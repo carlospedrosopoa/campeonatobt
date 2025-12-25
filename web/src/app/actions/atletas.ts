@@ -74,6 +74,7 @@ export async function searchAtletas(query: string): Promise<ExternalUser[]> {
         // Como a API não tem rota de busca pública, vamos listar usuários e filtrar
         // ATENÇÃO: Em produção com muitos usuários, isso deve ser otimizado na API externa (criar endpoint /search)
         
+        console.log("🔍 Buscando na API externa:", `${API_URL}/api/user/list`);
         const res = await fetch(`${API_URL}/api/user/list`, {
             headers: { 'Authorization': `Bearer ${token}` },
             cache: "no-store" // Garante dados frescos
@@ -81,6 +82,7 @@ export async function searchAtletas(query: string): Promise<ExternalUser[]> {
 
         if (res.ok) {
             const allUsers = await res.json();
+            console.log("✅ Usuários encontrados na API:", allUsers.length);
             
             // Filtrar localmente
             const filtered = allUsers
@@ -99,9 +101,10 @@ export async function searchAtletas(query: string): Promise<ExternalUser[]> {
                     isExternal: true
                 }));
             
+            console.log("✅ Resultados filtrados:", filtered.length);
             results.push(...filtered);
         } else {
-            console.error("❌ Erro ao listar usuários do PlayNaQuadra:", res.status);
+            console.error("❌ Erro ao listar usuários do PlayNaQuadra:", res.status, await res.text());
         }
     } else {
         // MOCK: Se não tiver config, usa mock para dev
