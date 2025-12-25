@@ -99,7 +99,15 @@ export default async function AdminTorneioDetalhesPage({
       <div className="grid md:grid-cols-3 gap-8">
         {/* Lista de Inscritos (Principal) */}
         <div className="md:col-span-2 space-y-6">
-            <h2 className="text-xl font-bold text-gray-800">Inscrições Realizadas</h2>
+            <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">Inscrições Realizadas</h2>
+                <Link 
+                  href={`/admin/torneios/${slug}/inscricao`}
+                  className="md:hidden flex items-center gap-1 text-sm font-medium text-primary"
+                >
+                  <UserPlus size={16} /> Nova
+                </Link>
+            </div>
             
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <table className="w-full text-left border-collapse">
@@ -150,8 +158,16 @@ export default async function AdminTorneioDetalhesPage({
                         ))
                     ) : (
                         <tr>
-                            <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
-                                Nenhuma inscrição realizada ainda.
+                            <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                                <div className="flex flex-col items-center justify-center gap-2">
+                                    <p>Nenhuma inscrição realizada ainda.</p>
+                                    <Link 
+                                      href={`/admin/torneios/${slug}/inscricao`}
+                                      className="text-primary hover:underline font-medium flex items-center gap-1"
+                                    >
+                                        <UserPlus size={16} /> Realizar primeira inscrição
+                                    </Link>
+                                </div>
                             </td>
                         </tr>
                     )}
