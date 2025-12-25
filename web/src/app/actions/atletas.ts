@@ -12,33 +12,99 @@ export interface ExternalUser {
   isExternal?: boolean; // Flag para saber se precisa importar
 }
 
+// Variáveis de ambiente
+const API_URL = process.env.PLAYNAQUADRA_API_URL;
+const ADMIN_EMAIL = process.env.PLAYNAQUADRA_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.PLAYNAQUADRA_ADMIN_PASSWORD;
+
+// Cache simples para token (em memória do processo serverless/container)
+let cachedToken: string | null = null;
+let tokenExpiresAt: number = 0;
+
+async function getAuthToken() {
+    if (!API_URL || !ADMIN_EMAIL || !ADMIN_PASSWORD) {
+        console.warn("⚠️ Credenciais do PlayNaQuadra não configuradas.");
+        return null;
+    }
+
+    // Se temos token válido, usa ele
+    if (cachedToken && Date.now() < tokenExpiresAt) {
+        return cachedToken;
+    }
+
+    try {
+        console.log("🔐 Autenticando no PlayNaQuadra...");
+        const res = await fetch(`${API_URL}/api/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+            cache: "no-store"
+        });
+
+        if (!res.ok) {
+            console.error("❌ Falha no login PlayNaQuadra:", await res.text());
+            return null;
+        }
+
+        const data = await res.json();
+        const token = data.token;
+
+        if (token) {
+            cachedToken = token;
+            // Define expiração segura (ex: 50 minutos se o token dura 1h)
+            tokenExpiresAt = Date.now() + (50 * 60 * 1000); 
+            return token;
+        }
+    } catch (error) {
+        console.error("❌ Erro ao conectar no PlayNaQuadra:", error);
+    }
+    return null;
+}
+
 export async function searchAtletas(query: string): Promise<ExternalUser[]> {
   if (!query || query.length < 3) return [];
 
   const results: ExternalUser[] = [];
-  const playNaQuadraUrl = process.env.PLAYNAQUADRA_API_URL;
 
   // 1. Buscar na API do PlayNaQuadra (Prioridade)
   try {
-    if (playNaQuadraUrl && !playNaQuadraUrl.includes("playnaquadra.com.br/api")) {
-        // Fetch real
-        const res = await fetch(`${playNaQuadraUrl}/users/search?q=${encodeURIComponent(query)}`, {
-            headers: { 'Authorization': `Bearer ${process.env.JWT_SECRET}` } // Exemplo de auth S2S
+    const token = await getAuthToken();
+
+    if (token && API_URL) {
+        // Como a API não tem rota de busca pública, vamos listar usuários e filtrar
+        // ATENÇÃO: Em produção com muitos usuários, isso deve ser otimizado na API externa (criar endpoint /search)
+        
+        const res = await fetch(`${API_URL}/api/user/list`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: "no-store" // Garante dados frescos
         });
+
         if (res.ok) {
-            const data = await res.json();
-            // Mapear resposta para ExternalUser
-            const externalUsers = (data.users || []).map((u: any) => ({
-                id: u.id,
-                name: u.name || u.nome,
-                email: u.email,
-                avatarUrl: u.avatarUrl || u.foto,
-                isExternal: true
-            }));
-            results.push(...externalUsers);
+            const allUsers = await res.json();
+            
+            // Filtrar localmente
+            const filtered = allUsers
+                .filter((u: any) => {
+                    const name = (u.name || u.nome || "").toLowerCase();
+                    const email = (u.email || "").toLowerCase();
+                    const q = query.toLowerCase();
+                    return name.includes(q) || email.includes(q);
+                })
+                .slice(0, 20) // Limita resultados
+                .map((u: any) => ({
+                    id: u.id,
+                    name: u.name || u.nome,
+                    email: u.email,
+                    avatarUrl: u.avatarUrl || u.foto,
+                    isExternal: true
+                }));
+            
+            results.push(...filtered);
+        } else {
+            console.error("❌ Erro ao listar usuários do PlayNaQuadra:", res.status);
         }
     } else {
-        // MOCK: Simular busca externa
+        // MOCK: Se não tiver config, usa mock para dev
         console.log("🔍 [MOCK] Buscando no PlayNaQuadra por:", query);
         const mockUsers = [
             { id: "pnq-1", name: "João da Silva", email: "joao@teste.com", isExternal: true },
@@ -56,9 +122,8 @@ export async function searchAtletas(query: string): Promise<ExternalUser[]> {
     console.error("Erro ao buscar no PlayNaQuadra:", error);
   }
 
-  // 2. Buscar no Banco Local (para garantir que encontramos quem já foi importado mas talvez não venha na busca externa)
-  // Opcional: Se a API externa for a fonte única, podemos pular isso. 
-  // Mas é bom ter caso o atleta tenha mudado de nome localmente ou algo assim.
+  // 2. Buscar no Banco Local (opcional, se quisermos misturar resultados)
+  // Por enquanto, confiamos na busca externa ou mock
 
   return results;
 }
