@@ -1,75 +1,88 @@
-import { db } from "@/db";
-import { tournaments, categories, registrations, users } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, UserPlus, Users, Trophy, Edit } from "lucide-react";
+import { ArrowLeft, UserPlus, Users, Trophy, Edit, Loader2 } from "lucide-react";
 import { CategoriesManager } from "@/components/admin/CategoriesManager";
+import { useParams } from "next/navigation";
 
-export default async function AdminTorneioDetalhesPage({ 
-  params 
-}: { 
-  params: Promise<{ slug: string }> 
-}) {
-  const { slug } = await params;
+interface Tournament {
+  id: string;
+  name: string;
+  slug: string;
+  startDate: string;
+  endDate: string;
+  location: string;
+  status: string;
+}
 
-  // 1. Buscar torneio
-  const tournamentResult = await db
-    .select()
-    .from(tournaments)
-    .where(eq(tournaments.slug, slug))
-    .limit(1);
+interface Category {
+  id: string;
+  name: string;
+  price: number;
+  maxPairs: number;
+}
 
-  const tournament = tournamentResult[0];
+interface Registration {
+  id: string;
+  categoryId: string;
+  player1: { name: string };
+  player2: { name: string };
+  categoryName: string;
+  status: string;
+}
 
-  if (!tournament) {
-    notFound();
+export default function AdminTorneioDetalhesPage() {
+  const params = useParams();
+  const slug = params.slug as string;
+
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<{
+    tournament: Tournament;
+    categories: Category[];
+    inscriptions: Registration[];
+  } | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch(`/api/admin/tournaments/${slug}/details`);
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        } else {
+          console.error("Failed to fetch tournament details");
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
-  // 2. Buscar categorias
-  const cats = await db
-    .select()
-    .from(categories)
-    .where(eq(categories.tournamentId, tournament.id));
-
-  // 3. Buscar inscrições (Complexo: precisa de joins manuais se não configurou relations)
-  // Vamos buscar todas as inscrições das categorias deste torneio
-  // Drizzle way sem relations:
-  // SELECT * FROM registrations r JOIN categories c ON r.categoryId = c.id WHERE c.tournamentId = ...
-  
-  // Vamos fazer uma busca "naive" e mapear em memória para o MVP, ou melhor, fazer queries separadas por categoria se forem poucas.
-  // Ou melhor: Buscar todas as inscrições onde categoryId IN (ids das categorias do torneio)
-  
-  const catIds = cats.map(c => c.id);
-  
-  let inscriptions: any[] = [];
-  
-  if (catIds.length > 0) {
-      // Drizzle `inArray` requer import
-      // Vamos buscar tudo de registrations e filtrar (MVP mode) ou fazer query certa
-      // Vamos tentar fazer a query certa com `inArray`
-      
-      // Como não importei `inArray` e editar imports é chato via tool, 
-      // vou buscar todas as inscrições e filtrar em memória (assumindo volume baixo < 1000)
-      // Se fosse produção com volume alto, faria diferente.
-      
-      const allRegs = await db.select().from(registrations);
-      const allUsers = await db.select().from(users);
-      
-      inscriptions = allRegs
-        .filter(r => catIds.includes(r.categoryId))
-        .map(r => {
-            const cat = cats.find(c => c.id === r.categoryId);
-            const p1 = allUsers.find(u => u.id === r.player1Id);
-            const p2 = allUsers.find(u => u.id === r.player2Id);
-            return {
-                ...r,
-                categoryName: cat?.name,
-                player1: p1,
-                player2: p2
-            };
-        });
+  if (!data) {
+    return (
+      <div className="flex h-[50vh] flex-col items-center justify-center gap-4">
+        <h2 className="text-xl font-bold text-gray-800">Torneio não encontrado</h2>
+        <Link href="/admin/torneios" className="text-primary hover:underline">
+          Voltar para lista
+        </Link>
+      </div>
+    );
   }
+
+  const { tournament, categories, inscriptions } = data;
 
   return (
     <div>
@@ -82,7 +95,7 @@ export default async function AdminTorneioDetalhesPage({
             <div>
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{tournament.name}</h1>
                 <div className="flex gap-4 text-sm text-gray-500">
-                    <span className="flex items-center gap-1"><Trophy size={14} /> {cats.length} Categorias</span>
+                    <span className="flex items-center gap-1"><Trophy size={14} /> {categories.length} Categorias</span>
                     <span className="flex items-center gap-1"><Users size={14} /> {inscriptions.length} Duplas Inscritas</span>
                 </div>
             </div>
@@ -116,6 +129,7 @@ export default async function AdminTorneioDetalhesPage({
                       <th className="px-6 py-4">Categoria</th>
                       <th className="px-6 py-4">Dupla</th>
                       <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -180,13 +194,13 @@ export default async function AdminTorneioDetalhesPage({
         <div className="space-y-6">
             <CategoriesManager 
               tournamentId={tournament.id} 
-              initialCategories={cats.map(c => ({...c, price: c.price.toString()}))} 
+              initialCategories={categories.map(c => ({...c, price: c.price.toString()}))} 
             />
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="font-bold text-gray-900 mb-4">Resumo por Categoria</h3>
                 <div className="space-y-3">
-                    {cats.map(cat => {
+                    {categories.map(cat => {
                         const count = inscriptions.filter(i => i.categoryId === cat.id).length;
                         return (
                             <div key={cat.id} className="flex items-center justify-between text-sm">
