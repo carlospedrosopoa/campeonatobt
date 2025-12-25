@@ -1,4 +1,4 @@
-podeimport { db } from "@/db";
+import { db } from "@/db";
 import { tournaments, categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
