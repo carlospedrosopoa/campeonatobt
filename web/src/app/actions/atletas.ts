@@ -76,8 +76,9 @@ export async function searchAtletas(query: string): Promise<ExternalUser[]> {
         // Como a API não tem rota de busca pública, vamos listar usuários e filtrar
         // ATENÇÃO: Em produção com muitos usuários, isso deve ser otimizado na API externa (criar endpoint /search)
         
-        console.log("🔍 Buscando na API externa:", `${API_URL}/api/user/list`);
-        const res = await fetch(`${API_URL}/api/user/list`, {
+        const endpoint = `${API_URL}/api/user/list`;
+        console.log("🔍 Buscando na API externa:", endpoint);
+        const res = await fetch(endpoint, {
             headers: { 'Authorization': `Bearer ${token}` },
             cache: "no-store" // Garante dados frescos
         });
