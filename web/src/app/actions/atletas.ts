@@ -44,6 +44,10 @@ export async function searchAtletas(query: string): Promise<ExternalUser[]> {
             { id: "pnq-1", name: "João da Silva", email: "joao@teste.com", isExternal: true },
             { id: "pnq-2", name: "Maria Oliveira", email: "maria@teste.com", isExternal: true },
             { id: "pnq-3", name: "Pedro Santos", email: "pedro@teste.com", isExternal: true },
+            { id: "pnq-4", name: "Ana Costa", email: "ana@teste.com", isExternal: true },
+            { id: "pnq-5", name: "Lucas Pereira", email: "lucas@teste.com", isExternal: true },
+            { id: "pnq-6", name: "Fernanda Lima", email: "fernanda@teste.com", isExternal: true },
+            { id: "pnq-7", name: "Carlos Pedroso", email: "carlospedrosopoa@gmail.com", isExternal: true },
         ].filter(u => u.name.toLowerCase().includes(query.toLowerCase()) || u.email.includes(query.toLowerCase()));
         
         results.push(...mockUsers);

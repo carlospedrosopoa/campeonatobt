@@ -55,7 +55,7 @@ export function InscricaoForm({ tournament, categories, slug }: Props) {
       setMessage("Inscrição realizada com sucesso!");
       // Limpar form ou redirecionar
       setTimeout(() => {
-        router.push(`/admin/torneios`);
+        router.push(`/admin/torneios/${slug}`);
       }, 1500);
 
     } catch (error) {
