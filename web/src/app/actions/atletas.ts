@@ -33,8 +33,10 @@ async function getAuthToken() {
     }
 
     try {
-        console.log("🔐 Autenticando no PlayNaQuadra...");
-        const res = await fetch(`${API_URL}/api/auth/login`, {
+        const endpoint = `${API_URL}/api/user/auth/login`;
+        console.log("🔐 Autenticando no PlayNaQuadra:", endpoint);
+        
+        const res = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
