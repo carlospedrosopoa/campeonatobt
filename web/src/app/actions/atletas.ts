@@ -33,7 +33,8 @@ async function getAuthToken() {
     }
 
     try {
-        const endpoint = `${API_URL}/api/user/auth/login`;
+        const cleanApiUrl = API_URL.replace(/\/api\/?$/, ""); // Remove /api ou /api/ do final
+        const endpoint = `${cleanApiUrl}/api/user/auth/login`;
         console.log("🔐 Autenticando no PlayNaQuadra:", endpoint);
         
         const res = await fetch(endpoint, {
@@ -76,7 +77,8 @@ export async function searchAtletas(query: string): Promise<ExternalUser[]> {
         // Como a API não tem rota de busca pública, vamos listar usuários e filtrar
         // ATENÇÃO: Em produção com muitos usuários, isso deve ser otimizado na API externa (criar endpoint /search)
         
-        const endpoint = `${API_URL}/api/user/list`;
+        const cleanApiUrl = API_URL.replace(/\/api\/?$/, ""); // Remove /api ou /api/ do final
+        const endpoint = `${cleanApiUrl}/api/user/list`;
         console.log("🔍 Buscando na API externa:", endpoint);
         const res = await fetch(endpoint, {
             headers: { 'Authorization': `Bearer ${token}` },
