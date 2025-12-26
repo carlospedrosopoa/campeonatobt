@@ -90,7 +90,7 @@ export function CategoriesManager({
               />
             </div>
             <div className="w-24">
-              <label className="text-xs text-blue-700 font-bold ml-1">Preço (R$)</label>
+              <label className="text-xs text-blue-700 font-bold ml-1">Valor por Atleta (R$)</label>
               <input 
                 type="number" 
                 value={newPrice}

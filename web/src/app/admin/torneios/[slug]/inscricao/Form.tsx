@@ -95,7 +95,7 @@ export function InscricaoForm({ tournament, categories, slug }: Props) {
             <option value="">Selecione uma categoria...</option>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>
-                {cat.name} - R$ {cat.price}
+                {cat.name} - R$ {cat.price} / atleta
               </option>
             ))}
           </select>
@@ -117,10 +117,13 @@ export function InscricaoForm({ tournament, categories, slug }: Props) {
 
         <div className="pt-4 border-t border-gray-100 mt-6">
           <div className="flex items-center justify-between mb-6 bg-gray-50 p-4 rounded-lg">
-             <span className="font-medium text-gray-700">Total a Pagar</span>
+             <div className="flex flex-col">
+               <span className="font-medium text-gray-700">Total a Pagar (Dupla)</span>
+               <span className="text-xs text-gray-500">2x Valor da Inscrição</span>
+             </div>
              <span className="text-xl font-bold text-green-600">
                {selectedCategory 
-                 ? `R$ ${categories.find(c => c.id === selectedCategory)?.price}` 
+                 ? `R$ ${(parseFloat(categories.find(c => c.id === selectedCategory)?.price || "0") * 2).toFixed(2)}` 
                  : "R$ 0,00"}
              </span>
           </div>

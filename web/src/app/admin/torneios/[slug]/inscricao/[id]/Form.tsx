@@ -145,7 +145,7 @@ export function EdicaoInscricaoForm({ registration, tournament, categories, slug
           >
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>
-                {cat.name} - R$ {cat.price}
+                {cat.name} - R$ {cat.price} / atleta
               </option>
             ))}
           </select>
