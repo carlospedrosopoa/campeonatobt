@@ -47,3 +47,15 @@ export const registrations = pgTable('registrations', {
   status: text('status', { enum: ['PENDING', 'APPROVED', 'REJECTED', 'PAID'] }).default('PENDING').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+export const sponsors = pgTable('sponsors', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tournamentId: uuid('tournament_id').references(() => tournaments.id).notNull(),
+  name: text('name').notNull(),
+  address: text('address'),
+  instagram: text('instagram'),
+  website: text('website'),
+  logoUrl: text('logo_url'),
+  bannerUrl: text('banner_url'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});

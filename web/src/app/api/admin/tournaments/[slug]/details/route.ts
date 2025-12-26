@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { tournaments, categories, registrations, users } from '@/db/schema';
+import { tournaments, categories, registrations, users, sponsors } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 
@@ -40,7 +40,13 @@ export async function GET(
       .from(categories)
       .where(eq(categories.tournamentId, tournament.id));
 
-    // 3. Buscar inscrições
+    // 3. Buscar apoiadores
+    const sponsorsResult = await db
+      .select()
+      .from(sponsors)
+      .where(eq(sponsors.tournamentId, tournament.id));
+
+    // 4. Buscar inscrições
     // Para simplificar, buscamos tudo e filtramos (ou poderíamos fazer joins)
     // Vamos buscar todas as inscrições que pertencem às categorias deste torneio
     const catIds = categoriesResult.map(c => c.id);
@@ -69,7 +75,8 @@ export async function GET(
     return NextResponse.json({
       tournament,
       categories: categoriesResult,
-      inscriptions: inscriptionsWithDetails
+      inscriptions: inscriptionsWithDetails,
+      sponsors: sponsorsResult
     });
   } catch (error) {
     console.error('Error fetching admin tournament details:', error);

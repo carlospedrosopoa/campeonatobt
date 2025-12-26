@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, UserPlus, Users, Trophy, Edit, Loader2 } from "lucide-react";
 import { CategoriesManager } from "@/components/admin/CategoriesManager";
+import { SponsorsManager } from "@/components/admin/SponsorsManager";
 import { useParams } from "next/navigation";
 
 interface Tournament {
@@ -21,6 +22,15 @@ interface Category {
   name: string;
   price: number;
   maxPairs: number;
+}
+
+interface Sponsor {
+  id: string;
+  name: string;
+  address: string | null;
+  instagram: string | null;
+  website: string | null;
+  logoUrl: string | null;
 }
 
 interface Registration {
@@ -41,6 +51,7 @@ export default function AdminTorneioDetalhesPage() {
     tournament: Tournament;
     categories: Category[];
     inscriptions: Registration[];
+    sponsors: Sponsor[];
   } | null>(null);
 
   useEffect(() => {
@@ -82,7 +93,7 @@ export default function AdminTorneioDetalhesPage() {
     );
   }
 
-  const { tournament, categories, inscriptions } = data;
+  const { tournament, categories, inscriptions, sponsors } = data;
 
   return (
     <div>
@@ -195,6 +206,11 @@ export default function AdminTorneioDetalhesPage() {
             <CategoriesManager 
               tournamentId={tournament.id} 
               initialCategories={categories.map(c => ({...c, price: c.price.toString()}))} 
+            />
+
+            <SponsorsManager 
+              tournamentId={tournament.id}
+              initialSponsors={sponsors || []}
             />
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
