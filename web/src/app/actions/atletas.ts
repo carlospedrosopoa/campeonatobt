@@ -34,7 +34,7 @@ async function getAuthToken() {
 
     try {
         const cleanApiUrl = API_URL.replace(/\/api\/?$/, ""); // Remove /api ou /api/ do final
-        const endpoint = `${cleanApiUrl}/api/user/auth/login`;
+        const endpoint = `${cleanApiUrl}/api/auth/login`;
         console.log("🔐 Autenticando no PlayNaQuadra:", endpoint);
         
         const res = await fetch(endpoint, {
