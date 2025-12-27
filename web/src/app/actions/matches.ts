@@ -48,73 +48,48 @@ export async function generateGroupMatches(categoryId: string, groupSize: number
         }
     }
 
-    // 3. Distribuir em Grupos
-    const shuffledTeams = shuffle([...teams]);
-    const numGroups = Math.ceil(shuffledTeams.length / groupSize);
-    
-    const createdGroups = [];
+    // 3. Criar Grupo Único
+    // Como solicitado: todos contra todos em grupo único na primeira fase
+    const [group] = await db.insert(groups).values({
+        categoryId,
+        name: "Grupo Único"
+    }).returning();
 
-    for (let i = 0; i < numGroups; i++) {
-        const groupName = `Grupo ${String.fromCharCode(65 + i)}`; // A, B, C...
-        const [newGroup] = await db.insert(groups).values({
-            categoryId,
-            name: groupName
-        }).returning();
-        createdGroups.push(newGroup);
-    }
-
-    // Distribuir times (Snake draft ou sequencial? Vamos sequencial simples)
-    let currentGroupIndex = 0;
-    const groupAssignments: { [groupId: string]: string[] } = {}; // groupId -> [teamIds]
-
-    for (const team of shuffledTeams) {
-        const group = createdGroups[currentGroupIndex];
-        
+    // Adicionar todos os times ao grupo
+    const teamIds: string[] = [];
+    for (const team of teams) {
         await db.insert(groupTeams).values({
             groupId: group.id,
             registrationId: team.id
         });
-
-        if (!groupAssignments[group.id]) groupAssignments[group.id] = [];
-        groupAssignments[group.id].push(team.id);
-
-        currentGroupIndex = (currentGroupIndex + 1) % numGroups;
+        teamIds.push(team.id);
     }
 
-    // 4. Gerar Jogos (Round Robin dentro de cada grupo)
-    // Para cada grupo, todos contra todos
+    // 4. Gerar Jogos (Todos contra Todos)
     let matchesCount = 0;
-    const tournamentId = teams[0].tournamentId; // Hack: pegar do registro não dá pq n tem, tem que pegar da categoria ou passar param
-    // Ops, registration não tem tournamentId. Precisamos buscar category -> tournamentId
-    const category = await db.query.categories.findFirst({
-        where: eq(categories.id, categoryId),
-        with: { tournament: true } // Se tiver relations configurado
-    });
     
-    // Fallback se não tiver relations
-    const cat = (await db.select().from(categories).where(eq(categories.id, categoryId)).limit(1))[0];
-    const tId = cat.tournamentId;
+    // Buscar tournamentId da categoria
+    const categoriesResult = await db.select().from(categories).where(eq(categories.id, categoryId)).limit(1);
+    const tId = categoriesResult[0]?.tournamentId;
 
-    for (const group of createdGroups) {
-        const groupTeamIds = groupAssignments[group.id] || [];
-        
-        for (let i = 0; i < groupTeamIds.length; i++) {
-            for (let j = i + 1; j < groupTeamIds.length; j++) {
-                await db.insert(matches).values({
-                    tournamentId: tId,
-                    categoryId,
-                    groupId: group.id,
-                    team1Id: groupTeamIds[i],
-                    team2Id: groupTeamIds[j],
-                    phase: 'GROUP',
-                    status: 'SCHEDULED'
-                });
-                matchesCount++;
-            }
+    if (!tId) throw new Error("Categoria sem torneio vinculado");
+
+    for (let i = 0; i < teamIds.length; i++) {
+        for (let j = i + 1; j < teamIds.length; j++) {
+            await db.insert(matches).values({
+                tournamentId: tId,
+                categoryId,
+                groupId: group.id,
+                team1Id: teamIds[i],
+                team2Id: teamIds[j],
+                phase: 'GROUP',
+                status: 'SCHEDULED'
+            });
+            matchesCount++;
         }
     }
 
-    return { success: true, message: `${matchesCount} jogos gerados em ${numGroups} grupos.` };
+    return { success: true, message: `${matchesCount} jogos gerados em grupo único.` };
 
   } catch (error) {
     console.error("Erro ao gerar jogos:", error);
