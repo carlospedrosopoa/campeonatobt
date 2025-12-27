@@ -55,6 +55,7 @@ interface Match {
   team2?: Registration;
   score: any;
   status: string;
+  round: number;
 }
 
 interface Group {
@@ -285,18 +286,20 @@ export default function AdminTorneioDetalhesPage() {
 
                     {selectedCategory && filteredMatches.length > 0 ? (
                         <div className="space-y-6">
-                             {/* Agrupar por Grupos (neste caso, Grupo Único ou A, B, C...) */}
-                             {Array.from(new Set(filteredMatches.map(m => m.groupId))).map(groupId => {
-                                 const groupMatches = filteredMatches.filter(m => m.groupId === groupId);
-                                 const groupName = groupMatches[0]?.groupName || "Grupo";
+                             {/* Agrupar por Rodadas */}
+                             {Array.from(new Set(filteredMatches.map(m => m.round || 1))).sort((a,b) => a - b).map(round => {
+                                 const roundMatches = filteredMatches.filter(m => (m.round || 1) === round);
                                  
                                  return (
-                                     <div key={groupId} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                                         <div className="bg-gray-50 px-6 py-3 border-b border-gray-100">
-                                             <h3 className="font-bold text-gray-800">{groupName}</h3>
+                                     <div key={round} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                         <div className="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
+                                             <h3 className="font-bold text-gray-800">Rodada {round}</h3>
+                                             <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-md">
+                                                 {roundMatches.length} jogos
+                                             </span>
                                          </div>
                                          <div className="divide-y divide-gray-100">
-                                             {groupMatches.map(match => (
+                                             {roundMatches.map(match => (
                                                  <div key={match.id} className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
                                                      {/* Time 1 */}
                                                      <div className="flex-1 text-center sm:text-right">

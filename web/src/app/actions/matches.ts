@@ -65,7 +65,9 @@ export async function generateGroupMatches(categoryId: string, groupSize: number
         teamIds.push(team.id);
     }
 
-    // 4. Gerar Jogos (Todos contra Todos)
+    // 4. Gerar Jogos com Algoritmo Round Robin (Método do Círculo)
+    // Para garantir rodadas onde cada time joga uma vez (ou folga)
+    
     let matchesCount = 0;
     
     // Buscar tournamentId da categoria
@@ -74,22 +76,46 @@ export async function generateGroupMatches(categoryId: string, groupSize: number
 
     if (!tId) throw new Error("Categoria sem torneio vinculado");
 
-    for (let i = 0; i < teamIds.length; i++) {
-        for (let j = i + 1; j < teamIds.length; j++) {
-            await db.insert(matches).values({
-                tournamentId: tId,
-                categoryId,
-                groupId: group.id,
-                team1Id: teamIds[i],
-                team2Id: teamIds[j],
-                phase: 'GROUP',
-                status: 'SCHEDULED'
-            });
-            matchesCount++;
-        }
+    // Algoritmo Round Robin
+    const teamsList = [...teamIds];
+    // Se número impar, adiciona "Bye" (folga)
+    if (teamsList.length % 2 !== 0) {
+        teamsList.push("BYE");
     }
 
-    return { success: true, message: `${matchesCount} jogos gerados em grupo único.` };
+    const n = teamsList.length;
+    const rounds = n - 1; // Número de rodadas é N-1 (para todos contra todos)
+    const matchesPerRound = n / 2;
+
+    for (let round = 0; round < rounds; round++) {
+        for (let match = 0; match < matchesPerRound; match++) {
+            const home = teamsList[match];
+            const away = teamsList[n - 1 - match];
+
+            // Se nenhum dos dois é "BYE", cria o jogo
+            if (home !== "BYE" && away !== "BYE") {
+                await db.insert(matches).values({
+                    tournamentId: tId,
+                    categoryId,
+                    groupId: group.id,
+                    team1Id: home,
+                    team2Id: away,
+                    phase: 'GROUP',
+                    status: 'SCHEDULED',
+                    round: round + 1 // Rodada 1, 2, 3...
+                });
+                matchesCount++;
+            }
+        }
+
+        // Rotacionar o array (mantendo o primeiro fixo e girando o resto)
+        // [0, 1, 2, 3] -> [0, 3, 1, 2] -> [0, 2, 3, 1]
+        // Remove último e insere na posição 1
+        const last = teamsList.pop();
+        if (last) teamsList.splice(1, 0, last);
+    }
+
+    return { success: true, message: `${matchesCount} jogos gerados em ${rounds} rodadas.` };
 
   } catch (error) {
     console.error("Erro ao gerar jogos:", error);

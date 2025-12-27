@@ -102,6 +102,7 @@ export const matches = pgTable('matches', {
   
   court: text('court'), // Quadra
   scheduledTime: timestamp('scheduled_time'),
+  round: integer('round'), // Rodada (1, 2, 3...)
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
