@@ -44,9 +44,31 @@ interface Registration {
   status: string;
 }
 
+interface Match {
+  id: string;
+  categoryId: string;
+  groupId: string;
+  groupName?: string;
+  team1Id: string;
+  team2Id: string;
+  team1?: Registration;
+  team2?: Registration;
+  score: any;
+  status: string;
+}
+
+interface Group {
+  id: string;
+  categoryId: string;
+  name: string;
+}
+
 export default function AdminTorneioDetalhesPage() {
   const params = useParams();
   const slug = params.slug as string;
+
+  const [activeTab, setActiveTab] = useState<'inscricoes' | 'jogos'>('inscricoes');
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<{
@@ -54,6 +76,8 @@ export default function AdminTorneioDetalhesPage() {
     categories: Category[];
     inscriptions: Registration[];
     sponsors: Sponsor[];
+    matches: Match[];
+    groups: Group[];
   } | null>(null);
 
   useEffect(() => {
@@ -95,7 +119,12 @@ export default function AdminTorneioDetalhesPage() {
     );
   }
 
-  const { tournament, categories, inscriptions, sponsors } = data;
+  const { tournament, categories, inscriptions, sponsors, matches, groups } = data;
+
+  // Filtrar jogos pela categoria selecionada
+  const filteredMatches = selectedCategory 
+    ? matches.filter(m => m.categoryId === selectedCategory)
+    : [];
 
   const handleGenerateMatches = async (categoryId: string) => {
     if (!confirm("Isso irá APAGAR os jogos existentes desta fase e gerar novos grupos. Confirmar?")) return;
@@ -135,87 +164,184 @@ export default function AdminTorneioDetalhesPage() {
               <UserPlus size={18} /> Nova Inscrição
             </Link>
         </div>
+        
+        {/* Tabs */}
+        <div className="flex gap-4 mt-8 border-b border-gray-200">
+            <button 
+                onClick={() => setActiveTab('inscricoes')}
+                className={`pb-3 px-1 font-medium text-sm transition-colors relative ${activeTab === 'inscricoes' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                Inscrições
+            </button>
+            <button 
+                onClick={() => setActiveTab('jogos')}
+                className={`pb-3 px-1 font-medium text-sm transition-colors relative ${activeTab === 'jogos' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                Tabela de Jogos
+            </button>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-8">
-        {/* Lista de Inscritos (Principal) */}
+        {/* Conteúdo Principal */}
         <div className="md:col-span-2 space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-800">Inscrições Realizadas</h2>
-                <Link 
-                  href={`/admin/torneios/${slug}/inscricao`}
-                  className="md:hidden flex items-center gap-1 text-sm font-medium text-primary"
-                >
-                  <UserPlus size={16} /> Nova
-                </Link>
-            </div>
             
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-gray-50 border-b border-gray-100 text-xs uppercase text-gray-500 font-semibold">
-                    <tr>
-                      <th className="px-6 py-4">Categoria</th>
-                      <th className="px-6 py-4">Dupla</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {inscriptions.length > 0 ? (
-                        inscriptions.map((ins) => (
-                            <tr key={ins.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 font-medium text-gray-700">
-                                    {ins.categoryName}
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                                            {ins.player1?.name} 
-                                            <span className="text-xs font-normal text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Cap</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                            {ins.player2?.name}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        ins.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
-                                        ins.status === 'PAID' ? 'bg-blue-100 text-blue-800' :
-                                        'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                        {ins.status}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <Link 
-                                      href={`/admin/torneios/${slug}/inscricao/${ins.id}`}
-                                      className="text-gray-400 hover:text-primary transition-colors"
-                                      title="Editar Inscrição"
-                                    >
-                                      <Edit size={16} />
-                                    </Link>
-                                </td>
+            {activeTab === 'inscricoes' && (
+                <>
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-gray-800">Inscrições Realizadas</h2>
+                        <Link 
+                        href={`/admin/torneios/${slug}/inscricao`}
+                        className="md:hidden flex items-center gap-1 text-sm font-medium text-primary"
+                        >
+                        <UserPlus size={16} /> Nova
+                        </Link>
+                    </div>
+                    
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                        <thead className="bg-gray-50 border-b border-gray-100 text-xs uppercase text-gray-500 font-semibold">
+                            <tr>
+                            <th className="px-6 py-4">Categoria</th>
+                            <th className="px-6 py-4">Dupla</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4 text-right">Ações</th>
                             </tr>
-                        ))
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {inscriptions.length > 0 ? (
+                                inscriptions.map((ins) => (
+                                    <tr key={ins.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 font-medium text-gray-700">
+                                            {ins.categoryName}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                                                    {ins.player1?.name} 
+                                                    <span className="text-xs font-normal text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Cap</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                    {ins.player2?.name}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                ins.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
+                                                ins.status === 'PAID' ? 'bg-blue-100 text-blue-800' :
+                                                'bg-yellow-100 text-yellow-800'
+                                            }`}>
+                                                {ins.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <Link 
+                                            href={`/admin/torneios/${slug}/inscricao/${ins.id}`}
+                                            className="text-gray-400 hover:text-primary transition-colors"
+                                            title="Editar Inscrição"
+                                            >
+                                            <Edit size={16} />
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                                        <div className="flex flex-col items-center justify-center gap-2">
+                                            <p>Nenhuma inscrição realizada ainda.</p>
+                                            <Link 
+                                            href={`/admin/torneios/${slug}/inscricao`}
+                                            className="text-primary hover:underline font-medium flex items-center gap-1"
+                                            >
+                                                <UserPlus size={16} /> Realizar primeira inscrição
+                                            </Link>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+
+            {activeTab === 'jogos' && (
+                <div className="space-y-6">
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Selecione a Categoria</label>
+                        <select 
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                        >
+                            <option value="">Selecione...</option>
+                            {categories.map(cat => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {selectedCategory && filteredMatches.length > 0 ? (
+                        <div className="space-y-6">
+                             {/* Agrupar por Grupos (neste caso, Grupo Único ou A, B, C...) */}
+                             {Array.from(new Set(filteredMatches.map(m => m.groupId))).map(groupId => {
+                                 const groupMatches = filteredMatches.filter(m => m.groupId === groupId);
+                                 const groupName = groupMatches[0]?.groupName || "Grupo";
+                                 
+                                 return (
+                                     <div key={groupId} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                         <div className="bg-gray-50 px-6 py-3 border-b border-gray-100">
+                                             <h3 className="font-bold text-gray-800">{groupName}</h3>
+                                         </div>
+                                         <div className="divide-y divide-gray-100">
+                                             {groupMatches.map(match => (
+                                                 <div key={match.id} className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                                                     {/* Time 1 */}
+                                                     <div className="flex-1 text-center sm:text-right">
+                                                         <div className="font-medium text-gray-900">{match.team1?.player1.name} / {match.team1?.player2.name}</div>
+                                                     </div>
+                                                     
+                                                     {/* Placar / VS */}
+                                                     <div className="flex flex-col items-center px-4 min-w-[100px]">
+                                                         <span className="text-xs text-gray-400 font-bold mb-1">VS</span>
+                                                         {match.status === 'FINISHED' ? (
+                                                             <div className="font-mono font-bold text-lg bg-gray-100 px-3 py-1 rounded">
+                                                                 {/* Renderizar placar simplificado */}
+                                                                 - x -
+                                                             </div>
+                                                         ) : (
+                                                             <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+                                                                 Agendado
+                                                             </span>
+                                                         )}
+                                                     </div>
+
+                                                     {/* Time 2 */}
+                                                     <div className="flex-1 text-center sm:text-left">
+                                                         <div className="font-medium text-gray-900">{match.team2?.player1.name} / {match.team2?.player2.name}</div>
+                                                     </div>
+                                                 </div>
+                                             ))}
+                                         </div>
+                                     </div>
+                                 )
+                             })}
+                        </div>
+                    ) : selectedCategory ? (
+                        <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-gray-200 border-dashed">
+                            <p>Nenhum jogo gerado para esta categoria.</p>
+                            <p className="text-sm mt-1">Clique no botão "Play" no menu lateral para gerar os confrontos.</p>
+                        </div>
                     ) : (
-                        <tr>
-                            <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
-                                <div className="flex flex-col items-center justify-center gap-2">
-                                    <p>Nenhuma inscrição realizada ainda.</p>
-                                    <Link 
-                                      href={`/admin/torneios/${slug}/inscricao`}
-                                      className="text-primary hover:underline font-medium flex items-center gap-1"
-                                    >
-                                        <UserPlus size={16} /> Realizar primeira inscrição
-                                    </Link>
-                                </div>
-                            </td>
-                        </tr>
+                        <div className="text-center py-12 text-gray-500">
+                            Selecione uma categoria acima para ver os jogos.
+                        </div>
                     )}
-                  </tbody>
-                </table>
-            </div>
+                </div>
+            )}
+
         </div>
 
         {/* Sidebar Infos */}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { tournaments, categories, registrations, users, sponsors } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { tournaments, categories, registrations, users, sponsors, matches, groups } from '@/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 
 export async function GET(
@@ -46,16 +46,24 @@ export async function GET(
       .from(sponsors)
       .where(eq(sponsors.tournamentId, tournament.id));
 
-    // 4. Buscar inscrições
-    // Para simplificar, buscamos tudo e filtramos (ou poderíamos fazer joins)
-    // Vamos buscar todas as inscrições que pertencem às categorias deste torneio
+    // 4. Buscar inscrições, jogos e grupos
     const catIds = categoriesResult.map(c => c.id);
     let inscriptionsWithDetails: any[] = [];
+    let matchesWithDetails: any[] = [];
+    let groupsResult: any[] = [];
 
     if (catIds.length > 0) {
        // Buscar inscrições e dados de usuários
-       const allRegs = await db.select().from(registrations); // Ineficiente se tiver muitos dados, mas ok para MVP
+       const allRegs = await db.select().from(registrations); // MVP
        const allUsers = await db.select().from(users);
+       
+       // Buscar grupos
+       // Drizzle inArray check
+       groupsResult = await db.select().from(groups); // MVP: fetch all groups then filter by category
+       groupsResult = groupsResult.filter(g => catIds.includes(g.categoryId));
+
+       // Buscar jogos
+       const allMatches = await db.select().from(matches).where(eq(matches.tournamentId, tournament.id));
 
        inscriptionsWithDetails = allRegs
         .filter(r => catIds.includes(r.categoryId))
@@ -70,13 +78,28 @@ export async function GET(
                 player2: p2
             };
         });
+        
+       // Enriquecer jogos com nomes dos times
+       matchesWithDetails = allMatches.map(m => {
+           const team1 = inscriptionsWithDetails.find(i => i.id === m.team1Id);
+           const team2 = inscriptionsWithDetails.find(i => i.id === m.team2Id);
+           const group = groupsResult.find(g => g.id === m.groupId);
+           return {
+               ...m,
+               team1,
+               team2,
+               groupName: group?.name
+           };
+       });
     }
 
     return NextResponse.json({
       tournament,
       categories: categoriesResult,
       inscriptions: inscriptionsWithDetails,
-      sponsors: sponsorsResult
+      sponsors: sponsorsResult,
+      matches: matchesWithDetails,
+      groups: groupsResult
     });
   } catch (error) {
     console.error('Error fetching admin tournament details:', error);
