@@ -103,7 +103,16 @@ export const matches = pgTable('matches', {
   court: text('court'), // Quadra
   scheduledTime: timestamp('scheduled_time'),
   round: integer('round'), // Rodada (1, 2, 3...)
+  playnaquadraBookingId: text('playnaquadra_booking_id'), // ID do agendamento externo
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const rounds = pgTable('rounds', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  categoryId: uuid('category_id').references(() => categories.id).notNull(),
+  roundNumber: integer('round_number').notNull(),
+  deadline: timestamp('deadline'), // Data limite da rodada
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 });

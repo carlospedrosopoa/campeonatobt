@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { registrations, matches, groups, groupTeams, categories } from "@/db/schema";
+import { registrations, matches, groups, groupTeams, categories, rounds as roundsTable } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 
 // Função para embaralhar array (Fisher-Yates)
@@ -65,8 +65,7 @@ export async function generateGroupMatches(categoryId: string, groupSize: number
         teamIds.push(team.id);
     }
 
-    // 4. Gerar Jogos com Algoritmo Round Robin (Método do Círculo)
-    // Para garantir rodadas onde cada time joga uma vez (ou folga)
+    // 4. Gerar Jogos com Algoritmo Round Robin
     
     let matchesCount = 0;
     
@@ -76,23 +75,33 @@ export async function generateGroupMatches(categoryId: string, groupSize: number
 
     if (!tId) throw new Error("Categoria sem torneio vinculado");
 
+    // Limpar rodadas existentes (se houver, pois estamos limpando os jogos)
+    await db.delete(roundsTable).where(eq(roundsTable.categoryId, categoryId));
+
     // Algoritmo Round Robin
     const teamsList = [...teamIds];
-    // Se número impar, adiciona "Bye" (folga)
     if (teamsList.length % 2 !== 0) {
         teamsList.push("BYE");
     }
 
     const n = teamsList.length;
-    const rounds = n - 1; // Número de rodadas é N-1 (para todos contra todos)
+    const numRounds = n - 1; 
     const matchesPerRound = n / 2;
 
-    for (let round = 0; round < rounds; round++) {
+    // Criar as rodadas no banco
+    for (let r = 1; r <= numRounds; r++) {
+        await db.insert(roundsTable).values({
+            categoryId,
+            roundNumber: r,
+            // deadline: null // Definido depois pelo usuário
+        });
+    }
+
+    for (let round = 0; round < numRounds; round++) {
         for (let match = 0; match < matchesPerRound; match++) {
             const home = teamsList[match];
             const away = teamsList[n - 1 - match];
 
-            // Se nenhum dos dois é "BYE", cria o jogo
             if (home !== "BYE" && away !== "BYE") {
                 await db.insert(matches).values({
                     tournamentId: tId,
@@ -102,20 +111,17 @@ export async function generateGroupMatches(categoryId: string, groupSize: number
                     team2Id: away,
                     phase: 'GROUP',
                     status: 'SCHEDULED',
-                    round: round + 1 // Rodada 1, 2, 3...
+                    round: round + 1 
                 });
                 matchesCount++;
             }
         }
 
-        // Rotacionar o array (mantendo o primeiro fixo e girando o resto)
-        // [0, 1, 2, 3] -> [0, 3, 1, 2] -> [0, 2, 3, 1]
-        // Remove último e insere na posição 1
         const last = teamsList.pop();
         if (last) teamsList.splice(1, 0, last);
     }
 
-    return { success: true, message: `${matchesCount} jogos gerados em ${rounds} rodadas.` };
+    return { success: true, message: `${matchesCount} jogos gerados em ${numRounds} rodadas.` };
 
   } catch (error) {
     console.error("Erro ao gerar jogos:", error);
