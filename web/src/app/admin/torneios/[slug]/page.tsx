@@ -6,6 +6,8 @@ import { ArrowLeft, UserPlus, Users, Trophy, Edit, Loader2 } from "lucide-react"
 import { CategoriesManager } from "@/components/admin/CategoriesManager";
 import { SponsorsManager } from "@/components/admin/SponsorsManager";
 import { useParams } from "next/navigation";
+import { generateGroupMatches } from "@/app/actions/matches";
+import { Play } from "lucide-react";
 
 interface Tournament {
   id: string;
@@ -94,6 +96,21 @@ export default function AdminTorneioDetalhesPage() {
   }
 
   const { tournament, categories, inscriptions, sponsors } = data;
+
+  const handleGenerateMatches = async (categoryId: string) => {
+    if (!confirm("Isso irá APAGAR os jogos existentes desta fase e gerar novos grupos. Confirmar?")) return;
+    
+    setLoading(true);
+    const res = await generateGroupMatches(categoryId, 4); // Default group size 4
+    if (res.success) {
+      alert(res.message);
+      // Recarregar dados
+      window.location.reload();
+    } else {
+      alert(res.message);
+      setLoading(false);
+    }
+  };
 
   return (
     <div>
@@ -221,7 +238,18 @@ export default function AdminTorneioDetalhesPage() {
                         return (
                             <div key={cat.id} className="flex items-center justify-between text-sm">
                                 <span className="text-gray-600">{cat.name}</span>
-                                <span className="font-medium bg-gray-100 px-2 py-1 rounded-md text-gray-800">{count} / {cat.maxPairs || 32}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium bg-gray-100 px-2 py-1 rounded-md text-gray-800">{count} / {cat.maxPairs || 32}</span>
+                                  {count >= 2 && (
+                                      <button 
+                                        onClick={() => handleGenerateMatches(cat.id)}
+                                        className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50"
+                                        title="Gerar Grupos e Jogos"
+                                      >
+                                          <Play size={14} />
+                                      </button>
+                                  )}
+                                </div>
                             </div>
                         );
                     })}
