@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { registrations, matches, groups, groupTeams } from "@/db/schema";
+import { registrations, matches, groups, groupTeams, categories } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 
 // Função para embaralhar array (Fisher-Yates)
