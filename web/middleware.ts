@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { decrypt } from './src/lib/auth';
 
 // 1. Specify protected and public routes
-const protectedRoutes = ['/admin', '/dashboard'];
+const protectedRoutes = ['/admin', '/dashboard', '/atleta'];
 const adminRoutes = ['/admin'];
 const publicRoutes = ['/login', '/signup', '/', '/torneios', '/ranking'];
 
@@ -33,6 +33,10 @@ export default async function middleware(req: NextRequest) {
   }
 
   // Se não tem cookie e tenta acessar rota protegida -> Login
+  if (path.startsWith("/atleta") && !path.startsWith("/atleta/login") && !cookie) {
+    return NextResponse.redirect(new URL('/atleta/login', req.nextUrl));
+  }
+
   if (isProtectedRoute && !cookie) {
     return NextResponse.redirect(new URL('/login', req.nextUrl));
   }
@@ -40,6 +44,10 @@ export default async function middleware(req: NextRequest) {
   // Se já está logado e tenta acessar login -> Dashboard (opcional)
   if (path === '/login' && cookie) {
     return NextResponse.redirect(new URL('/dashboard', req.nextUrl));
+  }
+
+  if (path === "/atleta/login" && cookie) {
+    return NextResponse.redirect(new URL("/atleta/torneios", req.nextUrl));
   }
 
   return NextResponse.next();

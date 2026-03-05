@@ -1,0 +1,63 @@
+import Link from "next/link";
+import { getSession } from "@/lib/auth";
+import { Trophy } from "lucide-react";
+
+export async function Navbar() {
+  const session = await getSession();
+  const perfil = session?.user?.perfil as string | undefined;
+  const isAdmin = perfil === "ADMIN" || perfil === "ORGANIZADOR";
+  const isAtleta = perfil === "ATLETA";
+
+  return (
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-16 items-center justify-between px-4 md:px-6">
+        <Link href="/" className="flex items-center gap-2 font-bold text-xl text-primary">
+          <Trophy className="h-6 w-6" />
+          <span>Arena Tour</span>
+        </Link>
+        
+        <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+          <Link href="/torneios" className="transition-colors hover:text-primary">
+            Torneios
+          </Link>
+          <Link href="/atleta/torneios" className="transition-colors hover:text-primary">
+            Área do Atleta
+          </Link>
+          {isAdmin && (
+            <Link href="/admin" className="transition-colors hover:text-primary">
+              Admin
+            </Link>
+          )}
+          <Link href="/rankings" className="transition-colors hover:text-primary">
+            Rankings
+          </Link>
+          <Link href="/sobre" className="transition-colors hover:text-primary">
+            Sobre
+          </Link>
+        </nav>
+
+        <div className="flex items-center gap-4">
+          {session ? (
+            <form action="/api/v1/auth/logout" method="post">
+              <button type="submit" className="text-sm font-medium hover:underline underline-offset-4">
+                Sair
+              </button>
+            </form>
+          ) : (
+            <>
+              <Link href="/atleta/login" className="text-sm font-medium hover:underline underline-offset-4">
+                Área do Atleta
+              </Link>
+              <Link 
+                href="https://atleta.playnaquadra.com.br" 
+                className="hidden md:inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+              >
+                Criar Perfil
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}

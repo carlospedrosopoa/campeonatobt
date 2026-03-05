@@ -1,0 +1,1 @@
+ALTER TABLE "rodadas" ADD COLUMN "data_limite" timestamp;

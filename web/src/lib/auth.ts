@@ -30,6 +30,7 @@ export async function createSession(user: any) {
     sameSite: 'lax',
     path: '/',
   });
+  return session;
 }
 
 export async function getSession() {
@@ -38,6 +39,14 @@ export async function getSession() {
   try {
     return await decrypt(session);
   } catch (error) {
+    return null;
+  }
+}
+
+export async function getSessionFromToken(token: string) {
+  try {
+    return await decrypt(token);
+  } catch {
     return null;
   }
 }

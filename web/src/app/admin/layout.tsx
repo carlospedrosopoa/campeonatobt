@@ -1,95 +1,53 @@
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Trophy, Users, Calendar, LayoutDashboard, LogOut } from "lucide-react";
+import { Trophy, Settings, List } from "lucide-react";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
+  const perfil = session?.user?.perfil as string | undefined;
+  const permitido = perfil === "ADMIN" || perfil === "ORGANIZADOR";
 
-  // Proteção básica: Se não logado ou não for admin/organizer, tchau.
-  if (!session) {
-    redirect("/login");
-  }
-
-  if (session.user.role !== "ADMIN" && session.user.role !== "ORGANIZER") {
-    // Se for player tentando acessar admin, manda pro dashboard dele
-    redirect("/dashboard");
+  if (!permitido) {
+    redirect(`/login?next=${encodeURIComponent("/admin")}`);
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col fixed h-full z-20">
-        <div className="p-6 border-b border-slate-800">
-          <span className="text-xl font-bold text-white tracking-tight">
-            BT<span className="text-orange-500">Manager</span> <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full ml-1">Admin</span>
-          </span>
-        </div>
-
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <Link 
-            href="/admin" 
-            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
-          >
-            <LayoutDashboard size={20} />
-            Dashboard
-          </Link>
-          
-          <div className="pt-4 pb-2 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Gestão
-          </div>
-          
-          <Link 
-            href="/admin/torneios" 
-            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
-          >
-            <Trophy size={20} />
-            Torneios
-          </Link>
-
-          <Link 
-            href="/admin/atletas" 
-            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
-          >
-            <Users size={20} />
-            Atletas
-          </Link>
-
-          <Link 
-            href="/admin/agenda" 
-            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
-          >
-            <Calendar size={20} />
-            Agenda / Quadras
-          </Link>
-        </nav>
-
-        <div className="p-4 border-t border-slate-800">
-           <div className="flex items-center gap-3 px-4 py-3 mb-2">
-              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold">
-                 {session.user.name.charAt(0)}
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50">
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-8">
+          <aside className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 h-fit lg:sticky lg:top-24">
+            <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2 font-bold text-slate-900">
+                <Trophy className="h-5 w-5 text-orange-500" />
+                Admin
               </div>
-              <div className="flex-1 min-w-0">
-                 <p className="text-sm font-medium text-white truncate">{session.user.name}</p>
-                 <p className="text-xs text-slate-400 truncate">{session.user.role}</p>
-              </div>
-           </div>
-           <form action="/api/auth/logout" method="POST">
-             <button type="submit" className="w-full flex items-center justify-center gap-2 px-4 py-2 text-red-400 hover:bg-slate-800 rounded-lg transition-colors text-sm">
-               <LogOut size={16} /> Sair
-             </button>
-           </form>
-        </div>
-      </aside>
+              <Link href="/" className="text-xs text-slate-600 hover:text-slate-900">
+                Ver site
+              </Link>
+            </div>
 
-      {/* Main Content */}
-      <main className="flex-1 ml-64 p-8">
-        {children}
-      </main>
+            <nav className="pt-4 space-y-1 text-sm">
+              <Link
+                href="/admin"
+                className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-slate-50 text-slate-700"
+              >
+                <Settings className="h-4 w-4 text-slate-500" />
+                Painel
+              </Link>
+              <Link
+                href="/admin/torneios"
+                className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-slate-50 text-slate-700"
+              >
+                <List className="h-4 w-4 text-slate-500" />
+                Torneios
+              </Link>
+            </nav>
+          </aside>
+
+          <div>{children}</div>
+        </div>
+      </div>
     </div>
   );
 }

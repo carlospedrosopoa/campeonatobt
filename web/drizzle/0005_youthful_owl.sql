@@ -1,0 +1,1 @@
+ALTER TABLE "torneios" ADD COLUMN "template_url" text;

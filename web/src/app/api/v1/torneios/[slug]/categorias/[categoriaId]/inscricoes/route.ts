@@ -1,0 +1,83 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { torneiosService } from "@/services/torneios.service";
+import { categoriasService } from "@/services/categorias.service";
+import { inscricoesService } from "@/services/inscricoes.service";
+
+function isAdmin(perfil?: string) {
+  return perfil === "ADMIN" || perfil === "ORGANIZADOR";
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ slug: string; categoriaId: string }> }
+) {
+  try {
+    const session = await getSession();
+    const perfil = session?.user?.perfil as string | undefined;
+    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+    const { slug, categoriaId } = await params;
+    const torneio = await torneiosService.buscarPorSlug(slug);
+    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+
+    const categoria = await categoriasService.buscarPorId(categoriaId);
+    if (!categoria || categoria.torneioId !== torneio.id) {
+      return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
+    }
+
+    const lista = await inscricoesService.listarPorCategoria(categoriaId);
+    return NextResponse.json(lista);
+  } catch (error) {
+    console.error("Erro ao listar inscrições:", error);
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+  }
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ slug: string; categoriaId: string }> }
+) {
+  try {
+    const session = await getSession();
+    const perfil = session?.user?.perfil as string | undefined;
+    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+    const { slug, categoriaId } = await params;
+    const torneio = await torneiosService.buscarPorSlug(slug);
+    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+
+    const categoria = await categoriasService.buscarPorId(categoriaId);
+    if (!categoria || categoria.torneioId !== torneio.id) {
+      return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
+    }
+
+    const body = await request.json().catch(() => null);
+
+    const equipeNome = (body?.equipeNome as string | undefined)?.trim();
+    const status = body?.status as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA" | undefined;
+
+    const atletaA = body?.atletaA as { nome?: string; email?: string; telefone?: string } | undefined;
+    const atletaB = body?.atletaB as { nome?: string; email?: string; telefone?: string } | undefined;
+
+    if (!atletaA?.nome || !atletaA?.email || !atletaB?.nome || !atletaB?.email) {
+      return NextResponse.json({ error: "Dados dos dois atletas são obrigatórios" }, { status: 400 });
+    }
+
+    const nova = await inscricoesService.criar({
+      torneioId: torneio.id,
+      categoriaId,
+      equipeNome,
+      status,
+      atletaA: { nome: atletaA.nome, email: atletaA.email, telefone: atletaA.telefone },
+      atletaB: { nome: atletaB.nome, email: atletaB.email, telefone: atletaB.telefone },
+    });
+
+    return NextResponse.json(nova, { status: 201 });
+  } catch (error: any) {
+    const msg = typeof error?.message === "string" ? error.message : "Erro interno do servidor";
+    const status = msg.includes("já está inscrito") || msg.includes("Atletas precisam ser diferentes") ? 400 : 500;
+    return NextResponse.json({ error: msg }, { status });
+  }
+}
+

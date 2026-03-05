@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1769918019352,
+      "tag": "0000_noisy_doctor_faustus",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1769947355626,
+      "tag": "0001_amazing_invaders",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771064700000,
+      "tag": "0002_super_campeonato",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772015834922,
+      "tag": "0003_arenas_e_agendamento",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772615390980,
+      "tag": "0004_nervous_mephisto",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772617518925,
+      "tag": "0005_youthful_owl",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772619612164,
+      "tag": "0006_bored_ronan",
+      "breakpoints": true
+    }
+  ]
+}
