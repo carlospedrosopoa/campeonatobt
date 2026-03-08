@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { decrypt } from './src/lib/auth';
+import { decrypt } from './src/lib/auth-token';
 
 // 1. Specify protected and public routes
 const protectedRoutes = ['/admin', '/dashboard', '/atleta'];
