@@ -52,8 +52,8 @@ export async function PUT(
 
     const dataHorario = dataHorarioRaw ? new Date(dataHorarioRaw) : null;
     const dataLimite = dataLimiteRaw ? new Date(dataLimiteRaw) : null;
-    if (dataHorarioRaw && Number.isNaN(dataHorario.getTime())) return NextResponse.json({ error: "Data/hora inválida" }, { status: 400 });
-    if (dataLimiteRaw && Number.isNaN(dataLimite.getTime())) return NextResponse.json({ error: "Data limite inválida" }, { status: 400 });
+    if (dataHorario && Number.isNaN(dataHorario.getTime())) return NextResponse.json({ error: "Data/hora inválida" }, { status: 400 });
+    if (dataLimite && Number.isNaN(dataLimite.getTime())) return NextResponse.json({ error: "Data limite inválida" }, { status: 400 });
 
     const [updated] = await db
       .update(partidas)
