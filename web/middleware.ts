@@ -41,9 +41,9 @@ export default async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/login', req.nextUrl));
   }
 
-  // Se já está logado e tenta acessar login -> Dashboard (opcional)
+  // Se já está logado e tenta acessar login -> Admin (ou Atleta se for o caso)
   if (path === '/login' && cookie) {
-    return NextResponse.redirect(new URL('/dashboard', req.nextUrl));
+    return NextResponse.redirect(new URL('/admin', req.nextUrl));
   }
 
   if (path === "/atleta/login" && cookie) {
