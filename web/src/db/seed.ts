@@ -2,6 +2,14 @@ import { db } from './index';
 import { esportes, usuarios, torneios, categorias } from './schema';
 import { eq } from 'drizzle-orm';
 
+function slugify(text: string) {
+  return text.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 async function seed() {
   console.log('🌱 Iniciando seed do banco de dados (Novo Schema PT-BR)...');
 
@@ -99,6 +107,7 @@ async function seed() {
     await db.insert(categorias).values({
       torneioId: tournamentId,
       nome: cat.nome,
+      slug: slugify(cat.nome),
       genero: cat.genero,
       valorInscricao: cat.valor.toString(),
       vagasMaximas: 32,

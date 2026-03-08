@@ -21,8 +21,8 @@ export function calcularResultadoSets(params: {
       a: Number(s?.a) || 0,
       b: Number(s?.b) || 0,
       tiebreak: Boolean(s?.tiebreak),
-      tbA: s?.tbA === undefined || s?.tbA === null || s?.tbA === "" ? undefined : Number(s?.tbA),
-      tbB: s?.tbB === undefined || s?.tbB === null || s?.tbB === "" ? undefined : Number(s?.tbB),
+      tbA: (s as any)?.tbA === undefined || (s as any)?.tbA === null || (s as any)?.tbA === "" ? undefined : Number((s as any)?.tbA),
+      tbB: (s as any)?.tbB === undefined || (s as any)?.tbB === null || (s as any)?.tbB === "" ? undefined : Number((s as any)?.tbB),
     }))
     .filter(
       (s) =>
