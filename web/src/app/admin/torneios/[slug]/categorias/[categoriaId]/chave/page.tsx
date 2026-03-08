@@ -97,12 +97,12 @@ export default function AdminCategoriaChavePage() {
   async function carregarChave() {
     const fases: Fase[] = ["OITAVAS", "QUARTAS", "SEMI", "FINAL"];
     const results = await Promise.all(
-      fases.map(async (f) => {
+      fases.map(async (f): Promise<[Fase, Partida[]]> => {
         const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=${f}`, { cache: "no-store" });
-        if (!res.ok) return [f, []] as const;
+        if (!res.ok) return [f, []];
         const rows = (await res.json()) as Partida[];
         const sorted = rows.slice().sort((a, b) => a.id.localeCompare(b.id));
-        return [f, sorted] as const;
+        return [f, sorted];
       })
     );
 
