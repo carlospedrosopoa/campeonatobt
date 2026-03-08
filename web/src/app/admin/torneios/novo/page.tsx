@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Save } from "lucide-react";
 import { ImageUpload } from "@/components/ui/image-upload";
 
