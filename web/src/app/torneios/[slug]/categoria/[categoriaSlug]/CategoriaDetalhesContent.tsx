@@ -54,6 +54,8 @@ type Partida = {
   rodadaNome: string | null;
   rodadaNumero: number | null;
   rodadaDataLimite: string | null;
+  equipeAId: string | null;
+  equipeBId: string | null;
   equipeANome: string | null;
   equipeBNome: string | null;
   vencedorId: string | null;
