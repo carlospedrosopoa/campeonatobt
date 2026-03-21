@@ -25,7 +25,7 @@ async function playFetch(path: string, init: RequestInit & { token?: string } = 
 }
 
 export async function playLogin(email: string, password: string) {
-  const res = await playFetch("/user/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+  const res = await playFetch("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
   const data = (await res.json().catch(() => null)) as PlayLoginResponse | null;
   return { res, data };
 }

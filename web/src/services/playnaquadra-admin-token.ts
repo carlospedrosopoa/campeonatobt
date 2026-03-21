@@ -29,7 +29,10 @@ export async function getPlayAdminToken() {
 
   const login = await playLogin(email, password);
   const token = (login.data?.token as string | undefined) ?? "";
-  if (!login.res.ok || !token) throw new Error("Falha ao autenticar no Play na Quadra");
+  if (!login.res.ok || !token) {
+    console.error("Falha ao autenticar admin no Play na Quadra. Res:", login.res.status, "Data:", login.data);
+    throw new Error(`Falha ao autenticar no Play na Quadra: ${login.data?.mensagem || login.data?.error || "Erro desconhecido"}`);
+  }
 
   cachedToken = token;
   cachedExpMs = decodeJwtExpMs(token) ?? null;

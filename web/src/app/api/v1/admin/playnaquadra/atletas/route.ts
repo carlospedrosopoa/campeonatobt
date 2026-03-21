@@ -22,10 +22,14 @@ export async function GET(request: NextRequest) {
     const tokenPlay = await getPlayAdminToken();
     const result = await playBuscarAtletas({ token: tokenPlay, q, limite });
     
-    if (!result.res.ok) return NextResponse.json({ error: "Falha ao buscar atletas no Play na Quadra" }, { status: 502 });
+    if (!result.res.ok) {
+      console.error("Falha API Play na Quadra:", result.res.status, result.data);
+      return NextResponse.json({ error: "Falha ao buscar atletas no Play na Quadra" }, { status: 502 });
+    }
     
     return NextResponse.json(result.data, { headers: { "Cache-Control": "no-store" } });
   } catch (e: any) {
+    console.error("Erro na busca de atletas do admin:", e);
     return NextResponse.json({ error: e?.message || "Erro ao buscar atletas" }, { status: 500 });
   }
 }
