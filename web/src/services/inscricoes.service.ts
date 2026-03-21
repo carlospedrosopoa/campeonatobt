@@ -6,8 +6,8 @@ export type CriarInscricaoDTO = {
   torneioId: string;
   categoriaId: string;
   equipeNome?: string;
-  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null };
-  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null };
+  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null };
+  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null };
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
 };
 
@@ -96,6 +96,7 @@ export class InscricoesService {
       email: atletaAEmail,
       telefone: dados.atletaA.telefone?.trim(),
       playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
+      fotoUrl: dados.atletaA.fotoUrl ?? null,
     });
 
     const atletaBId = await this.upsertAtleta({
@@ -103,6 +104,7 @@ export class InscricoesService {
       email: atletaBEmail,
       telefone: dados.atletaB.telefone?.trim(),
       playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
+      fotoUrl: dados.atletaB.fotoUrl ?? null,
     });
 
     if (atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
@@ -139,7 +141,7 @@ export class InscricoesService {
     return del ?? null;
   }
 
-  private async upsertAtleta(dados: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null }) {
+  private async upsertAtleta(dados: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null }) {
     if (dados.playnaquadraAtletaId) {
       const existingByPlay = await db
         .select({ id: usuarios.id })
@@ -154,6 +156,7 @@ export class InscricoesService {
             nome: dados.nome,
             email: dados.email,
             telefone: dados.telefone ?? null,
+            ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
             atualizadoEm: new Date(),
           })
           .where(eq(usuarios.id, id));
@@ -170,6 +173,7 @@ export class InscricoesService {
           nome: dados.nome,
           telefone: dados.telefone ?? null,
           playnaquadraAtletaId: dados.playnaquadraAtletaId ?? null,
+          ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
           atualizadoEm: new Date(),
         })
         .where(eq(usuarios.id, id));
@@ -184,6 +188,7 @@ export class InscricoesService {
         telefone: dados.telefone ?? null,
         perfil: "ATLETA",
         playnaquadraAtletaId: dados.playnaquadraAtletaId ?? null,
+        fotoUrl: dados.fotoUrl ?? null,
       })
       .returning();
 

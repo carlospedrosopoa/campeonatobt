@@ -57,8 +57,8 @@ export async function POST(
     const equipeNome = (body?.equipeNome as string | undefined)?.trim();
     const status = body?.status as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA" | undefined;
 
-    const atletaA = body?.atletaA as { nome?: string; email?: string; telefone?: string } | undefined;
-    const atletaB = body?.atletaB as { nome?: string; email?: string; telefone?: string } | undefined;
+    const atletaA = body?.atletaA as { nome?: string; email?: string; telefone?: string; playnaquadraAtletaId?: string; fotoUrl?: string } | undefined;
+    const atletaB = body?.atletaB as { nome?: string; email?: string; telefone?: string; playnaquadraAtletaId?: string; fotoUrl?: string } | undefined;
 
     if (!atletaA?.nome || !atletaA?.email || !atletaB?.nome || !atletaB?.email) {
       return NextResponse.json({ error: "Dados dos dois atletas são obrigatórios" }, { status: 400 });
@@ -69,8 +69,8 @@ export async function POST(
       categoriaId,
       equipeNome,
       status,
-      atletaA: { nome: atletaA.nome, email: atletaA.email, telefone: atletaA.telefone },
-      atletaB: { nome: atletaB.nome, email: atletaB.email, telefone: atletaB.telefone },
+      atletaA: { nome: atletaA.nome, email: atletaA.email, telefone: atletaA.telefone, playnaquadraAtletaId: atletaA.playnaquadraAtletaId, fotoUrl: atletaA.fotoUrl },
+      atletaB: { nome: atletaB.nome, email: atletaB.email, telefone: atletaB.telefone, playnaquadraAtletaId: atletaB.playnaquadraAtletaId, fotoUrl: atletaB.fotoUrl },
     });
 
     return NextResponse.json(nova, { status: 201 });

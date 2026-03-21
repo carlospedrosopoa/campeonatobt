@@ -59,9 +59,13 @@ export default function AdminCategoriaInscricoesPage() {
     atletaANome: "",
     atletaAEmail: "",
     atletaATelefone: "",
+    atletaAPlayId: "",
+    atletaAFotoUrl: "",
     atletaBNome: "",
     atletaBEmail: "",
     atletaBTelefone: "",
+    atletaBPlayId: "",
+    atletaBFotoUrl: "",
     status: "APROVADA" as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA",
   });
 
@@ -116,10 +120,10 @@ export default function AdminCategoriaInscricoesPage() {
     const timeout = setTimeout(async () => {
       try {
         setBuscandoAtletaA(true);
-        const res = await fetch(`/api/v1/usuarios?q=${encodeURIComponent(q)}&perfil=ATLETA&limit=8`, { cache: "no-store" });
+        const res = await fetch(`/api/v1/admin/playnaquadra/atletas?q=${encodeURIComponent(q)}&limit=8`, { cache: "no-store" });
         if (!res.ok) return;
-        const lista = (await res.json()) as Atleta[];
-        setResultadosAtletaA(lista);
+        const data = await res.json();
+        setResultadosAtletaA(data.atletas || []);
       } finally {
         setBuscandoAtletaA(false);
       }
@@ -139,10 +143,10 @@ export default function AdminCategoriaInscricoesPage() {
     const timeout = setTimeout(async () => {
       try {
         setBuscandoAtletaB(true);
-        const res = await fetch(`/api/v1/usuarios?q=${encodeURIComponent(q)}&perfil=ATLETA&limit=8`, { cache: "no-store" });
+        const res = await fetch(`/api/v1/admin/playnaquadra/atletas?q=${encodeURIComponent(q)}&limit=8`, { cache: "no-store" });
         if (!res.ok) return;
-        const lista = (await res.json()) as Atleta[];
-        setResultadosAtletaB(lista);
+        const data = await res.json();
+        setResultadosAtletaB(data.atletas || []);
       } finally {
         setBuscandoAtletaB(false);
       }
@@ -162,9 +166,13 @@ export default function AdminCategoriaInscricoesPage() {
       atletaANome: "",
       atletaAEmail: "",
       atletaATelefone: "",
+      atletaAPlayId: "",
+      atletaAFotoUrl: "",
       atletaBNome: "",
       atletaBEmail: "",
       atletaBTelefone: "",
+      atletaBPlayId: "",
+      atletaBFotoUrl: "",
       status: "APROVADA",
     });
   }
@@ -194,11 +202,15 @@ export default function AdminCategoriaInscricoesPage() {
           nome: form.atletaANome.trim(),
           email: form.atletaAEmail.trim(),
           telefone: form.atletaATelefone.trim() || undefined,
+          playnaquadraAtletaId: form.atletaAPlayId || undefined,
+          fotoUrl: form.atletaAFotoUrl || undefined,
         },
         atletaB: {
           nome: form.atletaBNome.trim(),
           email: form.atletaBEmail.trim(),
           telefone: form.atletaBTelefone.trim() || undefined,
+          playnaquadraAtletaId: form.atletaBPlayId || undefined,
+          fotoUrl: form.atletaBFotoUrl || undefined,
         },
       };
 
@@ -382,6 +394,8 @@ export default function AdminCategoriaInscricoesPage() {
                             atletaANome: a.nome,
                             atletaAEmail: a.email,
                             atletaATelefone: a.telefone ?? "",
+                            atletaAPlayId: a.id,
+                            atletaAFotoUrl: a.fotoUrl ?? "",
                           }));
                           setBuscaAtletaA("");
                           setResultadosAtletaA([]);
@@ -448,6 +462,8 @@ export default function AdminCategoriaInscricoesPage() {
                             atletaBNome: a.nome,
                             atletaBEmail: a.email,
                             atletaBTelefone: a.telefone ?? "",
+                            atletaBPlayId: a.id,
+                            atletaBFotoUrl: a.fotoUrl ?? "",
                           }));
                           setBuscaAtletaB("");
                           setResultadosAtletaB([]);
