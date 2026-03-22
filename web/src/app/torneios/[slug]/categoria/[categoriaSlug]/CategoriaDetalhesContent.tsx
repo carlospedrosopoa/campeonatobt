@@ -196,17 +196,17 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
   return (
     <div className="space-y-6">
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex gap-8 overflow-x-auto" aria-label="Tabs">
+      <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        <nav className="flex gap-2 overflow-x-auto" aria-label="Tabs">
           {(["inscritos", "classificacao", "jogos"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`
-                whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors
+                whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors
                 ${tab === t
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
                 }
               `}
             >
@@ -270,13 +270,14 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                 </div>
               ) : (
                 classificacao.map((grupo) => (
-                  <div key={grupo.grupoId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 font-bold text-gray-700">
-                      {grupo.grupoNome}
+                  <div key={grupo.grupoId} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-slate-50 to-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                      <div className="font-bold text-slate-800">{grupo.grupoNome}</div>
+                      <div className="text-xs font-medium text-slate-500">{grupo.equipes.length} duplas</div>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        <thead className="bg-white text-gray-500 border-b border-gray-100">
+                        <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
                           <tr>
                             <th className="px-4 py-3 text-left font-medium w-full">Equipe</th>
                             <th className="px-2 py-3 text-center font-medium" title="Pontos">P</th>
@@ -285,21 +286,21 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                             <th className="px-2 py-3 text-center font-medium" title="Saldo de Games">SG</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-slate-100">
                           {grupo.equipes.map((e, idx) => (
-                            <tr key={e.equipeId} className="hover:bg-gray-50">
+                            <tr key={e.equipeId} className="hover:bg-slate-50/70">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
-                                  <span className={`w-5 text-center font-mono text-xs ${idx < 2 ? "text-green-600 font-bold" : "text-gray-400"}`}>
+                                  <span className={`w-6 h-6 inline-flex items-center justify-center rounded-full text-[11px] font-bold ${idx < 2 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                                     {idx + 1}
                                   </span>
-                                  <span className="font-medium text-gray-900">{e.equipeNome}</span>
+                                  <span className="font-medium text-slate-900">{e.equipeNome}</span>
                                 </div>
                               </td>
-                              <td className="px-2 py-3 text-center font-bold text-gray-900">{e.pontos}</td>
-                              <td className="px-2 py-3 text-center text-gray-600">{e.jogosJogados}</td>
-                              <td className="px-2 py-3 text-center text-gray-600">{e.jogosVencidos}</td>
-                              <td className="px-2 py-3 text-center text-gray-600">{e.saldoGames}</td>
+                              <td className="px-2 py-3 text-center font-bold text-slate-900">{e.pontos}</td>
+                              <td className="px-2 py-3 text-center text-slate-600">{e.jogosJogados}</td>
+                              <td className="px-2 py-3 text-center text-slate-600">{e.jogosVencidos}</td>
+                              <td className="px-2 py-3 text-center text-slate-600">{e.saldoGames}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -314,18 +315,20 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
           {/* Aba Jogos */}
           {tab === "jogos" && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+                <div className="flex items-center gap-2 overflow-x-auto">
                 {fasesDisponiveis.map((f) => (
                   <button
                     key={f}
                     onClick={() => setFase(f)}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
-                      fase === f ? "bg-slate-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+                      fase === f ? "bg-slate-900 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
                     {f}
                   </button>
                 ))}
+                </div>
               </div>
 
               {partidas.length === 0 ? (

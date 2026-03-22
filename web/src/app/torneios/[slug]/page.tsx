@@ -102,7 +102,7 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                         href={`/torneios/${torneio.slug}/categoria/${cat.slug}`}
                         className="text-sm font-medium text-blue-600 hover:text-blue-800"
                       >
-                        Ver Chaves &rarr;
+                        Acessar categoria &rarr;
                       </Link>
                     </div>
                   ))}
