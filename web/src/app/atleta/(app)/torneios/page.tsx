@@ -174,7 +174,7 @@ export default function AtletaTorneiosPage() {
           <Trophy className="w-6 h-6 text-blue-600" />
           {label}
         </h1>
-        <p className="text-sm text-gray-600">Gerencie suas inscrições no Arena Tour.</p>
+        <p className="text-sm text-gray-600">Gerencie suas inscrições no Play Na Quadra - Competições.</p>
       </div>
     );
   }, [tab]);

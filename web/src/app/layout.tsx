@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Arena Tour - Gestão de Torneios",
+  title: "Play Na Quadra - Competições",
   description: "A melhor plataforma para gestão de torneios de Beach Tennis, Padel e muito mais.",
 };
 
