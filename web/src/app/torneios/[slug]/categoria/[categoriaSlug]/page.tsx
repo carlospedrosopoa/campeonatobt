@@ -41,7 +41,7 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-slate-900">{categoria.nome}</h1>
-              <p className="text-slate-500 mt-1">{categoria.genero} • {categoria.valorInscricao ? `R$ ${categoria.valorInscricao}` : 'Gratuito'}</p>
+              <p className="text-slate-500 mt-1">{categoria.genero}</p>
             </div>
             
             <Link 
