@@ -366,7 +366,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                     ? "bg-emerald-100 text-emerald-700"
                                     : "bg-amber-100 text-amber-700"
                                 }`}>
-                                  {p.status}
+                                  {p.status === "AGENDADA" ? "AGENDAMENTO" : p.status}
                                 </span>
                                 <span className="text-slate-500 font-medium">Jogo {jogoIndex + 1}</span>
                               </div>
