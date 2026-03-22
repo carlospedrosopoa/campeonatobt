@@ -282,8 +282,8 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                           <tr>
                             <th className="px-4 py-3 text-left font-medium w-full">Equipe</th>
                             <th className="px-2 py-3 text-center font-medium" title="Pontos">P</th>
-                            <th className="px-2 py-3 text-center font-medium" title="Jogos">J</th>
                             <th className="px-2 py-3 text-center font-medium" title="Vitórias">V</th>
+                            <th className="px-2 py-3 text-center font-medium" title="Sets Pró">SP</th>
                             <th className="px-2 py-3 text-center font-medium" title="Saldo de Games">SG</th>
                           </tr>
                         </thead>
@@ -299,8 +299,8 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                 </div>
                               </td>
                               <td className="px-2 py-3 text-center font-bold text-slate-900">{e.pontos}</td>
-                              <td className="px-2 py-3 text-center text-slate-600">{e.jogosJogados}</td>
                               <td className="px-2 py-3 text-center text-slate-600">{e.jogosVencidos}</td>
+                              <td className="px-2 py-3 text-center text-slate-600">{e.setsPro}</td>
                               <td className="px-2 py-3 text-center text-slate-600">{e.saldoGames}</td>
                             </tr>
                           ))}
