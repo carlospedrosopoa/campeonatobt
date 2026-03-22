@@ -179,13 +179,13 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
 
     partidas.forEach((p) => {
       const num = p.rodadaNumero ?? 0;
-      const atual = grupos.get(num) ?? {
+      const atual: { nome: string; dataLimite: string | null; jogos: Partida[] } = grupos.get(num) ?? {
         nome: p.rodadaNome || `Rodada ${num}`,
-        dataLimite: p.rodadaDataLimite || p.dataLimite,
+        dataLimite: p.rodadaDataLimite ?? p.dataLimite ?? null,
         jogos: [],
       };
       if (!atual.dataLimite && (p.rodadaDataLimite || p.dataLimite)) {
-        atual.dataLimite = p.rodadaDataLimite || p.dataLimite;
+        atual.dataLimite = p.rodadaDataLimite ?? p.dataLimite ?? null;
       }
       atual.jogos.push(p);
       grupos.set(num, atual);
