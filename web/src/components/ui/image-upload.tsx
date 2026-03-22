@@ -38,7 +38,7 @@ export function ImageUpload({ value, onChange, label, folder = "uploads", classN
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.mensagem || "Falha ao fazer upload");
+        throw new Error(errorData.mensagem || errorData.error || "Falha ao fazer upload");
       }
 
       const data = await res.json();

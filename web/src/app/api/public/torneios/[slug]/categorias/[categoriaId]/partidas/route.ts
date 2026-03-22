@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { db } from "@/db";
-import { arenas, grupos, partidas, rodadas } from "@/db/schema";
-import { and, asc, eq } from "drizzle-orm";
+import { arenas, equipeIntegrantes, grupos, partidas, rodadas, usuarios } from "@/db/schema";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 
 export async function GET(
@@ -21,7 +21,7 @@ export async function GET(
     }
 
     const { searchParams } = new URL(request.url);
-    const fase = (searchParams.get("fase") || "GRUPOS").trim();
+    const fase = (searchParams.get("fase") || "").trim();
 
     const rows = await db
       .select({
@@ -52,15 +52,42 @@ export async function GET(
       .leftJoin(grupos, eq(partidas.grupoId, grupos.id))
       .leftJoin(rodadas, eq(partidas.rodadaId, rodadas.id))
       .leftJoin(arenas, eq(partidas.arenaId, arenas.id))
-      .where(and(eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId), eq(partidas.fase, fase as any)))
+      .where(
+        fase
+          ? and(eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId), eq(partidas.fase, fase as any))
+          : and(eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId))
+      )
       .orderBy(asc(rodadas.numero), asc(partidas.criadoEm));
 
-    const equipeIds = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId])));
+    const equipeIds = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
     const mapNomes = await equipesDisplayService.mapNomesEquipes(equipeIds);
+    const atletasRows =
+      equipeIds.length > 0
+        ? await db
+            .select({
+              equipeId: equipeIntegrantes.equipeId,
+              atletaId: usuarios.id,
+              atletaNome: usuarios.nome,
+              atletaFotoUrl: usuarios.fotoUrl,
+            })
+            .from(equipeIntegrantes)
+            .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
+            .where(inArray(equipeIntegrantes.equipeId, equipeIds))
+        : [];
+
+    const mapAtletas = new Map<string, { id: string; nome: string; fotoUrl: string | null }[]>();
+    for (const a of atletasRows) {
+      const current = mapAtletas.get(a.equipeId) ?? [];
+      current.push({ id: a.atletaId, nome: a.atletaNome, fotoUrl: a.atletaFotoUrl ?? null });
+      mapAtletas.set(a.equipeId, current);
+    }
+
     const result = rows.map((r) => ({
       ...r,
       equipeANome: mapNomes.get(r.equipeAId) ?? null,
       equipeBNome: mapNomes.get(r.equipeBId) ?? null,
+      equipeAAtletas: r.equipeAId ? mapAtletas.get(r.equipeAId) ?? [] : [],
+      equipeBAtletas: r.equipeBId ? mapAtletas.get(r.equipeBId) ?? [] : [],
     }));
 
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });

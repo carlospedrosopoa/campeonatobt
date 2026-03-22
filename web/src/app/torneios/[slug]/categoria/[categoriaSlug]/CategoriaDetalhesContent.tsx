@@ -66,6 +66,8 @@ type Partida = {
   quadra: string | null;
   fotoUrl: string | null;
   transmissaoUrl: string | null;
+  equipeAAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
+  equipeBAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
 };
 
 interface Props {
@@ -74,12 +76,14 @@ interface Props {
 }
 
 export default function CategoriaDetalhesContent({ torneio, categoria }: Props) {
+  const ordemFases = ["GRUPOS", "OITAVAS", "QUARTAS", "SEMI", "FINAL"] as const;
   const [tab, setTab] = useState<"inscritos" | "classificacao" | "jogos">("inscritos");
   const [fase, setFase] = useState("GRUPOS");
   
   const [inscritos, setInscritos] = useState<Inscrito[]>([]);
   const [classificacao, setClassificacao] = useState<ClassificacaoGrupo[]>([]);
   const [partidas, setPartidas] = useState<Partida[]>([]);
+  const [fasesDisponiveis, setFasesDisponiveis] = useState<string[]>(["GRUPOS"]);
   
   const [loading, setLoading] = useState(false);
 
@@ -122,15 +126,30 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
   async function carregarPartidas() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/public/torneios/${torneio.slug}/categorias/${categoria.id}/partidas?fase=${fase}`);
-      const data = await res.json();
-      setPartidas(Array.isArray(data) ? data : []);
+      const [resFase, resAll] = await Promise.all([
+        fetch(`/api/public/torneios/${torneio.slug}/categorias/${categoria.id}/partidas?fase=${fase}`),
+        fetch(`/api/public/torneios/${torneio.slug}/categorias/${categoria.id}/partidas`),
+      ]);
+      const dataFase = await resFase.json();
+      const dataAll = await resAll.json();
+      const listaFase = Array.isArray(dataFase) ? dataFase : [];
+      const listaAll = Array.isArray(dataAll) ? dataAll : [];
+      setPartidas(listaFase);
+      const fasesSet = new Set<string>(listaAll.map((p: Partida) => p.fase).filter(Boolean));
+      const fases = ordemFases.filter((f) => fasesSet.has(f));
+      setFasesDisponiveis(fases.length > 0 ? [...fases] : ["GRUPOS"]);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (tab !== "jogos") return;
+    if (fasesDisponiveis.includes(fase)) return;
+    setFase(fasesDisponiveis[0] || "GRUPOS");
+  }, [tab, fase, fasesDisponiveis]);
 
   function formatarPlacar(p: Partida) {
     if (!p.detalhesPlacar || !Array.isArray(p.detalhesPlacar)) {
@@ -161,9 +180,12 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
       const num = p.rodadaNumero ?? 0;
       const atual = grupos.get(num) ?? {
         nome: p.rodadaNome || `Rodada ${num}`,
-        dataLimite: p.rodadaDataLimite,
+        dataLimite: p.rodadaDataLimite || p.dataLimite,
         jogos: [],
       };
+      if (!atual.dataLimite && (p.rodadaDataLimite || p.dataLimite)) {
+        atual.dataLimite = p.rodadaDataLimite || p.dataLimite;
+      }
       atual.jogos.push(p);
       grupos.set(num, atual);
     });
@@ -293,7 +315,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
           {tab === "jogos" && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                {(["GRUPOS", "OITAVAS", "QUARTAS", "SEMI", "FINAL"] as const).map((f) => (
+                {fasesDisponiveis.map((f) => (
                   <button
                     key={f}
                     onClick={() => setFase(f)}
@@ -314,24 +336,23 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                 <div className="space-y-8">
                   {partidasPorRodada.map(([num, dados]) => (
                     <div key={num} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                        <span className="font-bold text-gray-700">{dados.nome}</span>
+                      <div className="bg-gradient-to-r from-slate-50 to-white px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                        <span className="font-bold text-slate-800">{dados.nome}</span>
                         {dados.dataLimite && (
-                          <span className="text-xs text-gray-500 flex items-center gap-1">
+                          <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
                             <Clock className="w-3 h-3" />
-                            Limite: {new Date(dados.dataLimite).toLocaleDateString("pt-BR")}
+                            Limite: {new Date(dados.dataLimite).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                           </span>
                         )}
                       </div>
                       <div className="divide-y divide-gray-100">
                         {dados.jogos.map((p) => (
-                          <div key={p.id} className="p-4 hover:bg-gray-50 transition-colors">
+                          <div key={p.id} className="p-4 md:p-5 hover:bg-slate-50/70 transition-colors">
                             <div className="flex flex-col md:flex-row md:items-center gap-4">
-                              {/* Data/Hora e Local */}
-                              <div className="md:w-32 shrink-0 flex flex-col text-sm text-gray-500">
+                              <div className="md:w-36 shrink-0 flex flex-col text-sm text-slate-500">
                                 {p.dataHorario ? (
                                   <>
-                                    <span className="font-medium text-gray-900">
+                                    <span className="font-semibold text-slate-900">
                                       {new Date(p.dataHorario).toLocaleDateString("pt-BR", {
                                         day: "2-digit",
                                         month: "2-digit",
@@ -345,7 +366,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                     </span>
                                   </>
                                 ) : (
-                                  <span className="text-xs italic text-gray-400">Não agendado</span>
+                                  <span className="text-xs italic text-slate-400">Não agendado</span>
                                 )}
                                 {p.quadra && (
                                   <span className="mt-1 inline-flex items-center gap-1 text-xs">
@@ -355,26 +376,46 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                 )}
                               </div>
 
-                              {/* Placar */}
                               <div className="flex-1 flex items-center justify-between gap-4">
-                                <div className={`flex-1 text-right font-semibold ${p.vencedorId && p.vencedorId === p.equipeAId ? "text-green-700" : "text-gray-900"}`}>
-                                  {p.equipeANome || "A definir"}
+                                <div className={`flex-1 text-right ${p.vencedorId && p.vencedorId === p.equipeAId ? "text-green-700" : "text-slate-900"}`}>
+                                  <div className="font-semibold">{p.equipeANome || "A definir"}</div>
+                                  <div className="mt-2 flex items-center justify-end -space-x-2">
+                                    {(p.equipeAAtletas || []).slice(0, 2).map((a) => (
+                                      <img
+                                        key={a.id}
+                                        src={a.fotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nome)}&background=random&color=fff`}
+                                        alt={a.nome}
+                                        title={a.nome}
+                                        className="h-7 w-7 rounded-full ring-2 ring-white object-cover bg-slate-100"
+                                      />
+                                    ))}
+                                  </div>
                                 </div>
 
-                                <div className="shrink-0 flex flex-col items-center min-w-[80px]">
+                                <div className="shrink-0 flex flex-col items-center min-w-[96px]">
                                   {p.status === "FINALIZADA" || p.status === "WO" ? (
                                     formatarPlacar(p)
                                   ) : (
-                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">vs</span>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">vs</span>
                                   )}
                                 </div>
 
-                                <div className={`flex-1 text-left font-semibold ${p.vencedorId && p.vencedorId === p.equipeBId ? "text-green-700" : "text-gray-900"}`}>
-                                  {p.equipeBNome || "A definir"}
+                                <div className={`flex-1 text-left ${p.vencedorId && p.vencedorId === p.equipeBId ? "text-green-700" : "text-slate-900"}`}>
+                                  <div className="font-semibold">{p.equipeBNome || "A definir"}</div>
+                                  <div className="mt-2 flex items-center -space-x-2">
+                                    {(p.equipeBAtletas || []).slice(0, 2).map((a) => (
+                                      <img
+                                        key={a.id}
+                                        src={a.fotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nome)}&background=random&color=fff`}
+                                        alt={a.nome}
+                                        title={a.nome}
+                                        className="h-7 w-7 rounded-full ring-2 ring-white object-cover bg-slate-100"
+                                      />
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
 
-                              {/* Mídia */}
                               {(p.fotoUrl || p.transmissaoUrl) && (
                                 <div className="flex items-center gap-2 md:ml-4 border-t md:border-t-0 md:border-l border-gray-100 pt-2 md:pt-0 md:pl-4 justify-center md:justify-start">
                                   {p.fotoUrl && (
@@ -382,7 +423,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                       href={p.fotoUrl} 
                                       target="_blank" 
                                       rel="noopener noreferrer" 
-                                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
                                       title="Ver fotos"
                                     >
                                       <Camera className="w-4 h-4" />
@@ -393,7 +434,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                       href={p.transmissaoUrl} 
                                       target="_blank" 
                                       rel="noopener noreferrer" 
-                                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
                                       title="Assistir transmissão"
                                     >
                                       <Video className="w-4 h-4" />

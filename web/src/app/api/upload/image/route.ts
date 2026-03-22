@@ -49,8 +49,7 @@ export async function POST(request: NextRequest) {
     console.error('Erro ao fazer upload:', error);
     return NextResponse.json(
       { 
-        mensagem: 'Erro ao fazer upload da imagem',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        mensagem: error?.message || 'Erro ao fazer upload da imagem'
       },
       { status: 500 }
     );
