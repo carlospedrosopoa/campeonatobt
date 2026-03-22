@@ -66,8 +66,11 @@ export class DinamicaCategoriaService {
     const qtdManual = config.grupos?.quantidade;
     const qtdGrupos = modo === "MANUAL" && qtdManual ? qtdManual : Math.max(1, Math.ceil(equipesIds.length / tamanhoAlvo));
 
-    const categoriaRow = await db.select({ id: categorias.id }).from(categorias).where(eq(categorias.id, params.categoriaId)).limit(1);
+    const categoriaRow = await db.select({ id: categorias.id, torneioId: categorias.torneioId }).from(categorias).where(eq(categorias.id, params.categoriaId)).limit(1);
     if (!categoriaRow[0]) throw new Error("Categoria não encontrada");
+
+    const torneioRow = await db.select({ superCampeonato: torneios.superCampeonato }).from(torneios).where(eq(torneios.id, categoriaRow[0].torneioId)).limit(1);
+    const isSuperCampeonato = torneioRow[0]?.superCampeonato ?? false;
 
     const resultado = await db.transaction(async (tx) => {
       await tx.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "GRUPOS")));
@@ -88,15 +91,19 @@ export class DinamicaCategoriaService {
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
 
+      const qtdGruposCalculada = isSuperCampeonato 
+        ? 1 
+        : (modo === "MANUAL" && qtdManual ? qtdManual : Math.max(1, Math.ceil(equipesIds.length / tamanhoAlvo)));
+
       const gruposCriados: { id: string; nome: string; equipes: string[] }[] = [];
-      for (let i = 0; i < qtdGrupos; i++) {
-        const nome = groupName(i);
+      for (let i = 0; i < qtdGruposCalculada; i++) {
+        const nome = isSuperCampeonato ? "Grupo Único" : groupName(i);
         const [g] = await tx.insert(grupos).values({ categoriaId: params.categoriaId, nome }).returning();
         gruposCriados.push({ id: g.id, nome, equipes: [] });
       }
 
       for (let index = 0; index < shuffled.length; index++) {
-        const gIndex = index % qtdGrupos;
+        const gIndex = index % qtdGruposCalculada;
         gruposCriados[gIndex].equipes.push(shuffled[index]);
       }
 

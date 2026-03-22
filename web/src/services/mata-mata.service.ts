@@ -85,6 +85,12 @@ export class MataMataService {
       }
     }
 
+    if (superCampeonato) {
+      // Super Campeonato com 1 grupo único (todos contra todos) -> passam 6 (2 primeiros bye, 3..6 quartas)
+      const top6 = qualificados.slice(0, 6);
+      return { config, grupos, qualificados: top6, superCampeonato, seeds: top6.map((s) => s.equipeId) };
+    }
+
     if (melhoresTerceiros > 0) {
       const restantes: any[] = [];
       for (const g of grupos) {
@@ -173,7 +179,9 @@ export class MataMataService {
           throw new Error("Não foi possível montar a semifinal do Super Campeonato.");
         }
 
+        // Ordena os 4 semifinalistas de acordo com seu rank da 1ª fase (1, 2, V1, V2)
         semifinalistas.sort((a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999));
+        // O 1º melhor classificado pega o 4º (pior classificado). O 2º pega o 3º.
         pairings.push({ a: semifinalistas[0], b: semifinalistas[3] });
         pairings.push({ a: semifinalistas[1], b: semifinalistas[2] });
         return { faseProxima, pairings };
@@ -183,6 +191,9 @@ export class MataMataService {
     if (params.faseAtual === "QUARTAS" && winners.length === 2) {
       const { seeds } = await this.calcularSeeds({ categoriaId: params.categoriaId });
       if (seeds.length === 6) {
+        // Se for Super Campeonato, o re-seeding já foi tratado no bloco acima (faseProxima === "SEMI").
+        // Este bloco lida com torneios normais de 6 classificados onde a semi é fixa:
+        // S1 x Vencedor(S4xS5) e S2 x Vencedor(S3xS6)
         const s1 = seeds[0];
         const s2 = seeds[1];
         const s3 = seeds[2];
@@ -353,8 +364,48 @@ export class MataMataService {
   }
 
   async gerarPrimeiraFase(params: { torneioId: string; categoriaId: string }) {
-    const { config, grupos, qualificados, seeds: seedIds } = await this.calcularSeeds({ categoriaId: params.categoriaId });
+    const { config, grupos, qualificados, seeds: seedIds, superCampeonato } = await this.calcularSeeds({ categoriaId: params.categoriaId });
     const total = qualificados.length;
+    
+    // Regra específica para Super Campeonato
+    if (superCampeonato) {
+      await db.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), not(eq(partidas.fase, "GRUPOS"))));
+
+      if (total !== 6) {
+        throw new Error("Super Campeonato precisa de exatamente 6 classificados para gerar o mata-mata (Quartas de Final para 3º a 6º).");
+      }
+
+      const s1 = seedIds[0];
+      const s2 = seedIds[1];
+      const s3 = seedIds[2];
+      const s4 = seedIds[3];
+      const s5 = seedIds[4];
+      const s6 = seedIds[5];
+
+      const pairings = [
+        { a: s3, b: s6 }, // Jogo 1 Quartas
+        { a: s4, b: s5 }, // Jogo 2 Quartas
+      ];
+
+      let partidasCriadas = 0;
+      for (const p of pairings) {
+        await db.insert(partidas).values({
+          torneioId: params.torneioId,
+          categoriaId: params.categoriaId,
+          grupoId: null,
+          equipeAId: p.a,
+          equipeBId: p.b,
+          fase: "QUARTAS",
+          status: "AGENDADA",
+          placarA: 0,
+          placarB: 0,
+          atualizadoEm: new Date(),
+        });
+        partidasCriadas += 1;
+      }
+      return { fase: "QUARTAS", partidasCriadas, qualificados: total };
+    }
+
     if (grupos.length === 1 && (config.fase2?.temFinal ?? true) === false) {
       return { fase: null as any, partidasCriadas: 0, qualificados: total };
     }
@@ -371,13 +422,11 @@ export class MataMataService {
     const gruposOrdenados = [...grupos].sort((a, b) => a.grupoNome.localeCompare(b.grupoNome));
 
     if (total === 6) {
-      const s1 = seedIds[0];
-      const s2 = seedIds[1];
       const s3 = seedIds[2];
       const s4 = seedIds[3];
       const s5 = seedIds[4];
       const s6 = seedIds[5];
-      if (!s1 || !s2 || !s3 || !s4 || !s5 || !s6) {
+      if (!seedIds[0] || !seedIds[1] || !s3 || !s4 || !s5 || !s6) {
         throw new Error("Não foi possível montar a chave para 6 classificados.");
       }
       pairings.push({ a: s3, b: s6 });
