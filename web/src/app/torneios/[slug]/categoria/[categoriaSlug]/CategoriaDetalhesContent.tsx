@@ -76,6 +76,15 @@ interface Props {
   categoria: Categoria;
 }
 
+function formatarDataSemFuso(data: string | null | undefined) {
+  if (!data) return "";
+  const match = data.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+  const d = new Date(data);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 export default function CategoriaDetalhesContent({ torneio, categoria }: Props) {
   const ordemFases = ["GRUPOS", "OITAVAS", "QUARTAS", "SEMI", "FINAL"] as const;
   const [tab, setTab] = useState<"inscritos" | "classificacao" | "jogos">("inscritos");
@@ -345,7 +354,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                         {dados.dataLimite && (
                           <span className="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-full inline-flex items-center gap-1.5 w-fit">
                             <Clock className="w-3.5 h-3.5" />
-                            Data limite: {new Date(dados.dataLimite).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                            Data limite: {formatarDataSemFuso(dados.dataLimite)}
                           </span>
                         )}
                       </div>
