@@ -315,6 +315,17 @@ export default function AdminCategoriaJogosSuperPage() {
     return `${day}/${month}`;
   }
 
+  function formatDataHora(value?: string | null) {
+    if (!value) return null;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const hour = String(d.getHours()).padStart(2, "0");
+    const minute = String(d.getMinutes()).padStart(2, "0");
+    return `${day}/${month} às ${hour}:${minute}`;
+  }
+
   function startEditPartida(p: Partida) {
     const det = (p.detalhesPlacar ?? []).slice().sort((a, b) => a.set - b.set);
     setEditPartidaId(p.id);
@@ -361,6 +372,14 @@ export default function AdminCategoriaJogosSuperPage() {
     return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
   }
 
+  function toLocalDateTimeInput(value: string | null | undefined) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
   function abrirEditarRodada(rodadaId: string | null, dataLimiteAtual: string | null | undefined) {
     if (!rodadaId) return;
     setEditRodadaId(rodadaId);
@@ -371,7 +390,7 @@ export default function AdminCategoriaJogosSuperPage() {
     setEditAgendamentoId(p.id);
     setAgendaArenaId(p.arenaId ?? "");
     setAgendaQuadra((p.quadra ?? "").toString());
-    setAgendaDataHorario(toLocalDateInput(p.dataHorario ?? null));
+    setAgendaDataHorario(toLocalDateTimeInput(p.dataHorario ?? null));
     setAgendaDataLimite(toLocalDateInput(p.dataLimite ?? null));
 
     if (arenas.length > 0) return;
@@ -885,7 +904,7 @@ export default function AdminCategoriaJogosSuperPage() {
                           {p.dataHorario ? (
                             <div className="flex items-center gap-1.5 text-slate-600 font-medium">
                               <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                              {formatData(p.dataHorario)}
+                              {formatDataHora(p.dataHorario)}
                             </div>
                           ) : (
                             <div className="flex items-center gap-1.5 text-amber-600 font-medium">
@@ -981,7 +1000,7 @@ export default function AdminCategoriaJogosSuperPage() {
                       {p.dataHorario ? (
                             <div className="flex items-center gap-1.5 text-slate-600 font-medium">
                               <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                              {formatData(p.dataHorario)}
+                              {formatDataHora(p.dataHorario)}
                             </div>
                           ) : (
                             <div className="flex items-center gap-1.5 text-amber-600 font-medium">
@@ -1270,11 +1289,12 @@ export default function AdminCategoriaJogosSuperPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Data agendada</label>
+                      <label className="text-sm font-medium text-slate-700">Data e horário agendados</label>
                       <input
                         value={agendaDataHorario}
                         onChange={(e) => setAgendaDataHorario(e.target.value)}
-                        type="date"
+                        type="datetime-local"
+                        step={60}
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                       />
                     </div>
@@ -1304,7 +1324,8 @@ export default function AdminCategoriaJogosSuperPage() {
                         try {
                           setSalvandoAgendamento(true);
                           setErro(null);
-                          const toIso = (v: string) => (v.trim() ? new Date(v).toISOString() : null);
+                          const toIsoDateTime = (v: string) => (v.trim() ? new Date(v).toISOString() : null);
+                          const toIsoDate = (v: string) => (v.trim() ? new Date(`${v}T00:00:00`).toISOString() : null);
                           const res = await fetch(
                             `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partida.id}/agendamento`,
                             {
@@ -1313,8 +1334,8 @@ export default function AdminCategoriaJogosSuperPage() {
                               body: JSON.stringify({
                                 arenaId: agendaArenaId || null,
                                 quadra: agendaQuadra.trim() || null,
-                                dataHorario: toIso(agendaDataHorario),
-                                dataLimite: toIso(agendaDataLimite),
+                                dataHorario: toIsoDateTime(agendaDataHorario),
+                                dataLimite: toIsoDate(agendaDataLimite),
                               }),
                             }
                           );
