@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
+import { apoiadoresService } from "@/services/apoiadores.service";
 import { Calendar, MapPin, Trophy, Users, Info } from "lucide-react";
 import Link from "next/link";
 
@@ -19,6 +20,7 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
   }
 
   const categorias = await categoriasService.listarPorTorneio(torneio.id);
+  const apoiadores = await apoiadoresService.listarPorTorneio(torneio.id);
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
@@ -113,6 +115,37 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                 </div>
               )}
             </section>
+
+            {apoiadores.length > 0 ? (
+              <section className="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
+                <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-2">
+                  <Trophy className="h-5 w-5 text-orange-500" />
+                  <h2 className="text-xl font-bold text-slate-800">Apoiadores</h2>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5">
+                  {apoiadores.map((apoiador) => {
+                    if (!apoiador.logoUrl) return null;
+                    const card = (
+                      <div className="h-full rounded-xl border border-slate-100 bg-white p-4 flex items-center justify-center hover:border-orange-200 transition-colors">
+                        <img
+                          src={apoiador.logoUrl}
+                          alt={apoiador.nome}
+                          className="h-24 w-24 rounded-xl object-contain"
+                        />
+                      </div>
+                    );
+                    if (apoiador.siteUrl) {
+                      return (
+                        <a key={apoiador.id} href={apoiador.siteUrl} target="_blank" rel="noreferrer">
+                          {card}
+                        </a>
+                      );
+                    }
+                    return <div key={apoiador.id}>{card}</div>;
+                  })}
+                </div>
+              </section>
+            ) : null}
 
           </div>
 

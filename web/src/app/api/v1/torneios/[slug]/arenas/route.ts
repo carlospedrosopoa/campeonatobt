@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { torneiosService } from "@/services/torneios.service";
 import { arenasService } from "@/services/arenas.service";
+import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
+import { playListarPoints } from "@/services/playnaquadra-client";
 
 function isAdmin(perfil?: string) {
   return perfil === "ADMIN" || perfil === "ORGANIZADOR";
@@ -16,6 +18,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { slug } = await params;
     const torneio = await torneiosService.buscarPorSlug(slug);
     if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+
+    try {
+      const token = await getPlayAdminToken();
+      const { res, data } = await playListarPoints({ token, apenasAtivos: true });
+      if (res.ok && data?.success && Array.isArray(data.points)) {
+        await arenasService.sincronizarComPoints({
+          torneioId: torneio.id,
+          points: data.points
+            .filter((point: any) => point?.id && point?.nome)
+            .map((point: any) => ({
+              id: point.id,
+              nome: point.nome,
+              logoUrl: point.logoUrl ?? null,
+            })),
+        });
+      }
+    } catch (syncError) {
+      console.error("Falha ao sincronizar arenas por points:", syncError);
+    }
 
     const lista = await arenasService.listarPorTorneio(torneio.id);
     return NextResponse.json(lista);
@@ -46,4 +67,3 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
-

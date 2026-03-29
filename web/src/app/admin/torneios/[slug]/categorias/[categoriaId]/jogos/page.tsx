@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Banknote, Calendar, Crown, Gamepad2, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
+import { ArrowLeft, Banknote, Calendar, Crown, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
+import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
   id: string;
@@ -56,13 +57,16 @@ type Partida = {
   grupoNome: string | null;
   arenaId?: string | null;
   arenaNome?: string | null;
+  arenaLogoUrl?: string | null;
   quadra?: string | null;
   dataHorario?: string | null;
   dataLimite?: string | null;
   equipeAId: string;
   equipeANome: string | null;
+  equipeAAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
   equipeBId: string;
   equipeBNome: string | null;
+  equipeBAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
   vencedorId: string | null;
   placarA: number;
   placarB: number;
@@ -143,6 +147,8 @@ export default function AdminCategoriaJogosPage() {
   });
   const [fotoUrl, setFotoUrl] = useState("");
   const [transmissaoUrl, setTransmissaoUrl] = useState("");
+  const [torneioNome, setTorneioNome] = useState("Torneio");
+  const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
 
   async function carregarCategoria() {
     const resCat = await fetch(`/api/v1/torneios/${slug}/categorias`, { cache: "no-store" });
@@ -201,6 +207,8 @@ export default function AdminCategoriaJogosPage() {
         const resTorneio = await fetch(`/api/v1/torneios/${slug}`, { cache: "no-store" });
         if (resTorneio.ok) {
           const t = (await resTorneio.json()) as any;
+          if (t?.nome) setTorneioNome(String(t.nome));
+          setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
           if (t?.superCampeonato) {
             setRedirecting(true);
             router.replace(`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/super`);
@@ -298,6 +306,32 @@ export default function AdminCategoriaJogosPage() {
       s3a: det[2]?.a?.toString?.() ?? "",
       s3b: det[2]?.b?.toString?.() ?? "",
     });
+  }
+
+  async function gerarCardPartida(p: Partida) {
+    try {
+      setErro(null);
+      await gerarCardPartidaAdmin({
+        torneioNome,
+        categoriaNome: categoria?.nome || "Categoria",
+        templateUrl: torneioTemplateUrl,
+        partida: {
+          id: p.id,
+          fase: p.fase,
+          rodadaNome: p.rodadaNome ?? null,
+          rodadaNumero: p.rodadaNumero ?? null,
+          dataHorario: p.dataHorario ?? null,
+          arenaNome: p.arenaNome ?? null,
+          quadra: p.quadra ?? null,
+          equipeANome: p.equipeANome ?? null,
+          equipeAAtletas: p.equipeAAtletas ?? [],
+          equipeBNome: p.equipeBNome ?? null,
+          equipeBAtletas: p.equipeBAtletas ?? [],
+        },
+      });
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível gerar o card da partida");
+    }
   }
 
   async function abrirAlterarConfronto(p: Partida) {
@@ -898,6 +932,7 @@ export default function AdminCategoriaJogosPage() {
                         </span>
                         {p.arenaNome ? (
                           <span className="flex items-center gap-1">
+                            {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome} className="h-4 w-4 rounded-full object-cover" /> : null}
                             <MapPin className="h-3 w-3 text-slate-400" />
                             {p.arenaNome}
                             {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
@@ -949,6 +984,14 @@ export default function AdminCategoriaJogosPage() {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => gerarCardPartida(p)}
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                        title="Gerar card da partida"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => startEditPartida(p)}

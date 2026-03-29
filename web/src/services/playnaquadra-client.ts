@@ -52,3 +52,12 @@ export async function playBuscarAtletas(params: { token: string; q: string; limi
   return { res, data };
 }
 
+export async function playListarPoints(params: { token: string; apenasAtivos?: boolean }) {
+  const query = new URLSearchParams();
+  if (params.apenasAtivos) query.set("apenasAtivos", "true");
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const res = await playFetch(`/point${suffix}`, { method: "GET", token: params.token });
+  const data = (await res.json().catch(() => null)) as any;
+  return { res, data };
+}
+

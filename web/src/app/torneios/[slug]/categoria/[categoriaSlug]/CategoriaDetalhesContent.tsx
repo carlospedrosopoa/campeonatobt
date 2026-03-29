@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, Clock, MapPin, Trophy, Users, ChevronLeft, Camera, Video } from "lucide-react";
+import { Calendar, Clock, MapPin, Trophy, Users, ChevronLeft, Camera, ImageIcon, Video } from "lucide-react";
 import Link from "next/link";
+import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
   id: string;
@@ -18,6 +19,7 @@ type Torneio = {
   slug: string;
   status: string;
   bannerUrl: string | null;
+  templateUrl?: string | null;
   esporteNome: string | null;
 };
 
@@ -64,6 +66,8 @@ type Partida = {
   placarB: number | null;
   detalhesPlacar: any;
   dataHorario: string | null;
+  arenaNome?: string | null;
+  arenaLogoUrl?: string | null;
   quadra: string | null;
   fotoUrl: string | null;
   transmissaoUrl: string | null;
@@ -96,6 +100,27 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
   const [fasesDisponiveis, setFasesDisponiveis] = useState<string[]>(["GRUPOS"]);
   
   const [loading, setLoading] = useState(false);
+
+  async function gerarCardPublico(p: Partida) {
+    await gerarCardPartidaAdmin({
+      torneioNome: torneio.nome,
+      categoriaNome: categoria.nome,
+      templateUrl: torneio.templateUrl ?? null,
+      partida: {
+        id: p.id,
+        fase: p.fase,
+        rodadaNome: p.rodadaNome,
+        rodadaNumero: p.rodadaNumero,
+        dataHorario: p.dataHorario,
+        arenaNome: p.arenaNome ?? null,
+        quadra: p.quadra,
+        equipeANome: p.equipeANome,
+        equipeBNome: p.equipeBNome,
+        equipeAAtletas: p.equipeAAtletas ?? [],
+        equipeBAtletas: p.equipeBAtletas ?? [],
+      },
+    });
+  }
 
   useEffect(() => {
     if (tab === "inscritos") {
@@ -396,10 +421,12 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                 ) : (
                                   <span className="italic text-slate-400">Não agendado</span>
                                 )}
-                                {p.quadra && (
+                                {(p.arenaNome || p.quadra) && (
                                   <span className="inline-flex items-center gap-1 text-slate-600">
+                                    {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome || "Arena"} className="w-4 h-4 rounded-full object-cover" /> : null}
                                     <MapPin className="w-3.5 h-3.5" />
-                                    {p.quadra}
+                                    {p.arenaNome || "Arena"}
+                                    {p.quadra ? ` • ${p.quadra}` : ""}
                                   </span>
                                 )}
                               </div>
@@ -444,8 +471,18 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                 </div>
                               </div>
 
-                              {(p.fotoUrl || p.transmissaoUrl) && (
-                                <div className="flex items-center gap-2 pt-1 justify-center sm:justify-end">
+                              <div className="flex items-center gap-2 pt-1 justify-center sm:justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => gerarCardPublico(p)}
+                                  className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-white shadow-sm ring-1 ring-indigo-500/30 hover:bg-indigo-500 transition-colors animate-pulse"
+                                  title="Gerar card do jogo"
+                                >
+                                  <ImageIcon className="w-4 h-4" />
+                                  <span className="text-[11px] font-bold uppercase tracking-wide">Card</span>
+                                </button>
+                                {(p.fotoUrl || p.transmissaoUrl) ? (
+                                  <>
                                   {p.fotoUrl && (
                                     <a 
                                       href={p.fotoUrl} 
@@ -468,8 +505,9 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                       <Video className="w-4 h-4" />
                                     </a>
                                   )}
-                                </div>
-                              )}
+                                  </>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         ))}

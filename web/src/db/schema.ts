@@ -133,9 +133,13 @@ export const rodadas = pgTable('rodadas', {
 export const arenas = pgTable('arenas', {
   id: uuid('id').defaultRandom().primaryKey(),
   torneioId: uuid('torneio_id').references(() => torneios.id).notNull(),
+  pointId: text('point_id'),
   nome: text('nome').notNull(),
+  logoUrl: text('logo_url'),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
-});
+}, (t) => ({
+  unqPointTorneio: unique().on(t.torneioId, t.pointId),
+}));
 
 export const partidas = pgTable('partidas', {
   id: uuid('id').defaultRandom().primaryKey(),

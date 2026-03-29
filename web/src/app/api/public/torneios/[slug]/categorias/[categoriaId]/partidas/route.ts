@@ -36,6 +36,7 @@ export async function GET(
         grupoNome: grupos.nome,
         arenaId: partidas.arenaId,
         arenaNome: arenas.nome,
+        arenaLogoUrl: arenas.logoUrl,
         equipeAId: partidas.equipeAId,
         equipeBId: partidas.equipeBId,
         vencedorId: partidas.vencedorId,

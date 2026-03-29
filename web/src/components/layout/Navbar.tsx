@@ -11,7 +11,7 @@ export async function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-4 md:px-6">
         <Link href="/" className="flex items-center gap-2 font-bold text-xl text-primary">
-          <Image src="/playnaquadra-logo.svg" alt="Play Na Quadra" width={28} height={28} />
+          <Image src="/playnaquadra-logo.png" alt="Play Na Quadra" width={36} height={36} className="h-9 w-9 rounded-lg object-cover" />
           <span>Play Na Quadra - Competições</span>
         </Link>
         
@@ -27,12 +27,6 @@ export async function Navbar() {
               Admin
             </Link>
           )}
-          <Link href="/rankings" className="transition-colors hover:text-primary">
-            Rankings
-          </Link>
-          <Link href="/sobre" className="transition-colors hover:text-primary">
-            Sobre
-          </Link>
         </nav>
 
         <div className="flex items-center gap-4">

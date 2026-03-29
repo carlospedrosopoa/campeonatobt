@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, Calendar, Clock, Crown, Gamepad2, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
+import { ArrowLeft, Banknote, Calendar, Clock, Crown, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
+import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
   id: string;
@@ -56,13 +57,16 @@ type Partida = {
   grupoNome: string | null;
   arenaId?: string | null;
   arenaNome?: string | null;
+  arenaLogoUrl?: string | null;
   quadra?: string | null;
   dataHorario?: string | null;
   dataLimite?: string | null;
   equipeAId: string;
   equipeANome: string | null;
+  equipeAAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
   equipeBId: string;
   equipeBNome: string | null;
+  equipeBAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
   vencedorId: string | null;
   placarA: number;
   placarB: number;
@@ -72,7 +76,7 @@ type Partida = {
 type ResultadoFinal = { campeao: string; vice: string } | null;
 
 type Inscricao = { status: string; equipe: { id: string; nome: string | null } };
-type Arena = { id: string; nome: string };
+type Arena = { id: string; nome: string; logoUrl?: string | null };
 
 function ordinalRodada(n: number) {
   return `${n}ª Rodada`;
@@ -143,6 +147,8 @@ export default function AdminCategoriaJogosSuperPage() {
   const [editRodadaId, setEditRodadaId] = useState<string | null>(null);
   const [rodadaDataLimite, setRodadaDataLimite] = useState("");
   const [salvandoRodada, setSalvandoRodada] = useState(false);
+  const [torneioNome, setTorneioNome] = useState("Torneio");
+  const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [formPlacar, setFormPlacar] = useState({
     s1a: "",
     s1b: "",
@@ -164,6 +170,14 @@ export default function AdminCategoriaJogosSuperPage() {
     }
     const cats = (await resCat.json()) as Categoria[];
     return cats.find((c) => c.id === categoriaId) ?? null;
+  }
+
+  async function carregarTorneio() {
+    const res = await fetch(`/api/v1/torneios/${slug}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const t = (await res.json()) as any;
+    if (t?.nome) setTorneioNome(String(t.nome));
+    setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
   }
 
   async function carregarConfigEClassificacao() {
@@ -210,6 +224,7 @@ export default function AdminCategoriaJogosSuperPage() {
       try {
         setCarregando(true);
         setErro(null);
+        await carregarTorneio();
         const cat = await carregarCategoria();
         if (!ativo) return;
         setCategoria(cat);
@@ -386,6 +401,32 @@ export default function AdminCategoriaJogosSuperPage() {
     setRodadaDataLimite(toLocalDateInput(dataLimiteAtual));
   }
 
+  async function gerarCardPartida(p: Partida) {
+    try {
+      setErro(null);
+      await gerarCardPartidaAdmin({
+        torneioNome,
+        categoriaNome: categoria?.nome || "Categoria",
+        templateUrl: torneioTemplateUrl,
+        partida: {
+          id: p.id,
+          fase: p.fase,
+          rodadaNome: p.rodadaNome ?? null,
+          rodadaNumero: p.rodadaNumero ?? null,
+          dataHorario: p.dataHorario ?? null,
+          arenaNome: p.arenaNome ?? null,
+          quadra: p.quadra ?? null,
+          equipeANome: p.equipeANome ?? null,
+          equipeAAtletas: p.equipeAAtletas ?? [],
+          equipeBNome: p.equipeBNome ?? null,
+          equipeBAtletas: p.equipeBAtletas ?? [],
+        },
+      });
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível gerar o card da partida");
+    }
+  }
+
   async function abrirAgendamento(p: Partida) {
     setEditAgendamentoId(p.id);
     setAgendaArenaId(p.arenaId ?? "");
@@ -400,11 +441,10 @@ export default function AdminCategoriaJogosSuperPage() {
       if (!res.ok) return;
       const rows = (await res.json()) as any[];
       const lista = rows
-        .map((a) => ({ id: a.id as string, nome: (a.nome as string) ?? "" }))
+        .map((a) => ({ id: a.id as string, nome: (a.nome as string) ?? "", logoUrl: (a.logoUrl as string | null | undefined) ?? null }))
         .filter((a) => a.id && a.nome)
         .sort((a, b) => a.nome.localeCompare(b.nome));
       setArenas(lista);
-      if (!p.arenaId && lista.length > 0) setAgendaArenaId(lista[0].id);
     } finally {
       setCarregandoArenas(false);
     }
@@ -864,6 +904,7 @@ export default function AdminCategoriaJogosSuperPage() {
                             </span>
                             {p.arenaNome ? (
                               <span className="flex items-center gap-1">
+                                {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome ?? "Arena"} className="h-4 w-4 rounded-full object-cover" /> : null}
                                 <MapPin className="h-3 w-3 text-slate-400" />
                                 {p.arenaNome}
                                 {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
@@ -917,6 +958,14 @@ export default function AdminCategoriaJogosSuperPage() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
+                            onClick={() => gerarCardPartida(p)}
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                            title="Gerar card da partida"
+                          >
+                            <ImageIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => abrirAgendamento(p)}
                             className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
                             title="Agendar"
@@ -960,6 +1009,7 @@ export default function AdminCategoriaJogosSuperPage() {
                       <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                         {p.arenaNome ? (
                               <span className="flex items-center gap-1">
+                                {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome ?? "Arena"} className="h-4 w-4 rounded-full object-cover" /> : null}
                                 <MapPin className="h-3 w-3 text-slate-400" />
                                 {p.arenaNome}
                                 {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
@@ -1011,6 +1061,14 @@ export default function AdminCategoriaJogosSuperPage() {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => gerarCardPartida(p)}
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                        title="Gerar card da partida"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => abrirAgendamento(p)}
@@ -1263,16 +1321,23 @@ export default function AdminCategoriaJogosSuperPage() {
                         disabled={carregandoArenas}
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white disabled:opacity-50"
                       >
-                        {arenas.length === 0 ? (
-                          <option value="">Nenhuma arena cadastrada</option>
-                        ) : (
-                          arenas.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.nome}
-                            </option>
-                          ))
-                        )}
+                        <option value="">{arenas.length === 0 ? "Nenhuma arena disponível" : "Selecione uma arena"}</option>
+                        {arenas.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.nome}
+                          </option>
+                        ))}
                       </select>
+                      {agendaArenaId && arenas.find((a) => a.id === agendaArenaId)?.logoUrl ? (
+                        <div className="flex items-center gap-2 text-xs text-slate-600">
+                          <img
+                            src={arenas.find((a) => a.id === agendaArenaId)?.logoUrl || ""}
+                            alt={arenas.find((a) => a.id === agendaArenaId)?.nome || "Arena"}
+                            className="h-5 w-5 rounded-full object-cover"
+                          />
+                          {arenas.find((a) => a.id === agendaArenaId)?.nome}
+                        </div>
+                      ) : null}
                       <div className="text-xs text-slate-500">
                         Cadastre arenas em <Link href={`/admin/torneios/${slug}/arenas`} className="underline">Arenas</Link>.
                       </div>
@@ -1324,6 +1389,7 @@ export default function AdminCategoriaJogosSuperPage() {
                         try {
                           setSalvandoAgendamento(true);
                           setErro(null);
+                          if (agendaDataHorario.trim() && !agendaArenaId) throw new Error("Selecione uma arena para agendar a partida");
                           const toIsoDateTime = (v: string) => (v.trim() ? new Date(v).toISOString() : null);
                           const toIsoDate = (v: string) => (v.trim() ? new Date(`${v}T00:00:00`).toISOString() : null);
                           const res = await fetch(

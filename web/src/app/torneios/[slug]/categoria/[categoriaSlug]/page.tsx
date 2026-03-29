@@ -63,6 +63,7 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
             slug: torneio.slug,
             status: torneio.status,
             bannerUrl: torneio.bannerUrl,
+            templateUrl: torneio.templateUrl ?? null,
             esporteNome: torneio.esporteNome,
           }} 
           categoria={{

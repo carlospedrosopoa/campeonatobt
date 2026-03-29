@@ -54,6 +54,7 @@ export async function PUT(
     const dataLimite = dataLimiteRaw ? new Date(dataLimiteRaw) : null;
     if (dataHorario && Number.isNaN(dataHorario.getTime())) return NextResponse.json({ error: "Data/hora inválida" }, { status: 400 });
     if (dataLimite && Number.isNaN(dataLimite.getTime())) return NextResponse.json({ error: "Data limite inválida" }, { status: 400 });
+    if (dataHorario && !arenaId) return NextResponse.json({ error: "Arena é obrigatória para agendar a partida" }, { status: 400 });
 
     const [updated] = await db
       .update(partidas)
@@ -73,4 +74,3 @@ export async function PUT(
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
-
