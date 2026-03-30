@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractFileNameFromUrl, getSignedUrl } from "@/lib/googleCloudStorage";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,10 +17,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Protocolo não suportado" }, { status: 400 });
     }
 
-    const upstream = await fetch(parsed.toString(), { cache: "no-store", redirect: "follow" });
-    if (!upstream.ok) {
-      return NextResponse.json({ error: "Falha ao carregar imagem" }, { status: upstream.status });
+    let upstream = await fetch(parsed.toString(), { cache: "no-store", redirect: "follow" });
+    if (!upstream.ok && upstream.status === 403) {
+      const isGoogleStorage = parsed.hostname.includes("storage.googleapis.com") || parsed.hostname.includes("storage.cloud.google.com");
+      if (isGoogleStorage) {
+        const fileName = extractFileNameFromUrl(parsed.toString());
+        if (fileName) {
+          const signedUrl = await getSignedUrl(fileName, 3600);
+          if (signedUrl) {
+            upstream = await fetch(signedUrl, { cache: "no-store", redirect: "follow" });
+          }
+        }
+      }
     }
+    if (!upstream.ok) return NextResponse.json({ error: "Falha ao carregar imagem" }, { status: upstream.status });
 
     const contentType = upstream.headers.get("content-type") || "image/png";
     const arrayBuffer = await upstream.arrayBuffer();
