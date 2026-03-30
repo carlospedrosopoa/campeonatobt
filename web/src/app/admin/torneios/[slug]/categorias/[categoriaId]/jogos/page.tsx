@@ -315,6 +315,7 @@ export default function AdminCategoriaJogosPage() {
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
         templateUrl: torneioTemplateUrl,
+        syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         partida: {
           id: p.id,
           fase: p.fase,

@@ -106,6 +106,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
       torneioNome: torneio.nome,
       categoriaNome: categoria.nome,
       templateUrl: torneio.templateUrl ?? null,
+      syncFotosUrl: `/api/public/torneios/${torneio.slug}/categorias/${categoria.id}/partidas/${p.id}/sincronizar-fotos`,
       partida: {
         id: p.id,
         fase: p.fase,

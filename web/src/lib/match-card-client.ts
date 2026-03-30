@@ -18,6 +18,7 @@ type GerarCardParams = {
   torneioNome: string;
   categoriaNome: string;
   templateUrl?: string | null;
+  syncFotosUrl?: string | null;
   partida: PartidaCardInfo;
 };
 
@@ -107,6 +108,28 @@ function formatarDataHora(value?: string | null) {
   });
 }
 
+function fotoAtletaOuAvatar(atleta?: { nome: string; fotoUrl?: string | null } | null) {
+  if (!atleta) return null;
+  if (atleta.fotoUrl && atleta.fotoUrl.trim()) return atleta.fotoUrl;
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(atleta.nome || "Atleta")}&background=random&color=fff&size=256`;
+}
+
+async function sincronizarFotosPlaynaquadra(syncFotosUrl?: string | null) {
+  if (!syncFotosUrl) return new Map<string, string>();
+  try {
+    const res = await fetch(syncFotosUrl, { method: "POST", cache: "no-store" });
+    if (!res.ok) return new Map<string, string>();
+    const payload = (await res.json().catch(() => null)) as { updated?: Array<{ usuarioId: string; fotoUrl: string }> } | null;
+    const map = new Map<string, string>();
+    for (const item of payload?.updated ?? []) {
+      if (item?.usuarioId && item?.fotoUrl) map.set(item.usuarioId, item.fotoUrl);
+    }
+    return map;
+  } catch {
+    return new Map<string, string>();
+  }
+}
+
 function drawTextCenter(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
   const words = text.trim().split(/\s+/);
   const lines: string[] = [];
@@ -170,10 +193,21 @@ export async function gerarCardPartidaAdmin(params: GerarCardParams) {
   ctx.fillStyle = overlay;
   ctx.fillRect(0, 0, width, height);
 
-  const atletasA = (params.partida.equipeAAtletas ?? []).slice(0, 2);
-  const atletasB = (params.partida.equipeBAtletas ?? []).slice(0, 2);
-  const fotosA = await Promise.all(atletasA.map((a) => (a?.fotoUrl ? carregarImagem(a.fotoUrl) : Promise.resolve(null))));
-  const fotosB = await Promise.all(atletasB.map((a) => (a?.fotoUrl ? carregarImagem(a.fotoUrl) : Promise.resolve(null))));
+  const fotosSincronizadas = await sincronizarFotosPlaynaquadra(params.syncFotosUrl ?? null);
+  const atletasA = (params.partida.equipeAAtletas ?? [])
+    .slice(0, 2)
+    .map((a) => ({ ...a, fotoUrl: fotosSincronizadas.get(a.id) ?? a.fotoUrl ?? null }));
+  const atletasB = (params.partida.equipeBAtletas ?? [])
+    .slice(0, 2)
+    .map((a) => ({ ...a, fotoUrl: fotosSincronizadas.get(a.id) ?? a.fotoUrl ?? null }));
+  const fotosA = await Promise.all(atletasA.map((a) => {
+    const url = fotoAtletaOuAvatar(a);
+    return url ? carregarImagem(url) : Promise.resolve(null);
+  }));
+  const fotosB = await Promise.all(atletasB.map((a) => {
+    const url = fotoAtletaOuAvatar(a);
+    return url ? carregarImagem(url) : Promise.resolve(null);
+  }));
   const tamanhoAvatar = 255;
   const ajusteNomesY = 50;
   const larguraNome = 250;
