@@ -420,15 +420,13 @@ export default function AdminTorneioDashboardPage() {
           </Link>
           {torneio && (
             <>
-              <button
-                type="button"
-                onClick={gerarRelatorioJogosDoDia}
-                disabled={gerandoRelatorio}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              <Link
+                href={`/admin/torneios/${slugAtual}/jogos-do-dia`}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 <Calendar className="h-4 w-4" />
-                {gerandoRelatorio ? "Gerando..." : "Jogos do dia"}
-              </button>
+                Jogos do dia
+              </Link>
               <Link
                 href={`/torneios/${torneio.slug}`}
                 className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
