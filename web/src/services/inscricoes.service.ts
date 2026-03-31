@@ -11,6 +11,15 @@ export type CriarInscricaoDTO = {
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
 };
 
+export type AtualizarInscricaoDTO = {
+  torneioId: string;
+  categoriaId: string;
+  equipeNome?: string | null;
+  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null };
+  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null };
+  status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
+};
+
 export class InscricoesService {
   async listarPorCategoria(categoriaId: string) {
     const rows = await db
@@ -139,6 +148,82 @@ export class InscricoesService {
   async excluir(inscricaoId: string) {
     const [del] = await db.delete(inscricoes).where(eq(inscricoes.id, inscricaoId)).returning();
     return del ?? null;
+  }
+
+  async atualizar(inscricaoId: string, dados: AtualizarInscricaoDTO) {
+    const insRow = await db
+      .select({
+        inscricaoId: inscricoes.id,
+        torneioId: inscricoes.torneioId,
+        categoriaId: inscricoes.categoriaId,
+        equipeId: inscricoes.equipeId,
+      })
+      .from(inscricoes)
+      .where(eq(inscricoes.id, inscricaoId))
+      .limit(1);
+
+    const ins = insRow[0];
+    if (!ins) throw new Error("Inscrição não encontrada");
+    if (ins.torneioId !== dados.torneioId || ins.categoriaId !== dados.categoriaId) {
+      throw new Error("Inscrição inválida para a categoria/torneio");
+    }
+
+    const atletaAEmail = dados.atletaA.email.trim().toLowerCase();
+    const atletaBEmail = dados.atletaB.email.trim().toLowerCase();
+    if (!atletaAEmail || !atletaBEmail) throw new Error("Emails dos atletas são obrigatórios");
+    if (atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
+
+    const atletaAId = await this.upsertAtleta({
+      nome: dados.atletaA.nome.trim(),
+      email: atletaAEmail,
+      telefone: dados.atletaA.telefone?.trim(),
+      playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
+      fotoUrl: dados.atletaA.fotoUrl ?? null,
+    });
+
+    const atletaBId = await this.upsertAtleta({
+      nome: dados.atletaB.nome.trim(),
+      email: atletaBEmail,
+      telefone: dados.atletaB.telefone?.trim(),
+      playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
+      fotoUrl: dados.atletaB.fotoUrl ?? null,
+    });
+
+    if (atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
+
+    const conflito = await db
+      .select({ inscricaoId: inscricoes.id })
+      .from(inscricoes)
+      .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, inscricoes.equipeId))
+      .where(
+        and(
+          eq(inscricoes.categoriaId, dados.categoriaId),
+          sql`${inscricoes.id} <> ${inscricaoId}`,
+          inArray(equipeIntegrantes.usuarioId, [atletaAId, atletaBId])
+        )
+      )
+      .limit(1);
+
+    if (conflito.length > 0) {
+      throw new Error("Um dos atletas já está inscrito nesta categoria");
+    }
+
+    if (dados.equipeNome !== undefined) {
+      const nome = (dados.equipeNome || "").trim();
+      await db.update(equipes).set({ nome: nome ? nome : null }).where(eq(equipes.id, ins.equipeId));
+    }
+
+    if (dados.status) {
+      await db.update(inscricoes).set({ status: dados.status }).where(eq(inscricoes.id, inscricaoId));
+    }
+
+    await db.delete(equipeIntegrantes).where(eq(equipeIntegrantes.equipeId, ins.equipeId));
+    await db.insert(equipeIntegrantes).values([
+      { equipeId: ins.equipeId, usuarioId: atletaAId },
+      { equipeId: ins.equipeId, usuarioId: atletaBId },
+    ]);
+
+    return { ok: true };
   }
 
   private async upsertAtleta(dados: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null }) {

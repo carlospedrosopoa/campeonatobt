@@ -136,7 +136,15 @@ export async function POST(
     const alvo = inscritos.filter((i) => i.playId);
     if (!alvo.length) {
       return NextResponse.json(
-        { totalInscritos: inscritos.length, totalComPlayId: 0, atualizados: 0 } satisfies SyncResult,
+        {
+          totalInscritos: inscritos.length,
+          totalComPlayId: 0,
+          atualizados: 0,
+          consultados: 0,
+          jaAtualizados: 0,
+          semFotoNoPlay: 0,
+          falhasConsulta: 0,
+        } satisfies SyncResult,
         { headers: { "Cache-Control": "no-store" } }
       );
     }

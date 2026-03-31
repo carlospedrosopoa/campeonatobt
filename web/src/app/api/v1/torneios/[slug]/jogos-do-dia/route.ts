@@ -45,6 +45,7 @@ export async function GET(
         id: partidas.id,
         fase: partidas.fase,
         status: partidas.status,
+        categoriaId: partidas.categoriaId,
         categoriaNome: categorias.nome,
         arenaNome: arenas.nome,
         equipeAId: partidas.equipeAId,

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, Gamepad2, Plus, RefreshCw, Save, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Banknote, Gamepad2, Pencil, Plus, RefreshCw, Save, Trash2, Users, X } from "lucide-react";
 
 type Categoria = {
   id: string;
@@ -44,6 +44,7 @@ export default function AdminCategoriaInscricoesPage() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [mostraForm, setMostraForm] = useState(false);
+  const [editandoInscricao, setEditandoInscricao] = useState<Inscricao | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [sincronizandoFotos, setSincronizandoFotos] = useState(false);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
@@ -158,6 +159,7 @@ export default function AdminCategoriaInscricoesPage() {
 
   function abrirNova() {
     setMostraForm(true);
+    setEditandoInscricao(null);
     setBuscaAtletaA("");
     setResultadosAtletaA([]);
     setBuscaAtletaB("");
@@ -180,10 +182,37 @@ export default function AdminCategoriaInscricoesPage() {
 
   function fecharForm() {
     setMostraForm(false);
+    setEditandoInscricao(null);
     setBuscaAtletaA("");
     setResultadosAtletaA([]);
     setBuscaAtletaB("");
     setResultadosAtletaB([]);
+  }
+
+  function abrirEditar(inscricao: Inscricao) {
+    const atletas = inscricao.equipe.atletas.slice(0, 2);
+    const a1 = atletas[0];
+    const a2 = atletas[1];
+    setMostraForm(true);
+    setEditandoInscricao(inscricao);
+    setBuscaAtletaA("");
+    setResultadosAtletaA([]);
+    setBuscaAtletaB("");
+    setResultadosAtletaB([]);
+    setForm({
+      equipeNome: inscricao.equipe.nome || "",
+      atletaANome: a1?.nome || "",
+      atletaAEmail: a1?.email || "",
+      atletaATelefone: a1?.telefone || "",
+      atletaAPlayId: "",
+      atletaAFotoUrl: a1?.fotoUrl || "",
+      atletaBNome: a2?.nome || "",
+      atletaBEmail: a2?.email || "",
+      atletaBTelefone: a2?.telefone || "",
+      atletaBPlayId: "",
+      atletaBFotoUrl: a2?.fotoUrl || "",
+      status: (inscricao.status as any) || "APROVADA",
+    });
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -215,19 +244,25 @@ export default function AdminCategoriaInscricoesPage() {
         },
       };
 
-      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes`, {
-        method: "POST",
+      const url = editandoInscricao
+        ? `/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes/${editandoInscricao.id}`
+        : `/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes`;
+      const method = editandoInscricao ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const msg = await res.json().catch(() => null);
-        throw new Error(msg?.error || "Falha ao criar inscrição");
+        throw new Error(msg?.error || (editandoInscricao ? "Falha ao atualizar inscrição" : "Falha ao criar inscrição"));
       }
 
       await carregar();
       setMostraForm(false);
+      setEditandoInscricao(null);
     } catch (e: any) {
       setErro(e?.message || "Erro inesperado");
     } finally {
@@ -373,7 +408,7 @@ export default function AdminCategoriaInscricoesPage() {
       {mostraForm && (
         <form onSubmit={onSubmit} className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-5">
           <div className="flex items-center justify-between gap-3">
-            <div className="font-semibold text-slate-900">Nova inscrição</div>
+            <div className="font-semibold text-slate-900">{editandoInscricao ? "Editar inscrição" : "Nova inscrição"}</div>
             <button type="button" onClick={fecharForm} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
               <X className="h-4 w-4" />
               Fechar
@@ -558,7 +593,7 @@ export default function AdminCategoriaInscricoesPage() {
               className="inline-flex items-center justify-center gap-2 rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
-              {salvando ? "Salvando…" : "Salvar inscrição"}
+              {salvando ? "Salvando…" : editandoInscricao ? "Salvar alterações" : "Salvar inscrição"}
             </button>
           </div>
         </form>
@@ -622,15 +657,25 @@ export default function AdminCategoriaInscricoesPage() {
                   <td className="py-4 pr-4 text-slate-700">A definir</td>
                   <td className="py-4 pr-4 text-slate-700">{new Date(i.dataInscricao).toLocaleString("pt-BR")}</td>
                   <td className="py-4 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onExcluir(i.id)}
-                      disabled={excluindoId === i.id}
-                      className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      {excluindoId === i.id ? "Excluindo…" : "Excluir"}
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => abrirEditar(i)}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onExcluir(i.id)}
+                        disabled={excluindoId === i.id}
+                        className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {excluindoId === i.id ? "Excluindo…" : "Excluir"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

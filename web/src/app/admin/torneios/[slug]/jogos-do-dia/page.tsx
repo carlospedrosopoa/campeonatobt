@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, FileText, ImageIcon, MapPin, RefreshCw } from "lucide-react";
+import { ArrowLeft, Calendar, FileText, ImageIcon, MapPin, RefreshCw, Users } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Partida = {
   id: string;
   fase: string;
   status: string;
+  categoriaId: string;
   categoriaNome: string;
   arenaNome?: string | null;
   arenaLogoUrl?: string | null;
@@ -32,6 +33,9 @@ type Torneio = {
   bannerUrl: string | null;
   templateUrl: string | null;
 };
+
+const avatarPlaceholder =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiNlMmU4ZjAiLz48dGV4dCB4PSI1MCIgeT0iNTUiIGZvbnQtc2l6ZT0iMzUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmaWxsPSIjOTRhN2IzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+UE48L3RleHQ+PC9zdmc+";
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
@@ -57,6 +61,7 @@ export default function AdminJogosDoDiaPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
+  const [sincronizandoFotos, setSincronizandoFotos] = useState(false);
 
   async function carregarDados() {
     try {
@@ -114,7 +119,7 @@ export default function AdminJogosDoDiaPage() {
         torneioNome: torneio?.nome || "Torneio",
         categoriaNome: p.categoriaNome || "Categoria",
         templateUrl: torneio?.templateUrl,
-        syncFotosUrl: null, // Já temos os dados das fotos no payload
+        syncFotosUrl: `/api/public/torneios/${slug}/categorias/${p.categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         partida: {
           id: p.id,
           fase: p.fase,
@@ -132,12 +137,132 @@ export default function AdminJogosDoDiaPage() {
     }
   }
 
+  async function sincronizarFotos() {
+    try {
+      setErro(null);
+      if (partidas.length === 0) return;
+
+      const categoriaIds = Array.from(new Set(partidas.map((p) => p.categoriaId).filter(Boolean)));
+      if (categoriaIds.length === 0) return;
+
+      setSincronizandoFotos(true);
+
+      let totalInscritos = 0;
+      let totalComPlayId = 0;
+      let atualizados = 0;
+      let consultados = 0;
+      let jaAtualizados = 0;
+      let semFotoNoPlay = 0;
+      let falhasConsulta = 0;
+
+      for (const categoriaId of categoriaIds) {
+        const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes/sincronizar-fotos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!res.ok) continue;
+        const payload = (await res.json().catch(() => null)) as any;
+        if (!payload) continue;
+        totalInscritos += Number(payload.totalInscritos ?? 0);
+        totalComPlayId += Number(payload.totalComPlayId ?? 0);
+        atualizados += Number(payload.atualizados ?? 0);
+        consultados += Number(payload.consultados ?? 0);
+        jaAtualizados += Number(payload.jaAtualizados ?? 0);
+        semFotoNoPlay += Number(payload.semFotoNoPlay ?? 0);
+        falhasConsulta += Number(payload.falhasConsulta ?? 0);
+      }
+
+      await carregarDados();
+
+      alert(
+        `Sincronização concluída.\n\nCategorias: ${categoriaIds.length}\nInscritos: ${totalInscritos}\nCom Play ID: ${totalComPlayId}\nConsultados: ${consultados}\nAtualizados: ${atualizados}\nJá atualizados: ${jaAtualizados}\nSem foto no Play: ${semFotoNoPlay}\nFalhas: ${falhasConsulta}`
+      );
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao sincronizar fotos");
+    } finally {
+      setSincronizandoFotos(false);
+    }
+  }
+
   async function gerarRelatorioHTML() {
     if (!torneio || partidas.length === 0) return;
     
     try {
       setGerandoRelatorio(true);
-      const placeholder = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiNlMmU4ZjAiLz48dGV4dCB4PSI1MCIgeT0iNTUiIGZvbnQtc2l6ZT0iMzUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmaWxsPSIjOTRhN2IzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+UE48L3RleHQ+PC9zdmc+";
+
+      const escapeHtml = (value: string) =>
+        value
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+
+      const formatHoraRelatorio = (value?: string | null) => {
+        if (!value) return "--:--";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "--:--";
+        return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      };
+
+      const bannerHtml = torneio.bannerUrl
+        ? `<div class="mb-8 w-full"><img src="/api/image-proxy?url=${encodeURIComponent(torneio.bannerUrl)}" class="w-full h-auto rounded-xl shadow-sm" crossOrigin="anonymous" /></div>`
+        : "";
+
+      const cardsHtml = partidas
+        .map((p) => {
+          const equipeAAtletas = p.equipeAAtletas ?? [];
+          const equipeBAtletas = p.equipeBAtletas ?? [];
+
+          const atletasAHtml = equipeAAtletas
+            .map((a) => {
+              const src = a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder;
+              return `<img src="${src}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='${avatarPlaceholder}'" crossOrigin="anonymous" />`;
+            })
+            .join("");
+
+          const atletasBHtml = equipeBAtletas
+            .map((a) => {
+              const src = a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder;
+              return `<img src="${src}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='${avatarPlaceholder}'" crossOrigin="anonymous" />`;
+            })
+            .join("");
+
+          const categoriaNome = escapeHtml(p.categoriaNome || "Categoria");
+          const fase = escapeHtml(p.fase || "");
+          const equipeANome = escapeHtml(p.equipeANome || "A definir");
+          const equipeBNome = escapeHtml(p.equipeBNome || "A definir");
+          const arenaNome = escapeHtml(p.arenaNome || "A definir");
+          const quadra = p.quadra ? escapeHtml(String(p.quadra)) : "";
+          const hora = formatHoraRelatorio(p.dataHorario);
+
+          return `
+            <div class="card-partida bg-white">
+              <div class="bg-slate-50 px-4 py-2 border-b border-slate-100 flex justify-between items-center">
+                <span class="font-bold text-slate-700 uppercase tracking-wider text-xs">${categoriaNome}</span>
+                <span class="text-xs font-medium text-slate-500">${fase}</span>
+              </div>
+              <div class="p-6">
+                <div class="flex items-center justify-between gap-8">
+                  <div class="flex-1 flex flex-col items-center text-center">
+                    <div class="flex -space-x-2 mb-3">${atletasAHtml}</div>
+                    <span class="font-bold text-slate-900 leading-tight">${equipeANome}</span>
+                  </div>
+                  <div class="flex flex-col items-center px-4"><span class="text-2xl font-black text-slate-300">VS</span></div>
+                  <div class="flex-1 flex flex-col items-center text-center">
+                    <div class="flex -space-x-2 mb-3">${atletasBHtml}</div>
+                    <span class="font-bold text-slate-900 leading-tight">${equipeBNome}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 flex justify-between items-center text-sm">
+                <div class="flex items-center gap-2 text-slate-700 font-bold">${hora}</div>
+                <div class="flex items-center gap-2 text-slate-700 font-medium">${arenaNome}${quadra ? ` - ${quadra}` : ""}</div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
 
       const htmlContent = `
         <!DOCTYPE html>
@@ -179,41 +304,13 @@ export default function AdminJogosDoDiaPage() {
               <button onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium">Imprimir Relatório</button>
             </div>
             <div id="capture-target" class="shadow-xl rounded-2xl">
-              ${torneio.bannerUrl ? `<div class="mb-8 w-full"><img src="/api/image-proxy?url=${encodeURIComponent(torneio.bannerUrl)}" class="w-full h-auto rounded-xl shadow-sm" crossOrigin="anonymous" /></div>` : ''}
+              ${bannerHtml}
               <div class="text-center mb-8">
                 <h1 class="text-3xl font-bold text-slate-900">${torneio.nome}</h1>
                 <p class="text-lg text-slate-600">Jogos do Dia - ${new Date().toLocaleDateString('pt-BR')}</p>
               </div>
               <div class="grid grid-cols-1 gap-6">
-                ${partidas.map((p: any) => \`
-                  <div class="card-partida bg-white">
-                    <div class="bg-slate-50 px-4 py-2 border-b border-slate-100 flex justify-between items-center">
-                      <span class="font-bold text-slate-700 uppercase tracking-wider text-xs">\${p.categoriaNome}</span>
-                      <span class="text-xs font-medium text-slate-500">\${p.fase}</span>
-                    </div>
-                    <div class="p-6">
-                      <div class="flex items-center justify-between gap-8">
-                        <div class="flex-1 flex flex-col items-center text-center">
-                          <div class="flex -space-x-2 mb-3">
-                            \${p.equipeAAtletas.map((a: any) => \`<img src="\${a.fotoUrl ? \`/api/image-proxy?url=\${encodeURIComponent(a.fotoUrl)}\` : placeholder}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='\${placeholder}'" crossOrigin="anonymous" />\`).join('')}
-                          </div>
-                          <span class="font-bold text-slate-900 leading-tight">\${p.equipeANome || 'A definir'}</span>
-                        </div>
-                        <div class="flex flex-col items-center px-4"><span class="text-2xl font-black text-slate-300">VS</span></div>
-                        <div class="flex-1 flex flex-col items-center text-center">
-                          <div class="flex -space-x-2 mb-3">
-                            \${p.equipeBAtletas.map((a: any) => \`<img src="\${a.fotoUrl ? \`/api/image-proxy?url=\${encodeURIComponent(a.fotoUrl)}\` : placeholder}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='\${placeholder}'" crossOrigin="anonymous" />\`).join('')}
-                          </div>
-                          <span class="font-bold text-slate-900 leading-tight">\${p.equipeBNome || 'A definir'}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 flex justify-between items-center text-sm">
-                      <div class="flex items-center gap-2 text-slate-700 font-bold">\${formatDataHora(p.dataHorario) || '--:--'}</div>
-                      <div class="flex items-center gap-2 text-slate-700 font-medium">\${p.arenaNome || 'A definir'} \${p.quadra ? \`- \${p.quadra}\` : ''}</div>
-                    </div>
-                  </div>
-                \`).join('')}
+                ${cardsHtml}
               </div>
               <footer class="mt-12 pt-8 border-t border-slate-100 text-center text-slate-400 text-xs">Gerado por Play Na Quadra</footer>
             </div>
@@ -248,6 +345,14 @@ export default function AdminJogosDoDiaPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={sincronizarFotos}
+            disabled={sincronizandoFotos || partidas.length === 0 || carregando}
+            className="inline-flex items-center gap-2 rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+          >
+            <Users className="h-4 w-4" />
+            {sincronizandoFotos ? "Atualizando fotos..." : "Atualizar fotos"}
+          </button>
           <button
             onClick={gerarRelatorioHTML}
             disabled={gerandoRelatorio || partidas.length === 0}
@@ -308,6 +413,20 @@ export default function AdminJogosDoDiaPage() {
 
                 <div className="flex items-center justify-between gap-4 mb-4">
                   <div className="flex-1 text-center">
+                    <div className="flex items-center justify-center -space-x-2 mb-2">
+                      {(p.equipeAAtletas ?? []).slice(0, 2).map((a) => (
+                        <img
+                          key={a.id}
+                          src={a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder}
+                          onError={(e) => {
+                            const el = e.currentTarget as HTMLImageElement;
+                            el.src = avatarPlaceholder;
+                          }}
+                          className="h-9 w-9 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm"
+                          alt={a.nome}
+                        />
+                      ))}
+                    </div>
                     <div className="font-bold text-slate-900 leading-tight mb-1">
                       {p.equipeANome || "A definir"}
                     </div>
@@ -321,6 +440,20 @@ export default function AdminJogosDoDiaPage() {
                   </div>
 
                   <div className="flex-1 text-center">
+                    <div className="flex items-center justify-center -space-x-2 mb-2">
+                      {(p.equipeBAtletas ?? []).slice(0, 2).map((a) => (
+                        <img
+                          key={a.id}
+                          src={a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder}
+                          onError={(e) => {
+                            const el = e.currentTarget as HTMLImageElement;
+                            el.src = avatarPlaceholder;
+                          }}
+                          className="h-9 w-9 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm"
+                          alt={a.nome}
+                        />
+                      ))}
+                    </div>
                     <div className="font-bold text-slate-900 leading-tight mb-1">
                       {p.equipeBNome || "A definir"}
                     </div>
