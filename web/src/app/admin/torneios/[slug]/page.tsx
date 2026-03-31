@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, ExternalLink, Gamepad2, Handshake, List, MapPin, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Calendar, ExternalLink, Gamepad2, Handshake, List, MapPin, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
 
 type Torneio = {
   id: string;
@@ -56,6 +56,7 @@ export default function AdminTorneioDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [erroCategorias, setErroCategorias] = useState<string | null>(null);
+  const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
   const [editandoCategoriaId, setEditandoCategoriaId] = useState<string | null>(null);
   const [mostraFormCategoria, setMostraFormCategoria] = useState(false);
   const [salvandoCategoria, setSalvandoCategoria] = useState(false);
@@ -203,6 +204,142 @@ export default function AdminTorneioDashboardPage() {
     }
   }
 
+  async function gerarRelatorioJogosDoDia() {
+    if (!torneio) return;
+    
+    try {
+      setGerandoRelatorio(true);
+      // Usar data local para evitar problemas de fuso horário
+      const hoje = new Date();
+      const ano = hoje.getFullYear();
+      const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+      const dia = String(hoje.getDate()).padStart(2, '0');
+      const dataHoje = `${ano}-${mes}-${dia}`;
+      
+      const res = await fetch(`/api/v1/torneios/${slugAtual}/jogos-do-dia?data=${dataHoje}`);
+      
+      if (!res.ok) throw new Error("Falha ao buscar jogos do dia");
+      
+      const data = await res.json();
+      const partidas = data.partidas;
+      
+      if (!partidas || partidas.length === 0) {
+        alert("Nenhum jogo agendado para hoje.");
+        return;
+      }
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Jogos do Dia - ${torneio.nome}</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            @media print {
+              .no-print { display: none; }
+              body { padding: 0; margin: 0; }
+              .page-break { page-break-after: always; }
+            }
+            body { background-color: white; font-family: sans-serif; }
+            .card-partida { break-inside: avoid; border: 1px solid #e2e8f0; margin-bottom: 1rem; border-radius: 0.75rem; overflow: hidden; }
+          </style>
+        </head>
+        <body class="p-4 md:p-8">
+          <div class="max-w-4xl mx-auto">
+            <div class="no-print flex justify-end mb-4">
+              <button onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium">Imprimir Relatório</button>
+            </div>
+
+            ${torneio.bannerUrl ? `
+              <div class="mb-8 w-full">
+                <img src="${torneio.bannerUrl}" alt="Banner Torneio" class="w-full h-auto rounded-xl shadow-sm" />
+              </div>
+            ` : ''}
+
+            <div class="text-center mb-8">
+              <h1 class="text-3xl font-bold text-slate-900">${torneio.nome}</h1>
+              <p class="text-lg text-slate-600">Jogos do Dia - ${new Date().toLocaleDateString('pt-BR')}</p>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6">
+              ${partidas.map((p: any) => {
+                const dataHora = p.dataHorario ? new Date(p.dataHorario) : null;
+                const horaFormatada = dataHora ? dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                
+                return `
+                  <div class="card-partida bg-white">
+                    <div class="bg-slate-50 px-4 py-2 border-b border-slate-100 flex justify-between items-center">
+                      <span class="font-bold text-slate-700 uppercase tracking-wider text-xs">${p.categoriaNome}</span>
+                      <span class="text-xs font-medium text-slate-500">${p.fase}</span>
+                    </div>
+                    
+                    <div class="p-6">
+                      <div class="flex items-center justify-between gap-8">
+                        <!-- Time A -->
+                        <div class="flex-1 flex flex-col items-center text-center">
+                          <div class="flex -space-x-2 mb-3">
+                            ${p.equipeAAtletas.map((a: any) => `
+                              <img src="${a.fotoUrl || '/avatar-placeholder.png'}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='/avatar-placeholder.png'" />
+                            `).join('')}
+                          </div>
+                          <span class="font-bold text-slate-900 leading-tight">${p.equipeANome || 'A definir'}</span>
+                          <span class="text-xs text-slate-500 mt-1">${p.equipeAAtletas.map((a: any) => a.nome).join(' / ')}</span>
+                        </div>
+
+                        <div class="flex flex-col items-center px-4">
+                          <span class="text-2xl font-black text-slate-300">VS</span>
+                        </div>
+
+                        <!-- Time B -->
+                        <div class="flex-1 flex flex-col items-center text-center">
+                          <div class="flex -space-x-2 mb-3">
+                            ${p.equipeBAtletas.map((a: any) => `
+                              <img src="${a.fotoUrl || '/avatar-placeholder.png'}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='/avatar-placeholder.png'" />
+                            `).join('')}
+                          </div>
+                          <span class="font-bold text-slate-900 leading-tight">${p.equipeBNome || 'A definir'}</span>
+                          <span class="text-xs text-slate-500 mt-1">${p.equipeBAtletas.map((a: any) => a.nome).join(' / ')}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 flex justify-between items-center text-sm">
+                      <div class="flex items-center gap-2 text-slate-700 font-bold">
+                        <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        ${horaFormatada}
+                      </div>
+                      <div class="flex items-center gap-2 text-slate-700 font-medium">
+                        <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        ${p.arenaNome || 'A definir'} ${p.quadra ? `- ${p.quadra}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            
+            <footer class="mt-12 pt-8 border-t border-slate-100 text-center text-slate-400 text-xs">
+              Gerado em ${new Date().toLocaleString('pt-BR')} por Play Na Quadra
+            </footer>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.write(htmlContent);
+        win.document.close();
+      }
+    } catch (e: any) {
+      alert("Erro ao gerar relatório: " + e.message);
+    } finally {
+      setGerandoRelatorio(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -236,13 +373,24 @@ export default function AdminTorneioDashboardPage() {
             Apoiadores
           </Link>
           {torneio && (
-            <Link
-              href={`/torneios/${torneio.slug}`}
-              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Público
-            </Link>
+            <>
+              <button
+                type="button"
+                onClick={gerarRelatorioJogosDoDia}
+                disabled={gerandoRelatorio}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Calendar className="h-4 w-4" />
+                {gerandoRelatorio ? "Gerando..." : "Jogos do dia"}
+              </button>
+              <Link
+                href={`/torneios/${torneio.slug}`}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Público
+              </Link>
+            </>
           )}
         </div>
       </div>

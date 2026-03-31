@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, Gamepad2, Plus, Save, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Banknote, Gamepad2, Plus, RefreshCw, Save, Trash2, Users, X } from "lucide-react";
 
 type Categoria = {
   id: string;
@@ -45,6 +45,7 @@ export default function AdminCategoriaInscricoesPage() {
 
   const [mostraForm, setMostraForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [sincronizandoFotos, setSincronizandoFotos] = useState(false);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
 
   const [buscaAtletaA, setBuscaAtletaA] = useState("");
@@ -254,6 +255,28 @@ export default function AdminCategoriaInscricoesPage() {
     }
   }
 
+  async function onSincronizarFotos() {
+    try {
+      setErro(null);
+      setSincronizandoFotos(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes/sincronizar-fotos`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || "Falha ao sincronizar fotos");
+      }
+      await carregar();
+      alert(
+        `Sincronização concluída.\nInscritos: ${data?.totalInscritos ?? 0}\nCom Play ID: ${data?.totalComPlayId ?? 0}\nConsultados no Play: ${data?.consultados ?? 0}\nAtualizados: ${data?.atualizados ?? 0}\nJá estavam atualizados: ${data?.jaAtualizados ?? 0}\nSem foto no Play: ${data?.semFotoNoPlay ?? 0}\nFalhas de consulta: ${data?.falhasConsulta ?? 0}`
+      );
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSincronizandoFotos(false);
+    }
+  }
+
   const total = inscricoes.length;
 
   return (
@@ -300,14 +323,27 @@ export default function AdminCategoriaInscricoesPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={abrirNova}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-        >
-          <Plus className="h-4 w-4" />
-          Nova inscrição
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onSincronizarFotos}
+            disabled={sincronizandoFotos}
+            className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium ${
+              sincronizandoFotos ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-500"
+            }`}
+          >
+            <RefreshCw className={`h-4 w-4 ${sincronizandoFotos ? "animate-spin" : ""}`} />
+            {sincronizandoFotos ? "Sincronizando..." : "Atualizar fotos dos inscritos"}
+          </button>
+          <button
+            type="button"
+            onClick={abrirNova}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            <Plus className="h-4 w-4" />
+            Nova inscrição
+          </button>
+        </div>
       </div>
 
       {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
@@ -604,4 +640,3 @@ export default function AdminCategoriaInscricoesPage() {
     </div>
   );
 }
-
