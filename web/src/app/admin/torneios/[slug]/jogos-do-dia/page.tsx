@@ -142,40 +142,41 @@ export default function AdminJogosDoDiaPage() {
       setErro(null);
       if (partidas.length === 0) return;
 
-      const categoriaIds = Array.from(new Set(partidas.map((p) => p.categoriaId).filter(Boolean)));
-      if (categoriaIds.length === 0) return;
-
       setSincronizandoFotos(true);
 
-      let totalInscritos = 0;
-      let totalComPlayId = 0;
+      const hoje = new Date();
+      const ano = hoje.getFullYear();
+      const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+      const dia = String(hoje.getDate()).padStart(2, "0");
+      const dataHoje = `${ano}-${mes}-${dia}`;
+
+      const res = await fetch(`/api/v1/torneios/${slug}/jogos-do-dia?data=${dataHoje}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) {
+        throw new Error(payload?.error || "Falha ao atualizar fotos");
+      }
+
       let atualizados = 0;
       let consultados = 0;
       let jaAtualizados = 0;
       let semFotoNoPlay = 0;
       let falhasConsulta = 0;
-
-      for (const categoriaId of categoriaIds) {
-        const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes/sincronizar-fotos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-        if (!res.ok) continue;
-        const payload = (await res.json().catch(() => null)) as any;
-        if (!payload) continue;
-        totalInscritos += Number(payload.totalInscritos ?? 0);
-        totalComPlayId += Number(payload.totalComPlayId ?? 0);
-        atualizados += Number(payload.atualizados ?? 0);
-        consultados += Number(payload.consultados ?? 0);
-        jaAtualizados += Number(payload.jaAtualizados ?? 0);
-        semFotoNoPlay += Number(payload.semFotoNoPlay ?? 0);
-        falhasConsulta += Number(payload.falhasConsulta ?? 0);
-      }
+      const totalAtletas = Number(payload?.totalAtletas ?? 0);
+      const totalComPlayId = Number(payload?.totalComPlayId ?? 0);
+      atualizados += Number(payload?.atualizados ?? 0);
+      consultados += Number(payload?.consultados ?? 0);
+      jaAtualizados += Number(payload?.jaAtualizados ?? 0);
+      semFotoNoPlay += Number(payload?.semFotoNoPlay ?? 0);
+      falhasConsulta += Number(payload?.falhasConsulta ?? 0);
 
       await carregarDados();
 
       alert(
-        `Sincronização concluída.\n\nCategorias: ${categoriaIds.length}\nInscritos: ${totalInscritos}\nCom Play ID: ${totalComPlayId}\nConsultados: ${consultados}\nAtualizados: ${atualizados}\nJá atualizados: ${jaAtualizados}\nSem foto no Play: ${semFotoNoPlay}\nFalhas: ${falhasConsulta}`
+        `Sincronização concluída.\n\nAtletas (jogos listados): ${totalAtletas}\nCom Play ID: ${totalComPlayId}\nConsultados: ${consultados}\nAtualizados: ${atualizados}\nJá atualizados: ${jaAtualizados}\nSem foto no Play: ${semFotoNoPlay}\nFalhas: ${falhasConsulta}`
       );
     } catch (e: any) {
       setErro(e?.message || "Erro ao sincronizar fotos");
