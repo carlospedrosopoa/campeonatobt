@@ -236,6 +236,7 @@ export default function AdminTorneioDashboardPage() {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Jogos do Dia - ${torneio.nome}</title>
           <script src="https://cdn.tailwindcss.com"></script>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
           <style>
             @media print {
               .no-print { display: none; }
@@ -244,85 +245,130 @@ export default function AdminTorneioDashboardPage() {
             }
             body { background-color: white; font-family: sans-serif; }
             .card-partida { break-inside: avoid; border: 1px solid #e2e8f0; margin-bottom: 1rem; border-radius: 0.75rem; overflow: hidden; }
+            #capture-target { padding: 2rem; background: white; }
           </style>
-        </head>
-        <body class="p-4 md:p-8">
-          <div class="max-w-4xl mx-auto">
-            <div class="no-print flex justify-end mb-4">
-              <button onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium">Imprimir Relatório</button>
-            </div>
-
-            ${torneio.bannerUrl ? `
-              <div class="mb-8 w-full">
-                <img src="${torneio.bannerUrl}" alt="Banner Torneio" class="w-full h-auto rounded-xl shadow-sm" />
-              </div>
-            ` : ''}
-
-            <div class="text-center mb-8">
-              <h1 class="text-3xl font-bold text-slate-900">${torneio.nome}</h1>
-              <p class="text-lg text-slate-600">Jogos do Dia - ${new Date().toLocaleDateString('pt-BR')}</p>
-            </div>
-
-            <div class="grid grid-cols-1 gap-6">
-              ${partidas.map((p: any) => {
-                const dataHora = p.dataHorario ? new Date(p.dataHorario) : null;
-                const horaFormatada = dataHora ? dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+          <script>
+            async function gerarImagem() {
+              const btn = document.getElementById('btn-gerar-imagem');
+              const btnPrint = document.getElementById('btn-imprimir');
+              const originalText = btn.innerText;
+              
+              try {
+                btn.innerText = 'Processando...';
+                btn.disabled = true;
                 
-                return `
-                  <div class="card-partida bg-white">
-                    <div class="bg-slate-50 px-4 py-2 border-b border-slate-100 flex justify-between items-center">
-                      <span class="font-bold text-slate-700 uppercase tracking-wider text-xs">${p.categoriaNome}</span>
-                      <span class="text-xs font-medium text-slate-500">${p.fase}</span>
-                    </div>
-                    
-                    <div class="p-6">
-                      <div class="flex items-center justify-between gap-8">
-                        <!-- Time A -->
-                        <div class="flex-1 flex flex-col items-center text-center">
-                          <div class="flex -space-x-2 mb-3">
-                            ${p.equipeAAtletas.map((a: any) => `
-                              <img src="${a.fotoUrl || '/avatar-placeholder.png'}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='/avatar-placeholder.png'" />
-                            `).join('')}
-                          </div>
-                          <span class="font-bold text-slate-900 leading-tight">${p.equipeANome || 'A definir'}</span>
-                          <span class="text-xs text-slate-500 mt-1">${p.equipeAAtletas.map((a: any) => a.nome).join(' / ')}</span>
-                        </div>
-
-                        <div class="flex flex-col items-center px-4">
-                          <span class="text-2xl font-black text-slate-300">VS</span>
-                        </div>
-
-                        <!-- Time B -->
-                        <div class="flex-1 flex flex-col items-center text-center">
-                          <div class="flex -space-x-2 mb-3">
-                            ${p.equipeBAtletas.map((a: any) => `
-                              <img src="${a.fotoUrl || '/avatar-placeholder.png'}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='/avatar-placeholder.png'" />
-                            `).join('')}
-                          </div>
-                          <span class="font-bold text-slate-900 leading-tight">${p.equipeBNome || 'A definir'}</span>
-                          <span class="text-xs text-slate-500 mt-1">${p.equipeBAtletas.map((a: any) => a.nome).join(' / ')}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 flex justify-between items-center text-sm">
-                      <div class="flex items-center gap-2 text-slate-700 font-bold">
-                        <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        ${horaFormatada}
-                      </div>
-                      <div class="flex items-center gap-2 text-slate-700 font-medium">
-                        <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                        ${p.arenaNome || 'A definir'} ${p.quadra ? `- ${p.quadra}` : ''}
-                      </div>
-                    </div>
-                  </div>
-                `;
-              }).join('')}
+                // Pequeno delay para garantir que imagens foram carregadas e o layout estabilizou
+                await new Promise(r => setTimeout(r, 500));
+                
+                const element = document.getElementById('capture-target');
+                const canvas = await html2canvas(element, {
+                  useCORS: true,
+                  scale: 2, // Melhor qualidade
+                  backgroundColor: '#ffffff',
+                  logging: false
+                });
+                
+                const link = document.createElement('a');
+                link.download = \`jogos-do-dia-\${new Date().toISOString().split('T')[0]}.png\`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+              } catch (err) {
+                console.error('Erro ao gerar imagem:', err);
+                alert('Erro ao gerar imagem. Verifique o console.');
+              } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+              }
+            }
+          </script>
+        </head>
+        <body class="p-4 md:p-8 bg-slate-100">
+          <div class="max-w-4xl mx-auto">
+            <div class="no-print flex justify-end gap-3 mb-6">
+              <button id="btn-gerar-imagem" onclick="gerarImagem()" class="bg-orange-500 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-orange-600">Gerar Imagem (PNG)</button>
+              <button id="btn-imprimir" onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium">Imprimir Relatório</button>
             </div>
-            
-            <footer class="mt-12 pt-8 border-t border-slate-100 text-center text-slate-400 text-xs">
-              Gerado em ${new Date().toLocaleString('pt-BR')} por Play Na Quadra
-            </footer>
+
+            <div id="capture-target" class="shadow-xl rounded-2xl">
+              ${torneio.bannerUrl ? `
+                <div class="mb-8 w-full">
+                  <img src="/api/image-proxy?url=${encodeURIComponent(torneio.bannerUrl)}" alt="Banner Torneio" class="w-full h-auto rounded-xl shadow-sm" crossOrigin="anonymous" />
+                </div>
+              ` : ''}
+
+              <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-slate-900">${torneio.nome}</h1>
+                <p class="text-lg text-slate-600">Jogos do Dia - ${new Date().toLocaleDateString('pt-BR')}</p>
+              </div>
+
+              <div class="grid grid-cols-1 gap-6">
+                ${partidas.map((p: any) => {
+                  const dataHora = p.dataHorario ? new Date(p.dataHorario) : null;
+                  const horaFormatada = dataHora ? dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                  const placeholder = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiNlMmU4ZjAiLz48dGV4dCB4PSI1MCIgeT0iNTUiIGZvbnQtc2l6ZT0iMzUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmaWxsPSIjOTRhN2IzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+UE48L3RleHQ+PC9zdmc+";
+                  
+                  return `
+                    <div class="card-partida bg-white">
+                      <div class="bg-slate-50 px-4 py-2 border-b border-slate-100 flex justify-between items-center">
+                        <span class="font-bold text-slate-700 uppercase tracking-wider text-xs">${p.categoriaNome}</span>
+                        <span class="text-xs font-medium text-slate-500">${p.fase}</span>
+                      </div>
+                      
+                      <div class="p-6">
+                        <div class="flex items-center justify-between gap-8">
+                          <!-- Time A -->
+                          <div class="flex-1 flex flex-col items-center text-center">
+                            <div class="flex -space-x-2 mb-3">
+                              ${p.equipeAAtletas.map((a: any) => `
+                                <img src="${a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : placeholder}" 
+                                  class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" 
+                                  onerror="this.src='${placeholder}'" 
+                                  crossOrigin="anonymous" />
+                              `).join('')}
+                            </div>
+                            <span class="font-bold text-slate-900 leading-tight">${p.equipeANome || 'A definir'}</span>
+                            <span class="text-xs text-slate-500 mt-1">${p.equipeAAtletas.map((a: any) => a.nome).join(' / ')}</span>
+                          </div>
+
+                          <div class="flex flex-col items-center px-4">
+                            <span class="text-2xl font-black text-slate-300">VS</span>
+                          </div>
+
+                          <!-- Time B -->
+                          <div class="flex-1 flex flex-col items-center text-center">
+                            <div class="flex -space-x-2 mb-3">
+                              ${p.equipeBAtletas.map((a: any) => `
+                                <img src="${a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : placeholder}" 
+                                  class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" 
+                                  onerror="this.src='${placeholder}'" 
+                                  crossOrigin="anonymous" />
+                              `).join('')}
+                            </div>
+                            <span class="font-bold text-slate-900 leading-tight">${p.equipeBNome || 'A definir'}</span>
+                            <span class="text-xs text-slate-500 mt-1">${p.equipeBAtletas.map((a: any) => a.nome).join(' / ')}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 flex justify-between items-center text-sm">
+                        <div class="flex items-center gap-2 text-slate-700 font-bold">
+                          <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          ${horaFormatada}
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-700 font-medium">
+                          <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                          ${p.arenaNome || 'A definir'} ${p.quadra ? `- ${p.quadra}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+              
+              <footer class="mt-12 pt-8 border-t border-slate-100 text-center text-slate-400 text-xs">
+                Gerado em ${new Date().toLocaleString('pt-BR')} por Play Na Quadra
+              </footer>
+            </div>
           </div>
         </body>
         </html>
