@@ -457,8 +457,8 @@ export default function AdminCategoriaJogosSuperPage() {
       setErro(null);
 
       const regras = config?.regrasPartida;
-      const melhorDe = regras?.melhorDe ?? 1;
-      const superTie = regras?.superTiebreakDecisivo?.habilitado ?? false;
+      const melhorDe = 3;
+      const superTie = true;
       const tbHabilitado = regras?.tiebreak?.habilitado ?? true;
       const tbEm = regras?.tiebreak?.em ?? (regras?.gamesPorSet ?? 6);
 
@@ -594,8 +594,8 @@ export default function AdminCategoriaJogosSuperPage() {
       }));
   }, [partidas, fase]);
 
-  const melhorDe = config?.regrasPartida?.melhorDe ?? 1;
-  const superTie = config?.regrasPartida?.superTiebreakDecisivo?.habilitado ?? false;
+  const melhorDe = 3;
+  const superTie = true;
   const tbHabilitado = config?.regrasPartida?.tiebreak?.habilitado ?? true;
   const tbEm = config?.regrasPartida?.tiebreak?.em ?? (config?.regrasPartida?.gamesPorSet ?? 6);
   const isTbScore = (a: number, b: number) =>
