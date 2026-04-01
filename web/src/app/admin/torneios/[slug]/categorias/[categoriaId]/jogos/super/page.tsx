@@ -790,6 +790,21 @@ export default function AdminCategoriaJogosSuperPage() {
       }));
   }, [partidas, fase]);
 
+  const temResultadoNaCategoria = useMemo(() => {
+    if (temResultadoGrupos) return true;
+    for (const g of classificacao) {
+      for (const e of g.equipes) {
+        if ((e.jogosJogados ?? 0) > 0) return true;
+        if ((e.jogosVencidos ?? 0) > 0) return true;
+        if ((e.jogosPerdidos ?? 0) > 0) return true;
+        if ((e.pontos ?? 0) > 0) return true;
+        if ((e.saldoGames ?? 0) !== 0) return true;
+        if ((e.setsPro ?? 0) > 0) return true;
+      }
+    }
+    return false;
+  }, [classificacao, temResultadoGrupos]);
+
   const melhorDe = 3;
   const superTie = true;
   const tbHabilitado = config?.regrasPartida?.tiebreak?.habilitado ?? true;
@@ -951,7 +966,7 @@ export default function AdminCategoriaJogosSuperPage() {
 
             <button
               type="button"
-              disabled={gerandoGrupos || temResultadoGrupos}
+              disabled={gerandoGrupos || temResultadoNaCategoria}
               onClick={async () => {
                 try {
                   setGerandoGrupos(true);
@@ -970,7 +985,7 @@ export default function AdminCategoriaJogosSuperPage() {
                   setGerandoGrupos(false);
                 }
               }}
-              title={temResultadoGrupos ? "Não é possível gerar jogos: já existe partida com resultado ou em andamento." : undefined}
+              title={temResultadoNaCategoria ? "Não é possível gerar jogos: já existe partida com resultado ou em andamento." : undefined}
               className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {gerandoGrupos ? "Gerando…" : "Gerar rodadas/jogos"}
