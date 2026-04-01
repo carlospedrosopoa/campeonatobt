@@ -51,7 +51,7 @@ export async function PUT(
     const detalhesPlacar = Array.isArray(body?.detalhesPlacar) ? body.detalhesPlacar : [];
 
     const config = await categoriaConfigService.obterOuDefault(categoriaId);
-    const regras = config.regrasPartida ?? {
+    const regrasBase = config.regrasPartida ?? {
       tipo: "SETS" as const,
       melhorDe: 1 as const,
       gamesPorSet: 6 as const,
@@ -59,6 +59,22 @@ export async function PUT(
       superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
       incluirSuperTieEmGames: false,
     };
+
+    const regras =
+      torneio.superCampeonato
+        ? ({
+            ...regrasBase,
+            tipo: "SETS" as const,
+            melhorDe: 3 as const,
+            tiebreak: regrasBase.tiebreak ?? { habilitado: true, em: 6, ate: 7, diffMin: 2 },
+            superTiebreakDecisivo: {
+              habilitado: true,
+              ate: regrasBase.superTiebreakDecisivo?.ate ?? 10,
+              diffMin: regrasBase.superTiebreakDecisivo?.diffMin ?? 2,
+            },
+            incluirSuperTieEmGames: false,
+          } as const)
+        : regrasBase;
 
     const resultado = calcularResultadoSets({
       regras,
