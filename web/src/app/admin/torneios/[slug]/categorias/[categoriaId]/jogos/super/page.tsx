@@ -125,6 +125,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [fase, setFase] = useState<"GRUPOS" | "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL">("GRUPOS");
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [carregandoPartidas, setCarregandoPartidas] = useState(false);
+  const [temResultadoGrupos, setTemResultadoGrupos] = useState(false);
 
   const [resultadoFinal, setResultadoFinal] = useState<ResultadoFinal>(null);
 
@@ -379,7 +380,18 @@ export default function AdminCategoriaJogosSuperPage() {
       const faseQuery = faseParam ?? fase;
       const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=${faseQuery}`, { cache: "no-store" });
       if (!res.ok) return;
-      setPartidas((await res.json()) as Partida[]);
+      const lista = (await res.json()) as Partida[];
+      setPartidas(lista);
+      if (faseQuery === "GRUPOS") {
+        const iniciada = lista.some((p) => {
+          if (p.status && p.status !== "AGENDADA") return true;
+          if (p.vencedorId) return true;
+          if ((p.placarA ?? 0) !== 0 || (p.placarB ?? 0) !== 0) return true;
+          if (Array.isArray(p.detalhesPlacar) && p.detalhesPlacar.length > 0) return true;
+          return false;
+        });
+        setTemResultadoGrupos(iniciada);
+      }
     } finally {
       setCarregandoPartidas(false);
     }
@@ -938,7 +950,7 @@ export default function AdminCategoriaJogosSuperPage() {
 
             <button
               type="button"
-              disabled={gerandoGrupos}
+              disabled={gerandoGrupos || temResultadoGrupos}
               onClick={async () => {
                 try {
                   setGerandoGrupos(true);
@@ -957,6 +969,7 @@ export default function AdminCategoriaJogosSuperPage() {
                   setGerandoGrupos(false);
                 }
               }}
+              title={temResultadoGrupos ? "Não é possível gerar jogos: já existe partida com resultado ou em andamento." : undefined}
               className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {gerandoGrupos ? "Gerando…" : "Gerar rodadas/jogos"}
