@@ -1351,16 +1351,14 @@ export default function AdminCategoriaJogosSuperPage() {
                         Lançar placar
                       </button>
                       
-                      {p.status === "AGENDADA" && (
-                        <button
-                          type="button"
-                          onClick={() => abrirAlterarConfronto(p)}
-                          className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                          title="Alterar confronto"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => abrirAlterarConfronto(p)}
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                        title="Alterar confronto"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1455,6 +1453,12 @@ export default function AdminCategoriaJogosSuperPage() {
         (() => {
           const partida = partidas.find((p) => p.id === editConfrontoId);
           if (!partida) return null;
+          const started =
+            partida.status !== "AGENDADA" ||
+            Boolean(partida.vencedorId) ||
+            (partida.placarA ?? 0) !== 0 ||
+            (partida.placarB ?? 0) !== 0 ||
+            (Array.isArray(partida.detalhesPlacar) && partida.detalhesPlacar.length > 0);
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditConfrontoId(null)}>
               <div
@@ -1469,7 +1473,13 @@ export default function AdminCategoriaJogosSuperPage() {
                         {partida.equipeANome || partida.equipeAId.slice(0, 8)} <span className="text-slate-400">vs</span>{" "}
                         {partida.equipeBNome || partida.equipeBId.slice(0, 8)}
                       </div>
-                      <div className="text-sm text-slate-600 mt-1">Disponível apenas para jogos sem placar (status AGENDADA).</div>
+                      <div className="text-sm text-slate-600 mt-1">
+                        {partida.fase === "GRUPOS"
+                          ? started
+                            ? "Este jogo já possui placar/andamento. A alteração mantém o placar e troca as duplas."
+                            : "A alteração troca as duplas deste jogo."
+                          : "Disponível apenas para jogos sem placar no mata-mata."}
+                      </div>
                     </div>
                     <button type="button" onClick={() => setEditConfrontoId(null)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
                       <X className="h-4 w-4" />
@@ -1520,12 +1530,24 @@ export default function AdminCategoriaJogosSuperPage() {
                         try {
                           setSalvandoConfronto(true);
                           setErro(null);
+                          if (partida.fase !== "GRUPOS" && started) {
+                            throw new Error("Não é possível alterar confronto no mata-mata após iniciar/lançar placar");
+                          }
+                          if (partida.fase === "GRUPOS" && started) {
+                            const ok = confirm("Este jogo já tem placar/andamento. Alterar o confronto manterá o placar atual e trocará as duplas. Continuar?");
+                            if (!ok) return;
+                          }
                           const res = await fetch(
                             `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partida.id}/alterar-confronto`,
                             {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ equipeAId: confrontoEquipeAId, equipeBId: confrontoEquipeBId }),
+                              body: JSON.stringify({
+                                equipeAId: confrontoEquipeAId,
+                                equipeBId: confrontoEquipeBId,
+                                force: partida.fase === "GRUPOS" && started,
+                                preservarPlacar: partida.fase === "GRUPOS" && started,
+                              }),
                             }
                           );
                           const payload = (await res.json().catch(() => null)) as any;

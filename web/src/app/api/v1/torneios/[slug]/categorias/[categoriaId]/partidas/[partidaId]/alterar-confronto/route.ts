@@ -32,6 +32,8 @@ export async function POST(
     const body = await request.json().catch(() => null);
     const equipeAId = (body?.equipeAId as string | undefined)?.trim();
     const equipeBId = (body?.equipeBId as string | undefined)?.trim();
+    const force = Boolean(body?.force);
+    const preservarPlacar = body?.preservarPlacar !== undefined ? Boolean(body?.preservarPlacar) : true;
     if (!equipeAId || !equipeBId) return NextResponse.json({ error: "Informe as duas duplas" }, { status: 400 });
     if (equipeAId === equipeBId) return NextResponse.json({ error: "Duplas precisam ser diferentes" }, { status: 400 });
 
@@ -44,13 +46,14 @@ export async function POST(
         placarA: partidas.placarA,
         placarB: partidas.placarB,
         detalhesPlacar: partidas.detalhesPlacar,
+        rodadaId: partidas.rodadaId,
+        grupoId: partidas.grupoId,
       })
       .from(partidas)
       .where(and(eq(partidas.id, partidaId), eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId)))
       .limit(1);
     const partida = partidaRows[0];
     if (!partida) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
-    if (partida.fase === "GRUPOS") return NextResponse.json({ error: "Alteração de confronto é somente no mata-mata" }, { status: 400 });
 
     const started =
       partida.status !== "AGENDADA" ||
@@ -58,7 +61,24 @@ export async function POST(
       (partida.placarA ?? 0) !== 0 ||
       (partida.placarB ?? 0) !== 0 ||
       (Array.isArray(partida.detalhesPlacar) && partida.detalhesPlacar.length > 0);
-    if (started) return NextResponse.json({ error: "Não é possível alterar confronto após iniciar/lançar placar" }, { status: 400 });
+
+    if (partida.fase === "GRUPOS") {
+      const isSuperCampeonato = Boolean((torneio as any)?.superCampeonato);
+      if (!isSuperCampeonato) {
+        return NextResponse.json({ error: "Alteração de confronto em GRUPOS é permitida apenas no Super Campeonato" }, { status: 400 });
+      }
+      if (!partida.rodadaId || !partida.grupoId) {
+        return NextResponse.json({ error: "Partida inválida (sem rodada/grupo)" }, { status: 400 });
+      }
+      if (started && !force) {
+        return NextResponse.json(
+          { error: "Partida já possui placar/andamento. Para alterar o confronto, confirme a ação." },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (started) return NextResponse.json({ error: "Não é possível alterar confronto após iniciar/lançar placar" }, { status: 400 });
+    }
 
     const aprovadas = await db
       .select({ equipeId: inscricoes.equipeId })
@@ -74,22 +94,39 @@ export async function POST(
       .limit(2);
     if (aprovadas.length !== 2) return NextResponse.json({ error: "Uma das duplas não está aprovada na categoria" }, { status: 400 });
 
-    const conflito = await db
-      .select({ id: partidas.id })
-      .from(partidas)
-      .where(
-        and(
-          eq(partidas.torneioId, torneio.id),
-          eq(partidas.categoriaId, categoriaId),
-          eq(partidas.fase, partida.fase),
-          not(eq(partidas.id, partidaId)),
-          or(inArray(partidas.equipeAId, [equipeAId, equipeBId]), inArray(partidas.equipeBId, [equipeAId, equipeBId]))
-        )
-      )
-      .limit(1);
+    const conflitoWhere = [
+      eq(partidas.torneioId, torneio.id),
+      eq(partidas.categoriaId, categoriaId),
+      eq(partidas.fase, partida.fase),
+      not(eq(partidas.id, partidaId)),
+      or(inArray(partidas.equipeAId, [equipeAId, equipeBId]), inArray(partidas.equipeBId, [equipeAId, equipeBId])),
+    ];
+    if (partida.fase === "GRUPOS") {
+      conflitoWhere.push(eq(partidas.rodadaId, partida.rodadaId as string));
+      conflitoWhere.push(eq(partidas.grupoId, partida.grupoId as string));
+    }
+
+    const conflito = await db.select({ id: partidas.id }).from(partidas).where(and(...conflitoWhere)).limit(1);
     if (conflito.length > 0) return NextResponse.json({ error: "Uma das duplas já está em outro jogo desta fase" }, { status: 400 });
 
     const updated = await db.transaction(async (tx) => {
+      if (partida.fase === "GRUPOS" && started && preservarPlacar) {
+        const setsA = partida.placarA ?? 0;
+        const setsB = partida.placarB ?? 0;
+        const vencedorId = setsA === setsB ? null : setsA > setsB ? equipeAId : equipeBId;
+        const [u] = await tx
+          .update(partidas)
+          .set({
+            equipeAId,
+            equipeBId,
+            vencedorId,
+            atualizadoEm: new Date(),
+          })
+          .where(eq(partidas.id, partidaId))
+          .returning();
+        return u;
+      }
+
       const [u] = await tx
         .update(partidas)
         .set({
@@ -107,12 +144,14 @@ export async function POST(
       return u;
     });
 
-    const mataMataService = new MataMataService();
-    await mataMataService.resetarChaveDepoisDeFaseSePossivel({
-      torneioId: torneio.id,
-      categoriaId,
-      faseAtual: partida.fase as any,
-    });
+    if (partida.fase !== "GRUPOS") {
+      const mataMataService = new MataMataService();
+      await mataMataService.resetarChaveDepoisDeFaseSePossivel({
+        torneioId: torneio.id,
+        categoriaId,
+        faseAtual: partida.fase as any,
+      });
+    }
 
     return NextResponse.json({ partida: updated });
   } catch (error: any) {
