@@ -1033,7 +1033,9 @@ export default function AdminCategoriaJogosSuperPage() {
                       <tr className="text-left text-slate-500 border-b border-slate-100">
                         <th className="py-2 pr-3 font-medium">Equipe</th>
                         <th className="py-2 pr-3 font-medium">P</th>
+                        <th className="py-2 pr-3 font-medium">J</th>
                         <th className="py-2 pr-3 font-medium">V</th>
+                        <th className="py-2 pr-3 font-medium">AP%</th>
                         <th className="py-2 pr-3 font-medium">SP</th>
                         <th className="py-2 pr-3 font-medium">SG</th>
                       </tr>
@@ -1043,7 +1045,11 @@ export default function AdminCategoriaJogosSuperPage() {
                         <tr key={e.equipeId} className="border-b border-slate-50">
                           <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.pontos}</td>
+                          <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
+                          </td>
                           <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
                         </tr>
