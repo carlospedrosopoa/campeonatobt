@@ -332,6 +332,7 @@ export class DinamicaCategoriaService {
       if (typeof r.numero === "number") rodadaIdByNumero.set(r.numero, r.id);
     }
     const rodadaIdsFrom = rodadasRows.filter((r) => (r.numero ?? 0) >= aPartirDaRodada).map((r) => r.id);
+    const rodadaNumerosFrom = rodadasRows.filter((r) => (r.numero ?? 0) >= aPartirDaRodada).map((r) => r.numero).filter((n): n is number => typeof n === "number");
 
     const partidasRows = await db
       .select({
@@ -385,6 +386,7 @@ export class DinamicaCategoriaService {
         await tx.delete(partidas).where(inArray(partidas.rodadaId, rodadaIdsFrom));
         await tx.delete(rodadas).where(inArray(rodadas.id, rodadaIdsFrom));
       }
+      for (const n of rodadaNumerosFrom) rodadaIdByNumero.delete(n);
 
       const rodadasCriadas: { id: string; numero: number }[] = [];
       for (let numero = 1; numero <= maxRodadas; numero++) {
