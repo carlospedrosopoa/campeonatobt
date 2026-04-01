@@ -138,6 +138,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [carregandoEquipes, setCarregandoEquipes] = useState(false);
   const [confrontoEquipeAId, setConfrontoEquipeAId] = useState("");
   const [confrontoEquipeBId, setConfrontoEquipeBId] = useState("");
+  const [modoManutencaoConfronto, setModoManutencaoConfronto] = useState(true);
   const [editAgendamentoId, setEditAgendamentoId] = useState<string | null>(null);
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
   const [arenas, setArenas] = useState<Arena[]>([]);
@@ -1528,6 +1529,23 @@ export default function AdminCategoriaJogosSuperPage() {
                     </div>
                   </div>
 
+                  {partida.fase === "GRUPOS" && (
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="text-sm text-slate-700">
+                        Modo manutenção: permite trocar duplas mesmo que fiquem repetidas temporariamente (corrija antes de gerar rodadas restantes).
+                      </div>
+                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={modoManutencaoConfronto}
+                          onChange={(e) => setModoManutencaoConfronto(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300"
+                        />
+                        Ativar
+                      </label>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-end gap-2">
                     <button type="button" onClick={() => setEditConfrontoId(null)} className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                       Cancelar
@@ -1553,7 +1571,7 @@ export default function AdminCategoriaJogosSuperPage() {
                               body: JSON.stringify({
                                 equipeAId: confrontoEquipeAId,
                                 equipeBId: confrontoEquipeBId,
-                                force: partida.fase === "GRUPOS" && started,
+                                force: partida.fase === "GRUPOS" && (started || modoManutencaoConfronto),
                                 preservarPlacar: partida.fase === "GRUPOS" && started,
                               }),
                             }

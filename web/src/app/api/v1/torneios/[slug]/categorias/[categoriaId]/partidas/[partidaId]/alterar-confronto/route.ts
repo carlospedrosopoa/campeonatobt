@@ -62,8 +62,9 @@ export async function POST(
       (partida.placarB ?? 0) !== 0 ||
       (Array.isArray(partida.detalhesPlacar) && partida.detalhesPlacar.length > 0);
 
+    const isSuperCampeonato = Boolean((torneio as any)?.superCampeonato);
+
     if (partida.fase === "GRUPOS") {
-      const isSuperCampeonato = Boolean((torneio as any)?.superCampeonato);
       if (!isSuperCampeonato) {
         return NextResponse.json({ error: "Alteração de confronto em GRUPOS é permitida apenas no Super Campeonato" }, { status: 400 });
       }
@@ -93,6 +94,46 @@ export async function POST(
       )
       .limit(2);
     if (aprovadas.length !== 2) return NextResponse.json({ error: "Uma das duplas não está aprovada na categoria" }, { status: 400 });
+
+    const ignorarConflito = partida.fase === "GRUPOS" && isSuperCampeonato && force;
+    if (ignorarConflito) {
+      const updated = await db.transaction(async (tx) => {
+        if (started && preservarPlacar) {
+          const setsA = partida.placarA ?? 0;
+          const setsB = partida.placarB ?? 0;
+          const vencedorId = setsA === setsB ? null : setsA > setsB ? equipeAId : equipeBId;
+          const [u] = await tx
+            .update(partidas)
+            .set({
+              equipeAId,
+              equipeBId,
+              vencedorId,
+              atualizadoEm: new Date(),
+            })
+            .where(eq(partidas.id, partidaId))
+            .returning();
+          return u;
+        }
+
+        const [u] = await tx
+          .update(partidas)
+          .set({
+            equipeAId,
+            equipeBId,
+            vencedorId: null,
+            placarA: 0,
+            placarB: 0,
+            detalhesPlacar: null as any,
+            status: "AGENDADA",
+            atualizadoEm: new Date(),
+          })
+          .where(eq(partidas.id, partidaId))
+          .returning();
+        return u;
+      });
+
+      return NextResponse.json({ partida: updated });
+    }
 
     const conflitoWhere = [
       eq(partidas.torneioId, torneio.id),
