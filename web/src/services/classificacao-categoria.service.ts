@@ -62,8 +62,9 @@ export class ClassificacaoCategoriaService {
       .where(eq(categorias.id, categoriaId))
       .limit(1);
     const superCampeonato = torneioRow[0]?.superCampeonato ?? false;
-    const ignoreSuperTieMin =
-      config.regrasPartida?.superTiebreakDecisivo?.habilitado && (superCampeonato || config.regrasPartida?.incluirSuperTieEmGames !== true)
+    const ignoreSuperTieMin = superCampeonato
+      ? (config.regrasPartida?.superTiebreakDecisivo?.ate ?? 10)
+      : config.regrasPartida?.superTiebreakDecisivo?.habilitado && config.regrasPartida?.incluirSuperTieEmGames !== true
         ? config.regrasPartida.superTiebreakDecisivo.ate ?? 10
         : null;
 
@@ -210,8 +211,9 @@ export class ClassificacaoCategoriaService {
       ? (["PONTOS", "VITORIAS", "SETS_PRO", "SALDO_GAMES", "SORTEIO"] as any)
       : (config.desempate ?? ["PONTOS", "CONFRONTO_DIRETO", "SALDO_GAMES", "GAMES_PRO", "VITORIAS", "SORTEIO"]);
 
-    const ignoreSuperTieMin =
-      config.regrasPartida?.superTiebreakDecisivo?.habilitado && (superCampeonato || config.regrasPartida?.incluirSuperTieEmGames !== true)
+    const ignoreSuperTieMin = superCampeonato
+      ? (config.regrasPartida?.superTiebreakDecisivo?.ate ?? 10)
+      : config.regrasPartida?.superTiebreakDecisivo?.habilitado && config.regrasPartida?.incluirSuperTieEmGames !== true
         ? config.regrasPartida.superTiebreakDecisivo.ate ?? 10
         : null;
 
