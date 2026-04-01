@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, Calendar, Clock, Crown, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
+import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
@@ -149,6 +149,8 @@ export default function AdminCategoriaJogosSuperPage() {
   const [salvandoRodada, setSalvandoRodada] = useState(false);
   const [torneioNome, setTorneioNome] = useState("Torneio");
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
+  const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
+  const [gerandoRelatorioClassificacao, setGerandoRelatorioClassificacao] = useState(false);
   const [formPlacar, setFormPlacar] = useState({
     s1a: "",
     s1b: "",
@@ -178,6 +180,183 @@ export default function AdminCategoriaJogosSuperPage() {
     const t = (await res.json()) as any;
     if (t?.nome) setTorneioNome(String(t.nome));
     setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
+    setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
+  }
+
+  async function gerarRelatorioClassificacao() {
+    if (!categoria) return;
+    if (classificacao.length === 0) {
+      alert("Nenhuma classificação disponível para gerar relatório.");
+      return;
+    }
+
+    try {
+      setGerandoRelatorioClassificacao(true);
+
+      const escapeHtml = (value: string) =>
+        value
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+
+      const avatarPlaceholder =
+        "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiNlMmU4ZjAiLz48dGV4dCB4PSI1MCIgeT0iNTUiIGZvbnQtc2l6ZT0iMzUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmaWxsPSIjOTRhN2IzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+UE48L3RleHQ+PC9zdmc+";
+
+      const resPartidas = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=GRUPOS`, { cache: "no-store" });
+      const partidasGrupos = (resPartidas.ok ? ((await resPartidas.json()) as Partida[]) : []) ?? [];
+
+      const equipeAtletas = new Map<string, { id: string; nome: string; fotoUrl?: string | null }[]>();
+      for (const p of partidasGrupos) {
+        if (p.equipeAId && p.equipeAAtletas?.length) equipeAtletas.set(p.equipeAId, p.equipeAAtletas);
+        if (p.equipeBId && p.equipeBAtletas?.length) equipeAtletas.set(p.equipeBId, p.equipeBAtletas);
+      }
+
+      const bannerHtml = torneioBannerUrl
+        ? `<div class="mb-8 w-full"><img src="/api/image-proxy?url=${encodeURIComponent(torneioBannerUrl)}" class="w-full h-auto rounded-2xl shadow-sm" crossOrigin="anonymous" /></div>`
+        : "";
+
+      const gruposHtml = classificacao
+        .map((g) => {
+          const rowsHtml = g.equipes
+            .map((e, idx) => {
+              const atletas = equipeAtletas.get(e.equipeId) ?? [];
+              const a1 = atletas[0];
+              const a2 = atletas[1];
+              const foto1 = a1?.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a1.fotoUrl)}` : avatarPlaceholder;
+              const foto2 = a2?.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a2.fotoUrl)}` : avatarPlaceholder;
+              const nome1 = escapeHtml(a1?.nome || "");
+              const nome2 = escapeHtml(a2?.nome || "");
+              const equipeNome = escapeHtml(e.equipeNome || e.equipeId.slice(0, 8));
+
+              const destaque =
+                idx === 0
+                  ? "bg-gradient-to-r from-amber-50 to-white border-amber-100"
+                  : idx === 1
+                    ? "bg-gradient-to-r from-slate-50 to-white border-slate-100"
+                    : "bg-white border-slate-100";
+
+              return `
+                <div class="flex items-center justify-between gap-4 rounded-xl border ${destaque} px-4 py-3">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <div class="flex items-center justify-center h-8 w-8 rounded-lg bg-slate-900 text-white text-sm font-black">${idx + 1}</div>
+                    <div class="flex items-center -space-x-2">
+                      <img src="${foto1}" class="h-10 w-10 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='${avatarPlaceholder}'" crossOrigin="anonymous" />
+                      <img src="${foto2}" class="h-10 w-10 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='${avatarPlaceholder}'" crossOrigin="anonymous" />
+                    </div>
+                    <div class="min-w-0">
+                      <div class="font-bold text-slate-900 truncate">${equipeNome}</div>
+                      <div class="text-xs text-slate-500 truncate">${[nome1, nome2].filter(Boolean).join(" / ")}</div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-4">
+                    <div class="text-center">
+                      <div class="text-[10px] font-bold text-slate-400">PTS</div>
+                      <div class="text-lg font-black text-slate-900">${e.pontos}</div>
+                    </div>
+                    <div class="hidden sm:block text-center">
+                      <div class="text-[10px] font-bold text-slate-400">V</div>
+                      <div class="text-base font-bold text-slate-700">${e.jogosVencidos}</div>
+                    </div>
+                    <div class="hidden sm:block text-center">
+                      <div class="text-[10px] font-bold text-slate-400">SP</div>
+                      <div class="text-base font-bold text-slate-700">${e.setsPro ?? 0}</div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-[10px] font-bold text-slate-400">SG</div>
+                      <div class="text-base font-bold ${e.saldoGames >= 0 ? "text-green-700" : "text-red-700"}">${e.saldoGames}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            })
+            .join("");
+
+          return `
+            <section class="mb-8">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-black tracking-wider uppercase text-slate-700">${escapeHtml(g.grupoNome)}</h2>
+                <div class="text-xs text-slate-400 font-semibold">Classificação</div>
+              </div>
+              <div class="space-y-2">${rowsHtml}</div>
+            </section>
+          `;
+        })
+        .join("");
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Classificação - ${escapeHtml(categoria.nome)} - ${escapeHtml(torneioNome)}</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+          <style>
+            @media print { .no-print { display: none; } body { padding: 0; margin: 0; } }
+            body { background-color: #f8fafc; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif; }
+            #capture-target { padding: 2rem; background: #f8fafc; }
+          </style>
+          <script>
+            async function gerarImagem() {
+              const btn = document.getElementById('btn-gerar-imagem');
+              const originalText = btn.innerText;
+              try {
+                btn.innerText = 'Processando...';
+                btn.disabled = true;
+                await new Promise(r => setTimeout(r, 700));
+                const element = document.getElementById('capture-target');
+                const canvas = await html2canvas(element, { useCORS: true, scale: 2, backgroundColor: '#f8fafc', logging: false });
+                const link = document.createElement('a');
+                link.download = 'classificacao-${encodeURIComponent(categoria.nome)}.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+              } catch (err) { alert('Erro ao gerar imagem.'); } finally { btn.innerText = originalText; btn.disabled = false; }
+            }
+          </script>
+        </head>
+        <body class="p-4 md:p-8">
+          <div class="max-w-4xl mx-auto">
+            <div class="no-print flex justify-end gap-3 mb-6">
+              <button id="btn-gerar-imagem" onclick="gerarImagem()" class="bg-orange-500 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-orange-600">Gerar Imagem (PNG)</button>
+              <button onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium">Imprimir</button>
+            </div>
+            <div id="capture-target" class="rounded-3xl shadow-xl border border-slate-100 bg-slate-50">
+              <div class="p-6 md:p-8">
+                ${bannerHtml}
+                <div class="mb-8">
+                  <div class="text-xs font-black tracking-widest uppercase text-slate-400">Play Na Quadra</div>
+                  <h1 class="text-3xl font-black text-slate-900 leading-tight">${escapeHtml(torneioNome)}</h1>
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center rounded-full bg-slate-900 text-white px-3 py-1 text-xs font-bold">${escapeHtml(categoria.nome)}</span>
+                    <span class="text-xs text-slate-500 font-semibold">Classificação</span>
+                    <span class="text-xs text-slate-400">•</span>
+                    <span class="text-xs text-slate-500 font-semibold">${new Date().toLocaleDateString('pt-BR')}</span>
+                  </div>
+                </div>
+                ${gruposHtml}
+                <footer class="mt-10 pt-6 border-t border-slate-200 text-center text-slate-400 text-xs font-semibold">
+                  Gerado por Play Na Quadra
+                </footer>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const win = window.open("", "_blank");
+      if (win) {
+        win.document.write(htmlContent);
+        win.document.close();
+      }
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao gerar relatório da classificação");
+    } finally {
+      setGerandoRelatorioClassificacao(false);
+    }
   }
 
   async function carregarConfigEClassificacao() {
@@ -740,6 +919,17 @@ export default function AdminCategoriaJogosSuperPage() {
             >
               <Save className="h-4 w-4" />
               {salvandoConfig ? "Salvando…" : "Salvar config"}
+            </button>
+
+            <button
+              type="button"
+              disabled={gerandoRelatorioClassificacao || classificacao.length === 0}
+              onClick={gerarRelatorioClassificacao}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Relatório da classificação (com banner e PNG)"
+            >
+              <FileText className="h-4 w-4" />
+              {gerandoRelatorioClassificacao ? "Gerando…" : "Relatório classificação"}
             </button>
 
             <button
