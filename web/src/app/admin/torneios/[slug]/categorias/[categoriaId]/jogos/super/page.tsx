@@ -1244,6 +1244,14 @@ export default function AdminCategoriaJogosSuperPage() {
                           >
                             Lançar placar
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => abrirAlterarConfronto(p)}
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                            title="Alterar confronto"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
                     </div>
