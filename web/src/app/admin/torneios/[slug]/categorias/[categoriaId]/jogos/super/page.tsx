@@ -712,7 +712,7 @@ export default function AdminCategoriaJogosSuperPage() {
         </div>
 
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="text-xs text-slate-500">Pontuação: 3 (sem TB) • 2 (com TB) • 1 (derrota com TB)</div>
+          <div className="text-xs text-slate-500">Pontuação: 2-0 = 3 • 2-1 = 2/1 • 1 set: 3 (sem TB) • 2/1 (com TB)</div>
           <div className="flex items-center gap-2">
             <button
               type="button"

@@ -133,8 +133,34 @@ export class ClassificacaoCategoriaService {
 
       const winner = resolveWinner(m);
       const teveTieBreak = Array.isArray(m.detalhesPlacar) && m.detalhesPlacar.some((s) => Boolean((s as any)?.tiebreak));
-      const pontosVencedor = superCampeonato ? (teveTieBreak ? 2 : 3) : 1;
-      const pontosPerdedor = superCampeonato ? (teveTieBreak ? 1 : 0) : 0;
+      const melhorDe = config.regrasPartida?.melhorDe ?? 1;
+      const setsA = m.placarA ?? 0;
+      const setsB = m.placarB ?? 0;
+      const setsMax = Math.max(setsA, setsB);
+      const setsMin = Math.min(setsA, setsB);
+
+      const pontosVencedor =
+        superCampeonato
+          ? melhorDe === 1
+            ? teveTieBreak
+              ? 2
+              : 3
+            : setsMax === 2 && setsMin === 1
+              ? 2
+              : 3
+          : 1;
+
+      const pontosPerdedor =
+        superCampeonato
+          ? melhorDe === 1
+            ? teveTieBreak
+              ? 1
+              : 0
+            : setsMax === 2 && setsMin === 1
+              ? 1
+              : 0
+          : 0;
+
       const pontosVencedorWO = superCampeonato ? 3 : 1;
       if (winner === m.equipeAId) {
         a.jogosVencidos += 1;
