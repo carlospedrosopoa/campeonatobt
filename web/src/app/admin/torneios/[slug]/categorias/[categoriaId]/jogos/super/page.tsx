@@ -116,6 +116,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [config, setConfig] = useState<CategoriaConfig | null>(null);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [gerandoGrupos, setGerandoGrupos] = useState(false);
+  const [gerandoRodadasRestantes, setGerandoRodadasRestantes] = useState(false);
   const [recalculando, setRecalculando] = useState(false);
   const [gerandoMataMata, setGerandoMataMata] = useState(false);
   const [resetando, setResetando] = useState(false);
@@ -973,6 +974,41 @@ export default function AdminCategoriaJogosSuperPage() {
               className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {gerandoGrupos ? "Gerando…" : "Gerar rodadas/jogos"}
+            </button>
+
+            <button
+              type="button"
+              disabled={gerandoRodadasRestantes || !temResultadoGrupos}
+              onClick={async () => {
+                try {
+                  setGerandoRodadasRestantes(true);
+                  setErro(null);
+                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-rodadas-restantes`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ aPartirDaRodada: 2 }),
+                  });
+                  const payload = (await res.json().catch(() => null)) as any;
+                  if (!res.ok) throw new Error(payload?.error || "Falha ao gerar rodadas restantes");
+                  const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+                  if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+                  setFase("GRUPOS");
+                  await carregarPartidas("GRUPOS");
+                  alert(`Rodadas restantes geradas.\n\nRodadas: ${payload?.maxRodadas ?? "-"}\nPartidas criadas: ${payload?.partidasCriadas ?? 0}`);
+                } catch (e: any) {
+                  setErro(e?.message || "Erro inesperado");
+                } finally {
+                  setGerandoRodadasRestantes(false);
+                }
+              }}
+              title={
+                !temResultadoGrupos
+                  ? "Use quando já existe resultado na 1ª rodada e você precisa gerar as rodadas seguintes mantendo a 1ª."
+                  : undefined
+              }
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {gerandoRodadasRestantes ? "Gerando…" : "Gerar rodadas restantes"}
             </button>
 
             <button
