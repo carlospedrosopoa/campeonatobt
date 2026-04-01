@@ -267,6 +267,10 @@ export default function AdminCategoriaJogosSuperPage() {
                       <div class="text-[10px] font-bold text-slate-400">SG</div>
                       <div class="text-base font-bold ${e.saldoGames >= 0 ? "text-green-700" : "text-red-700"}">${e.saldoGames}</div>
                     </div>
+                    <div class="text-center">
+                      <div class="text-[10px] font-bold text-slate-400">AP%</div>
+                      <div class="text-base font-bold text-slate-700">${e.jogosJogados > 0 ? Math.round((e.pontos / (e.jogosJogados * 3)) * 100) : 0}%</div>
+                    </div>
                   </div>
                 </div>
               `;
@@ -1035,9 +1039,9 @@ export default function AdminCategoriaJogosSuperPage() {
                         <th className="py-2 pr-3 font-medium">P</th>
                         <th className="py-2 pr-3 font-medium">J</th>
                         <th className="py-2 pr-3 font-medium">V</th>
-                        <th className="py-2 pr-3 font-medium">AP%</th>
                         <th className="py-2 pr-3 font-medium">SP</th>
                         <th className="py-2 pr-3 font-medium">SG</th>
+                        <th className="py-2 pr-3 font-medium">AP%</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1047,11 +1051,11 @@ export default function AdminCategoriaJogosSuperPage() {
                           <td className="py-2 pr-3 text-slate-700">{e.pontos}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
+                          <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
+                          <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
                           <td className="py-2 pr-3 text-slate-700">
                             {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
                           </td>
-                          <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
-                          <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
                         </tr>
                       ))}
                     </tbody>
