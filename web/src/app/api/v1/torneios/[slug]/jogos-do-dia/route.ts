@@ -81,22 +81,25 @@ function normalizarTexto(value?: string | null) {
     .trim();
 }
 
-function parseDiaRange(dataStr: string | null) {
-  let dataInicio: Date;
-  let dataFim: Date;
+function ymdSaoPaulo(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
 
-  if (dataStr) {
-    dataInicio = new Date(`${dataStr}T00:00:00`);
-    dataFim = new Date(`${dataStr}T23:59:59.999`);
-  } else {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    dataInicio = hoje;
-    dataFim = new Date(hoje);
-    dataFim.setHours(23, 59, 59, 999);
-  }
+function normalizeYmd(value: string | null) {
+  const v = (value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  return ymdSaoPaulo();
+}
 
-  return { dataInicio, dataFim };
+function addDaysYmd(ymd: string, days: number) {
+  const [y, m, d] = ymd.split("-").map((n) => Number(n));
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, (d || 1) + days, 0, 0, 0, 0));
+  return dt.toISOString().slice(0, 10);
 }
 
 export async function GET(
@@ -114,7 +117,8 @@ export async function GET(
 
     const { searchParams } = new URL(request.url);
     const dataStr = searchParams.get("data"); // YYYY-MM-DD
-    const { dataInicio, dataFim } = parseDiaRange(dataStr);
+    const dataYmd = normalizeYmd(dataStr);
+    const dataYmdFim = addDaysYmd(dataYmd, 1);
 
     const rows = await db
       .select({
@@ -135,8 +139,8 @@ export async function GET(
       .where(
         and(
           eq(partidas.torneioId, torneio.id),
-          gte(partidas.dataHorario, dataInicio),
-          lte(partidas.dataHorario, dataFim)
+          sql`${partidas.dataHorario} >= ${dataYmd}::date`,
+          sql`${partidas.dataHorario} < ${dataYmdFim}::date`
         )
       )
       .orderBy(asc(partidas.dataHorario));
@@ -202,7 +206,8 @@ export async function POST(
 
     const { searchParams } = new URL(request.url);
     const dataStr = searchParams.get("data"); // YYYY-MM-DD
-    const { dataInicio, dataFim } = parseDiaRange(dataStr);
+    const dataYmd = normalizeYmd(dataStr);
+    const dataYmdFim = addDaysYmd(dataYmd, 1);
 
     const rows = await db
       .select({
@@ -213,8 +218,8 @@ export async function POST(
       .where(
         and(
           eq(partidas.torneioId, torneio.id),
-          gte(partidas.dataHorario, dataInicio),
-          lte(partidas.dataHorario, dataFim)
+          sql`${partidas.dataHorario} >= ${dataYmd}::date`,
+          sql`${partidas.dataHorario} < ${dataYmdFim}::date`
         )
       );
 
