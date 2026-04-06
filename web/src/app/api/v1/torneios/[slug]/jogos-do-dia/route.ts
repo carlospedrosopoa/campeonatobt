@@ -102,6 +102,10 @@ function addDaysYmd(ymd: string, days: number) {
   return dt.toISOString().slice(0, 10);
 }
 
+function dataHorarioLocalDateSql(targetYmd: string) {
+  return sql`timezone('America/Sao_Paulo', timezone('UTC', ${partidas.dataHorario}))::date = ${targetYmd}::date`;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -118,7 +122,6 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const dataStr = searchParams.get("data"); // YYYY-MM-DD
     const dataYmd = normalizeYmd(dataStr);
-    const dataYmdFim = addDaysYmd(dataYmd, 1);
 
     const rows = await db
       .select({
@@ -139,8 +142,7 @@ export async function GET(
       .where(
         and(
           eq(partidas.torneioId, torneio.id),
-          sql`${partidas.dataHorario} >= ${dataYmd}::date`,
-          sql`${partidas.dataHorario} < ${dataYmdFim}::date`
+          dataHorarioLocalDateSql(dataYmd)
         )
       )
       .orderBy(asc(partidas.dataHorario));
@@ -207,7 +209,6 @@ export async function POST(
     const { searchParams } = new URL(request.url);
     const dataStr = searchParams.get("data"); // YYYY-MM-DD
     const dataYmd = normalizeYmd(dataStr);
-    const dataYmdFim = addDaysYmd(dataYmd, 1);
 
     const rows = await db
       .select({
@@ -218,8 +219,7 @@ export async function POST(
       .where(
         and(
           eq(partidas.torneioId, torneio.id),
-          sql`${partidas.dataHorario} >= ${dataYmd}::date`,
-          sql`${partidas.dataHorario} < ${dataYmdFim}::date`
+          dataHorarioLocalDateSql(dataYmd)
         )
       );
 
