@@ -52,6 +52,21 @@ const getStatusBadge = (status: string) => {
   );
 };
 
+function ymdSaoPaulo(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function datePtBrFromYmd(ymd: string) {
+  const [y, m, d] = ymd.split("-").map((n) => Number(n));
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0, 0));
+  return dt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+
 export default function AdminJogosDoDiaPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
@@ -62,19 +77,15 @@ export default function AdminJogosDoDiaPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
   const [sincronizandoFotos, setSincronizandoFotos] = useState(false);
+  const [dataSelecionada, setDataSelecionada] = useState(() => ymdSaoPaulo());
 
-  async function carregarDados() {
+  async function carregarDados(data?: string) {
     try {
       setCarregando(true);
       setErro(null);
-      
-      const hoje = new Date();
-      const ano = hoje.getFullYear();
-      const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-      const dia = String(hoje.getDate()).padStart(2, '0');
-      const dataHoje = `${ano}-${mes}-${dia}`;
 
-      const res = await fetch(`/api/v1/torneios/${slug}/jogos-do-dia?data=${dataHoje}`, { cache: "no-store" });
+      const dataRef = (data || "").trim() || ymdSaoPaulo();
+      const res = await fetch(`/api/v1/torneios/${slug}/jogos-do-dia?data=${dataRef}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Falha ao carregar jogos do dia");
       
       const data = await res.json();
@@ -88,8 +99,8 @@ export default function AdminJogosDoDiaPage() {
   }
 
   useEffect(() => {
-    void carregarDados();
-  }, [slug]);
+    void carregarDados(dataSelecionada);
+  }, [slug, dataSelecionada]);
 
   function formatPlacar(detalhes: Partida["detalhesPlacar"]) {
     if (!detalhes || detalhes.length === 0) return "X";
@@ -143,14 +154,9 @@ export default function AdminJogosDoDiaPage() {
       if (partidas.length === 0) return;
 
       setSincronizandoFotos(true);
+      const dataRef = (dataSelecionada || "").trim() || ymdSaoPaulo();
 
-      const hoje = new Date();
-      const ano = hoje.getFullYear();
-      const mes = String(hoje.getMonth() + 1).padStart(2, "0");
-      const dia = String(hoje.getDate()).padStart(2, "0");
-      const dataHoje = `${ano}-${mes}-${dia}`;
-
-      const res = await fetch(`/api/v1/torneios/${slug}/jogos-do-dia?data=${dataHoje}`, {
+      const res = await fetch(`/api/v1/torneios/${slug}/jogos-do-dia?data=${dataRef}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -173,7 +179,7 @@ export default function AdminJogosDoDiaPage() {
       semFotoNoPlay += Number(payload?.semFotoNoPlay ?? 0);
       falhasConsulta += Number(payload?.falhasConsulta ?? 0);
 
-      await carregarDados();
+      await carregarDados(dataRef);
 
       alert(
         `Sincronização concluída.\n\nAtletas (jogos listados): ${totalAtletas}\nCom Play ID: ${totalComPlayId}\nConsultados: ${consultados}\nAtualizados: ${atualizados}\nJá atualizados: ${jaAtualizados}\nSem foto no Play: ${semFotoNoPlay}\nFalhas: ${falhasConsulta}`
@@ -308,7 +314,7 @@ export default function AdminJogosDoDiaPage() {
               ${bannerHtml}
               <div class="text-center mb-8">
                 <h1 class="text-3xl font-bold text-slate-900">${torneio.nome}</h1>
-                <p class="text-lg text-slate-600">Jogos do Dia - ${new Date().toLocaleDateString('pt-BR')}</p>
+                <p class="text-lg text-slate-600">Jogos do Dia - ${datePtBrFromYmd(dataSelecionada)}</p>
               </div>
               <div class="grid grid-cols-1 gap-6">
                 ${cardsHtml}
@@ -342,10 +348,19 @@ export default function AdminJogosDoDiaPage() {
           </Link>
           <h1 className="text-2xl font-bold text-slate-900 mt-2">Jogos do Dia</h1>
           <p className="text-sm text-slate-600">
-            {torneio?.nome} • {new Date().toLocaleDateString('pt-BR')}
+            {torneio?.nome} • {datePtBrFromYmd(dataSelecionada)}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+            <Calendar className="h-4 w-4 text-slate-500" />
+            <input
+              type="date"
+              value={dataSelecionada}
+              onChange={(e) => setDataSelecionada(e.target.value)}
+              className="bg-transparent outline-none text-slate-700"
+            />
+          </div>
           <button
             onClick={sincronizarFotos}
             disabled={sincronizandoFotos || partidas.length === 0 || carregando}
@@ -363,7 +378,7 @@ export default function AdminJogosDoDiaPage() {
             {gerandoRelatorio ? "Gerando..." : "Gerar Relatório"}
           </button>
           <button
-            onClick={carregarDados}
+            onClick={() => carregarDados(dataSelecionada)}
             disabled={carregando}
             className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
           >
@@ -383,7 +398,7 @@ export default function AdminJogosDoDiaPage() {
         ) : partidas.length === 0 ? (
           <div className="col-span-full py-20 text-center bg-white rounded-xl border border-dashed border-slate-200">
             <Calendar className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">Nenhum jogo agendado para hoje.</p>
+            <p className="text-slate-500 font-medium">Nenhum jogo agendado para esta data.</p>
           </div>
         ) : (
           partidas.map((p) => (
