@@ -79,18 +79,19 @@ export default function AdminJogosDoDiaPage() {
   const [sincronizandoFotos, setSincronizandoFotos] = useState(false);
   const [dataSelecionada, setDataSelecionada] = useState(() => ymdSaoPaulo());
 
-  async function carregarDados(data?: string) {
+  async function carregarDados(dataYmd?: string) {
     try {
       setCarregando(true);
       setErro(null);
 
-      const dataRef = (data || "").trim() || ymdSaoPaulo();
+      const dataRef = (dataYmd || "").trim() || ymdSaoPaulo();
       const res = await fetch(`/api/v1/torneios/${slug}/jogos-do-dia?data=${dataRef}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Falha ao carregar jogos do dia");
-      
-      const data = await res.json();
-      setTorneio(data.torneio);
-      setPartidas(data.partidas);
+
+      const payload = (await res.json().catch(() => null)) as { torneio: Torneio; partidas: Partida[] } | null;
+      if (!payload?.torneio) throw new Error("Resposta inválida do servidor");
+      setTorneio(payload.torneio);
+      setPartidas(payload.partidas || []);
     } catch (e: any) {
       setErro(e.message);
     } finally {
