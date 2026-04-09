@@ -24,7 +24,7 @@ type SyncResult = {
 
 type SyncOneResult =
   | { ok: true; usuarioId: string; consultado: boolean; atualizado: boolean; fotoUrl: string | null }
-  | { ok: false; usuarioId: string; error: string };
+  | { ok: false; usuarioId: string; error: string; debug?: any };
 
 function extrairFotoUrl(payload: any): string | null {
   const baseRaw = process.env.PLAYNAQUADRA_API_URL || "";
@@ -151,6 +151,64 @@ function extrairFotoUrl(payload: any): string | null {
     if (url) return url;
   }
   return findUrlDeep(payload, 6, new Set()) || null;
+}
+
+function coletarCamposFoto(payload: any) {
+  const results: Array<{ path: string; type: string; length?: number; sample?: string }> = [];
+  const visited = new Set<any>();
+
+  const pushValue = (path: string, value: any) => {
+    if (value === null || value === undefined) return;
+    if (typeof value === "string") {
+      const v = value.trim();
+      results.push({
+        path,
+        type: "string",
+        length: v.length,
+        sample:
+          v.length > 120
+            ? `${v.slice(0, 60)}…${v.slice(-40)}`
+            : v,
+      });
+      return;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      results.push({ path, type: typeof value, sample: String(value) });
+      return;
+    }
+    if (typeof value === "object") {
+      results.push({ path, type: Array.isArray(value) ? "array" : "object" });
+    }
+  };
+
+  const walk = (value: any, path: string, depth: number) => {
+    if (depth <= 0) return;
+    if (!value || typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (let i = 0; i < Math.min(value.length, 8); i++) {
+        walk(value[i], `${path}[${i}]`, depth - 1);
+      }
+      return;
+    }
+
+    for (const [k, v] of Object.entries(value as Record<string, any>)) {
+      const nextPath = path ? `${path}.${k}` : k;
+      if (/(foto|photo|avatar|imagem|image|profile)/i.test(k)) {
+        pushValue(nextPath, v);
+        if (typeof v === "object") {
+          walk(v, nextPath, depth - 1);
+        }
+      } else {
+        walk(v, nextPath, depth - 1);
+      }
+    }
+  };
+
+  walk(payload, "", 6);
+  return results.slice(0, 120);
 }
 
 function extrairEmail(payload: any): string | null {
@@ -349,6 +407,9 @@ export async function POST(
     const perfil = session?.user?.perfil as string | undefined;
     if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
+    const { searchParams: sp } = new URL(request.url);
+    const debug = sp.get("debug") === "1";
+
     const body = (await request.json().catch(() => null)) as any;
     const usuarioId = typeof body?.usuarioId === "string" ? body.usuarioId.trim() : "";
 
@@ -383,8 +444,37 @@ export async function POST(
         });
 
         if (!fotoUrl) {
+          let debugPayload: any = undefined;
+          if (debug) {
+            let byIdStatus: number | null = null;
+            let byIdCamposFoto: any[] | null = null;
+            if (resolvedPlayId) {
+              const byId = await playGetAtletaById({ token, atletaId: resolvedPlayId }).catch(() => null as any);
+              byIdStatus = byId?.res?.status ?? null;
+              byIdCamposFoto = byId?.data ? coletarCamposFoto(byId.data) : null;
+            }
+            const termos = Array.from(
+              new Set([String(resolvedPlayId || ""), user[0].email, user[0].nome].map((x) => String(x || "").trim()).filter(Boolean))
+            ).slice(0, 3);
+            const buscas: any[] = [];
+            for (const q of termos) {
+              const b = await playBuscarAtletas({ token, q, limite: 5 }).catch(() => null as any);
+              buscas.push({
+                q,
+                status: b?.res?.status ?? null,
+                camposFoto: b?.data ? coletarCamposFoto(b.data) : null,
+              });
+            }
+            debugPayload = {
+              playnaquadraAtletaId: user[0].playnaquadraAtletaId,
+              resolvedPlayId,
+              byIdStatus,
+              byIdCamposFoto,
+              buscas,
+            };
+          }
           return NextResponse.json(
-            { ok: false, usuarioId, error: "Sem foto no Play Na Quadra" } satisfies SyncOneResult,
+            { ok: false, usuarioId, error: "Sem foto no Play Na Quadra", debug: debugPayload } satisfies SyncOneResult,
             { status: 400, headers: { "Cache-Control": "no-store" } }
           );
         }
