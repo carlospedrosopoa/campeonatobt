@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, FileText, ImageIcon, MapPin, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, Calendar, FileText, ImageIcon, Loader2, MapPin, RefreshCw, Users } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Partida = {
@@ -78,6 +78,7 @@ export default function AdminJogosDoDiaPage() {
   const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
   const [sincronizandoFotos, setSincronizandoFotos] = useState(false);
   const [dataSelecionada, setDataSelecionada] = useState(() => ymdSaoPaulo());
+  const [atletasAtualizando, setAtletasAtualizando] = useState<Record<string, boolean>>({});
 
   async function carregarDados(dataYmd?: string) {
     try {
@@ -189,6 +190,34 @@ export default function AdminJogosDoDiaPage() {
       setErro(e?.message || "Erro ao sincronizar fotos");
     } finally {
       setSincronizandoFotos(false);
+    }
+  }
+
+  async function atualizarFotoAtleta(usuarioId: string) {
+    const id = (usuarioId || "").trim();
+    if (!id) return;
+    if (atletasAtualizando[id]) return;
+
+    try {
+      setErro(null);
+      setAtletasAtualizando((prev) => ({ ...prev, [id]: true }));
+      const dataRef = (dataSelecionada || "").trim() || ymdSaoPaulo();
+      const res = await fetch(`/api/v1/torneios/${slug}/jogos-do-dia?data=${dataRef}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuarioId: id }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao atualizar foto");
+      await carregarDados(dataRef);
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao atualizar foto");
+    } finally {
+      setAtletasAtualizando((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   }
 
@@ -432,16 +461,29 @@ export default function AdminJogosDoDiaPage() {
                   <div className="flex-1 text-center">
                     <div className="flex items-center justify-center -space-x-2 mb-2">
                       {(p.equipeAAtletas ?? []).slice(0, 2).map((a) => (
-                        <img
+                        <button
                           key={a.id}
-                          src={a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder}
-                          onError={(e) => {
-                            const el = e.currentTarget as HTMLImageElement;
-                            el.src = avatarPlaceholder;
-                          }}
-                          className="h-9 w-9 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm"
-                          alt={a.nome}
-                        />
+                          type="button"
+                          onClick={() => atualizarFotoAtleta(a.id)}
+                          disabled={Boolean(atletasAtualizando[a.id])}
+                          title="Atualizar foto do Play Na Quadra"
+                          className="relative h-9 w-9 rounded-full border-2 border-white bg-slate-100 shadow-sm disabled:opacity-60"
+                        >
+                          <img
+                            src={a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder}
+                            onError={(e) => {
+                              const el = e.currentTarget as HTMLImageElement;
+                              el.src = avatarPlaceholder;
+                            }}
+                            className="h-full w-full rounded-full object-cover"
+                            alt={a.nome}
+                          />
+                          {atletasAtualizando[a.id] && (
+                            <span className="absolute inset-0 rounded-full bg-white/70 flex items-center justify-center">
+                              <Loader2 className="h-4 w-4 animate-spin text-slate-600" />
+                            </span>
+                          )}
+                        </button>
                       ))}
                     </div>
                     <div className="font-bold text-slate-900 leading-tight mb-1">
@@ -459,16 +501,29 @@ export default function AdminJogosDoDiaPage() {
                   <div className="flex-1 text-center">
                     <div className="flex items-center justify-center -space-x-2 mb-2">
                       {(p.equipeBAtletas ?? []).slice(0, 2).map((a) => (
-                        <img
+                        <button
                           key={a.id}
-                          src={a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder}
-                          onError={(e) => {
-                            const el = e.currentTarget as HTMLImageElement;
-                            el.src = avatarPlaceholder;
-                          }}
-                          className="h-9 w-9 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm"
-                          alt={a.nome}
-                        />
+                          type="button"
+                          onClick={() => atualizarFotoAtleta(a.id)}
+                          disabled={Boolean(atletasAtualizando[a.id])}
+                          title="Atualizar foto do Play Na Quadra"
+                          className="relative h-9 w-9 rounded-full border-2 border-white bg-slate-100 shadow-sm disabled:opacity-60"
+                        >
+                          <img
+                            src={a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder}
+                            onError={(e) => {
+                              const el = e.currentTarget as HTMLImageElement;
+                              el.src = avatarPlaceholder;
+                            }}
+                            className="h-full w-full rounded-full object-cover"
+                            alt={a.nome}
+                          />
+                          {atletasAtualizando[a.id] && (
+                            <span className="absolute inset-0 rounded-full bg-white/70 flex items-center justify-center">
+                              <Loader2 className="h-4 w-4 animate-spin text-slate-600" />
+                            </span>
+                          )}
+                        </button>
                       ))}
                     </div>
                     <div className="font-bold text-slate-900 leading-tight mb-1">

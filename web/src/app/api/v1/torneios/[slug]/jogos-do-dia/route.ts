@@ -22,6 +22,10 @@ type SyncResult = {
   falhasConsulta: number;
 };
 
+type SyncOneResult =
+  | { ok: true; usuarioId: string; consultado: boolean; atualizado: boolean; fotoUrl: string | null }
+  | { ok: false; usuarioId: string; error: string };
+
 function extrairFotoUrl(payload: any): string | null {
   const candidatos = [
     payload?.fotoUrl,
@@ -104,6 +108,53 @@ function addDaysYmd(ymd: string, days: number) {
 
 function dataHorarioLocalDateSql(targetYmd: string) {
   return sql`timezone('America/Sao_Paulo', timezone('UTC', ${partidas.dataHorario}))::date = ${targetYmd}::date`;
+}
+
+async function buscarFotoNoPlay(params: { token: string; playId?: string | null; email?: string; nome?: string }) {
+  const email = (params.email || "").trim().toLowerCase();
+  const nome = (params.nome || "").trim();
+  const playId = (params.playId || "").trim();
+
+  let fotoUrl: string | null = null;
+  let resolvedPlayId: string | null = playId || null;
+
+  if (resolvedPlayId) {
+    const { res, data } = await playGetAtletaById({ token: params.token, atletaId: resolvedPlayId });
+    if (res.ok && data) {
+      fotoUrl = extrairFotoUrl(data);
+    }
+  }
+
+  if (!fotoUrl) {
+    const termosBusca = [resolvedPlayId, email, nome].filter((v, i, arr) => !!v && arr.indexOf(v) === i);
+    for (const termo of termosBusca) {
+      const busca = await playBuscarAtletas({ token: params.token, q: termo, limite: 20 });
+      if (!busca.res.ok || !busca.data) continue;
+      const listaBusca = Array.isArray(busca.data?.atletas)
+        ? busca.data.atletas
+        : Array.isArray(busca.data)
+          ? busca.data
+          : [];
+
+      const byEmail = email ? listaBusca.find((x: any) => extrairEmail(x) === email) : null;
+      const byNome = nome
+        ? listaBusca.find((x: any) => normalizarTexto(x?.nome || x?.usuario?.nome || x?.atleta?.nome) === normalizarTexto(nome))
+        : null;
+      const first = byEmail || byNome || listaBusca[0] || null;
+
+      if (first) {
+        const id = String(first?.id || first?._id || first?.atletaId || first?.usuarioId || "").trim();
+        if (id && !resolvedPlayId) resolvedPlayId = id;
+        fotoUrl = extrairFotoUrl(first);
+        if (fotoUrl) break;
+      }
+
+      fotoUrl = extrairFotoUrl(busca.data);
+      if (fotoUrl) break;
+    }
+  }
+
+  return { fotoUrl, resolvedPlayId };
 }
 
 export async function GET(
@@ -202,9 +253,65 @@ export async function POST(
     const perfil = session?.user?.perfil as string | undefined;
     if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
+    const body = (await request.json().catch(() => null)) as any;
+    const usuarioId = typeof body?.usuarioId === "string" ? body.usuarioId.trim() : "";
+
     const { slug } = await params;
     const torneio = await torneiosService.buscarPorSlug(slug);
     if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+
+    if (usuarioId) {
+      const user = await db
+        .select({
+          id: usuarios.id,
+          nome: usuarios.nome,
+          email: usuarios.email,
+          fotoUrl: usuarios.fotoUrl,
+          playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
+        })
+        .from(usuarios)
+        .where(eq(usuarios.id, usuarioId))
+        .limit(1);
+
+      if (user.length === 0) {
+        return NextResponse.json({ ok: false, usuarioId, error: "Atleta não encontrado" } satisfies SyncOneResult, { status: 404 });
+      }
+
+      const token = await getPlayAdminToken();
+      try {
+        const { fotoUrl, resolvedPlayId } = await buscarFotoNoPlay({
+          token,
+          playId: user[0].playnaquadraAtletaId,
+          email: user[0].email,
+          nome: user[0].nome,
+        });
+
+        if (!fotoUrl) {
+          return NextResponse.json(
+            { ok: false, usuarioId, error: "Sem foto no Play Na Quadra" } satisfies SyncOneResult,
+            { status: 400, headers: { "Cache-Control": "no-store" } }
+          );
+        }
+
+        const precisaAtualizar = !user[0].fotoUrl || user[0].fotoUrl.trim() !== fotoUrl.trim() || (!user[0].playnaquadraAtletaId && resolvedPlayId);
+        if (precisaAtualizar) {
+          await db
+            .update(usuarios)
+            .set({ fotoUrl, playnaquadraAtletaId: resolvedPlayId || user[0].playnaquadraAtletaId, atualizadoEm: new Date() })
+            .where(eq(usuarios.id, usuarioId));
+        }
+
+        return NextResponse.json(
+          { ok: true, usuarioId, consultado: true, atualizado: precisaAtualizar, fotoUrl } satisfies SyncOneResult,
+          { headers: { "Cache-Control": "no-store" } }
+        );
+      } catch {
+        return NextResponse.json(
+          { ok: false, usuarioId, error: "Falha ao consultar Play Na Quadra" } satisfies SyncOneResult,
+          { status: 500, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+    }
 
     const { searchParams } = new URL(request.url);
     const dataStr = searchParams.get("data"); // YYYY-MM-DD
@@ -297,28 +404,7 @@ export async function POST(
     for (const atleta of alvo) {
       try {
         consultados += 1;
-        const { res, data } = await playGetAtletaById({ token, atletaId: atleta.playId as string });
-        let fotoUrl = res.ok && data ? extrairFotoUrl(data) : null;
-        if (!fotoUrl) {
-          const termosBusca = [String(atleta.playId), atleta.email, atleta.nome].filter((v, i, arr) => !!v && arr.indexOf(v) === i);
-          for (const termo of termosBusca) {
-            const busca = await playBuscarAtletas({ token, q: termo, limite: 20 });
-            if (!busca.res.ok || !busca.data) continue;
-            const listaBusca = Array.isArray(busca.data?.atletas)
-              ? busca.data.atletas
-              : Array.isArray(busca.data)
-                ? busca.data
-                : [];
-            const byId = listaBusca.find((x: any) => {
-              const id = String(x?.id || x?._id || x?.atletaId || x?.usuarioId || "");
-              return id === String(atleta.playId);
-            });
-            const byEmail = listaBusca.find((x: any) => extrairEmail(x) === atleta.email.toLowerCase());
-            const byNome = listaBusca.find((x: any) => normalizarTexto(x?.nome || x?.usuario?.nome || x?.atleta?.nome) === normalizarTexto(atleta.nome));
-            fotoUrl = extrairFotoUrl(byId || byEmail || byNome || listaBusca[0] || busca.data);
-            if (fotoUrl) break;
-          }
-        }
+        const { fotoUrl } = await buscarFotoNoPlay({ token, playId: atleta.playId, email: atleta.email, nome: atleta.nome });
 
         if (!fotoUrl) {
           semFotoNoPlay += 1;
