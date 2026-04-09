@@ -51,6 +51,44 @@ function extrairFotoUrl(payload: any): string | null {
     return null;
   };
 
+  const findUrlDeep = (value: any, depth: number, visited: Set<any>): string | null => {
+    if (!value || depth <= 0) return null;
+    if (typeof value === "string") return normalizeUrl(value);
+    if (typeof value !== "object") return null;
+    if (visited.has(value)) return null;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = findUrlDeep(item, depth - 1, visited);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    const entries = Object.entries(value as Record<string, any>);
+    const priority: Array<[string, any]> = [];
+    const rest: Array<[string, any]> = [];
+    for (const [k, v] of entries) {
+      if (/(foto|photo|avatar|imagem|image|profile)/i.test(k)) priority.push([k, v]);
+      else rest.push([k, v]);
+    }
+
+    for (const [, v] of priority) {
+      const direct = normalizeUrl(v);
+      if (direct) return direct;
+      const found = findUrlDeep(v, depth - 1, visited);
+      if (found) return found;
+    }
+
+    for (const [, v] of rest) {
+      const found = findUrlDeep(v, depth - 1, visited);
+      if (found) return found;
+    }
+
+    return null;
+  };
+
   const candidatos = [
     payload?.fotoUrl,
     payload?.foto,
@@ -94,7 +132,7 @@ function extrairFotoUrl(payload: any): string | null {
     const url = normalizeUrl(c);
     if (url) return url;
   }
-  return null;
+  return findUrlDeep(payload, 6, new Set()) || null;
 }
 
 function extrairEmail(payload: any): string | null {
