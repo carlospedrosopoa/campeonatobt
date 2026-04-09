@@ -27,6 +27,30 @@ type SyncOneResult =
   | { ok: false; usuarioId: string; error: string };
 
 function extrairFotoUrl(payload: any): string | null {
+  const baseRaw = process.env.PLAYNAQUADRA_API_URL || "";
+  const base = baseRaw.endsWith("/") ? baseRaw.slice(0, -1) : baseRaw;
+
+  const normalizeUrl = (value: any): string | null => {
+    if (!value) return null;
+    if (typeof value === "string") {
+      const v = value.trim();
+      if (!v) return null;
+      try {
+        const u = new URL(v);
+        if (!["http:", "https:"].includes(u.protocol)) return null;
+        return u.toString();
+      } catch {
+        if (v.startsWith("/") && base) return `${base}${v}`;
+        if (!v.startsWith("http") && base) return `${base}/${v.replace(/^\/+/, "")}`;
+        return null;
+      }
+    }
+    if (typeof value === "object") {
+      return normalizeUrl((value as any).url || (value as any).href || (value as any).src);
+    }
+    return null;
+  };
+
   const candidatos = [
     payload?.fotoUrl,
     payload?.foto,
@@ -54,9 +78,21 @@ function extrairFotoUrl(payload: any): string | null {
     payload?.data?.foto,
     payload?.data?.atleta?.fotoUrl,
     payload?.data?.usuario?.fotoUrl,
+    payload?.foto?.url,
+    payload?.fotoPerfil?.url,
+    payload?.avatar?.url,
+    payload?.image?.url,
+    payload?.imagem?.url,
+    payload?.atleta?.foto?.url,
+    payload?.atleta?.fotoPerfil?.url,
+    payload?.usuario?.foto?.url,
+    payload?.usuario?.fotoPerfil?.url,
+    payload?.data?.foto?.url,
+    payload?.data?.avatar?.url,
   ];
   for (const c of candidatos) {
-    if (typeof c === "string" && c.trim()) return c.trim();
+    const url = normalizeUrl(c);
+    if (url) return url;
   }
   return null;
 }
