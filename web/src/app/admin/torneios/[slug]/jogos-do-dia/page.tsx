@@ -38,7 +38,7 @@ const avatarPlaceholder =
   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiNlMmU4ZjAiLz48dGV4dCB4PSI1MCIgeT0iNTUiIGZvbnQtc2l6ZT0iMzUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmaWxsPSIjOTRhN2IzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+UE48L3RleHQ+PC9zdmc+";
 
 function fotoSrc(url?: string | null) {
-  const v = (url || "").trim();
+  const v = (url || "").replace(/[`'"\s]/g, "").trim();
   if (!v) return avatarPlaceholder;
   if (v.startsWith("data:image/")) return v;
   if (v.length > 200 && /^[A-Za-z0-9+/=\r\n]+$/.test(v)) return `data:image/jpeg;base64,${v.replaceAll(/\s+/g, "")}`;

@@ -33,8 +33,9 @@ function slugify(value: string) {
 
 async function carregarImagem(url: string): Promise<HTMLImageElement | null> {
   try {
-    const origemDireta = url.startsWith("/") || url.startsWith("data:") || url.startsWith("blob:");
-    const resolvedUrl = origemDireta ? url : `/api/image-proxy?url=${encodeURIComponent(url)}`;
+    const cleaned = (url || "").replace(/[`'"\s]/g, "");
+    const origemDireta = cleaned.startsWith("/") || cleaned.startsWith("data:") || cleaned.startsWith("blob:");
+    const resolvedUrl = origemDireta ? cleaned : `/api/image-proxy?url=${encodeURIComponent(cleaned)}`;
     const res = await fetch(resolvedUrl, { cache: "no-store" });
     if (!res.ok) return null;
     const blob = await res.blob();

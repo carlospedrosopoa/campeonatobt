@@ -3,7 +3,8 @@ import { extractFileNameFromUrl, getSignedUrl } from "@/lib/googleCloudStorage";
 
 export async function GET(request: NextRequest) {
   try {
-    const url = request.nextUrl.searchParams.get("url");
+    const raw = request.nextUrl.searchParams.get("url");
+    const url = (raw || "").replace(/[`'"\s]/g, "");
     if (!url) return NextResponse.json({ error: "URL não informada" }, { status: 400 });
 
     let parsed: URL;
