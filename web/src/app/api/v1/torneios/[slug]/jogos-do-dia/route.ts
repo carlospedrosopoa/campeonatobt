@@ -126,7 +126,11 @@ async function buscarFotoNoPlay(params: { token: string; playId?: string | null;
   }
 
   if (!fotoUrl) {
-    const termosBusca = [resolvedPlayId, email, nome].filter((v, i, arr) => !!v && arr.indexOf(v) === i);
+    const termosBusca = Array.from(
+      new Set(
+        [resolvedPlayId, email, nome].filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      )
+    );
     for (const termo of termosBusca) {
       const busca = await playBuscarAtletas({ token: params.token, q: termo, limite: 20 });
       if (!busca.res.ok || !busca.data) continue;
@@ -293,7 +297,10 @@ export async function POST(
           );
         }
 
-        const precisaAtualizar = !user[0].fotoUrl || user[0].fotoUrl.trim() !== fotoUrl.trim() || (!user[0].playnaquadraAtletaId && resolvedPlayId);
+        const precisaAtualizar =
+          !user[0].fotoUrl ||
+          user[0].fotoUrl.trim() !== fotoUrl.trim() ||
+          Boolean(!user[0].playnaquadraAtletaId && resolvedPlayId);
         if (precisaAtualizar) {
           await db
             .update(usuarios)
