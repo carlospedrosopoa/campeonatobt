@@ -30,12 +30,29 @@ function extrairFotoUrl(payload: any): string | null {
   const baseRaw = process.env.PLAYNAQUADRA_API_URL || "";
   const base = baseRaw.endsWith("/") ? baseRaw.slice(0, -1) : baseRaw;
 
+  const base64Mime = (raw: string) => {
+    const s = raw.trim();
+    if (s.startsWith("/9j/")) return "image/jpeg";
+    if (s.startsWith("iVBORw0KGgo")) return "image/png";
+    if (s.startsWith("R0lGODdh") || s.startsWith("R0lGODlh")) return "image/gif";
+    if (s.startsWith("UklGR")) return "image/webp";
+    return "image/jpeg";
+  };
+
+  const looksLikeBase64 = (raw: string) => {
+    const s = raw.trim();
+    if (s.length < 200) return false;
+    if (!/^[A-Za-z0-9+/=\r\n]+$/.test(s)) return false;
+    return true;
+  };
+
   const normalizeUrl = (value: any): string | null => {
     if (!value) return null;
     if (typeof value === "string") {
       const v = value.trim();
       if (!v) return null;
       if (v.startsWith("data:image/")) return v;
+      if (looksLikeBase64(v)) return `data:${base64Mime(v)};base64,${v.replaceAll(/\s+/g, "")}`;
       try {
         const u = new URL(v);
         if (!["http:", "https:", "data:"].includes(u.protocol)) return null;

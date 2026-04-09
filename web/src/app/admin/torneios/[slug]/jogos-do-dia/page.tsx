@@ -41,6 +41,7 @@ function fotoSrc(url?: string | null) {
   const v = (url || "").trim();
   if (!v) return avatarPlaceholder;
   if (v.startsWith("data:image/")) return v;
+  if (v.length > 200 && /^[A-Za-z0-9+/=\r\n]+$/.test(v)) return `data:image/jpeg;base64,${v.replaceAll(/\s+/g, "")}`;
   return `/api/image-proxy?url=${encodeURIComponent(v)}`;
 }
 
