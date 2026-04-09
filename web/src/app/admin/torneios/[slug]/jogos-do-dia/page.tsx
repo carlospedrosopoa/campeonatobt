@@ -37,6 +37,13 @@ type Torneio = {
 const avatarPlaceholder =
   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiNlMmU4ZjAiLz48dGV4dCB4PSI1MCIgeT0iNTUiIGZvbnQtc2l6ZT0iMzUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmaWxsPSIjOTRhN2IzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+UE48L3RleHQ+PC9zdmc+";
 
+function fotoSrc(url?: string | null) {
+  const v = (url || "").trim();
+  if (!v) return avatarPlaceholder;
+  if (v.startsWith("data:image/")) return v;
+  return `/api/image-proxy?url=${encodeURIComponent(v)}`;
+}
+
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
     AGENDADA: "bg-blue-50 text-blue-700 border-blue-100",
@@ -253,14 +260,14 @@ export default function AdminJogosDoDiaPage() {
 
           const atletasAHtml = equipeAAtletas
             .map((a) => {
-              const src = a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder;
+              const src = fotoSrc(a.fotoUrl);
               return `<img src="${src}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='${avatarPlaceholder}'" crossOrigin="anonymous" />`;
             })
             .join("");
 
           const atletasBHtml = equipeBAtletas
             .map((a) => {
-              const src = a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder;
+              const src = fotoSrc(a.fotoUrl);
               return `<img src="${src}" class="h-14 w-14 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='${avatarPlaceholder}'" crossOrigin="anonymous" />`;
             })
             .join("");
@@ -470,7 +477,7 @@ export default function AdminJogosDoDiaPage() {
                           className="relative h-9 w-9 rounded-full border-2 border-white bg-slate-100 shadow-sm disabled:opacity-60"
                         >
                           <img
-                            src={a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder}
+                            src={fotoSrc(a.fotoUrl)}
                             onError={(e) => {
                               const el = e.currentTarget as HTMLImageElement;
                               el.src = avatarPlaceholder;
@@ -510,7 +517,7 @@ export default function AdminJogosDoDiaPage() {
                           className="relative h-9 w-9 rounded-full border-2 border-white bg-slate-100 shadow-sm disabled:opacity-60"
                         >
                           <img
-                            src={a.fotoUrl ? `/api/image-proxy?url=${encodeURIComponent(a.fotoUrl)}` : avatarPlaceholder}
+                            src={fotoSrc(a.fotoUrl)}
                             onError={(e) => {
                               const el = e.currentTarget as HTMLImageElement;
                               el.src = avatarPlaceholder;

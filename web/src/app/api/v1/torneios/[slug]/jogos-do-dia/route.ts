@@ -35,9 +35,10 @@ function extrairFotoUrl(payload: any): string | null {
     if (typeof value === "string") {
       const v = value.trim();
       if (!v) return null;
+      if (v.startsWith("data:image/")) return v;
       try {
         const u = new URL(v);
-        if (!["http:", "https:"].includes(u.protocol)) return null;
+        if (!["http:", "https:", "data:"].includes(u.protocol)) return null;
         return u.toString();
       } catch {
         if (v.startsWith("/") && base) return `${base}${v}`;
