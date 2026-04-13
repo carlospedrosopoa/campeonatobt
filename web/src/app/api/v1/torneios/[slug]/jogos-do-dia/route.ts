@@ -30,6 +30,19 @@ function extrairFotoUrl(payload: any): string | null {
   const baseRaw = process.env.PLAYNAQUADRA_API_URL || "";
   const base = baseRaw.endsWith("/") ? baseRaw.slice(0, -1) : baseRaw;
 
+  const sanitize = (value: string) => value.replace(/[`'"\s]/g, "").trim();
+
+  const looksLikeUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+  const isPlayApiUuidUrl = (value: string) => {
+    try {
+      const u = new URL(value);
+      return u.hostname.includes("playnaquadra.com.br") && /^\/api\/[0-9a-f-]{36}$/i.test(u.pathname);
+    } catch {
+      return false;
+    }
+  };
+
   const base64Mime = (raw: string) => {
     const s = raw.trim();
     if (s.startsWith("/9j/")) return "image/jpeg";
@@ -49,17 +62,20 @@ function extrairFotoUrl(payload: any): string | null {
   const normalizeUrl = (value: any): string | null => {
     if (!value) return null;
     if (typeof value === "string") {
-      const v = value.trim();
+      const v = sanitize(value);
       if (!v) return null;
       if (v.startsWith("data:image/")) return v;
       if (looksLikeBase64(v)) return `data:${base64Mime(v)};base64,${v.replaceAll(/\s+/g, "")}`;
       try {
         const u = new URL(v);
         if (!["http:", "https:", "data:"].includes(u.protocol)) return null;
-        return u.toString();
+        const url = u.toString();
+        if (isPlayApiUuidUrl(url)) return null;
+        return url;
       } catch {
+        if (looksLikeUuid(v)) return null;
         if (v.startsWith("/") && base) return `${base}${v}`;
-        if (!v.startsWith("http") && base) return `${base}/${v.replace(/^\/+/, "")}`;
+        if (v.includes("/") && base) return `${base}/${v.replace(/^\/+/, "")}`;
         return null;
       }
     }
@@ -151,6 +167,114 @@ function extrairFotoUrl(payload: any): string | null {
     if (url) return url;
   }
   return findUrlDeep(payload, 6, new Set()) || null;
+}
+
+function extrairFotoFileId(payload: any): string | null {
+  const visited = new Set<any>();
+
+  const pick = (value: any): string | null => {
+    if (!value) return null;
+    if (typeof value === "string") {
+      const v = value.replace(/[`'"\s]/g, "").trim();
+      if (/^[0-9a-f-]{36}$/i.test(v)) return v;
+      try {
+        const u = new URL(v);
+        const last = u.pathname.split("/").filter(Boolean).pop() || "";
+        if (/^[0-9a-f-]{36}$/i.test(last)) return last;
+      } catch {}
+      return null;
+    }
+    if (typeof value === "object") {
+      const obj = value as any;
+      const v = pick(obj.id || obj._id || obj.fileId || obj.fotoId || obj.imagemId);
+      if (v) return v;
+    }
+    return null;
+  };
+
+  const walk = (value: any, depth: number): string | null => {
+    if (!value || depth <= 0) return null;
+    if (typeof value !== "object") return null;
+    if (visited.has(value)) return null;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value.slice(0, 10)) {
+        const found = pick(item) || walk(item, depth - 1);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    for (const [k, v] of Object.entries(value as Record<string, any>)) {
+      if (/(foto|photo|avatar|imagem|image|profile)/i.test(k)) {
+        const found = pick(v) || walk(v, depth - 1);
+        if (found) return found;
+      }
+    }
+
+    for (const v of Object.values(value as Record<string, any>)) {
+      const found = walk(v, depth - 1);
+      if (found) return found;
+    }
+
+    return null;
+  };
+
+  const direct = pick(payload);
+  if (direct) return direct;
+  return walk(payload, 6);
+}
+
+async function resolverFotoPorFileId(params: { token: string; fileId: string }) {
+  const baseRaw = process.env.PLAYNAQUADRA_API_URL || "";
+  const base = baseRaw.endsWith("/") ? baseRaw.slice(0, -1) : baseRaw;
+  if (!base) return null;
+
+  const candidates = [
+    `${base}/arquivo/${params.fileId}`,
+    `${base}/arquivos/${params.fileId}`,
+    `${base}/file/${params.fileId}`,
+    `${base}/files/${params.fileId}`,
+    `${base}/imagem/${params.fileId}`,
+    `${base}/image/${params.fileId}`,
+    `${base}/foto/${params.fileId}`,
+    `${base}/fotos/${params.fileId}`,
+    `${base}/midia/${params.fileId}`,
+    `${base}/media/${params.fileId}`,
+  ];
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        redirect: "manual",
+        headers: { Authorization: `Bearer ${params.token}` },
+      });
+
+      const location = res.headers.get("location");
+      if (location) {
+        try {
+          const resolved = new URL(location, url).toString();
+          if (resolved) return resolved;
+        } catch {}
+      }
+
+      const contentType = (res.headers.get("content-type") || "").toLowerCase();
+      if (res.ok && contentType.startsWith("image/")) return url;
+
+      if (res.ok && contentType.includes("application/json")) {
+        const data = await res.json().catch(() => null);
+        const maybe = extrairFotoUrl(data);
+        if (maybe) return maybe;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }
 
 function coletarCamposFoto(payload: any) {
@@ -272,6 +396,10 @@ async function buscarFotoNoPlay(params: { token: string; playId?: string | null;
     const { res, data } = await playGetAtletaById({ token: params.token, atletaId: resolvedPlayId });
     if (res.ok && data) {
       fotoUrl = extrairFotoUrl(data);
+      if (!fotoUrl) {
+        const fileId = extrairFotoFileId(data);
+        if (fileId) fotoUrl = await resolverFotoPorFileId({ token: params.token, fileId });
+      }
     }
   }
 
@@ -300,10 +428,18 @@ async function buscarFotoNoPlay(params: { token: string; playId?: string | null;
         const id = String(first?.id || first?._id || first?.atletaId || first?.usuarioId || "").trim();
         if (id && !resolvedPlayId) resolvedPlayId = id;
         fotoUrl = extrairFotoUrl(first);
+        if (!fotoUrl) {
+          const fileId = extrairFotoFileId(first);
+          if (fileId) fotoUrl = await resolverFotoPorFileId({ token: params.token, fileId });
+        }
         if (fotoUrl) break;
       }
 
       fotoUrl = extrairFotoUrl(busca.data);
+      if (!fotoUrl) {
+        const fileId = extrairFotoFileId(busca.data);
+        if (fileId) fotoUrl = await resolverFotoPorFileId({ token: params.token, fileId });
+      }
       if (fotoUrl) break;
     }
   }
