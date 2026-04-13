@@ -43,6 +43,26 @@ function extrairFotoUrl(payload: any): string | null {
     }
   };
 
+  const isLikelyAthletePhotoUrl = (value: string) => {
+    if (value.startsWith("data:image/")) return true;
+    try {
+      const u = new URL(value);
+      const path = (u.pathname || "").toLowerCase();
+      if (path.includes("/campeonatos/") || path.includes("/banners/") || path.includes("/arenas/") || path.includes("/arena/") || path.includes("/points/") || path.includes("/point/")) {
+        return false;
+      }
+      if (u.hostname.includes("storage.googleapis.com")) {
+        return path.includes("/atletas/") || path.includes("/atleta/");
+      }
+      if (u.hostname.includes("playnaquadra.com.br")) {
+        return path.includes("atleta") || path.includes("profile") || path.includes("avatar") || path.includes("foto");
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const base64Mime = (raw: string) => {
     const s = raw.trim();
     if (s.startsWith("/9j/")) return "image/jpeg";
@@ -71,6 +91,7 @@ function extrairFotoUrl(payload: any): string | null {
         if (!["http:", "https:", "data:"].includes(u.protocol)) return null;
         const url = u.toString();
         if (isPlayApiUuidUrl(url)) return null;
+        if (!isLikelyAthletePhotoUrl(url)) return null;
         return url;
       } catch {
         if (looksLikeUuid(v)) return null;
@@ -166,7 +187,20 @@ function extrairFotoUrl(payload: any): string | null {
     const url = normalizeUrl(c);
     if (url) return url;
   }
-  return findUrlDeep(payload, 6, new Set()) || null;
+  const subtrees = [
+    payload?.atleta,
+    payload?.usuario,
+    payload?.user,
+    payload?.data?.atleta,
+    payload?.data?.usuario,
+    payload?.data?.user,
+    payload?.data,
+  ].filter(Boolean);
+  for (const subtree of subtrees) {
+    const found = findUrlDeep(subtree, 6, new Set());
+    if (found) return found;
+  }
+  return null;
 }
 
 function extrairFotoFileId(payload: any): string | null {
@@ -609,9 +643,13 @@ export async function POST(
               buscas,
             };
           }
+          const tinhaFoto = Boolean(user[0].fotoUrl && String(user[0].fotoUrl).trim().length > 0);
+          if (tinhaFoto) {
+            await db.update(usuarios).set({ fotoUrl: null, atualizadoEm: new Date() }).where(eq(usuarios.id, usuarioId));
+          }
           return NextResponse.json(
-            { ok: false, usuarioId, error: "Sem foto no Play Na Quadra", debug: debugPayload } satisfies SyncOneResult,
-            { status: 400, headers: { "Cache-Control": "no-store" } }
+            { ok: true, usuarioId, consultado: true, atualizado: tinhaFoto, fotoUrl: null, ...(debug ? { debug: debugPayload } : {}) } satisfies any,
+            { headers: { "Cache-Control": "no-store" } }
           );
         }
 
