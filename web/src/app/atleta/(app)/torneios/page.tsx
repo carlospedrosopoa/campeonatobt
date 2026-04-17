@@ -198,6 +198,12 @@ export default function AtletaTorneiosPage() {
         <div className="flex items-start justify-between gap-4">
           {header}
           <div className="flex items-center gap-2">
+            <Link
+              href="/atleta/jogos"
+              className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm font-semibold"
+            >
+              Meus jogos
+            </Link>
             <form action="/api/v1/auth/logout" method="post">
               <button type="submit" className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm font-semibold">
                 Sair

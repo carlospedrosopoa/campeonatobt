@@ -7,6 +7,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await getSession();
   const perfil = session?.user?.perfil as string | undefined;
   const permitido = perfil === "ADMIN" || perfil === "ORGANIZADOR";
+  const isAdmin = perfil === "ADMIN";
 
   if (!permitido) {
     redirect(`/login?next=${encodeURIComponent("/admin")}`);
@@ -42,6 +43,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 <List className="h-4 w-4 text-slate-500" />
                 Torneios
               </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin/configuracoes"
+                  className="flex items-center gap-2 rounded-md px-3 py-2 hover:bg-slate-50 text-slate-700"
+                >
+                  <Settings className="h-4 w-4 text-slate-500" />
+                  Configurações
+                </Link>
+              )}
             </nav>
           </aside>
 

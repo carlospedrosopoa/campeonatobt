@@ -7,6 +7,7 @@ export const statusPartidaEnum = pgEnum('status_partida', ['AGENDADA', 'EM_ANDAM
 export const faseTorneioEnum = pgEnum('fase_torneio', ['GRUPOS', 'OITAVAS', 'QUARTAS', 'SEMI', 'FINAL']);
 export const statusInscricaoEnum = pgEnum('status_inscricao', ['PENDENTE', 'APROVADA', 'RECUSADA', 'FILA_ESPERA']);
 export const generoCategoriaEnum = pgEnum('genero_categoria', ['MASCULINO', 'FEMININO', 'MISTO']);
+export const statusPlacarSubmissaoEnum = pgEnum('status_placar_submissao', ['PENDENTE', 'CONFIRMADA', 'CANCELADA']);
 
 // Tabelas
 
@@ -168,6 +169,36 @@ export const partidas = pgTable('partidas', {
   fotoUrl: text('foto_url'),
   transmissaoUrl: text('transmissao_url'),
   
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});
+
+export const gzappyConfig = pgTable('gzappy_config', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  ativo: boolean('ativo').default(false).notNull(),
+  apiKey: text('api_key'),
+  instanceId: text('instance_id'),
+  whatsappArbitragem: text('whatsapp_arbitragem'),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});
+
+export const placarSubmissoes = pgTable('placar_submissoes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  partidaId: uuid('partida_id').references(() => partidas.id).notNull(),
+  usuarioId: uuid('usuario_id').references(() => usuarios.id).notNull(),
+  status: statusPlacarSubmissaoEnum('status').default('PENDENTE').notNull(),
+  detalhesPlacar: json('detalhes_placar')
+    .$type<{ set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[]>()
+    .notNull(),
+  placarA: integer('placar_a').notNull(),
+  placarB: integer('placar_b').notNull(),
+  vencedorId: uuid('vencedor_id').references(() => equipes.id),
+  tokenHash: text('token_hash').notNull(),
+  tokenExpiraEm: timestamp('token_expira_em'),
+  confirmadoEm: timestamp('confirmado_em'),
+  canceladoEm: timestamp('cancelado_em'),
+  canceladoMotivo: text('cancelado_motivo'),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });
