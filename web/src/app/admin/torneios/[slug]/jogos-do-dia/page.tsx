@@ -85,6 +85,7 @@ export default function AdminJogosDoDiaPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
   const [sincronizandoFotos, setSincronizandoFotos] = useState(false);
+  const [atualizandoPlacares, setAtualizandoPlacares] = useState(false);
   const [dataSelecionada, setDataSelecionada] = useState(() => ymdSaoPaulo());
   const [atletasAtualizando, setAtletasAtualizando] = useState<Record<string, boolean>>({});
 
@@ -126,6 +127,12 @@ export default function AdminJogosDoDiaPage() {
       .join(" ");
   }
 
+  function textoPlacar(p: Partida) {
+    if (p.detalhesPlacar && p.detalhesPlacar.length > 0) return formatPlacar(p.detalhesPlacar);
+    if ((p.placarA ?? 0) > 0 || (p.placarB ?? 0) > 0) return `${p.placarA ?? 0} x ${p.placarB ?? 0}`;
+    return null;
+  }
+
   function formatDataHora(value?: string | null) {
     if (!value) return null;
     const d = new Date(value);
@@ -144,6 +151,9 @@ export default function AdminJogosDoDiaPage() {
         partida: {
           id: p.id,
           fase: p.fase,
+          placarA: p.placarA ?? 0,
+          placarB: p.placarB ?? 0,
+          detalhesPlacar: p.detalhesPlacar ?? null,
           dataHorario: p.dataHorario ?? null,
           arenaNome: p.arenaNome ?? null,
           quadra: p.quadra ?? null,
@@ -155,6 +165,19 @@ export default function AdminJogosDoDiaPage() {
       });
     } catch (e: any) {
       setErro(e?.message || "Não foi possível gerar o card da partida");
+    }
+  }
+
+  async function atualizarPlacares() {
+    const dataRef = (dataSelecionada || "").trim() || ymdSaoPaulo();
+    try {
+      setErro(null);
+      setAtualizandoPlacares(true);
+      await carregarDados(dataRef);
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao atualizar placares");
+    } finally {
+      setAtualizandoPlacares(false);
     }
   }
 
@@ -408,6 +431,14 @@ export default function AdminJogosDoDiaPage() {
             {sincronizandoFotos ? "Atualizando fotos..." : "Atualizar fotos"}
           </button>
           <button
+            onClick={atualizarPlacares}
+            disabled={atualizandoPlacares || carregando}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${atualizandoPlacares ? 'animate-spin' : ''}`} />
+            {atualizandoPlacares ? "Atualizando placares..." : "Atualizar placar"}
+          </button>
+          <button
             onClick={gerarRelatorioHTML}
             disabled={gerandoRelatorio || partidas.length === 0}
             className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -503,7 +534,14 @@ export default function AdminJogosDoDiaPage() {
                   </div>
                   
                   <div className="flex flex-col items-center justify-center min-w-[2.5rem]">
-                    <span className="text-sm font-black text-slate-300 italic">VS</span>
+                    {textoPlacar(p) ? (
+                      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-center">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Placar</span>
+                        <span className="block text-xs font-bold text-emerald-800">{textoPlacar(p)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm font-black text-slate-300 italic">VS</span>
+                    )}
                   </div>
 
                   <div className="flex-1 text-center">

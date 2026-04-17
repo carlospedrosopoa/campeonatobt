@@ -3,6 +3,9 @@
 type PartidaCardInfo = {
   id: string;
   fase?: string | null;
+  placarA?: number | null;
+  placarB?: number | null;
+  detalhesPlacar?: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
   rodadaNome?: string | null;
   rodadaNumero?: number | null;
   dataHorario?: string | null;
@@ -107,6 +110,24 @@ function formatarDataHora(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatarPlacarPartida(partida: PartidaCardInfo) {
+  const detalhes = partida.detalhesPlacar ?? [];
+  if (detalhes.length > 0) {
+    return detalhes
+      .slice()
+      .sort((a, b) => a.set - b.set)
+      .map((s) => {
+        if (s.tiebreak && s.tbA !== undefined && s.tbB !== undefined) return `${s.a}-${s.b}(${s.tbA}-${s.tbB})`;
+        return `${s.a}-${s.b}`;
+      })
+      .join(" ");
+  }
+  const a = Number(partida.placarA ?? 0);
+  const b = Number(partida.placarB ?? 0);
+  if (a > 0 || b > 0) return `${a} x ${b}`;
+  return "";
 }
 
 function fotoAtletaOuAvatar(atleta?: { nome: string; fotoUrl?: string | null } | null) {
@@ -249,6 +270,24 @@ export async function gerarCardPartidaAdmin(params: GerarCardParams) {
   drawTextLeft(ctx, params.categoriaNome || "A definir", valorX, yCategoria + 10, 650, 40);
   drawTextLeft(ctx, formatarDataHora(params.partida.dataHorario), valorX, yData + 10, 650, 40);
   drawTextLeft(ctx, local, valorX, yArena + 10, 650, 40);
+
+  const placarTexto = formatarPlacarPartida(params.partida);
+  if (placarTexto) {
+    ctx.fillStyle = "rgba(16,185,129,0.15)";
+    const boxX = 70;
+    const boxY = 1620;
+    const boxW = 940;
+    const boxH = 92;
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeStyle = "rgba(16,185,129,0.55)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#dcfce7";
+    ctx.font = "700 40px Inter, Arial, sans-serif";
+    ctx.fillText(`PLACAR: ${placarTexto}`, boxX + boxW / 2, boxY + boxH / 2);
+  }
 
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
