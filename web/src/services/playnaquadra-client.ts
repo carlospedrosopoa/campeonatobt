@@ -42,7 +42,12 @@ async function playFetchSmartJson(path: string, init: RequestInit & { token?: st
   const res1 = await playFetchWithBase(base, path, init);
   if (res1.status === 204) return { res: res1, data: null as any };
   const data1 = (await res1.json().catch(() => null)) as any;
-  if (res1.status === 403 && isAtletaAreaRequiredMessage(data1)) {
+  const shouldTryAtleta =
+    (res1.status === 403 && isAtletaAreaRequiredMessage(data1)) ||
+    (res1.status === 401 && isAtletaAreaRequiredMessage(data1)) ||
+    (res1.status === 401 && (path.startsWith("/user/getUsuarioLogado") || path.startsWith("/atleta/me/atleta")));
+
+  if (shouldTryAtleta) {
     const atletaBase = getAtletaBaseUrl();
     const res2 = await playFetchWithBase(atletaBase, path, init);
     if (res2.status === 204) return { res: res2, data: null as any };
