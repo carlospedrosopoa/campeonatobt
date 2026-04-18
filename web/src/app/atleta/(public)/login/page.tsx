@@ -82,6 +82,11 @@ export default function AtletaLoginPage() {
                     </a>
                   </div>
                 )}
+                {code === "PLAY_CREDENCIAIS_INVALIDAS" && (
+                  <div className="text-sm text-red-700">
+                    Se você estiver tentando entrar com um usuário de admin/arena/professor, use uma conta de atleta.
+                  </div>
+                )}
               </div>
             )}
 

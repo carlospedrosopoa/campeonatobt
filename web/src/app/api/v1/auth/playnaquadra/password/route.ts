@@ -18,12 +18,28 @@ export async function POST(request: NextRequest) {
     const login = await playLogin(email, password);
     const tokenPlay = (login.data?.token as string | undefined) ?? "";
     if (!login.res.ok || !tokenPlay) {
-      return NextResponse.json({ error: login.data?.mensagem || login.data?.error || "Credenciais inválidas" }, { status: 401 });
+      const msg = login.data?.mensagem || login.data?.error || "Credenciais inválidas";
+      const lower = String(msg).toLowerCase();
+      const atletaAppRequired = lower.includes("atletas devem usar") || lower.includes("aplicativo do atleta");
+      return NextResponse.json(
+        {
+          error:
+            login.res.status === 401
+              ? "Credenciais inválidas no Play na Quadra. Use o email/senha de uma conta de atleta."
+              : msg,
+          code: login.res.status === 401 ? "PLAY_CREDENCIAIS_INVALIDAS" : atletaAppRequired ? "ATLETA_APP_REQUIRED" : "PLAY_LOGIN_FALHOU",
+          url: atletaAppRequired ? CREATE_PROFILE_URL : undefined,
+        },
+        { status: 401 }
+      );
     }
 
     const meRes = await playGetUsuarioLogado(tokenPlay);
     if (!meRes.res.ok) {
-      return NextResponse.json({ error: meRes.data?.mensagem || meRes.data?.error || "Falha ao validar token no Play na Quadra" }, { status: 401 });
+      return NextResponse.json(
+        { error: meRes.data?.mensagem || meRes.data?.error || "Falha ao validar token no Play na Quadra", code: "PLAY_TOKEN_INVALIDO" },
+        { status: 401 }
+      );
     }
 
     const identity = extractPlayIdentity(meRes.data, tokenPlay);
