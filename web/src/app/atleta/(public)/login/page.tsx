@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
 
 const CREATE_PROFILE_URL = "https://atleta.playnaquadra.com.br";
+const APP_ATLETA_LOGIN_URL = "https://atleta.playnaquadra.com.br/login";
 
 export default function AtletaLoginPage() {
   const router = useRouter();
@@ -126,6 +127,12 @@ export default function AtletaLoginPage() {
               <Link href="/" className="text-slate-600 hover:text-slate-900">
                 Voltar ao site
               </Link>
+              <a
+                href={`${APP_ATLETA_LOGIN_URL}?nextExternal=${encodeURIComponent("https://torneios.playnaquadra.com.br/atleta/sso")}`}
+                className="text-slate-600 hover:text-slate-900"
+              >
+                Entrar com App
+              </a>
               <a href={CREATE_PROFILE_URL} target="_blank" rel="noreferrer" className="text-slate-600 hover:text-slate-900">
                 Criar perfil
               </a>
