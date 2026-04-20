@@ -39,7 +39,7 @@ export default function AtletaLoginPage() {
 
     try {
       setCarregando(true);
-      const res = await fetch("/api/v1/auth/playnaquadra/password", {
+      const res = await fetch("/api/v1/auth/sso/carlaobtonline/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, next }),
@@ -69,7 +69,7 @@ export default function AtletaLoginPage() {
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-slate-900">Área do Atleta</h1>
-              <p className="text-sm text-slate-600">Entre com seu login do Play na Quadra.</p>
+              <p className="text-sm text-slate-600">Entre com seu login do App do Atleta.</p>
             </div>
 
             {erro && (
