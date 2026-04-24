@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
       torneioSlug: torneios.slug,
       categoriaId: categorias.id,
       categoriaNome: categorias.nome,
+      categoriaSlug: categorias.slug,
       equipeId: equipes.id,
       equipeNome: equipes.nome,
       atletaId: usuarios.id,
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
         status: r.status,
         dataInscricao: r.dataInscricao,
         torneio: { id: r.torneioId, nome: r.torneioNome, slug: r.torneioSlug },
-        categoria: { id: r.categoriaId, nome: r.categoriaNome },
+        categoria: { id: r.categoriaId, nome: r.categoriaNome, slug: r.categoriaSlug },
         equipe: {
           id: r.equipeId,
           nome: r.equipeNome,

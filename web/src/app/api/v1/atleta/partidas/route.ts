@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, partidas, torneios } from "@/db/schema";
-import { asc, desc, eq, inArray, or } from "drizzle-orm";
+import { categorias, equipeIntegrantes, partidas, placarSubmissoes, torneios } from "@/db/schema";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 
 export async function GET(request: NextRequest) {
@@ -45,6 +45,16 @@ export async function GET(request: NextRequest) {
   const ids = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
   const mapNomes = await equipesDisplayService.mapNomesEquipes(ids);
 
+  const partidaIds = Array.from(new Set(rows.map((r) => r.id))).filter(Boolean) as string[];
+  const pendentes = new Set<string>();
+  if (partidaIds.length > 0) {
+    const pendentesRows = await db
+      .select({ partidaId: placarSubmissoes.partidaId })
+      .from(placarSubmissoes)
+      .where(and(inArray(placarSubmissoes.partidaId, partidaIds), eq(placarSubmissoes.status, "PENDENTE")));
+    for (const pr of pendentesRows) pendentes.add(pr.partidaId);
+  }
+
   const partidasResult = rows.map((r) => ({
     id: r.id,
     torneio: { id: r.torneioId, nome: r.torneioNome, slug: r.torneioSlug },
@@ -59,6 +69,7 @@ export async function GET(request: NextRequest) {
     dataHorario: r.dataHorario,
     quadra: r.quadra,
     meuLado: equipeIds.includes(r.equipeAId) ? "A" : equipeIds.includes(r.equipeBId) ? "B" : null,
+    placarSubmissaoPendente: pendentes.has(r.id),
   }));
 
   return NextResponse.json({ partidas: partidasResult }, { headers: { "Cache-Control": "no-store" } });

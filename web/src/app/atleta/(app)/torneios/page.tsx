@@ -20,6 +20,7 @@ type Torneio = {
   categorias: {
     id: string;
     nome: string;
+    slug: string;
     genero: string;
     valorInscricao: string | null;
     vagasMaximas: number | null;
@@ -33,7 +34,7 @@ type Inscricao = {
   status: string;
   dataInscricao: string;
   torneio: { id: string; nome: string; slug: string };
-  categoria: { id: string; nome: string };
+  categoria: { id: string; nome: string; slug: string };
   equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null }[] };
 };
 
@@ -69,7 +70,7 @@ function getInitials(nome: string) {
 }
 
 export default function AtletaTorneiosPage() {
-  const [tab, setTab] = useState<"torneios" | "inscricoes">("torneios");
+  const [tab, setTab] = useState<"torneios" | "inscricoes">("inscricoes");
 
   const [torneios, setTorneios] = useState<Torneio[]>([]);
   const [carregandoTorneios, setCarregandoTorneios] = useState(true);
@@ -121,6 +122,7 @@ export default function AtletaTorneiosPage() {
 
   useEffect(() => {
     void carregarTorneios();
+    void carregarInscricoes();
   }, []);
 
   useEffect(() => {
@@ -167,17 +169,57 @@ export default function AtletaTorneiosPage() {
   }, [buscaParceiro, modalCategoria]);
 
   const header = useMemo(() => {
-    const label = tab === "torneios" ? "Torneios" : "Minhas inscrições";
+    const label = tab === "torneios" ? "Torneios abertos" : "Meus torneios";
     return (
       <div className="space-y-1">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Trophy className="w-6 h-6 text-blue-600" />
           {label}
         </h1>
-        <p className="text-sm text-gray-600">Gerencie suas inscrições no Play Na Quadra - Competições.</p>
+        <p className="text-sm text-gray-600">Acesse os torneios, categorias e suas inscrições.</p>
       </div>
     );
   }, [tab]);
+
+  const meusTorneios = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        torneio: Inscricao["torneio"];
+        categorias: Array<{
+          inscricaoId: string;
+          status: string;
+          dataInscricao: string;
+          categoria: Inscricao["categoria"];
+          equipe: Inscricao["equipe"];
+        }>;
+        ultimaDataInscricao: number;
+      }
+    >();
+
+    for (const i of inscricoes) {
+      const key = i.torneio.id;
+      const data = new Date(i.dataInscricao).getTime();
+      const current =
+        map.get(key) ??
+        {
+          torneio: i.torneio,
+          categorias: [],
+          ultimaDataInscricao: data || 0,
+        };
+      current.categorias.push({
+        inscricaoId: i.id,
+        status: i.status,
+        dataInscricao: i.dataInscricao,
+        categoria: i.categoria,
+        equipe: i.equipe,
+      });
+      current.ultimaDataInscricao = Math.max(current.ultimaDataInscricao, data || 0);
+      if (!map.has(key)) map.set(key, current);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.ultimaDataInscricao - a.ultimaDataInscricao);
+  }, [inscricoes]);
 
   if (carregandoTorneios && tab === "torneios") {
     return (
@@ -224,7 +266,7 @@ export default function AtletaTorneiosPage() {
               tab === "torneios" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"
             }`}
           >
-            Torneios
+            Torneios abertos
           </button>
           <button
             type="button"
@@ -233,7 +275,7 @@ export default function AtletaTorneiosPage() {
               tab === "inscricoes" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"
             }`}
           >
-            Minhas inscrições
+            Meus torneios
           </button>
         </div>
 
@@ -307,26 +349,36 @@ export default function AtletaTorneiosPage() {
                                   {c.inscritos} {c.inscritos === 1 ? "inscrito" : "inscritos"}
                                 </div>
                               </div>
-                              {c.inscricoesAbertas === false ? (
-                                <span className="px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm font-semibold whitespace-nowrap">
-                                  Inscrições encerradas
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setErroModal(null);
-                                    setEquipeNome("");
-                                    setBuscaParceiro("");
-                                    setParceiros([]);
-                                    setParceiroSelecionado(null);
-                                    setModalCategoria({ torneio: t, categoriaId: c.id });
-                                  }}
-                                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold whitespace-nowrap"
-                                >
-                                  Inscrever
-                                </button>
-                              )}
+                              <div className="flex flex-col items-end gap-2">
+                                {c.slug && (
+                                  <Link
+                                    href={`/torneios/${t.slug}/categoria/${c.slug}`}
+                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 whitespace-nowrap"
+                                  >
+                                    Ver categoria
+                                  </Link>
+                                )}
+                                {c.inscricoesAbertas === false ? (
+                                  <span className="px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm font-semibold whitespace-nowrap">
+                                    Inscrições encerradas
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setErroModal(null);
+                                      setEquipeNome("");
+                                      setBuscaParceiro("");
+                                      setParceiros([]);
+                                      setParceiroSelecionado(null);
+                                      setModalCategoria({ torneio: t, categoriaId: c.id });
+                                    }}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold whitespace-nowrap"
+                                  >
+                                    Inscrever
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -357,7 +409,7 @@ export default function AtletaTorneiosPage() {
                   <div className="h-24 bg-gray-200 rounded"></div>
                 </div>
               </div>
-            ) : inscricoes.length === 0 ? (
+            ) : meusTorneios.length === 0 ? (
               <div className="bg-white rounded-xl shadow-lg p-8 text-center">
                 <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">Você ainda não tem inscrições</p>
@@ -365,30 +417,61 @@ export default function AtletaTorneiosPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {inscricoes.map((i) => (
-                  <div key={i.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
+                {meusTorneios.map((t) => (
+                  <div key={t.torneio.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
                     <div className="p-6 border-b border-gray-100">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-base font-semibold text-gray-900 truncate">{i.torneio.nome}</div>
-                          <div className="text-sm text-gray-600 truncate mt-1">{i.categoria.nome}</div>
+                          <div className="text-base font-semibold text-gray-900 truncate">{t.torneio.nome}</div>
+                          <div className="text-sm text-gray-600 truncate mt-1">
+                            {t.categorias.length} {t.categorias.length === 1 ? "categoria" : "categorias"}
+                          </div>
                         </div>
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 whitespace-nowrap">
-                          {i.status}
-                        </span>
+                        <Link href={`/torneios/${t.torneio.slug}`} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
+                          Ver
+                        </Link>
                       </div>
                     </div>
                     <div className="p-6">
-                      <div className="text-sm text-gray-700">
-                        <div className="font-semibold text-gray-900">{i.equipe.nome || "Dupla"}</div>
-                        <div className="mt-3 space-y-2 text-sm">
-                          {i.equipe.atletas.map((a) => (
-                            <div key={a.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                              <span className="font-medium text-gray-900 truncate">{a.nome}</span>
-                              <span className="text-gray-600 truncate">{a.email}</span>
+                      <div className="space-y-3">
+                        {t.categorias.map((c) => (
+                          <div key={c.inscricaoId} className="rounded-lg border border-gray-200 p-4 space-y-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-semibold text-gray-900">{c.categoria.nome}</div>
+                                <div className="text-xs text-gray-600 mt-1">{c.equipe.nome || "Dupla"}</div>
+                              </div>
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 whitespace-nowrap">
+                                {c.status}
+                              </span>
                             </div>
-                          ))}
-                        </div>
+
+                            <div className="mt-2 space-y-1 text-sm text-gray-700">
+                              {c.equipe.atletas.map((a) => (
+                                <div key={a.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                  <span className="font-medium text-gray-900 truncate">{a.nome}</span>
+                                  <span className="text-gray-600 truncate">{a.email}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-3">
+                              {c.categoria.slug ? (
+                                <Link
+                                  href={`/torneios/${t.torneio.slug}/categoria/${c.categoria.slug}`}
+                                  className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                                >
+                                  Ver categoria
+                                </Link>
+                              ) : (
+                                <span />
+                              )}
+                              <Link href="/atleta/jogos" className="text-xs font-semibold text-gray-700 hover:text-gray-900">
+                                Meus jogos
+                              </Link>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>

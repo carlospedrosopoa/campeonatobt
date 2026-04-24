@@ -18,6 +18,7 @@ type Partida = {
   dataHorario: string | null;
   quadra: string | null;
   meuLado: "A" | "B" | null;
+  placarSubmissaoPendente?: boolean;
 };
 
 function formatDataHora(value?: string | null) {
@@ -106,7 +107,7 @@ export default function AtletaJogosPage() {
       });
       const data = (await res.json().catch(() => null)) as any;
       if (!res.ok) throw new Error(data?.error || "Falha ao enviar placar");
-      alert("Placar enviado para confirmação da arbitragem.");
+      alert("Placar enviado. Aguardando aprovação do gestor do torneio.");
       setModal(null);
       await carregar();
     } catch (e: any) {
@@ -124,7 +125,7 @@ export default function AtletaJogosPage() {
             <Trophy className="h-6 w-6 text-orange-500" />
             <div>
               <div className="font-bold text-slate-900">Meus jogos</div>
-              <div className="text-xs text-slate-500">Informe o placar e aguarde a confirmação da arbitragem.</div>
+              <div className="text-xs text-slate-500">Informe o placar e aguarde a aprovação do gestor do torneio.</div>
             </div>
           </div>
           <Link href="/atleta/torneios" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
@@ -156,6 +157,11 @@ export default function AtletaJogosPage() {
                 <div className="text-xs text-slate-600">
                   {formatDataHora(p.dataHorario) || "Horário a definir"}{p.quadra ? ` • Q. ${p.quadra}` : ""} • {p.status}
                 </div>
+                {(p.detalhesPlacar?.length || 0) > 0 && (
+                  <div className="text-xs font-semibold text-slate-700">
+                    Placar: {(p.placarA ?? 0)} x {(p.placarB ?? 0)}
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
                   <Link
                     href={`/torneios/${p.torneio.slug}`}
@@ -163,13 +169,44 @@ export default function AtletaJogosPage() {
                   >
                     Ver torneio
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => abrirModal(p)}
-                    className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                  >
-                    Informar placar
-                  </button>
+                  {(() => {
+                    const temPlacar =
+                      (p.detalhesPlacar?.length || 0) > 0 || p.status === "FINALIZADA" || p.status === "WO";
+                    const podeInformar =
+                      !temPlacar &&
+                      !p.placarSubmissaoPendente &&
+                      (p.status === "AGENDADA" || p.status === "EM_ANDAMENTO");
+
+                    if (p.placarSubmissaoPendente) {
+                      return (
+                        <span className="rounded-md bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">
+                          Aguardando aprovação
+                        </span>
+                      );
+                    }
+
+                    if (podeInformar) {
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => abrirModal(p)}
+                          className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                        >
+                          Informar placar
+                        </button>
+                      );
+                    }
+
+                    if (temPlacar) {
+                      return (
+                        <span className="rounded-md bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-800">
+                          Placar informado
+                        </span>
+                      );
+                    }
+
+                    return null;
+                  })()}
                 </div>
               </div>
             ))}
@@ -203,6 +240,10 @@ export default function AtletaJogosPage() {
               <input value={s3b} onChange={(e) => setS3b(e.target.value)} type="number" className="rounded-md border border-slate-200 px-3 py-2 text-sm text-center" />
             </div>
 
+            <div className="text-xs text-slate-500">
+              Ao enviar, o placar ficará pendente e será aprovado pelo gestor do torneio.
+            </div>
+
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 type="button"
@@ -227,4 +268,3 @@ export default function AtletaJogosPage() {
     </div>
   );
 }
-

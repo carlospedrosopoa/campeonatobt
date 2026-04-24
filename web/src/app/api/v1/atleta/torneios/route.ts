@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       esporteNome: esportes.nome,
       categoriaId: categorias.id,
       categoriaNome: categorias.nome,
+      categoriaSlug: categorias.slug,
       categoriaGenero: categorias.genero,
       categoriaValorInscricao: categorias.valorInscricao,
       categoriaVagasMaximas: categorias.vagasMaximas,
@@ -91,6 +92,7 @@ export async function GET(request: NextRequest) {
       current.categorias.push({
         id: r.categoriaId,
         nome: r.categoriaNome ?? "",
+        slug: r.categoriaSlug ?? "",
         genero: r.categoriaGenero ?? "",
         valorInscricao: r.categoriaValorInscricao ?? null,
         vagasMaximas: r.categoriaVagasMaximas ?? null,
