@@ -259,8 +259,8 @@ export default function AdminCategoriaJogosSuperPage() {
                       <div class="text-lg font-black text-slate-900">${e.pontos}</div>
                     </div>
                     <div class="text-center">
-                      <div class="text-[10px] font-bold text-slate-400">J</div>
-                      <div class="text-base font-bold text-slate-700">${e.jogosJogados}</div>
+                      <div class="text-[10px] font-bold text-slate-400">JOG</div>
+                      <div class="text-lg font-black text-slate-900">${e.jogosJogados}</div>
                     </div>
                     <div class="hidden sm:block text-center">
                       <div class="text-[10px] font-bold text-slate-400">V</div>
