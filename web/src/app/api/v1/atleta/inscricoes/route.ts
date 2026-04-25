@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       status: string;
       dataInscricao: Date;
       torneio: { id: string; nome: string; slug: string };
-      categoria: { id: string; nome: string };
+      categoria: { id: string; nome: string; slug: string };
       equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null }[] };
     }
   >();
