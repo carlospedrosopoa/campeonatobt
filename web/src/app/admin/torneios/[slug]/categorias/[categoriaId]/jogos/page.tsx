@@ -213,7 +213,8 @@ export default function AdminCategoriaJogosPage() {
           setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
           if (t?.superCampeonato) {
             setRedirecting(true);
-            router.replace(`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/super`);
+            const qs = typeof window !== "undefined" ? window.location.search : "";
+            router.replace(`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/super${qs}`);
             return;
           }
         }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
@@ -108,6 +108,8 @@ export default function AdminCategoriaJogosSuperPage() {
   const params = useParams<{ slug: string; categoriaId: string }>();
   const slug = params.slug;
   const categoriaId = params.categoriaId;
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -131,6 +133,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [resultadoFinal, setResultadoFinal] = useState<ResultadoFinal>(null);
 
   const [editPartidaId, setEditPartidaId] = useState<string | null>(null);
+  const [pendingOpenPartidaId, setPendingOpenPartidaId] = useState<string | null>(null);
   const [salvandoPartida, setSalvandoPartida] = useState(false);
   const [editConfrontoId, setEditConfrontoId] = useState<string | null>(null);
   const [salvandoConfronto, setSalvandoConfronto] = useState(false);
@@ -448,6 +451,32 @@ export default function AdminCategoriaJogosSuperPage() {
   useEffect(() => {
     void carregarPartidas();
   }, [slug, categoriaId, fase]);
+
+  useEffect(() => {
+    const partidaId = (searchParams.get("partidaId") || "").trim();
+    if (!partidaId) return;
+
+    const faseParam = (searchParams.get("fase") || "").trim().toUpperCase();
+    if (faseParam === "GRUPOS" || faseParam === "OITAVAS" || faseParam === "QUARTAS" || faseParam === "SEMI" || faseParam === "FINAL") {
+      setFase(faseParam as any);
+    }
+    setPendingOpenPartidaId(partidaId);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!pendingOpenPartidaId) return;
+    const partida = partidas.find((p) => p.id === pendingOpenPartidaId);
+    if (!partida) return;
+
+    startEditPartida(partida);
+    setPendingOpenPartidaId(null);
+
+    const sp = new URLSearchParams(searchParams.toString());
+    sp.delete("partidaId");
+    sp.delete("fase");
+    const qs = sp.toString();
+    router.replace(`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/super${qs ? `?${qs}` : ""}`);
+  }, [pendingOpenPartidaId, partidas, router, searchParams, slug, categoriaId]);
 
   useEffect(() => {
     if (!editPartidaId) return;
