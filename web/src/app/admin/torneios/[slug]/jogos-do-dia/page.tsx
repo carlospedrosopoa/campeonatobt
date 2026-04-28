@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, FileText, ImageIcon, Loader2, MapPin, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, Calendar, FileText, ImageIcon, Loader2, MapPin, Pencil, RefreshCw, Users } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Partida = {
@@ -588,6 +588,15 @@ export default function AdminJogosDoDiaPage() {
                 </div>
                 
                 <div className="flex items-center gap-2">
+                  {p.status !== "CANCELADA" && (
+                    <Link
+                      href={`/admin/torneios/${slug}/categorias/${p.categoriaId}/jogos?fase=${encodeURIComponent(p.fase)}&partidaId=${encodeURIComponent(p.id)}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm hover:bg-slate-800 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      {textoPlacar(p) ? "Editar placar" : "Informar placar"}
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={() => gerarCardPartida(p)}
