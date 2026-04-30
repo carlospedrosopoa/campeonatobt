@@ -50,6 +50,13 @@
       "when": 1772619612164,
       "tag": "0006_bored_ronan",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777546812951,
+      "tag": "0007_boring_maria_hill",
+      "breakpoints": true
     }
   ]
 }

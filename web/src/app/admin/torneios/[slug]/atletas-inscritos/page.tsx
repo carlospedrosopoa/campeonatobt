@@ -14,6 +14,7 @@ type AtletaInscrito = {
   equipeNome: string | null;
   inscricaoId: string;
   inscricaoStatus: string;
+  pago: boolean;
 };
 
 type CategoriaInscritos = {
@@ -76,6 +77,7 @@ export default function AdminAtletasInscritosPage() {
         Telefone: a.atletaTelefone || "",
         Dupla: a.equipeNome || "",
         Status: a.inscricaoStatus,
+        Pago: a.pago ? "SIM" : "NAO",
       }))
     );
 
@@ -89,6 +91,7 @@ export default function AdminAtletasInscritosPage() {
         Telefone: a.atletaTelefone || "",
         Dupla: a.equipeNome || "",
         Status: a.inscricaoStatus,
+        Pago: a.pago ? "SIM" : "NAO",
       }));
       const ws = XLSX.utils.json_to_sheet(linhas);
       XLSX.utils.book_append_sheet(wb, ws, normalizeSheetName(c.categoriaNome));
@@ -163,6 +166,7 @@ export default function AdminAtletasInscritosPage() {
                       <th className="py-3 px-4 font-medium">Telefone</th>
                       <th className="py-3 px-4 font-medium">Dupla</th>
                       <th className="py-3 px-4 font-medium">Status</th>
+                      <th className="py-3 px-4 font-medium">Pago</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -173,11 +177,20 @@ export default function AdminAtletasInscritosPage() {
                         <td className="py-3 px-4 text-slate-700">{a.atletaTelefone || "-"}</td>
                         <td className="py-3 px-4 text-slate-700">{a.equipeNome || "-"}</td>
                         <td className="py-3 px-4 text-slate-700">{a.inscricaoStatus}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase ${
+                              a.pago ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"
+                            }`}
+                          >
+                            {a.pago ? "PAGO" : "PENDENTE"}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                     {c.atletas.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-slate-500">
+                        <td colSpan={6} className="py-8 text-center text-slate-500">
                           Nenhum atleta nesta categoria.
                         </td>
                       </tr>
@@ -192,4 +205,3 @@ export default function AdminAtletasInscritosPage() {
     </div>
   );
 }
-

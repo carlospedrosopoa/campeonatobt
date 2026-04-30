@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, inscricoes, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 export type CriarInscricaoDTO = {
@@ -34,11 +34,13 @@ export class InscricoesService {
         atletaEmail: usuarios.email,
         atletaTelefone: usuarios.telefone,
         atletaFotoUrl: usuarios.fotoUrl,
+        atletaPago: inscricaoPagamentos.pago,
       })
       .from(inscricoes)
       .innerJoin(equipes, eq(inscricoes.equipeId, equipes.id))
       .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, equipes.id))
       .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
+      .leftJoin(inscricaoPagamentos, and(eq(inscricaoPagamentos.inscricaoId, inscricoes.id), eq(inscricaoPagamentos.usuarioId, usuarios.id)))
       .where(eq(inscricoes.categoriaId, categoriaId));
 
     const map = new Map<
@@ -47,7 +49,7 @@ export class InscricoesService {
         id: string;
         status: string;
         dataInscricao: Date;
-        equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null; fotoUrl: string | null }[] };
+        equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null; fotoUrl: string | null; pago: boolean }[] };
       }
     >();
 
@@ -63,12 +65,26 @@ export class InscricoesService {
             id: r.equipeId,
             nome: r.equipeNome,
             atletas: [
-              { id: r.atletaId, nome: r.atletaNome, email: r.atletaEmail, telefone: r.atletaTelefone ?? null, fotoUrl: r.atletaFotoUrl ?? null },
+              {
+                id: r.atletaId,
+                nome: r.atletaNome,
+                email: r.atletaEmail,
+                telefone: r.atletaTelefone ?? null,
+                fotoUrl: r.atletaFotoUrl ?? null,
+                pago: Boolean(r.atletaPago),
+              },
             ],
           },
         });
       } else {
-        current.equipe.atletas.push({ id: r.atletaId, nome: r.atletaNome, email: r.atletaEmail, telefone: r.atletaTelefone ?? null, fotoUrl: r.atletaFotoUrl ?? null });
+        current.equipe.atletas.push({
+          id: r.atletaId,
+          nome: r.atletaNome,
+          email: r.atletaEmail,
+          telefone: r.atletaTelefone ?? null,
+          fotoUrl: r.atletaFotoUrl ?? null,
+          pago: Boolean(r.atletaPago),
+        });
       }
     }
 
@@ -141,6 +157,14 @@ export class InscricoesService {
         status: dados.status ?? "APROVADA",
       })
       .returning();
+
+    await db
+      .insert(inscricaoPagamentos)
+      .values([
+        { inscricaoId: novaInscricao.id, usuarioId: atletaAId, pago: false },
+        { inscricaoId: novaInscricao.id, usuarioId: atletaBId, pago: false },
+      ])
+      .onConflictDoNothing();
 
     return novaInscricao;
   }
@@ -222,6 +246,18 @@ export class InscricoesService {
       { equipeId: ins.equipeId, usuarioId: atletaAId },
       { equipeId: ins.equipeId, usuarioId: atletaBId },
     ]);
+
+    await db
+      .delete(inscricaoPagamentos)
+      .where(and(eq(inscricaoPagamentos.inscricaoId, inscricaoId), sql`${inscricaoPagamentos.usuarioId} not in (${atletaAId}, ${atletaBId})`));
+
+    await db
+      .insert(inscricaoPagamentos)
+      .values([
+        { inscricaoId, usuarioId: atletaAId, pago: false },
+        { inscricaoId, usuarioId: atletaBId, pago: false },
+      ])
+      .onConflictDoNothing();
 
     return { ok: true };
   }

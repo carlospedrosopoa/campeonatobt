@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { torneiosService } from "@/services/torneios.service";
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, inscricoes, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, usuarios } from "@/db/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 function isAdmin(perfil?: string) {
@@ -48,12 +48,14 @@ export async function GET(
       atletaNome: usuarios.nome,
       atletaEmail: usuarios.email,
       atletaTelefone: usuarios.telefone,
+      atletaPago: inscricaoPagamentos.pago,
     })
     .from(inscricoes)
     .innerJoin(categorias, eq(inscricoes.categoriaId, categorias.id))
     .innerJoin(equipes, eq(inscricoes.equipeId, equipes.id))
     .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, equipes.id))
     .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
+    .leftJoin(inscricaoPagamentos, and(eq(inscricaoPagamentos.inscricaoId, inscricoes.id), eq(inscricaoPagamentos.usuarioId, usuarios.id)))
     .where(and(eq(inscricoes.torneioId, torneio.id), inArray(inscricoes.status, statusesFiltro as any)))
     .orderBy(asc(categorias.nome), asc(usuarios.nome));
 
@@ -72,6 +74,7 @@ export async function GET(
         equipeNome: string | null;
         inscricaoId: string;
         inscricaoStatus: string;
+        pago: boolean;
       }>;
     }
   >();
@@ -95,6 +98,7 @@ export async function GET(
       equipeNome: r.equipeNome ?? null,
       inscricaoId: r.inscricaoId,
       inscricaoStatus: r.inscricaoStatus,
+      pago: Boolean(r.atletaPago),
     });
   }
 
@@ -110,4 +114,3 @@ export async function GET(
     { headers: { "Cache-Control": "no-store" } }
   );
 }
-

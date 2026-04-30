@@ -100,6 +100,16 @@ export const inscricoes = pgTable('inscricoes', {
   dataInscricao: timestamp('data_inscricao').defaultNow().notNull(),
 });
 
+export const inscricaoPagamentos = pgTable('inscricao_pagamentos', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  inscricaoId: uuid('inscricao_id').references(() => inscricoes.id, { onDelete: "cascade" }).notNull(),
+  usuarioId: uuid('usuario_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+  pago: boolean('pago').default(false).notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique().on(t.inscricaoId, t.usuarioId),
+}));
+
 export const grupos = pgTable('grupos', {
   id: uuid('id').defaultRandom().primaryKey(),
   categoriaId: uuid('categoria_id').references(() => categorias.id).notNull(),

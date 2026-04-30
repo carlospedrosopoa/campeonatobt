@@ -21,7 +21,7 @@ type Inscricao = {
   equipe: {
     id: string;
     nome: string | null;
-    atletas: { id: string; nome: string; email: string; telefone: string | null; fotoUrl?: string | null }[];
+    atletas: { id: string; nome: string; email: string; telefone: string | null; fotoUrl?: string | null; pago: boolean }[];
   };
 };
 
@@ -48,6 +48,7 @@ export default function AdminCategoriaInscricoesPage() {
   const [salvando, setSalvando] = useState(false);
   const [sincronizandoFotos, setSincronizandoFotos] = useState(false);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const [pagando, setPagando] = useState<Record<string, boolean>>({});
 
   const [buscaAtletaA, setBuscaAtletaA] = useState("");
   const [resultadosAtletaA, setResultadosAtletaA] = useState<Atleta[]>([]);
@@ -309,6 +310,39 @@ export default function AdminCategoriaInscricoesPage() {
       setErro(e?.message || "Erro inesperado");
     } finally {
       setSincronizandoFotos(false);
+    }
+  }
+
+  async function setAtletaPago(params: { inscricaoId: string; atletaId: string; pago: boolean }) {
+    const key = `${params.inscricaoId}:${params.atletaId}`;
+    try {
+      setErro(null);
+      setPagando((p) => ({ ...p, [key]: true }));
+
+      const res = await fetch(`/api/v1/torneios/${slug}/inscricoes/${params.inscricaoId}/pagamentos`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ atletaId: params.atletaId, pago: params.pago }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao atualizar pagamento");
+
+      setInscricoes((prev) =>
+        prev.map((i) => {
+          if (i.id !== params.inscricaoId) return i;
+          return {
+            ...i,
+            equipe: {
+              ...i.equipe,
+              atletas: i.equipe.atletas.map((a) => (a.id === params.atletaId ? { ...a, pago: params.pago } : a)),
+            },
+          };
+        })
+      );
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao atualizar pagamento");
+    } finally {
+      setPagando((p) => ({ ...p, [key]: false }));
     }
   }
 
@@ -654,7 +688,28 @@ export default function AdminCategoriaInscricoesPage() {
                   <td className="py-4 pr-4">
                     <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase bg-slate-100 text-slate-700">{i.status}</span>
                   </td>
-                  <td className="py-4 pr-4 text-slate-700">A definir</td>
+                  <td className="py-4 pr-4">
+                    <div className="flex flex-col gap-1.5">
+                      {i.equipe.atletas.map((a) => {
+                        const key = `${i.id}:${a.id}`;
+                        const firstName = (a.nome || "").trim().split(/\s+/)[0] || "Atleta";
+                        return (
+                          <label key={a.id} className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(a.pago)}
+                              disabled={Boolean(pagando[key])}
+                              onChange={(e) => void setAtletaPago({ inscricaoId: i.id, atletaId: a.id, pago: e.target.checked })}
+                              className="h-4 w-4 accent-emerald-600"
+                            />
+                            <span className={a.pago ? "text-emerald-700" : "text-amber-800"}>
+                              {firstName}: {a.pago ? "Pago" : "Pendente"}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </td>
                   <td className="py-4 pr-4 text-slate-700">{new Date(i.dataInscricao).toLocaleString("pt-BR")}</td>
                   <td className="py-4 text-right">
                     <div className="inline-flex items-center gap-2">
