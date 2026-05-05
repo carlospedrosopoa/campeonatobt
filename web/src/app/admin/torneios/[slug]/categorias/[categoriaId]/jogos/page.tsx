@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Banknote, Calendar, Crown, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
+import { ArrowLeft, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
@@ -151,6 +151,8 @@ export default function AdminCategoriaJogosPage() {
   const [transmissaoUrl, setTransmissaoUrl] = useState("");
   const [torneioNome, setTorneioNome] = useState("Torneio");
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
+  const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
+  const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
 
   async function carregarCategoria() {
     const resCat = await fetch(`/api/v1/torneios/${slug}/categorias`, { cache: "no-store" });
@@ -211,6 +213,7 @@ export default function AdminCategoriaJogosPage() {
           const t = (await resTorneio.json()) as any;
           if (t?.nome) setTorneioNome(String(t.nome));
           setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
+          setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
           if (t?.superCampeonato) {
             setRedirecting(true);
             const qs = typeof window !== "undefined" ? window.location.search : "";
@@ -316,6 +319,207 @@ export default function AdminCategoriaJogosPage() {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return null;
     return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function gerarRelatorioJogos() {
+    if (!categoria) return;
+    try {
+      setGerandoRelatorioJogos(true);
+
+      const escapeHtml = (value: string) =>
+        value
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+
+      const resPartidas = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=GRUPOS`, { cache: "no-store" });
+      const partidasGrupos = (resPartidas.ok ? ((await resPartidas.json()) as Partida[]) : []) ?? [];
+
+      if (partidasGrupos.length === 0) {
+        alert("Nenhum jogo encontrado para gerar relatório.");
+        return;
+      }
+
+      const bannerHtml = torneioBannerUrl
+        ? `<div class="mb-8 w-full"><img src="/api/image-proxy?url=${encodeURIComponent(torneioBannerUrl)}" class="w-full h-auto rounded-2xl shadow-sm" crossOrigin="anonymous" /></div>`
+        : "";
+
+      const formatPlacarRel = (detalhes: Partida["detalhesPlacar"]) => {
+        if (!detalhes || detalhes.length === 0) return "-";
+        return detalhes
+          .slice()
+          .sort((a, b) => a.set - b.set)
+          .map((s) => {
+            if (s.tiebreak && s.tbA !== undefined && s.tbB !== undefined) {
+              return `${s.a}-${s.b} (${s.tbA}-${s.tbB})`;
+            }
+            return `${s.a}-${s.b}`;
+          })
+          .join(" ");
+      };
+
+      const byRodada = new Map<string, { rodadaNumero: number | null; rodadaNome: string; partidas: Partida[] }>();
+
+      for (const p of partidasGrupos) {
+        const rodadaNumero = (p.rodadaNumero ?? null) as number | null;
+        const rodadaNome = (p.rodadaNome || (rodadaNumero ? `Rodada ${rodadaNumero}` : "Sem rodada")).trim();
+        const key = (p.rodadaId || `${rodadaNumero ?? "x"}:${rodadaNome}`).toString();
+        const current = byRodada.get(key) ?? { rodadaNumero, rodadaNome, partidas: [] };
+        current.partidas.push(p);
+        byRodada.set(key, current);
+      }
+
+      const rodadas = Array.from(byRodada.values()).sort((a, b) => {
+        const an = a.rodadaNumero ?? 9999;
+        const bn = b.rodadaNumero ?? 9999;
+        if (an !== bn) return an - bn;
+        return a.rodadaNome.localeCompare(b.rodadaNome);
+      });
+
+      for (const r of rodadas) {
+        r.partidas.sort((a, b) => {
+          const da = a.dataHorario ? new Date(a.dataHorario).getTime() : Number.MAX_SAFE_INTEGER;
+          const db = b.dataHorario ? new Date(b.dataHorario).getTime() : Number.MAX_SAFE_INTEGER;
+          if (da !== db) return da - db;
+          const ga = (a.grupoNome ?? "").toString();
+          const gb = (b.grupoNome ?? "").toString();
+          const gcmp = ga.localeCompare(gb);
+          if (gcmp !== 0) return gcmp;
+          return a.id.localeCompare(b.id);
+        });
+      }
+
+      const rodadasHtml = rodadas
+        .map((r) => {
+          const rowsHtml = r.partidas
+            .map((p, idx) => {
+              const equipeA = escapeHtml((p.equipeANome || p.equipeAId?.slice?.(0, 8) || "Equipe A").toString());
+              const equipeB = escapeHtml((p.equipeBNome || p.equipeBId?.slice?.(0, 8) || "Equipe B").toString());
+              const grupoNome = escapeHtml((p.grupoNome || "-").toString());
+              const dataHora = escapeHtml((formatDataHora(p.dataHorario) || "-").toString());
+              const quadra = escapeHtml([p.arenaNome || "", p.quadra ? `Quadra ${p.quadra}` : ""].filter(Boolean).join(" • ") || "-");
+              const status = escapeHtml((p.status || "-").toString());
+              const placar = escapeHtml(formatPlacarRel(p.detalhesPlacar));
+
+              return `
+                <tr class="${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}">
+                  <td class="py-3 px-3 text-xs text-slate-500 font-semibold">${grupoNome}</td>
+                  <td class="py-3 px-3 text-sm font-bold text-slate-900">
+                    <span class="truncate inline-block max-w-[260px] align-bottom">${equipeA}</span>
+                    <span class="text-slate-400 font-black px-2">x</span>
+                    <span class="truncate inline-block max-w-[260px] align-bottom">${equipeB}</span>
+                  </td>
+                  <td class="py-3 px-3 text-xs text-slate-700 font-semibold whitespace-nowrap">${dataHora}</td>
+                  <td class="py-3 px-3 text-xs text-slate-700 font-semibold">${quadra}</td>
+                  <td class="py-3 px-3 text-xs text-slate-600 font-bold uppercase tracking-wide">${status}</td>
+                  <td class="py-3 px-3 text-xs text-slate-900 font-black whitespace-nowrap">${placar}</td>
+                </tr>
+              `;
+            })
+            .join("");
+
+          return `
+            <section class="mb-10">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-black tracking-wider uppercase text-slate-700">${escapeHtml(r.rodadaNome)}</h2>
+                <div class="text-xs text-slate-400 font-semibold">${r.partidas.length} jogo(s)</div>
+              </div>
+              <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <table class="w-full">
+                  <thead class="bg-slate-100/60 border-b border-slate-200">
+                    <tr class="text-left">
+                      <th class="py-2.5 px-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Grupo</th>
+                      <th class="py-2.5 px-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Confronto</th>
+                      <th class="py-2.5 px-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Data/Hora</th>
+                      <th class="py-2.5 px-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Quadra</th>
+                      <th class="py-2.5 px-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
+                      <th class="py-2.5 px-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Placar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rowsHtml}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          `;
+        })
+        .join("");
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Jogos - ${escapeHtml(categoria.nome)} - ${escapeHtml(torneioNome)}</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+          <style>
+            @media print { .no-print { display: none; } body { padding: 0; margin: 0; } }
+            body { background-color: #f8fafc; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif; }
+            #capture-target { padding: 2rem; background: #f8fafc; }
+          </style>
+          <script>
+            async function gerarImagem() {
+              const btn = document.getElementById('btn-gerar-imagem');
+              const originalText = btn.innerText;
+              try {
+                btn.innerText = 'Processando...';
+                btn.disabled = true;
+                await new Promise(r => setTimeout(r, 700));
+                const element = document.getElementById('capture-target');
+                const canvas = await html2canvas(element, { useCORS: true, scale: 2, backgroundColor: '#f8fafc', logging: false });
+                const link = document.createElement('a');
+                link.download = 'jogos-${encodeURIComponent(categoria.nome)}.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+              } catch (err) { alert('Erro ao gerar imagem.'); } finally { btn.innerText = originalText; btn.disabled = false; }
+            }
+          </script>
+        </head>
+        <body class="p-4 md:p-8">
+          <div class="max-w-5xl mx-auto">
+            <div class="no-print flex justify-end gap-3 mb-6">
+              <button id="btn-gerar-imagem" onclick="gerarImagem()" class="bg-orange-500 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-orange-600">Gerar Imagem (PNG)</button>
+              <button onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium">Imprimir</button>
+            </div>
+            <div id="capture-target" class="rounded-3xl shadow-xl border border-slate-100 bg-slate-50">
+              <div class="p-6 md:p-8">
+                ${bannerHtml}
+                <div class="mb-8">
+                  <div class="text-xs font-black tracking-widest uppercase text-slate-400">Play Na Quadra</div>
+                  <h1 class="text-3xl font-black text-slate-900 leading-tight">${escapeHtml(torneioNome)}</h1>
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center rounded-full bg-slate-900 text-white px-3 py-1 text-xs font-bold">${escapeHtml(categoria.nome)}</span>
+                    <span class="text-xs text-slate-500 font-semibold">Relatório de jogos</span>
+                    <span class="text-xs text-slate-400">•</span>
+                    <span class="text-xs text-slate-500 font-semibold">${new Date().toLocaleDateString('pt-BR')}</span>
+                  </div>
+                </div>
+                ${rodadasHtml}
+                <footer class="mt-10 pt-6 border-t border-slate-200 text-center text-slate-400 text-xs font-semibold">
+                  Gerado por Play Na Quadra
+                </footer>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const win = window.open("", "_blank");
+      if (win) {
+        win.document.write(htmlContent);
+        win.document.close();
+      }
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao gerar relatório de jogos");
+    } finally {
+      setGerandoRelatorioJogos(false);
+    }
   }
 
   function startEditPartida(p: Partida) {
@@ -764,6 +968,17 @@ export default function AdminCategoriaJogosPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="text-xs text-slate-500">Desempate padrão: PONTOS → CONFRONTO_DIRETO → SALDO_GAMES → GAMES_PRO → VITORIAS</div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={!categoria || gerandoRelatorioJogos}
+              onClick={gerarRelatorioJogos}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Relatório dos jogos (agrupado por rodada, com banner e PNG)"
+            >
+              <FileText className="h-4 w-4" />
+              {gerandoRelatorioJogos ? "Gerando…" : "Relatório jogos"}
+            </button>
+
             <button
               type="button"
               disabled={!config || salvandoConfig}
