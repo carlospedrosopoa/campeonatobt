@@ -406,10 +406,10 @@ export default function AdminCategoriaJogosPage() {
               return `
                 <tr class="${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}">
                   <td class="py-3 px-3 text-xs text-slate-500 font-semibold">${grupoNome}</td>
-                  <td class="py-3 px-3 text-sm font-bold text-slate-900">
-                    <span class="truncate inline-block max-w-[260px] align-bottom">${equipeA}</span>
+                  <td class="py-3 px-3 text-sm font-bold text-slate-900 whitespace-normal break-words">
+                    <span class="inline align-bottom">${equipeA}</span>
                     <span class="text-slate-400 font-black px-2">x</span>
-                    <span class="truncate inline-block max-w-[260px] align-bottom">${equipeB}</span>
+                    <span class="inline align-bottom">${equipeB}</span>
                   </td>
                   <td class="py-3 px-3 text-xs text-slate-700 font-semibold whitespace-nowrap">${dataHora}</td>
                   <td class="py-3 px-3 text-xs text-slate-700 font-semibold">${quadra}</td>
