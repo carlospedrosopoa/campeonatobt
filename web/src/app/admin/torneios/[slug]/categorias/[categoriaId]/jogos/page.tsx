@@ -471,7 +471,7 @@ export default function AdminCategoriaJogosPage() {
                 btn.disabled = true;
                 await new Promise(r => setTimeout(r, 700));
                 const element = document.getElementById('capture-target');
-                const canvas = await html2canvas(element, { useCORS: true, scale: 2, backgroundColor: '#f8fafc', logging: false });
+                const canvas = await html2canvas(element, { useCORS: true, scale: 3, backgroundColor: '#f8fafc', logging: false });
                 const link = document.createElement('a');
                 link.download = 'jogos-${encodeURIComponent(categoria.nome)}.png';
                 link.href = canvas.toDataURL('image/png');
@@ -481,7 +481,7 @@ export default function AdminCategoriaJogosPage() {
           </script>
         </head>
         <body class="p-4 md:p-8">
-          <div class="max-w-5xl mx-auto">
+          <div class="mx-auto" style="max-width: 1400px;">
             <div class="no-print flex justify-end gap-3 mb-6">
               <button id="btn-gerar-imagem" onclick="gerarImagem()" class="bg-orange-500 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-orange-600">Gerar Imagem (PNG)</button>
               <button onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium">Imprimir</button>
