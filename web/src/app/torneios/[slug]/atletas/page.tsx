@@ -46,6 +46,21 @@ type Dashboard = {
   partidas: Partida[];
 };
 
+type ClassificacaoGrupo = {
+  grupoId: string;
+  grupoNome: string;
+  equipes: {
+    equipeId: string;
+    equipeNome: string;
+    pontos: number;
+    jogosJogados: number;
+    jogosVencidos: number;
+    jogosPerdidos: number;
+    setsPro?: number;
+    saldoGames: number;
+  }[];
+};
+
 function formatDataHora(value?: string | null) {
   if (!value) return "-";
   const d = new Date(value);
@@ -104,6 +119,8 @@ export default function TorneioAtletasDashboardPage() {
 
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [carregandoDashboard, setCarregandoDashboard] = useState(false);
+  const [carregandoClassificacao, setCarregandoClassificacao] = useState(false);
+  const [classificacaoPorCategoria, setClassificacaoPorCategoria] = useState<Record<string, ClassificacaoGrupo[]>>({});
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,6 +154,7 @@ export default function TorneioAtletasDashboardPage() {
     async function carregar() {
       if (!atletaId) {
         setDashboard(null);
+        setClassificacaoPorCategoria({});
         return;
       }
       try {
@@ -161,11 +179,68 @@ export default function TorneioAtletasDashboardPage() {
     };
   }, [slug, atletaId]);
 
+  useEffect(() => {
+    let ativo = true;
+    async function carregar() {
+      if (!dashboard || !atletaId) {
+        setClassificacaoPorCategoria({});
+        return;
+      }
+      try {
+        setCarregandoClassificacao(true);
+        const categoriaIds = Array.from(new Set((dashboard.partidas ?? []).map((p) => p.categoriaId).filter(Boolean)));
+        if (categoriaIds.length === 0) {
+          setClassificacaoPorCategoria({});
+          return;
+        }
+
+        const results = await Promise.all(
+          categoriaIds.map(async (categoriaId) => {
+            const res = await fetch(`/api/public/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+            const payload = (await res.json().catch(() => null)) as any;
+            if (!res.ok) return [categoriaId, [] as ClassificacaoGrupo[]] as const;
+            const groups = (Array.isArray(payload) ? payload : []) as ClassificacaoGrupo[];
+            return [categoriaId, groups] as const;
+          })
+        );
+
+        if (!ativo) return;
+        const map: Record<string, ClassificacaoGrupo[]> = {};
+        for (const [categoriaId, grupos] of results) map[categoriaId] = grupos;
+        setClassificacaoPorCategoria(map);
+      } finally {
+        if (!ativo) return;
+        setCarregandoClassificacao(false);
+      }
+    }
+    void carregar();
+    return () => {
+      ativo = false;
+    };
+  }, [slug, atletaId, dashboard]);
+
   const atletasFiltrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     if (!q) return atletas;
     return atletas.filter((a) => a.nome.toLowerCase().includes(q));
   }, [atletas, busca]);
+
+  const categoriasDoAtleta = useMemo(() => {
+    const list = dashboard?.partidas ?? [];
+    const map = new Map<string, string>();
+    for (const p of list) {
+      if (!p.categoriaId) continue;
+      map.set(p.categoriaId, p.categoriaNome || "Categoria");
+    }
+    return Array.from(map.entries())
+      .map(([id, nome]) => ({ id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [dashboard]);
+
+  const equipesDoAtleta = useMemo(() => {
+    const list = dashboard?.partidas ?? [];
+    return new Set(list.map((p) => p.meuTimeId).filter(Boolean));
+  }, [dashboard]);
 
   const partidasOrdenadas = useMemo(() => {
     const list = dashboard?.partidas ?? [];
@@ -337,6 +412,113 @@ export default function TorneioAtletasDashboardPage() {
                 </div>
                 <BarList items={stats.turnos} />
               </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-xl font-bold text-slate-900">Classificação</div>
+                  <div className="text-sm text-slate-600">Tabela de classificação da(s) categoria(s) do atleta.</div>
+                </div>
+              </div>
+
+              {carregandoClassificacao ? (
+                <div className="mt-4 text-sm text-slate-600">Carregando classificação…</div>
+              ) : categoriasDoAtleta.length === 0 ? (
+                <div className="mt-4 text-sm text-slate-600">Sem categorias para exibir.</div>
+              ) : (
+                <div className="mt-4 space-y-6">
+                  {categoriasDoAtleta.map((cat) => {
+                    const grupos = classificacaoPorCategoria[cat.id] ?? [];
+                    return (
+                      <div key={cat.id} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="font-bold text-slate-900">{cat.nome}</div>
+                          <div className="text-xs text-slate-500 font-semibold">{grupos.length ? `${grupos.length} grupo(s)` : "Sem classificação"}</div>
+                        </div>
+
+                        {grupos.length === 0 ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                            Classificação não disponível.
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {grupos.map((grupo) => (
+                              <div key={grupo.grupoId} className="rounded-xl border border-slate-200 overflow-hidden">
+                                <div className="bg-gradient-to-r from-slate-50 to-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                                  <div className="font-bold text-slate-800">{grupo.grupoNome}</div>
+                                  <div className="text-xs font-medium text-slate-500">{grupo.equipes.length} duplas</div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                                      <tr>
+                                        <th className="px-4 py-3 text-left font-medium w-full">Equipe</th>
+                                        <th className="px-2 py-3 text-center font-medium" title="Pontos">
+                                          P
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium" title="Jogos">
+                                          J
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium" title="Vitórias">
+                                          V
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium" title="Sets Pró">
+                                          SP
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium" title="Saldo de Games">
+                                          SG
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium" title="Aproveitamento">
+                                          AP%
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {grupo.equipes.map((e, idx) => {
+                                        const isMine = equipesDoAtleta.has(e.equipeId);
+                                        return (
+                                          <tr key={e.equipeId} className={`hover:bg-slate-50/70 ${isMine ? "bg-amber-50/70" : ""}`}>
+                                            <td className="px-4 py-3">
+                                              <div className="flex items-center gap-2">
+                                                <span
+                                                  className={`w-6 h-6 inline-flex items-center justify-center rounded-full text-[11px] font-bold ${
+                                                    isMine ? "bg-amber-200 text-amber-900" : idx < 2 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+                                                  }`}
+                                                >
+                                                  {idx + 1}
+                                                </span>
+                                                <span className={`font-medium ${isMine ? "text-amber-950" : "text-slate-900"}`}>{e.equipeNome}</span>
+                                                {isMine ? (
+                                                  <span className="ml-1 inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-900">
+                                                    Atleta
+                                                  </span>
+                                                ) : null}
+                                              </div>
+                                            </td>
+                                            <td className={`px-2 py-3 text-center font-bold ${isMine ? "text-amber-950" : "text-slate-900"}`}>{e.pontos}</td>
+                                            <td className="px-2 py-3 text-center text-slate-600">{e.jogosJogados}</td>
+                                            <td className="px-2 py-3 text-center text-slate-600">{e.jogosVencidos}</td>
+                                            <td className="px-2 py-3 text-center text-slate-600">{e.setsPro ?? 0}</td>
+                                            <td className="px-2 py-3 text-center text-slate-600">{e.saldoGames}</td>
+                                            <td className="px-2 py-3 text-center text-slate-600">
+                                              {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
