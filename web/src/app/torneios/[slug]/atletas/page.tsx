@@ -191,7 +191,7 @@ export default function TorneioAtletasDashboardPage() {
     const dias = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
     for (const p of partidas) {
-      const arena = (p.arenaNome || "Sem arena").trim();
+      const arena = (p.arenaNome || "Não agendados").trim();
       byArena.set(arena, (byArena.get(arena) ?? 0) + 1);
 
       if (p.dataHorario) {
@@ -393,7 +393,7 @@ export default function TorneioAtletasDashboardPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-slate-500">Local</span>
-                            <span className="truncate">{[p.arenaNome || "Sem arena", p.quadra ? `Q. ${p.quadra}` : ""].filter(Boolean).join(" • ")}</span>
+                            <span className="truncate">{[p.arenaNome || "Não agendado", p.quadra ? `Q. ${p.quadra}` : ""].filter(Boolean).join(" • ")}</span>
                           </div>
                         </div>
                       </div>
@@ -412,4 +412,3 @@ export default function TorneioAtletasDashboardPage() {
     </div>
   );
 }
-
