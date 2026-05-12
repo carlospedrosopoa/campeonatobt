@@ -123,6 +123,7 @@ export default function AdminCategoriaJogosPage() {
   const [fasePartidas, setFasePartidas] = useState<"GRUPOS" | "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL">("GRUPOS");
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [carregandoPartidas, setCarregandoPartidas] = useState(false);
+  const [filtroAtletaId, setFiltroAtletaId] = useState("");
 
   const [resultadoFinal, setResultadoFinal] = useState<ResultadoFinal>(null);
 
@@ -321,6 +322,36 @@ export default function AdminCategoriaJogosPage() {
     return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   }
 
+  const atletasFiltroOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of partidas) {
+      for (const a of p.equipeAAtletas ?? []) {
+        if (a?.id && a?.nome) map.set(a.id, a.nome);
+      }
+      for (const a of p.equipeBAtletas ?? []) {
+        if (a?.id && a?.nome) map.set(a.id, a.nome);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, nome]) => ({ id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [partidas]);
+
+  useEffect(() => {
+    if (!filtroAtletaId) return;
+    if (atletasFiltroOptions.some((a) => a.id === filtroAtletaId)) return;
+    setFiltroAtletaId("");
+  }, [filtroAtletaId, atletasFiltroOptions]);
+
+  const partidasFiltradas = useMemo(() => {
+    if (!filtroAtletaId) return partidas;
+    return partidas.filter((p) => {
+      const a = (p.equipeAAtletas ?? []).some((x) => x.id === filtroAtletaId);
+      const b = (p.equipeBAtletas ?? []).some((x) => x.id === filtroAtletaId);
+      return a || b;
+    });
+  }, [partidas, filtroAtletaId]);
+
   async function gerarRelatorioJogos() {
     if (!categoria) return;
     try {
@@ -335,7 +366,14 @@ export default function AdminCategoriaJogosPage() {
           .replaceAll("'", "&#39;");
 
       const resPartidas = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=GRUPOS`, { cache: "no-store" });
-      const partidasGrupos = (resPartidas.ok ? ((await resPartidas.json()) as Partida[]) : []) ?? [];
+      const partidasGruposRaw = (resPartidas.ok ? ((await resPartidas.json()) as Partida[]) : []) ?? [];
+      const partidasGrupos = filtroAtletaId
+        ? partidasGruposRaw.filter((p) => {
+            const a = (p.equipeAAtletas ?? []).some((x) => x.id === filtroAtletaId);
+            const b = (p.equipeBAtletas ?? []).some((x) => x.id === filtroAtletaId);
+            return a || b;
+          })
+        : partidasGruposRaw;
 
       if (partidasGrupos.length === 0) {
         alert("Nenhum jogo encontrado para gerar relatório.");
@@ -1140,6 +1178,19 @@ export default function AdminCategoriaJogosPage() {
           </div>
           <div className="flex items-center gap-2">
             <select
+              value={filtroAtletaId}
+              onChange={(e) => setFiltroAtletaId(e.target.value)}
+              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              title="Filtrar partidas por atleta"
+            >
+              <option value="">Todos atletas</option>
+              {atletasFiltroOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nome}
+                </option>
+              ))}
+            </select>
+            <select
               value={fasePartidas}
               onChange={(e) => setFasePartidas(e.target.value as any)}
               className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
@@ -1162,12 +1213,12 @@ export default function AdminCategoriaJogosPage() {
         </div>
 
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {partidas.length === 0 ? (
+            {partidasFiltradas.length === 0 ? (
               <div className="col-span-full py-10 text-center text-slate-500">
                 Nenhuma partida encontrada.
               </div>
             ) : (
-              partidas.map((p) => (
+              partidasFiltradas.map((p) => (
                 <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
                   <div>
                     <div className="flex items-center justify-between mb-4">
