@@ -256,7 +256,6 @@ export default function TorneioAtletasDashboardPage() {
     const finalizadas = partidas.filter((p) => p.status === "FINALIZADA" || p.status === "WO");
     const vitorias = finalizadas.filter((p) => p.vencedorId && p.vencedorId === p.meuTimeId).length;
     const derrotas = finalizadas.filter((p) => p.vencedorId && p.vencedorId !== p.meuTimeId).length;
-    const wo = finalizadas.filter((p) => p.status === "WO").length;
     const winPct = finalizadas.length > 0 ? Math.round((vitorias / finalizadas.length) * 100) : 0;
 
     const byArena = new Map<string, number>();
@@ -288,7 +287,6 @@ export default function TorneioAtletasDashboardPage() {
       finalizadas: finalizadas.length,
       vitorias,
       derrotas,
-      wo,
       winPct,
       arenas: toSorted(byArena),
       diasSemana: ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"].map((label) => ({ label, value: byWeekday.get(label) ?? 0 })).filter((i) => i.value > 0),
@@ -381,7 +379,6 @@ export default function TorneioAtletasDashboardPage() {
               <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
                 <div className="text-xs text-slate-500 uppercase tracking-wider">Derrotas</div>
                 <div className="text-2xl font-black text-red-700">{stats.derrotas}</div>
-                <div className="text-xs text-slate-500 mt-1">WO: {stats.wo}</div>
               </div>
               <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
                 <div className="text-xs text-slate-500 uppercase tracking-wider">Atleta</div>
