@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { apoiadoresService } from "@/services/apoiadores.service";
-import { Calendar, MapPin, Trophy, Users, Info } from "lucide-react";
+import { BarChart3, Calendar, MapPin, Trophy, Users, Info } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = 'force-dynamic';
@@ -178,6 +178,14 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                 >
                   Inscrições em Breve
                 </button>
+
+                <Link
+                  href={`/torneios/${torneio.slug}/atletas`}
+                  className="w-full mt-3 bg-slate-900 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-slate-800"
+                >
+                  <BarChart3 className="h-5 w-5" />
+                  Dashboard de Atletas
+                </Link>
               </div>
             </div>
           </div>
