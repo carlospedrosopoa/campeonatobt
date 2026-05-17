@@ -22,6 +22,7 @@ type Torneio = {
   local: string;
   status: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
   superCampeonato: boolean;
+  oculto: boolean;
   bannerUrl: string | null;
   logoUrl: string | null;
   templateUrl: string | null;
@@ -65,6 +66,7 @@ export default function AdminEditarDadosTorneioPage() {
     templateUrl: "",
     status: "RASCUNHO" as Torneio["status"],
     superCampeonato: false,
+    oculto: false,
   });
 
   useEffect(() => {
@@ -106,6 +108,7 @@ export default function AdminEditarDadosTorneioPage() {
           templateUrl: t.templateUrl ?? "",
           status: t.status,
           superCampeonato: Boolean(t.superCampeonato),
+          oculto: Boolean(t.oculto),
         });
       } catch (e: any) {
         if (ativo) setErro(e?.message || "Erro inesperado");
@@ -156,6 +159,7 @@ export default function AdminEditarDadosTorneioPage() {
         templateUrl: form.templateUrl?.trim() ? form.templateUrl : null,
         status: form.status,
         superCampeonato: form.superCampeonato,
+        oculto: form.oculto,
       };
 
       const res = await fetch(`/api/v1/torneios/${slugAtual}`, {
@@ -302,6 +306,19 @@ export default function AdminEditarDadosTorneioPage() {
                 <option value="SUPER">Super Campeonato</option>
               </select>
               <div className="text-xs text-slate-500">A classificação usa pontuação especial no Super Campeonato.</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Visibilidade</label>
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.oculto)}
+                  onChange={(e) => setForm((prev) => ({ ...prev, oculto: e.target.checked }))}
+                />
+                Oculto (não aparece para usuários)
+              </label>
+              <div className="text-xs text-slate-500">Quando marcado, o torneio não aparece no site público.</div>
             </div>
 
             <div className="space-y-2">

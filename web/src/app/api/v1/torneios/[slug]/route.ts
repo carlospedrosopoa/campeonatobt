@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
+import { getSession } from "@/lib/auth";
+
+function isAdmin(perfil?: string) {
+  return perfil === "ADMIN" || perfil === "ORGANIZADOR";
+}
 
 export async function GET(
   request: NextRequest,
@@ -25,6 +30,10 @@ export async function PUT(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const session = await getSession();
+    const perfil = session?.user?.perfil as string | undefined;
+    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
     const { slug } = await params;
     const body = await request.json();
 
@@ -45,6 +54,10 @@ export async function DELETE(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const session = await getSession();
+    const perfil = session?.user?.perfil as string | undefined;
+    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
     const { slug } = await params;
     const excluido = await torneiosService.excluirPorSlug(slug);
     if (!excluido) {
@@ -52,8 +65,9 @@ export async function DELETE(
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
+  } catch (error: any) {
+    const msg = typeof error?.message === "string" ? error.message : "Erro interno do servidor";
     console.error("Erro ao excluir torneio:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

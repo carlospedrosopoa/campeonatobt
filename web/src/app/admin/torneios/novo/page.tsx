@@ -21,6 +21,7 @@ type CriarTorneioPayload = {
   local: string;
   esporteId: string;
   superCampeonato?: boolean;
+  oculto?: boolean;
   bannerUrl?: string;
   logoUrl?: string;
   templateUrl?: string;
@@ -51,6 +52,7 @@ export default function AdminNovoTorneioPage() {
     local: "",
     esporteId: "",
     superCampeonato: false,
+    oculto: false,
     bannerUrl: "",
     logoUrl: "",
     templateUrl: "",
@@ -213,6 +215,19 @@ export default function AdminNovoTorneioPage() {
               <option value="SUPER">Super Campeonato</option>
             </select>
             <div className="text-xs text-slate-500">A classificação usa pontuação especial no Super Campeonato.</div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Visibilidade</label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={Boolean(form.oculto)}
+                onChange={(e) => setForm((prev) => ({ ...prev, oculto: e.target.checked }))}
+              />
+              Oculto (não aparece para usuários)
+            </label>
+            <div className="text-xs text-slate-500">Use enquanto organiza o evento. Depois é só desmarcar.</div>
           </div>
 
           <div className="space-y-2">

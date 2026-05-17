@@ -1,6 +1,24 @@
 import { db } from "@/db";
-import { torneios, esportes, usuarios } from "@/db/schema";
-import { eq, desc, asc } from "drizzle-orm";
+import {
+  apoiadores,
+  arenas,
+  categorias,
+  categoriaConfiguracoes,
+  equipeIntegrantes,
+  equipes,
+  esportes,
+  grupos,
+  grupoEquipes,
+  inscricaoPagamentos,
+  inscricoes,
+  partidas,
+  patrocinadores,
+  placarSubmissoes,
+  rodadas,
+  torneios,
+  usuarios,
+} from "@/db/schema";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 export type CriarTorneioDTO = {
   nome: string;
@@ -11,6 +29,7 @@ export type CriarTorneioDTO = {
   local: string;
   esporteId: string;
   superCampeonato?: boolean;
+  oculto?: boolean;
   organizadorId?: string;
   bannerUrl?: string;
   logoUrl?: string;
@@ -35,6 +54,7 @@ export class TorneiosService {
         logoUrl: torneios.logoUrl,
         templateUrl: torneios.templateUrl,
         superCampeonato: torneios.superCampeonato,
+        oculto: torneios.oculto,
         esporteNome: esportes.nome,
       })
       .from(torneios)
@@ -48,6 +68,37 @@ export class TorneiosService {
     return await this.listar({ limit: 10, offset: 0 });
   }
 
+  async listarPublicos(params?: { limit?: number; offset?: number }) {
+    const limit = Math.min(Math.max(params?.limit ?? 50, 1), 200);
+    const offset = Math.max(params?.offset ?? 0, 0);
+    return await db
+      .select({
+        id: torneios.id,
+        nome: torneios.nome,
+        slug: torneios.slug,
+        dataInicio: torneios.dataInicio,
+        dataFim: torneios.dataFim,
+        local: torneios.local,
+        status: torneios.status,
+        bannerUrl: torneios.bannerUrl,
+        logoUrl: torneios.logoUrl,
+        templateUrl: torneios.templateUrl,
+        superCampeonato: torneios.superCampeonato,
+        oculto: torneios.oculto,
+        esporteNome: esportes.nome,
+      })
+      .from(torneios)
+      .leftJoin(esportes, eq(torneios.esporteId, esportes.id))
+      .where(eq(torneios.oculto, false))
+      .orderBy(desc(torneios.criadoEm))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async listarRecentesPublicos() {
+    return await this.listarPublicos({ limit: 10, offset: 0 });
+  }
+
   async buscarPorSlug(slug: string) {
     const resultado = await db.select({
       id: torneios.id,
@@ -58,6 +109,7 @@ export class TorneiosService {
       dataFim: torneios.dataFim,
       local: torneios.local,
       status: torneios.status,
+      oculto: torneios.oculto,
       bannerUrl: torneios.bannerUrl,
       logoUrl: torneios.logoUrl,
       templateUrl: torneios.templateUrl,
@@ -93,6 +145,7 @@ export class TorneiosService {
 
     const [novoTorneio] = await db.insert(torneios).values({
       ...dados,
+      oculto: dados.oculto ?? false,
       organizadorId,
       superCampeonato: dados.superCampeonato ?? false,
       status: 'RASCUNHO'
@@ -105,6 +158,7 @@ export class TorneiosService {
     dados: Partial<Omit<CriarTorneioDTO, "organizadorId">> & {
       status?: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
       superCampeonato?: boolean;
+      oculto?: boolean;
     }
   ) {
     const [atualizado] = await db
@@ -120,8 +174,86 @@ export class TorneiosService {
   }
 
   async excluirPorSlug(slug: string) {
-    const [excluido] = await db.delete(torneios).where(eq(torneios.slug, slug)).returning();
-    return excluido ?? null;
+    const torneio = await this.buscarPorSlug(slug);
+    if (!torneio) return null;
+
+    const resCount = await db
+      .select({
+        count: sql<number>`coalesce(count(*), 0)::int`,
+      })
+      .from(partidas)
+      .where(
+        and(
+          eq(partidas.torneioId, torneio.id),
+          sql`(
+            ${partidas.status} in ('FINALIZADA','WO')
+            OR ${partidas.vencedorId} is not null
+            OR coalesce(jsonb_array_length(${partidas.detalhesPlacar}::jsonb), 0) > 0
+            OR coalesce(${partidas.placarA}, 0) > 0
+            OR coalesce(${partidas.placarB}, 0) > 0
+          )`
+        )
+      );
+
+    const jogosComResultado = (resCount[0]?.count ?? 0) > 0;
+    if (jogosComResultado) {
+      throw new Error("Não é possível excluir: existe jogo com resultado informado.");
+    }
+
+    await db.transaction(async (tx) => {
+      const categoriaRows = await tx.select({ id: categorias.id }).from(categorias).where(eq(categorias.torneioId, torneio.id));
+      const categoriaIds = categoriaRows.map((r) => r.id);
+
+      const grupoIds =
+        categoriaIds.length > 0
+          ? (await tx.select({ id: grupos.id }).from(grupos).where(inArray(grupos.categoriaId, categoriaIds))).map((g) => g.id)
+          : [];
+
+      const partidaRows = await tx.select({ id: partidas.id }).from(partidas).where(eq(partidas.torneioId, torneio.id));
+      const partidaIds = partidaRows.map((p) => p.id);
+
+      const inscricaoRows = await tx
+        .select({ id: inscricoes.id, equipeId: inscricoes.equipeId })
+        .from(inscricoes)
+        .where(eq(inscricoes.torneioId, torneio.id));
+      const inscricaoIds = inscricaoRows.map((i) => i.id);
+      const equipeIds = Array.from(new Set(inscricaoRows.map((i) => i.equipeId).filter(Boolean))) as string[];
+
+      if (partidaIds.length > 0) {
+        await tx.delete(placarSubmissoes).where(inArray(placarSubmissoes.partidaId, partidaIds));
+      }
+
+      await tx.delete(partidas).where(eq(partidas.torneioId, torneio.id));
+      await tx.delete(rodadas).where(eq(rodadas.torneioId, torneio.id));
+
+      if (grupoIds.length > 0) {
+        await tx.delete(grupoEquipes).where(inArray(grupoEquipes.grupoId, grupoIds));
+      }
+      if (categoriaIds.length > 0) {
+        await tx.delete(grupos).where(inArray(grupos.categoriaId, categoriaIds));
+        await tx.delete(categoriaConfiguracoes).where(inArray(categoriaConfiguracoes.categoriaId, categoriaIds));
+        await tx.delete(categorias).where(eq(categorias.torneioId, torneio.id));
+      }
+
+      await tx.delete(arenas).where(eq(arenas.torneioId, torneio.id));
+      await tx.delete(apoiadores).where(eq(apoiadores.torneioId, torneio.id));
+      await tx.delete(patrocinadores).where(eq(patrocinadores.torneioId, torneio.id));
+
+      if (inscricaoIds.length > 0) {
+        await tx.delete(inscricaoPagamentos).where(inArray(inscricaoPagamentos.inscricaoId, inscricaoIds));
+      }
+
+      await tx.delete(inscricoes).where(eq(inscricoes.torneioId, torneio.id));
+
+      if (equipeIds.length > 0) {
+        await tx.delete(equipeIntegrantes).where(inArray(equipeIntegrantes.equipeId, equipeIds));
+        await tx.delete(equipes).where(inArray(equipes.id, equipeIds));
+      }
+
+      await tx.delete(torneios).where(eq(torneios.id, torneio.id));
+    });
+
+    return { id: torneio.id };
   }
 }
 

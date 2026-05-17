@@ -9,7 +9,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   try {
     const { slug, atletaId } = await params;
     const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    if (!torneio || torneio.oculto) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
 
     const atletaRows = await db
       .select({ id: usuarios.id, nome: usuarios.nome, fotoUrl: usuarios.fotoUrl })
@@ -112,4 +112,3 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
-

@@ -11,7 +11,7 @@ export default async function TorneiosPage({
 }) {
   const { q } = await searchParams;
   // TODO: Implementar busca no service. Por enquanto lista todos recentes.
-  const torneios = await torneiosService.listarRecentes(); 
+  const torneios = await torneiosService.listarRecentesPublicos(); 
 
   const filtrados = q 
     ? torneios.filter(t => t.nome.toLowerCase().includes(q.toLowerCase()) || (t.local && t.local.toLowerCase().includes(q.toLowerCase())))

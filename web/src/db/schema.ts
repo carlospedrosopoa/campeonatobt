@@ -40,6 +40,7 @@ export const torneios = pgTable('torneios', {
   dataFim: date('data_fim').notNull(),
   local: text('local').notNull(),
   status: statusTorneioEnum('status').default('RASCUNHO').notNull(),
+  oculto: boolean('oculto').default(false).notNull(),
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
   esporteId: uuid('esporte_id').references(() => esportes.id),
   organizadorId: uuid('organizador_id').references(() => usuarios.id).notNull(),

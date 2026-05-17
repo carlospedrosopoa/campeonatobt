@@ -8,7 +8,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   try {
     const { slug } = await params;
     const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    if (!torneio || torneio.oculto) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
 
     const rows = await db
       .select({

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const torneiosRecentes = await torneiosService.listarRecentes();
+  const torneiosRecentes = await torneiosService.listarRecentesPublicos();
 
   return (
     <div className="flex flex-col min-h-screen">

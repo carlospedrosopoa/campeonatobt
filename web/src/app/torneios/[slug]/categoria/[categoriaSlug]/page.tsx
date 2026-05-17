@@ -15,7 +15,7 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
   const { slug, categoriaSlug } = await params;
   const torneio = await torneiosService.buscarPorSlug(slug);
 
-  if (!torneio) {
+  if (!torneio || torneio.oculto) {
     notFound();
   }
 

@@ -18,7 +18,7 @@ export async function POST(
   try {
     const { slug, categoriaId, partidaId } = await params;
     const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    if (!torneio || torneio.oculto) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
 
     const categoria = await categoriasService.buscarPorId(categoriaId);
     if (!categoria || categoria.torneioId !== torneio.id) {

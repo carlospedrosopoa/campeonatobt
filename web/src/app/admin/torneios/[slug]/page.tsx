@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, ExternalLink, Gamepad2, Handshake, List, MapPin, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Calendar, ExternalLink, FileUp, Gamepad2, Handshake, List, MapPin, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
 
 type Torneio = {
   id: string;
@@ -433,6 +433,13 @@ export default function AdminTorneioDashboardPage() {
               >
                 <Calendar className="h-4 w-4" />
                 Jogos do dia
+              </Link>
+              <Link
+                href={`/admin/torneios/${slugAtual}/importar-supercampeonato`}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <FileUp className="h-4 w-4" />
+                Importar Excel
               </Link>
               <Link
                 href={`/torneios/${torneio.slug}`}
