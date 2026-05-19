@@ -4,6 +4,32 @@ import { v4 as uuidv4 } from 'uuid';
 import { existsSync } from 'fs';
 import path from 'path';
 
+type GcsCredentials = {
+  project_id?: string;
+  projectId?: string;
+  [key: string]: unknown;
+};
+
+const resolveProjectId = (credentials?: GcsCredentials) => {
+  return (
+    process.env.GOOGLE_CLOUD_PROJECT_ID ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT ||
+    process.env.GCP_PROJECT ||
+    credentials?.project_id ||
+    credentials?.projectId
+  );
+};
+
+const resolveBucketName = () => {
+  return (
+    process.env.GOOGLE_CLOUD_STORAGE_BUCKET ||
+    process.env.GCS_BUCKET ||
+    process.env.GOOGLE_CLOUD_BUCKET ||
+    ''
+  );
+};
+
 // Inicializar cliente do GCS
 const getStorage = () => {
   // Em produção (Vercel/Cloud Run), usar Application Default Credentials (ADC)
@@ -15,11 +41,11 @@ const getStorage = () => {
     try {
       const key = JSON.parse(
         Buffer.from(process.env.GOOGLE_CLOUD_KEY, 'base64').toString()
-      );
-      return new Storage({
-        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-        credentials: key,
-      });
+      ) as GcsCredentials;
+      const projectId = resolveProjectId(key);
+      return projectId
+        ? new Storage({ projectId, credentials: key as any })
+        : new Storage({ credentials: key as any });
     } catch (error) {
       console.error('Erro ao parsear GOOGLE_CLOUD_KEY:', error);
       throw new Error('Configuração inválida do Google Cloud Storage');
@@ -31,10 +57,10 @@ const getStorage = () => {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     const credentialsPath = path.resolve(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS);
     if (existsSync(credentialsPath)) {
-      return new Storage({
-        keyFilename: credentialsPath,
-        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-      });
+      const projectId = resolveProjectId();
+      return projectId
+        ? new Storage({ keyFilename: credentialsPath, projectId })
+        : new Storage({ keyFilename: credentialsPath });
     } else {
       console.warn(`Arquivo de credenciais não encontrado: ${credentialsPath}. Removendo GOOGLE_APPLICATION_CREDENTIALS e tentando ADC...`);
       // Evitar que a SDK tente usar um caminho inválido via variável de ambiente
@@ -44,21 +70,16 @@ const getStorage = () => {
   
   // Opção 3: Application Default Credentials (ADC) - automático em Cloud Run/Vercel
   // Não precisa configurar credenciais - a biblioteca detecta automaticamente
-  if (process.env.GOOGLE_CLOUD_PROJECT_ID) {
-    try {
-      return new Storage({
-        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-        // Sem credentials - usa ADC automaticamente
-      });
-    } catch (error) {
-      console.error('Erro ao inicializar Storage com ADC:', error);
-      // Em desenvolvimento, permite continuar sem GCS
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('ADC não disponível. Uploads serão ignorados em desenvolvimento.');
-        return null;
-      }
-      throw error;
+  try {
+    const projectId = resolveProjectId();
+    return projectId ? new Storage({ projectId }) : new Storage();
+  } catch (error) {
+    console.error('Erro ao inicializar Storage com ADC:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('ADC não disponível. Uploads serão ignorados em desenvolvimento.');
+      return null;
     }
+    throw error;
   }
   
   // Se não configurado, retornar null (permitir funcionar sem GCS)
@@ -102,8 +123,6 @@ const initializeStorage = () => {
 
 // Tentar inicializar na carga do módulo
 initializeStorage();
-
-const bucketName = process.env.GOOGLE_CLOUD_STORAGE_BUCKET || '';
 
 export interface UploadResult {
   url: string;
@@ -155,6 +174,7 @@ export async function uploadImage(
     }
   }
 
+  const bucketName = resolveBucketName();
   if (!bucketName) {
     console.error('[GCS uploadImage] Bucket name não configurado');
     throw new Error('GOOGLE_CLOUD_STORAGE_BUCKET não configurado nas variáveis de ambiente');
@@ -259,6 +279,7 @@ export async function uploadImage(
  * Remove uma imagem do Google Cloud Storage
  */
 export async function deleteImage(fileUrl: string): Promise<void> {
+  const bucketName = resolveBucketName();
   if (!storageInstance || !bucketName) {
     if (process.env.NODE_ENV === 'development') {
       console.warn('[GCS] Storage não configurado - ignorando delete');
@@ -369,6 +390,7 @@ export async function getSignedUrl(
   fileName: string,
   expiresIn: number = 3600
 ): Promise<string | null> {
+  const bucketName = resolveBucketName();
   if (!storageInstance || !bucketName) {
     console.warn('[GCS] Storage não configurado, não é possível gerar signed URL');
     return null;
