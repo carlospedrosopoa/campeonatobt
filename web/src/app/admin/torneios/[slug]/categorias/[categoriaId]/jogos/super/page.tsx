@@ -61,6 +61,8 @@ type Partida = {
   quadra?: string | null;
   dataHorario?: string | null;
   dataLimite?: string | null;
+  fotoUrl?: string | null;
+  transmissaoUrl?: string | null;
   equipeAId: string;
   equipeANome: string | null;
   equipeAAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
@@ -851,11 +853,18 @@ export default function AdminCategoriaJogosSuperPage() {
   async function gerarCardPartida(p: Partida) {
     try {
       setErro(null);
+      if ((p.fotoUrl || "").trim()) {
+        window.open(p.fotoUrl as string, "_blank");
+        return;
+      }
       await gerarCardPartidaAdmin({
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
         templateUrl: torneioTemplateUrl,
         syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
+        salvarNoGcs: true,
+        uploadFolder: `cards/partidas/${slug}`,
+        persistFotoUrlApi: `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}`,
         partida: {
           id: p.id,
           fase: p.fase,

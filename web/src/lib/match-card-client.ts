@@ -22,6 +22,10 @@ type GerarCardParams = {
   categoriaNome: string;
   templateUrl?: string | null;
   syncFotosUrl?: string | null;
+  salvarNoGcs?: boolean;
+  uploadFolder?: string | null;
+  persistFotoUrlApi?: string | null;
+  download?: boolean;
   partida: PartidaCardInfo;
 };
 
@@ -301,13 +305,50 @@ export async function gerarCardPartidaAdmin(params: GerarCardParams) {
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
   if (!blob) throw new Error("Falha ao gerar imagem do card");
 
-  const downloadUrl = URL.createObjectURL(blob);
   const fileName = `card-${slugify(params.torneioNome)}-${slugify(params.categoriaNome)}-${params.partida.id}.png`;
-  const a = document.createElement("a");
-  a.href = downloadUrl;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(downloadUrl);
+
+  let uploadedUrl: string | null = null;
+  if (params.salvarNoGcs) {
+    const fd = new FormData();
+    fd.set("folder", (params.uploadFolder || "cards/partidas").trim());
+    try {
+      fd.set("file", new File([blob], fileName, { type: "image/png" }));
+    } catch {
+      fd.set("file", blob, fileName);
+    }
+
+    const res = await fetch("/api/upload/image", { method: "POST", body: fd, cache: "no-store" });
+    const data = (await res.json().catch(() => null)) as any;
+    if (!res.ok) throw new Error(data?.mensagem || data?.error || "Falha ao salvar imagem no GCS");
+    const url = String(data?.url || "").trim();
+    if (!url) throw new Error("Upload no GCS não retornou URL");
+    uploadedUrl = url;
+
+    if (params.persistFotoUrlApi) {
+      const resPatch = await fetch(params.persistFotoUrlApi, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fotoUrl: uploadedUrl }),
+        cache: "no-store",
+      });
+      if (!resPatch.ok) {
+        const msg = await resPatch.json().catch(() => null);
+        throw new Error(msg?.error || "Falha ao salvar URL do card na partida");
+      }
+    }
+  }
+
+  const shouldDownload = params.download !== false;
+  if (shouldDownload) {
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadUrl);
+  }
+
+  return { url: uploadedUrl };
 }
