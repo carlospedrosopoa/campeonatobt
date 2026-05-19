@@ -297,7 +297,7 @@ export default function AdminJogosDoDiaPage() {
         templateUrl: torneio?.templateUrl,
         syncFotosUrl: `/api/public/torneios/${slug}/categorias/${p.categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         salvarNoGcs: true,
-        uploadFolder: `cards/partidas/${slug}`,
+        uploadFolder: `campeonatos/cards/partidas/${slug}`,
         persistFotoUrlApi: `/api/v1/torneios/${slug}/categorias/${p.categoriaId}/partidas/${p.id}`,
         partida: {
           id: p.id,

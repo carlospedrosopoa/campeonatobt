@@ -506,6 +506,7 @@ export async function GET(
         placarA: partidas.placarA,
         placarB: partidas.placarB,
         detalhesPlacar: partidas.detalhesPlacar,
+        fotoUrl: partidas.fotoUrl,
         categoriaId: partidas.categoriaId,
         categoriaNome: categorias.nome,
         arenaNome: arenas.nome,
