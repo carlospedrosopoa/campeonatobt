@@ -203,6 +203,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         existente ??
         ((await categoriasService.criar({ torneioId: torneio.id, nome: categoriaNome, genero: categoriaGenero })) as any);
     }
+    if (!categoria) return NextResponse.json({ error: "Falha ao resolver categoria" }, { status: 400 });
 
     const baseYear = new Date(torneio.dataFim as any).getFullYear() || new Date().getFullYear();
 
