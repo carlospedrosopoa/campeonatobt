@@ -6,6 +6,7 @@ export type CriarApoiadorDTO = {
   torneioId: string;
   nome: string;
   logoUrl?: string;
+  instagram?: string;
   slogan?: string;
   endereco?: string;
   latitude?: string;

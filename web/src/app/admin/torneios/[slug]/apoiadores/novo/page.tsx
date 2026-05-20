@@ -14,6 +14,7 @@ export default function AdminNovoApoiadorPage() {
   const [form, setForm] = useState({
     nome: "",
     logoUrl: "",
+    instagram: "",
     slogan: "",
     endereco: "",
     latitude: "",
@@ -115,6 +116,16 @@ export default function AdminNovoApoiadorPage() {
                 onChange={e => setForm(prev => ({ ...prev, siteUrl: e.target.value }))}
                 className="w-full mt-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 outline-none"
                 placeholder="https://..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Instagram</label>
+              <input
+                value={form.instagram}
+                onChange={e => setForm(prev => ({ ...prev, instagram: e.target.value }))}
+                className="w-full mt-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 outline-none"
+                placeholder="@patrocinador"
               />
             </div>
 

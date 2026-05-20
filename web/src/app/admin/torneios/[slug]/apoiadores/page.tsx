@@ -9,6 +9,7 @@ type Apoiador = {
   id: string;
   nome: string;
   logoUrl?: string;
+  instagram?: string;
   slogan?: string;
 };
 
@@ -89,6 +90,7 @@ export default function AdminApoiadoresPage() {
             <tr>
               <th className="py-3 px-4 text-left font-medium text-slate-600">Logo</th>
               <th className="py-3 px-4 text-left font-medium text-slate-600">Nome</th>
+              <th className="py-3 px-4 text-left font-medium text-slate-600">Instagram</th>
               <th className="py-3 px-4 text-left font-medium text-slate-600">Slogan</th>
               <th className="py-3 px-4 text-right font-medium text-slate-600">Ações</th>
             </tr>
@@ -96,7 +98,7 @@ export default function AdminApoiadoresPage() {
           <tbody className="divide-y divide-slate-100">
             {apoiadores.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-8 text-center text-slate-500">Nenhum apoiador cadastrado.</td>
+                <td colSpan={5} className="py-8 text-center text-slate-500">Nenhum apoiador cadastrado.</td>
               </tr>
             )}
             {apoiadores.map((a) => (
@@ -109,6 +111,7 @@ export default function AdminApoiadoresPage() {
                   )}
                 </td>
                 <td className="py-3 px-4 font-medium text-slate-900">{a.nome}</td>
+                <td className="py-3 px-4 text-slate-600">{a.instagram || "-"}</td>
                 <td className="py-3 px-4 text-slate-600">{a.slogan}</td>
                 <td className="py-3 px-4 text-right space-x-2">
                   <Link

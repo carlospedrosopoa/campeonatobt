@@ -228,6 +228,7 @@ export const apoiadores = pgTable('apoiadores', {
   torneioId: uuid('torneio_id').references(() => torneios.id).notNull(),
   nome: text('nome').notNull(),
   logoUrl: text('logo_url'),
+  instagram: text('instagram'),
   slogan: text('slogan'),
   endereco: text('endereco'),
   latitude: text('latitude'),

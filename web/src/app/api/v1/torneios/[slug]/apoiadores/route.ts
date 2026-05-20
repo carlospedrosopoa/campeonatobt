@@ -45,6 +45,7 @@ export async function POST(
       torneioId: torneio.id,
       nome: body.nome,
       logoUrl: body.logoUrl,
+      instagram: body.instagram,
       slogan: body.slogan,
       endereco: body.endereco,
       latitude: body.latitude,

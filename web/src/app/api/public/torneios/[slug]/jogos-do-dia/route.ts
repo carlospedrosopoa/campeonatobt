@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
 import { db } from "@/db";
-import { partidas } from "@/db/schema";
+import { apoiadores, partidas } from "@/db/schema";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 function ymdSaoPaulo(date = new Date()) {
@@ -49,6 +49,14 @@ function parseMencoes(raw: string | null) {
   return Array.from(new Set(items));
 }
 
+function parseInstagramHandle(raw: string | null | undefined) {
+  const v = String(raw || "").replace(/[`'"\s]/g, "").trim();
+  if (!v) return null;
+  const handle = v.startsWith("@") ? v : `@${v}`;
+  if (!/^@[A-Za-z0-9._]{1,30}$/.test(handle)) return null;
+  return handle;
+}
+
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -71,7 +79,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const { searchParams } = new URL(request.url);
   const dataYmd = normalizeYmd(searchParams.get("data"));
-  const mencoesPadrao = parseMencoes(searchParams.get("mencoes"));
+  const mencoesQuery = parseMencoes(searchParams.get("mencoes"));
+
+  const apoiadoresRows = await db
+    .select({ instagram: apoiadores.instagram })
+    .from(apoiadores)
+    .where(eq(apoiadores.torneioId, torneio.id));
+
+  const mencoesApoiadores = apoiadoresRows
+    .map((a) => parseInstagramHandle(a.instagram))
+    .filter((x): x is string => Boolean(x));
+
+  const mencoesPadrao = Array.from(new Set([...mencoesApoiadores, ...mencoesQuery]));
 
   const rows = await db
     .select({
@@ -94,4 +113,3 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   return NextResponse.json(payload, { headers: corsHeaders() });
 }
-

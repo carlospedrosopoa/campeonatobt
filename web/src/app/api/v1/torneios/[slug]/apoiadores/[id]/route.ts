@@ -29,6 +29,7 @@ export async function PUT(
     const atualizado = await apoiadoresService.atualizar(params.id, {
       nome: body.nome,
       logoUrl: body.logoUrl,
+      instagram: body.instagram,
       slogan: body.slogan,
       endereco: body.endereco,
       latitude: body.latitude,
