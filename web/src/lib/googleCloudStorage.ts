@@ -34,7 +34,18 @@ const parseGoogleCloudKey = (raw: string): GcsCredentials => {
   const trimmed = raw.trim().replace(/^"(.*)"$/, '$1').trim();
 
   if (trimmed.startsWith('{')) {
-    return JSON.parse(trimmed) as GcsCredentials;
+    try {
+      return JSON.parse(trimmed) as GcsCredentials;
+    } catch {
+      const braceWrappedBase64 = /^\{\s*[A-Za-z0-9+/=\s]+\s*\}$/.test(trimmed);
+      if (braceWrappedBase64) {
+        const inner = trimmed.replace(/^\{\s*/, '').replace(/\s*\}$/, '');
+        const normalized = inner.replace(/\s+/g, '');
+        const decoded = Buffer.from(normalized, 'base64').toString();
+        return JSON.parse(decoded) as GcsCredentials;
+      }
+      throw new Error('GOOGLE_CLOUD_KEY não está em JSON válido nem em base64 válido');
+    }
   }
 
   const maybeDataUrl = trimmed.includes('base64,') ? trimmed.split('base64,').pop() || '' : trimmed;
