@@ -37,7 +37,9 @@ const parseGoogleCloudKey = (raw: string): GcsCredentials => {
     return JSON.parse(trimmed) as GcsCredentials;
   }
 
-  const decoded = Buffer.from(trimmed, 'base64').toString();
+  const maybeDataUrl = trimmed.includes('base64,') ? trimmed.split('base64,').pop() || '' : trimmed;
+  const normalized = maybeDataUrl.replace(/\s+/g, '');
+  const decoded = Buffer.from(normalized, 'base64').toString();
   return JSON.parse(decoded) as GcsCredentials;
 };
 
@@ -102,6 +104,7 @@ const getStorage = () => {
 
 let storageInstance: Storage | null = null;
 let initializationAttempted = false;
+let lastInitializationErrorMessage: string | null = null;
 
 const initializeStorage = () => {
   if (initializationAttempted && storageInstance) {
@@ -112,6 +115,7 @@ const initializeStorage = () => {
   
   try {
     storageInstance = getStorage();
+    lastInitializationErrorMessage = null;
     if (storageInstance) {
       console.log('[GCS] Storage inicializado com sucesso');
     } else {
@@ -119,6 +123,7 @@ const initializeStorage = () => {
     }
   } catch (error: any) {
     console.error('[GCS] Erro ao inicializar Google Cloud Storage:', error.message);
+    lastInitializationErrorMessage = error?.message || 'Falha ao inicializar Google Cloud Storage';
     // Em produção, se ADC não estiver disponível, ainda pode funcionar para algumas operações
     if (process.env.NODE_ENV === 'production') {
       console.warn('[GCS] ADC não disponível. Algumas operações podem falhar.');
@@ -179,7 +184,10 @@ export async function uploadImage(
           size: fileBuffer.length,
         };
       }
-      throw new Error('Google Cloud Storage não configurado. Verifique as variáveis de ambiente GOOGLE_CLOUD_PROJECT_ID e GOOGLE_CLOUD_STORAGE_BUCKET.');
+      const detail = lastInitializationErrorMessage ? ` Detalhe: ${lastInitializationErrorMessage}` : '';
+      throw new Error(
+        `Google Cloud Storage não configurado. Verifique as variáveis de ambiente GOOGLE_CLOUD_KEY e GOOGLE_CLOUD_STORAGE_BUCKET.${detail}`
+      );
     }
   }
 
