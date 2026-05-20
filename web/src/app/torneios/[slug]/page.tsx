@@ -186,6 +186,14 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                   <BarChart3 className="h-5 w-5" />
                   Dashboard de Atletas
                 </Link>
+
+                <Link
+                  href={`/torneios/${torneio.slug}/jogos-do-dia`}
+                  className="w-full mt-3 bg-white text-slate-900 font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-slate-200 hover:bg-slate-50"
+                >
+                  <Calendar className="h-5 w-5" />
+                  Jogos do dia
+                </Link>
               </div>
             </div>
           </div>
