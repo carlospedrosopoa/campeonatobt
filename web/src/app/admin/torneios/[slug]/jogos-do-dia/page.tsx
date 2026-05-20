@@ -291,7 +291,7 @@ export default function AdminJogosDoDiaPage() {
         window.open(p.fotoUrl as string, "_blank");
         return;
       }
-      await gerarCardPartidaAdmin({
+      const result = await gerarCardPartidaAdmin({
         torneioNome: torneio?.nome || "Torneio",
         categoriaNome: p.categoriaNome || "Categoria",
         templateUrl: torneio?.templateUrl,
@@ -314,6 +314,10 @@ export default function AdminJogosDoDiaPage() {
           equipeBAtletas: p.equipeBAtletas ?? [],
         },
       });
+      const url = (result?.url || "").trim();
+      if (url) {
+        setPartidas((prev) => prev.map((it) => (it.id === p.id ? { ...it, fotoUrl: url } : it)));
+      }
     } catch (e: any) {
       setErro(e?.message || "Não foi possível gerar o card da partida");
     }
