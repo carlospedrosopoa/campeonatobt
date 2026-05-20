@@ -30,6 +30,17 @@ const resolveBucketName = () => {
   );
 };
 
+const parseGoogleCloudKey = (raw: string): GcsCredentials => {
+  const trimmed = raw.trim().replace(/^"(.*)"$/, '$1').trim();
+
+  if (trimmed.startsWith('{')) {
+    return JSON.parse(trimmed) as GcsCredentials;
+  }
+
+  const decoded = Buffer.from(trimmed, 'base64').toString();
+  return JSON.parse(decoded) as GcsCredentials;
+};
+
 // Inicializar cliente do GCS
 const getStorage = () => {
   // Em produção (Vercel/Cloud Run), usar Application Default Credentials (ADC)
@@ -39,9 +50,7 @@ const getStorage = () => {
   // Opção 1: Usar chave em base64 (se fornecido - para casos específicos)
   if (process.env.GOOGLE_CLOUD_KEY) {
     try {
-      const key = JSON.parse(
-        Buffer.from(process.env.GOOGLE_CLOUD_KEY, 'base64').toString()
-      ) as GcsCredentials;
+      const key = parseGoogleCloudKey(process.env.GOOGLE_CLOUD_KEY);
       const projectId = resolveProjectId(key);
       return projectId
         ? new Storage({ projectId, credentials: key as any })
