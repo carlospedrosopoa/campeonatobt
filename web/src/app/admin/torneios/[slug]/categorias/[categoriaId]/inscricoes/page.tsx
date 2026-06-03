@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, Gamepad2, Pencil, Plus, RefreshCw, Save, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Banknote, Gamepad2, ImageIcon, Pencil, Plus, RefreshCw, Save, Trash2, Users, X } from "lucide-react";
+import { gerarCardInscricaoAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
   id: string;
@@ -12,6 +13,7 @@ type Categoria = {
   genero: "MASCULINO" | "FEMININO" | "MISTO";
   valorInscricao: string | null;
   vagasMaximas: number | null;
+  dataHorario?: string | null;
 };
 
 type Inscricao = {
@@ -48,6 +50,8 @@ export default function AdminCategoriaInscricoesPage() {
   const categoriaId = params.categoriaId;
 
   const [categoria, setCategoria] = useState<Categoria | null>(null);
+  const [torneioNome, setTorneioNome] = useState("Torneio");
+  const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -90,10 +94,17 @@ export default function AdminCategoriaInscricoesPage() {
       setCarregando(true);
       setErro(null);
 
-      const [resCat, resIns] = await Promise.all([
+      const [resTorneio, resCat, resIns] = await Promise.all([
+        fetch(`/api/v1/torneios/${slug}`, { cache: "no-store" }),
         fetch(`/api/v1/torneios/${slug}/categorias`, { cache: "no-store" }),
         fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes`, { cache: "no-store" }),
       ]);
+
+      if (resTorneio.ok) {
+        const t = (await resTorneio.json().catch(() => null)) as any;
+        if (t?.nome) setTorneioNome(String(t.nome));
+        setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
+      }
 
       if (!resCat.ok) {
         const msg = await resCat.json().catch(() => null);
@@ -114,6 +125,31 @@ export default function AdminCategoriaInscricoesPage() {
       setErro(e?.message || "Erro inesperado");
     } finally {
       setCarregando(false);
+    }
+  }
+
+  async function gerarCardInscricao(i: Inscricao) {
+    try {
+      setErro(null);
+      const result = await gerarCardInscricaoAdmin({
+        torneioNome,
+        categoriaNome: categoria?.nome || "Categoria",
+        templateUrl: torneioTemplateUrl,
+        salvarNoGcs: true,
+        uploadFolder: `campeonatos/cards/inscricoes/${slug}`,
+        inscricao: {
+          id: i.id,
+          status: i.status,
+          dataInscricao: i.dataInscricao,
+          equipeNome: i.equipe.nome ?? "Dupla",
+          categoriaDataHorario: categoria?.dataHorario ?? null,
+          atletas: (i.equipe.atletas ?? []).map((a) => ({ id: a.id, nome: a.nome, fotoUrl: a.fotoUrl ?? null })),
+        },
+      });
+      const url = (result?.url || "").trim();
+      if (url) window.open(url, "_blank");
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível gerar o card da inscrição");
     }
   }
 
@@ -734,6 +770,15 @@ export default function AdminCategoriaInscricoesPage() {
                   <td className="py-4 pr-4 text-slate-700">{new Date(i.dataInscricao).toLocaleString("pt-BR")}</td>
                   <td className="py-4 text-right">
                     <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void gerarCardInscricao(i)}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        title="Gerar card da inscrição"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                        Card
+                      </button>
                       <button
                         type="button"
                         onClick={() => abrirEditar(i)}

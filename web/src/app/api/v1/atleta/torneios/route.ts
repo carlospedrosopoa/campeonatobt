@@ -114,5 +114,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json(Array.from(map.values()), { headers: { "Cache-Control": "no-store", Vary: "Authorization" } });
+  const torneiosResult = Array.from(map.values());
+  for (const t of torneiosResult) {
+    t.categorias.sort((a, b) => {
+      const ta = a.dataHorario ? new Date(a.dataHorario).getTime() : Number.POSITIVE_INFINITY;
+      const tb = b.dataHorario ? new Date(b.dataHorario).getTime() : Number.POSITIVE_INFINITY;
+      if (ta !== tb) return ta - tb;
+      return (a.nome || "").localeCompare(b.nome || "");
+    });
+  }
+
+  return NextResponse.json(torneiosResult, { headers: { "Cache-Control": "no-store", Vary: "Authorization" } });
 }

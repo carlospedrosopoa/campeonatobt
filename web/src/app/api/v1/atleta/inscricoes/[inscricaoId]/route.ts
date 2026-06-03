@@ -228,6 +228,7 @@ export async function DELETE(
   const insRows = await db
     .select({
       inscricaoId: inscricoes.id,
+      torneioId: inscricoes.torneioId,
       categoriaId: inscricoes.categoriaId,
     })
     .from(inscricoes)
@@ -236,6 +237,15 @@ export async function DELETE(
     .limit(1);
   const ins = insRows[0];
   if (!ins) return NextResponse.json({ error: "Inscrição não encontrada" }, { status: 404 });
+
+  const torneioComJogosEmAndamento = await db
+    .select({ id: partidas.id })
+    .from(partidas)
+    .where(and(eq(partidas.torneioId, ins.torneioId), inArray(partidas.status, ["EM_ANDAMENTO", "FINALIZADA", "WO"] as any)))
+    .limit(1);
+  if (torneioComJogosEmAndamento.length > 0) {
+    return NextResponse.json({ error: "Não é possível cancelar: torneio já iniciou (jogos em andamento ou finalizados)" }, { status: 400 });
+  }
 
   const partidasExistentes = await db.select({ id: partidas.id }).from(partidas).where(eq(partidas.categoriaId, ins.categoriaId)).limit(1);
   if (partidasExistentes.length > 0) {

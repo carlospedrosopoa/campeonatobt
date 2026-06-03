@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       id: string;
       status: string;
       dataInscricao: Date;
-      torneio: { id: string; nome: string; slug: string };
+      torneio: { id: string; nome: string; slug: string; temJogosEmAndamento: boolean };
       torneioCamisetaOpcoes: string[] | null;
       minhaCamisetaOpcao: string | null;
       categoria: { id: string; nome: string; slug: string; valorInscricao: string | null };
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
         id: r.inscricaoId,
         status: r.status,
         dataInscricao: r.dataInscricao,
-        torneio: { id: r.torneioId, nome: r.torneioNome, slug: r.torneioSlug },
+        torneio: { id: r.torneioId, nome: r.torneioNome, slug: r.torneioSlug, temJogosEmAndamento: false },
         torneioCamisetaOpcoes: (r.torneioCamisetaOpcoes as string[] | null) ?? null,
         minhaCamisetaOpcao: r.minhaCamisetaOpcao ?? null,
         categoria: { id: r.categoriaId, nome: r.categoriaNome, slug: r.categoriaSlug, valorInscricao: r.categoriaValorInscricao ?? null },
@@ -112,6 +112,18 @@ export async function GET(request: NextRequest) {
   }
 
   const result = Array.from(map.values());
+  const torneioIds = Array.from(new Set(result.map((i) => i.torneio.id).filter(Boolean)));
+  if (torneioIds.length > 0) {
+    const torneiosComJogos = await db
+      .select({ torneioId: partidas.torneioId })
+      .from(partidas)
+      .where(and(inArray(partidas.torneioId, torneioIds), inArray(partidas.status, ["EM_ANDAMENTO", "FINALIZADA", "WO"] as any)))
+      .groupBy(partidas.torneioId);
+    const started = new Set(torneiosComJogos.map((t) => t.torneioId));
+    for (const item of result) {
+      item.torneio.temJogosEmAndamento = started.has(item.torneio.id);
+    }
+  }
   for (const item of result) {
     const nomeAtual = (item.equipe.nome || "").trim();
     if (!nomeAtual) {

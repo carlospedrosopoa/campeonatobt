@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
-import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
+import { gerarCardPartidaAdmin, gerarCardProgramacaoAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
   id: string;
@@ -13,6 +13,7 @@ type Categoria = {
   genero: "MASCULINO" | "FEMININO" | "MISTO";
   valorInscricao: string | null;
   vagasMaximas: number | null;
+  dataHorario?: string | null;
 };
 
 type CategoriaConfig = {
@@ -116,6 +117,8 @@ export default function AdminCategoriaJogosSuperPage() {
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [categoriaDataHorario, setCategoriaDataHorario] = useState("");
+  const [salvandoCategoriaDataHorario, setSalvandoCategoriaDataHorario] = useState(false);
 
   const [config, setConfig] = useState<CategoriaConfig | null>(null);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
@@ -191,6 +194,27 @@ export default function AdminCategoriaJogosSuperPage() {
     if (t?.nome) setTorneioNome(String(t.nome));
     setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
     setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
+  }
+
+  async function salvarCategoriaDataHorario() {
+    try {
+      setSalvandoCategoriaDataHorario(true);
+      setErro(null);
+      const iso = categoriaDataHorario.trim() ? new Date(categoriaDataHorario).toISOString() : null;
+      if (iso && Number.isNaN(new Date(iso).getTime())) throw new Error("Data/hora inválida");
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataHorario: iso }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao salvar data/hora da categoria");
+      setCategoria((prev) => (prev ? { ...prev, dataHorario: payload?.dataHorario ?? null } : prev));
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoCategoriaDataHorario(false);
+    }
   }
 
   async function gerarRelatorioClassificacao() {
@@ -651,6 +675,8 @@ export default function AdminCategoriaJogosSuperPage() {
         const cat = await carregarCategoria();
         if (!ativo) return;
         setCategoria(cat);
+        const dt = cat?.dataHorario ? toLocalDateTimeInput(cat.dataHorario) : "";
+        setCategoriaDataHorario(dt);
         await carregarConfigEClassificacao();
         await carregarResultadoFinal();
       } catch (e: any) {
@@ -896,6 +922,37 @@ export default function AdminCategoriaJogosSuperPage() {
       }
     } catch (e: any) {
       setErro(e?.message || "Não foi possível gerar o card da partida");
+    }
+  }
+
+  async function gerarCardProgramacao(p: Partida) {
+    try {
+      setErro(null);
+      const result = await gerarCardProgramacaoAdmin({
+        torneioNome,
+        categoriaNome: categoria?.nome || "Categoria",
+        templateUrl: torneioTemplateUrl,
+        syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
+        salvarNoGcs: true,
+        uploadFolder: `campeonatos/cards/programacao/${slug}`,
+        partida: {
+          id: p.id,
+          fase: p.fase,
+          rodadaNome: p.rodadaNome ?? null,
+          rodadaNumero: p.rodadaNumero ?? null,
+          dataHorario: p.dataHorario ?? null,
+          arenaNome: p.arenaNome ?? null,
+          quadra: p.quadra ?? null,
+          equipeANome: p.equipeANome ?? null,
+          equipeAAtletas: p.equipeAAtletas ?? [],
+          equipeBNome: p.equipeBNome ?? null,
+          equipeBAtletas: p.equipeBAtletas ?? [],
+        },
+      });
+      const url = (result?.url || "").trim();
+      if (url) window.open(url, "_blank");
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível gerar o card de programação");
     }
   }
 
@@ -1417,6 +1474,27 @@ export default function AdminCategoriaJogosSuperPage() {
           </div>
         </div>
 
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div className="w-full md:max-w-sm space-y-2">
+            <label className="block text-sm font-medium text-slate-700">Data/Hora da categoria</label>
+            <input
+              value={categoriaDataHorario}
+              onChange={(e) => setCategoriaDataHorario(e.target.value)}
+              type="datetime-local"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={salvandoCategoriaDataHorario}
+            onClick={() => void salvarCategoriaDataHorario()}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Save className="h-4 w-4" />
+            {salvandoCategoriaDataHorario ? "Salvando…" : "Salvar data/hora"}
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {classificacao.length === 0 ? (
             <div className="text-sm text-slate-600">Nenhuma classificação disponível (gere jogos e/ou recalcule).</div>
@@ -1557,6 +1635,14 @@ export default function AdminCategoriaJogosSuperPage() {
                             title="Gerar card da partida"
                           >
                             <ImageIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => gerarCardProgramacao(p)}
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                            title="Gerar card de programação"
+                          >
+                            <FileText className="h-4 w-4" />
                           </button>
                           <button
                             type="button"

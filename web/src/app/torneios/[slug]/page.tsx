@@ -2,8 +2,9 @@ import { notFound } from "next/navigation";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { apoiadoresService } from "@/services/apoiadores.service";
-import { BarChart3, Calendar, MapPin, Trophy, Users, Info } from "lucide-react";
+import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket } from "lucide-react";
 import Link from "next/link";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,21 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
 
   const categorias = await categoriasService.listarPorTorneio(torneio.id);
   const apoiadores = await apoiadoresService.listarPorTorneio(torneio.id);
+  const session = await getSession();
+  const isAtleta = session?.user?.perfil === "ATLETA";
+  const nextInscricao = `/atleta/torneios?torneioSlug=${encodeURIComponent(torneio.slug)}`;
+  const hrefInscricao = isAtleta ? nextInscricao : `/atleta/login?next=${encodeURIComponent(nextInscricao)}`;
+
+  function formatarDataHoraCategoria(value: any) {
+    if (!value) return null;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm} ${hh}:${mi}`;
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
@@ -97,7 +113,15 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                   {categorias.map((cat) => (
                     <div key={cat.id} className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 hover:border-blue-200 transition-colors">
                       <div>
-                        <h3 className="font-bold text-slate-700">{cat.nome}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-slate-700">{cat.nome}</h3>
+                          {formatarDataHoraCategoria((cat as any).dataHorario) ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                              <Clock className="h-3.5 w-3.5 text-slate-400" />
+                              {formatarDataHoraCategoria((cat as any).dataHorario)}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="text-xs text-gray-500 uppercase tracking-wider">{cat.genero}</p>
                       </div>
                       <Link 
@@ -172,12 +196,13 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                   <span className="font-semibold text-slate-900">{categorias.length}</span>
                 </div>
 
-                <button 
-                  disabled
-                  className="w-full mt-4 bg-gray-100 text-gray-400 font-bold py-3 rounded-lg cursor-not-allowed flex items-center justify-center gap-2"
+                <Link
+                  href={hrefInscricao}
+                  className="w-full mt-4 bg-orange-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-orange-600"
                 >
-                  Inscrições em Breve
-                </button>
+                  <Ticket className="h-5 w-5" />
+                  {isAtleta ? "Inscrever" : "Entrar para inscrever"}
+                </Link>
 
                 <Link
                   href={`/torneios/${torneio.slug}/atletas`}

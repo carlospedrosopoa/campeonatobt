@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, ExternalLink, FileUp, Gamepad2, Handshake, List, MapPin, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Calendar, ExternalLink, FileUp, Gamepad2, Handshake, ImageIcon, List, MapPin, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
+import { gerarCardProgramacaoTorneioAdmin } from "@/lib/match-card-client";
 
 type Torneio = {
   id: string;
@@ -16,6 +17,7 @@ type Torneio = {
   status: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
   bannerUrl: string | null;
   logoUrl: string | null;
+  templateUrl: string | null;
   organizadorId: string;
   esporteId: string | null;
   esporteNome: string | null;
@@ -58,6 +60,7 @@ export default function AdminTorneioDashboardPage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [erroCategorias, setErroCategorias] = useState<string | null>(null);
   const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
+  const [gerandoCardProgramacao, setGerandoCardProgramacao] = useState(false);
   const [editandoCategoriaId, setEditandoCategoriaId] = useState<string | null>(null);
   const [mostraFormCategoria, setMostraFormCategoria] = useState(false);
   const [salvandoCategoria, setSalvandoCategoria] = useState(false);
@@ -85,6 +88,27 @@ export default function AdminTorneioDashboardPage() {
     if (Number.isNaN(d.getTime())) return "";
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  async function gerarCardProgramacaoTorneio() {
+    if (!torneio) return;
+    try {
+      setErroCategorias(null);
+      setGerandoCardProgramacao(true);
+      const result = await gerarCardProgramacaoTorneioAdmin({
+        torneioNome: torneio.nome,
+        templateUrl: torneio.templateUrl ?? null,
+        salvarNoGcs: true,
+        uploadFolder: `campeonatos/cards/programacao-torneio/${slugAtual}`,
+        categorias: categorias.map((c) => ({ id: c.id, nome: c.nome, genero: c.genero, dataHorario: c.dataHorario })),
+      });
+      const url = (result?.url || "").trim();
+      if (url) window.open(url, "_blank");
+    } catch (e: any) {
+      setErroCategorias(e?.message || "Não foi possível gerar o card de programação");
+    } finally {
+      setGerandoCardProgramacao(false);
+    }
   }
 
   useEffect(() => {
@@ -540,14 +564,26 @@ export default function AdminTorneioDashboardPage() {
                 <h2 className="text-xl font-bold text-slate-900">Categorias</h2>
                 <p className="text-sm text-slate-600">Crie e edite as categorias do torneio.</p>
               </div>
-              <button
-                type="button"
-                onClick={abrirNovaCategoria}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-              >
-                <Plus className="h-4 w-4" />
-                Nova categoria
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={gerandoCardProgramacao || categorias.length === 0}
+                  onClick={() => void gerarCardProgramacaoTorneio()}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  title={categorias.length === 0 ? "Cadastre ao menos 1 categoria para gerar o card" : "Gerar card da programação (categorias e horários)"}
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  {gerandoCardProgramacao ? "Gerando…" : "Card programação"}
+                </button>
+                <button
+                  type="button"
+                  onClick={abrirNovaCategoria}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                >
+                  <Plus className="h-4 w-4" />
+                  Nova categoria
+                </button>
+              </div>
             </div>
 
             {erroCategorias && (

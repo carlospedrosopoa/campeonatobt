@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { categorias } from "@/db/schema";
-import { eq, asc, and } from "drizzle-orm";
+import { eq, asc, and, sql } from "drizzle-orm";
 import { slugify } from "@/lib/utils";
 
 export type CriarCategoriaDTO = {
@@ -25,7 +25,7 @@ export class CategoriasService {
     return await db.select()
       .from(categorias)
       .where(eq(categorias.torneioId, torneioId))
-      .orderBy(asc(categorias.nome));
+      .orderBy(sql`${categorias.dataHorario} asc nulls last`, asc(categorias.nome));
   }
 
   async buscarPorId(id: string) {

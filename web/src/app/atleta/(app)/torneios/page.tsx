@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Calendar, MapPin, Trophy, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 type Torneio = {
   id: string;
@@ -37,7 +38,7 @@ type Inscricao = {
   id: string;
   status: string;
   dataInscricao: string;
-  torneio: { id: string; nome: string; slug: string };
+  torneio: { id: string; nome: string; slug: string; temJogosEmAndamento?: boolean };
   categoria: { id: string; nome: string; slug: string; valorInscricao: string | null };
   torneioPix: { chave: string | null; nome: string | null; cidade: string | null };
   meuPagamento: { pago: boolean; status?: string | null; valorDevido: string | null };
@@ -87,7 +88,9 @@ function getInitials(nome: string) {
 }
 
 export default function AtletaTorneiosPage() {
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<"torneios" | "inscricoes">("inscricoes");
+  const [torneioSlugFiltro, setTorneioSlugFiltro] = useState<string | null>(null);
 
   const [torneios, setTorneios] = useState<Torneio[]>([]);
   const [carregandoTorneios, setCarregandoTorneios] = useState(true);
@@ -145,6 +148,13 @@ export default function AtletaTorneiosPage() {
   } | null>(null);
   const [pixCarregando, setPixCarregando] = useState(false);
   const [pixErro, setPixErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    const slug = searchParams.get("torneioSlug");
+    if (!slug) return;
+    setTorneioSlugFiltro(slug);
+    setTab("torneios");
+  }, [searchParams]);
 
   async function abrirPix(params: { inscricaoId: string; torneioNome: string; categoriaNome: string }) {
     try {
@@ -509,6 +519,12 @@ export default function AtletaTorneiosPage() {
     );
   }, [tab]);
 
+  const torneiosParaExibir = useMemo(() => {
+    if (!torneioSlugFiltro) return torneios;
+    const filtrados = torneios.filter((t) => t.slug === torneioSlugFiltro);
+    return filtrados.length ? filtrados : torneios;
+  }, [torneios, torneioSlugFiltro]);
+
   const meusTorneios = useMemo(() => {
     const map = new Map<
       string,
@@ -624,7 +640,21 @@ export default function AtletaTorneiosPage() {
 
         {tab === "torneios" ? (
           <div className="space-y-4">
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between gap-3">
+              {torneioSlugFiltro ? (
+                <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                  Filtrado por torneio: {torneioSlugFiltro}
+                  <button
+                    type="button"
+                    onClick={() => setTorneioSlugFiltro(null)}
+                    className="ml-1 inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              ) : (
+                <span />
+              )}
               <button
                 type="button"
                 onClick={() => carregarTorneios()}
@@ -635,7 +665,7 @@ export default function AtletaTorneiosPage() {
               </button>
             </div>
 
-            {torneios.length === 0 ? (
+            {torneiosParaExibir.length === 0 ? (
               <div className="bg-white rounded-xl shadow-lg p-8 text-center">
                 <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">Nenhum torneio disponível</p>
@@ -643,7 +673,7 @@ export default function AtletaTorneiosPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {torneios.map((t) => (
+                {torneiosParaExibir.map((t) => (
                   <div key={t.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
                     <div className="p-6 border-b border-gray-100">
                       <div className="flex items-start justify-between gap-3">
@@ -683,7 +713,14 @@ export default function AtletaTorneiosPage() {
                           {t.categorias.map((c) => (
                             <div key={c.id} className="rounded-lg border border-gray-200 p-4 flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="font-semibold text-gray-900">{c.nome}</div>
+                                <div className="flex items-center gap-2">
+                                  <div className="font-semibold text-gray-900">{c.nome}</div>
+                                  {c.dataHorario ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                                      {formatDataHora(c.dataHorario)}
+                                    </span>
+                                  ) : null}
+                                </div>
                                 <div className="text-xs text-gray-600 mt-1">
                                   {!t.superCampeonato && (t.valorPrimeiraInscricao || t.valorInscricaoAdicional) ? (
                                     <>
@@ -703,12 +740,6 @@ export default function AtletaTorneiosPage() {
                                   )}
                                   <span className="mx-1">•</span>
                                   {c.inscritos} {c.inscritos === 1 ? "inscrito" : "inscritos"}
-                                  {c.dataHorario ? (
-                                    <>
-                                      <span className="mx-1">•</span>
-                                      {formatDataHora(c.dataHorario)}
-                                    </>
-                                  ) : null}
                                 </div>
                               </div>
                               <div className="flex flex-col items-end gap-2">
@@ -860,8 +891,10 @@ export default function AtletaTorneiosPage() {
                               const processando = statusPg === "PROCESSANDO";
                               const podePagar = pixOk && statusPg === "PENDENTE" && valorNum > 0;
                               const podeEditar = statusPg === "PENDENTE";
-                              const podeCancelar = statusPg === "PENDENTE";
+                              const torneioComJogos = Boolean(t.torneio.temJogosEmAndamento);
+                              const podeCancelar = statusPg === "PENDENTE" && !torneioComJogos;
                               const bloqueioAcao = pago ? "Bloqueado: pagamento já confirmado" : processando ? "Bloqueado: pagamento em processamento" : "Bloqueado";
+                              const bloqueioCancelar = torneioComJogos ? "Bloqueado: torneio com jogos em andamento" : bloqueioAcao;
                               const statusLabel = pago ? "Pago" : processando ? "Em processamento" : "Pendente";
                               const statusClass = pago ? "text-emerald-700 font-semibold" : processando ? "text-blue-700 font-semibold" : "text-amber-800 font-semibold";
 
@@ -910,7 +943,7 @@ export default function AtletaTorneiosPage() {
                                       <button
                                         type="button"
                                         disabled={!podeCancelar || cancelandoInscricaoId === c.inscricaoId}
-                                        title={!podeCancelar ? bloqueioAcao : undefined}
+                                        title={!podeCancelar ? bloqueioCancelar : undefined}
                                         onClick={() => (podeCancelar ? void cancelarInscricao(c.inscricaoId) : undefined)}
                                         className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
