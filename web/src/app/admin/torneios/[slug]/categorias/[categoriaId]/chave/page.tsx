@@ -16,6 +16,21 @@ type Categoria = {
 
 type Fase = "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL";
 
+type GrupoClassificacao = {
+  grupoId: string;
+  grupoNome: string;
+  equipes: {
+    equipeId: string;
+    equipeNome: string;
+    pontos: number;
+    jogosJogados: number;
+    jogosVencidos: number;
+    jogosPerdidos: number;
+    saldoGames: number;
+    setsPro?: number;
+  }[];
+};
+
 type Partida = {
   id: string;
   fase: Fase;
@@ -73,6 +88,8 @@ export default function AdminCategoriaChavePage() {
   const categoriaId = params.categoriaId;
 
   const [categoria, setCategoria] = useState<Categoria | null>(null);
+  const [superCampeonato, setSuperCampeonato] = useState(false);
+  const [classificacao, setClassificacao] = useState<GrupoClassificacao[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
@@ -111,6 +128,20 @@ export default function AdminCategoriaChavePage() {
     setJogosPorFase(map);
   }
 
+  async function carregarTorneioSuper() {
+    const res = await fetch(`/api/v1/torneios/${slug}`, { cache: "no-store" });
+    if (!res.ok) return false;
+    const t = (await res.json()) as any;
+    return Boolean(t?.superCampeonato);
+  }
+
+  async function carregarClassificacao() {
+    const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const rows = (await res.json()) as GrupoClassificacao[];
+    return Array.isArray(rows) ? rows : [];
+  }
+
   useEffect(() => {
     let ativo = true;
     async function carregar() {
@@ -120,6 +151,10 @@ export default function AdminCategoriaChavePage() {
         const cat = await carregarCategoria();
         if (!ativo) return;
         setCategoria(cat);
+        const [isSuper, classRows] = await Promise.all([carregarTorneioSuper(), carregarClassificacao()]);
+        if (!ativo) return;
+        setSuperCampeonato(isSuper);
+        setClassificacao(classRows);
         await carregarChave();
       } catch (e: any) {
         if (!ativo) return;
@@ -134,6 +169,15 @@ export default function AdminCategoriaChavePage() {
       ativo = false;
     };
   }, [slug, categoriaId]);
+
+  const superTop2 = useMemo(() => {
+    if (!superCampeonato) return null;
+    const g0 = classificacao[0];
+    const a = g0?.equipes?.[0];
+    const b = g0?.equipes?.[1];
+    if (!a || !b) return null;
+    return { s1: a, s2: b };
+  }, [classificacao, superCampeonato]);
 
   const fasesView = useMemo(() => {
     const base =
@@ -159,8 +203,13 @@ export default function AdminCategoriaChavePage() {
       expected.FINAL = expected.SEMI > 0 ? 1 : 0;
     } else if (base === "QUARTAS") {
       expected.QUARTAS = baseCount;
-      expected.SEMI = Math.max(0, Math.floor(baseCount / 2));
-      expected.FINAL = expected.SEMI > 0 ? 1 : 0;
+      if (superCampeonato && baseCount === 2) {
+        expected.SEMI = 2;
+        expected.FINAL = 1;
+      } else {
+        expected.SEMI = Math.max(0, Math.floor(baseCount / 2));
+        expected.FINAL = expected.SEMI > 0 ? 1 : 0;
+      }
     } else if (base === "SEMI") {
       expected.SEMI = baseCount;
       expected.FINAL = expected.SEMI > 0 ? 1 : 0;
@@ -183,8 +232,31 @@ export default function AdminCategoriaChavePage() {
     fill("SEMI");
     fill("FINAL");
 
+    if (superCampeonato && base === "QUARTAS" && expected.SEMI === 2 && out.SEMI.length === 2) {
+      const s1 = superTop2?.s1;
+      const s2 = superTop2?.s2;
+      if (s1 && out.SEMI[0]?.id.startsWith("placeholder:")) {
+        out.SEMI[0] = {
+          ...out.SEMI[0],
+          equipeAId: s1.equipeId,
+          equipeANome: s1.equipeNome || "1º colocado",
+          equipeBId: "aguardando",
+          equipeBNome: "Aguardando vencedor das quartas",
+        };
+      }
+      if (s2 && out.SEMI[1]?.id.startsWith("placeholder:")) {
+        out.SEMI[1] = {
+          ...out.SEMI[1],
+          equipeAId: s2.equipeId,
+          equipeANome: s2.equipeNome || "2º colocado",
+          equipeBId: "aguardando",
+          equipeBNome: "Aguardando vencedor das quartas",
+        };
+      }
+    }
+
     return out;
-  }, [jogosPorFase]);
+  }, [jogosPorFase, superCampeonato, superTop2]);
 
   if (carregando) return <div className="text-sm text-slate-600">Carregando…</div>;
 
@@ -230,6 +302,9 @@ export default function AdminCategoriaChavePage() {
           onClick={async () => {
             try {
               setAtualizando(true);
+              const [isSuper, classRows] = await Promise.all([carregarTorneioSuper(), carregarClassificacao()]);
+              setSuperCampeonato(isSuper);
+              setClassificacao(classRows);
               await carregarChave();
             } finally {
               setAtualizando(false);
@@ -288,4 +363,3 @@ export default function AdminCategoriaChavePage() {
     </div>
   );
 }
-

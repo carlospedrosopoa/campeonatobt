@@ -16,6 +16,9 @@ type Torneio = {
   bannerUrl: string | null;
   logoUrl: string | null;
   superCampeonato: boolean;
+  valorPrimeiraInscricao?: string | null;
+  valorInscricaoAdicional?: string | null;
+  camisetaOpcoes?: string[] | null;
   esporteNome: string | null;
   categorias: {
     id: string;
@@ -24,6 +27,7 @@ type Torneio = {
     genero: string;
     valorInscricao: string | null;
     vagasMaximas: number | null;
+    dataHorario: string | null;
     inscritos: number;
     inscricoesAbertas?: boolean;
   }[];
@@ -34,7 +38,11 @@ type Inscricao = {
   status: string;
   dataInscricao: string;
   torneio: { id: string; nome: string; slug: string };
-  categoria: { id: string; nome: string; slug: string };
+  categoria: { id: string; nome: string; slug: string; valorInscricao: string | null };
+  torneioPix: { chave: string | null; nome: string | null; cidade: string | null };
+  meuPagamento: { pago: boolean; status?: string | null; valorDevido: string | null };
+  torneioCamisetaOpcoes?: string[] | null;
+  minhaCamisetaOpcao?: string | null;
   equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null }[] };
 };
 
@@ -53,6 +61,15 @@ function formatDateRange(ini?: string | null, fim?: string | null) {
   const a = d1.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   const b = d2.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   return `${a}–${b}`;
+}
+
+function formatDataHora(value?: string | null) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const data = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${data} ${hora}`;
 }
 
 function statusBadge(status: string) {
@@ -89,6 +106,232 @@ export default function AtletaTorneiosPage() {
   const [carregandoParceiros, setCarregandoParceiros] = useState(false);
   const [parceiroSelecionado, setParceiroSelecionado] = useState<ParceiroBusca | null>(null);
   const [erroModal, setErroModal] = useState<string | null>(null);
+  const [camisetaOpcoes, setCamisetaOpcoes] = useState<string[]>([]);
+  const [camisetaSelecionada, setCamisetaSelecionada] = useState("");
+  const [camisetaCarregando, setCamisetaCarregando] = useState(false);
+  const [camisetaErro, setCamisetaErro] = useState<string | null>(null);
+
+  const [camisetaEditar, setCamisetaEditar] = useState<{
+    torneioId: string;
+    torneioNome: string;
+    opcoes: string[];
+    selecionada: string;
+  } | null>(null);
+  const [camisetaSalvando, setCamisetaSalvando] = useState(false);
+  const [inscricaoEditar, setInscricaoEditar] = useState<{
+    inscricaoId: string;
+    torneioId: string;
+    torneioNome: string;
+    categoriaNome: string;
+    equipeNome: string;
+  } | null>(null);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [cancelandoInscricaoId, setCancelandoInscricaoId] = useState<string | null>(null);
+  const [buscaParceiroEditar, setBuscaParceiroEditar] = useState("");
+  const [parceirosEditar, setParceirosEditar] = useState<ParceiroBusca[]>([]);
+  const [carregandoParceirosEditar, setCarregandoParceirosEditar] = useState(false);
+  const [parceiroSelecionadoEditar, setParceiroSelecionadoEditar] = useState<ParceiroBusca | null>(null);
+  const [erroEditar, setErroEditar] = useState<string | null>(null);
+
+  const [pixModal, setPixModal] = useState<{
+    inscricaoId: string;
+    torneioNome: string;
+    categoriaNome: string;
+    valor: string | null;
+    payload: string;
+    svg: string;
+    pago: boolean;
+    status: string;
+  } | null>(null);
+  const [pixCarregando, setPixCarregando] = useState(false);
+  const [pixErro, setPixErro] = useState<string | null>(null);
+
+  async function abrirPix(params: { inscricaoId: string; torneioNome: string; categoriaNome: string }) {
+    try {
+      setPixErro(null);
+      setPixCarregando(true);
+      setPixModal({
+        inscricaoId: params.inscricaoId,
+        torneioNome: params.torneioNome,
+        categoriaNome: params.categoriaNome,
+        valor: null,
+        payload: "",
+        svg: "",
+        pago: false,
+        status: "PENDENTE",
+      });
+
+      const res = await fetch(`/api/v1/atleta/inscricoes/${params.inscricaoId}/pix`, { cache: "no-store" });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Falha ao gerar PIX");
+
+      setPixModal({
+        inscricaoId: params.inscricaoId,
+        torneioNome: params.torneioNome,
+        categoriaNome: params.categoriaNome,
+        valor: (data?.valor as string | null) ?? null,
+        payload: String(data?.payload || ""),
+        svg: String(data?.svg || ""),
+        pago: Boolean(data?.pago),
+        status: String(data?.status || (data?.pago ? "PAGO" : "PENDENTE")),
+      });
+    } catch (e: any) {
+      setPixErro(e?.message || "Erro ao gerar PIX");
+      setPixModal(null);
+    } finally {
+      setPixCarregando(false);
+    }
+  }
+
+  async function abrirPixTotal(params: { torneioId: string; torneioNome: string }) {
+    try {
+      setPixErro(null);
+      setPixCarregando(true);
+      setPixModal({
+        inscricaoId: `TOTAL:${params.torneioId}`,
+        torneioNome: params.torneioNome,
+        categoriaNome: "Pagamento total das inscrições",
+        valor: null,
+        payload: "",
+        svg: "",
+        pago: false,
+        status: "PENDENTE",
+      });
+
+      const res = await fetch(`/api/v1/atleta/torneios/${params.torneioId}/pix`, { cache: "no-store" });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Falha ao gerar PIX");
+
+      setPixModal({
+        inscricaoId: `TOTAL:${params.torneioId}`,
+        torneioNome: params.torneioNome,
+        categoriaNome: "Pagamento total das inscrições",
+        valor: (data?.valor as string | null) ?? null,
+        payload: String(data?.payload || ""),
+        svg: String(data?.svg || ""),
+        pago: false,
+        status: "PENDENTE",
+      });
+    } catch (e: any) {
+      setPixErro(e?.message || "Erro ao gerar PIX");
+      setPixModal(null);
+    } finally {
+      setPixCarregando(false);
+    }
+  }
+
+  async function abrirEditarCamiseta(params: { torneioId: string; torneioNome: string }) {
+    try {
+      setCamisetaErro(null);
+      setCamisetaSalvando(false);
+      const res = await fetch(`/api/v1/atleta/torneios/${params.torneioId}/camiseta`, { cache: "no-store" });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Falha ao carregar opções de camiseta");
+      const opcoes = Array.isArray(data?.opcoes) ? (data.opcoes as any[]).map((s) => String(s)) : [];
+      const selecionada = String(data?.selecionada || data?.playDefault || "");
+      setCamisetaEditar({
+        torneioId: params.torneioId,
+        torneioNome: params.torneioNome,
+        opcoes,
+        selecionada,
+      });
+    } catch (e: any) {
+      setCamisetaErro(e?.message || "Falha ao carregar opções de camiseta");
+      setCamisetaEditar(null);
+    }
+  }
+
+  async function salvarCamisetaEditar() {
+    if (!camisetaEditar) return;
+    try {
+      setCamisetaErro(null);
+      if (!camisetaEditar.selecionada.trim()) {
+        setCamisetaErro("Selecione uma opção de camiseta.");
+        return;
+      }
+      setCamisetaSalvando(true);
+      const res = await fetch(`/api/v1/atleta/torneios/${camisetaEditar.torneioId}/camiseta`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ camisetaOpcao: camisetaEditar.selecionada }),
+      });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Falha ao salvar camiseta");
+      setCamisetaEditar(null);
+      setFlashOk("Camiseta atualizada para o torneio.");
+      void carregarInscricoes();
+    } catch (e: any) {
+      setCamisetaErro(e?.message || "Falha ao salvar camiseta");
+    } finally {
+      setCamisetaSalvando(false);
+    }
+  }
+
+  function abrirEditarInscricao(params: {
+    inscricaoId: string;
+    torneioId: string;
+    torneioNome: string;
+    categoriaNome: string;
+    equipeNome: string;
+  }) {
+    setErroEditar(null);
+    setBuscaParceiroEditar("");
+    setParceirosEditar([]);
+    setParceiroSelecionadoEditar(null);
+    setInscricaoEditar(params);
+  }
+
+  async function salvarEdicaoInscricao() {
+    if (!inscricaoEditar) return;
+    try {
+      if (!parceiroSelecionadoEditar?.id || !parceiroSelecionadoEditar.email) {
+        setErroEditar("Selecione um parceiro com perfil no Play na Quadra");
+        return;
+      }
+      setErroEditar(null);
+      setSalvandoEdicao(true);
+      const res = await fetch(`/api/v1/atleta/inscricoes/${inscricaoEditar.inscricaoId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          equipeNome: inscricaoEditar.equipeNome.trim() || null,
+          parceiro: {
+            playnaquadraAtletaId: parceiroSelecionadoEditar.id,
+            nome: parceiroSelecionadoEditar.nome,
+            email: parceiroSelecionadoEditar.email,
+            telefone: parceiroSelecionadoEditar.telefone || null,
+          },
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Falha ao editar inscrição");
+      setInscricaoEditar(null);
+      setFlashOk("Inscrição atualizada.");
+      void carregarInscricoes();
+    } catch (e: any) {
+      setErroEditar(e?.message || "Falha ao editar inscrição");
+    } finally {
+      setSalvandoEdicao(false);
+    }
+  }
+
+  async function cancelarInscricao(inscricaoId: string) {
+    const ok = window.confirm("Deseja cancelar esta inscrição? Essa ação não pode ser desfeita.");
+    if (!ok) return;
+    try {
+      setErroInscricoes(null);
+      setCancelandoInscricaoId(inscricaoId);
+      const res = await fetch(`/api/v1/atleta/inscricoes/${inscricaoId}`, { method: "DELETE" });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Falha ao cancelar inscrição");
+      setFlashOk("Inscrição cancelada.");
+      void carregarInscricoes();
+    } catch (e: any) {
+      setErroInscricoes(e?.message || "Falha ao cancelar inscrição");
+    } finally {
+      setCancelandoInscricaoId(null);
+    }
+  }
 
   async function carregarTorneios() {
     try {
@@ -131,6 +374,53 @@ export default function AtletaTorneiosPage() {
   }, [tab]);
 
   useEffect(() => {
+    let ativo = true;
+    async function carregarCamiseta() {
+      if (!modalCategoria) {
+        setCamisetaOpcoes([]);
+        setCamisetaSelecionada("");
+        setCamisetaErro(null);
+        setCamisetaCarregando(false);
+        return;
+      }
+
+      const opcoesT = (modalCategoria.torneio?.camisetaOpcoes ?? []) as string[] | null;
+      const tem = Array.isArray(opcoesT) && opcoesT.length > 0;
+      if (!tem) {
+        setCamisetaOpcoes([]);
+        setCamisetaSelecionada("");
+        setCamisetaErro(null);
+        setCamisetaCarregando(false);
+        return;
+      }
+
+      try {
+        setCamisetaErro(null);
+        setCamisetaCarregando(true);
+        const res = await fetch(`/api/v1/atleta/torneios/${modalCategoria.torneio.id}/camiseta`, { cache: "no-store" });
+        const data = (await res.json().catch(() => null)) as any;
+        if (!res.ok) throw new Error(data?.error || "Falha ao carregar camiseta");
+        const opcoes = Array.isArray(data?.opcoes) ? (data.opcoes as any[]).map((s) => String(s)) : [];
+        const selecionada = String(data?.selecionada || data?.playDefault || "");
+        if (!ativo) return;
+        setCamisetaOpcoes(opcoes);
+        setCamisetaSelecionada(selecionada);
+      } catch (e: any) {
+        if (!ativo) return;
+        setCamisetaErro(e?.message || "Falha ao carregar camiseta");
+        setCamisetaOpcoes([]);
+        setCamisetaSelecionada("");
+      } finally {
+        if (ativo) setCamisetaCarregando(false);
+      }
+    }
+    void carregarCamiseta();
+    return () => {
+      ativo = false;
+    };
+  }, [modalCategoria]);
+
+  useEffect(() => {
     if (!modalCategoria) return;
     const q = buscaParceiro.trim();
     setErroModal(null);
@@ -168,8 +458,46 @@ export default function AtletaTorneiosPage() {
     return () => clearTimeout(handle);
   }, [buscaParceiro, modalCategoria]);
 
+  useEffect(() => {
+    if (!inscricaoEditar) return;
+    const q = buscaParceiroEditar.trim();
+    setErroEditar(null);
+    if (q.length < 2) {
+      setParceirosEditar([]);
+      setCarregandoParceirosEditar(false);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        setCarregandoParceirosEditar(true);
+        const sp = new URLSearchParams();
+        sp.set("q", q);
+        sp.set("limite", "20");
+        const res = await fetch(`/api/v1/atleta/parceiros?${sp.toString()}`, { cache: "no-store" });
+        const data = (await res.json().catch(() => null)) as any;
+        if (!res.ok) throw new Error(data?.error || "Falha ao buscar atletas");
+        const atletas = (data?.atletas as any[]) ?? [];
+        setParceirosEditar(
+          atletas.map((a) => ({
+            id: String(a.id),
+            nome: String(a.nome || ""),
+            telefone: a.telefone ?? null,
+            fotoUrl: a.fotoUrl ?? null,
+            email: a.email ?? null,
+          }))
+        );
+      } catch (e: any) {
+        setParceirosEditar([]);
+        setErroEditar(e?.message || "Falha ao buscar atletas");
+      } finally {
+        setCarregandoParceirosEditar(false);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [buscaParceiroEditar, inscricaoEditar]);
+
   const header = useMemo(() => {
-    const label = tab === "torneios" ? "Torneios abertos" : "Meus torneios";
+    const label = tab === "torneios" ? "Torneios abertos" : "Minhas inscrições";
     return (
       <div className="space-y-1">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -186,11 +514,15 @@ export default function AtletaTorneiosPage() {
       string,
       {
         torneio: Inscricao["torneio"];
+        torneioCamisetaOpcoes: string[] | null;
+        minhaCamisetaOpcao: string | null;
         categorias: Array<{
           inscricaoId: string;
           status: string;
           dataInscricao: string;
           categoria: Inscricao["categoria"];
+          torneioPix: Inscricao["torneioPix"];
+          meuPagamento: Inscricao["meuPagamento"];
           equipe: Inscricao["equipe"];
         }>;
         ultimaDataInscricao: number;
@@ -204,6 +536,8 @@ export default function AtletaTorneiosPage() {
         map.get(key) ??
         {
           torneio: i.torneio,
+          torneioCamisetaOpcoes: (i.torneioCamisetaOpcoes as string[] | null) ?? null,
+          minhaCamisetaOpcao: i.minhaCamisetaOpcao ?? null,
           categorias: [],
           ultimaDataInscricao: data || 0,
         };
@@ -212,6 +546,8 @@ export default function AtletaTorneiosPage() {
         status: i.status,
         dataInscricao: i.dataInscricao,
         categoria: i.categoria,
+        torneioPix: i.torneioPix,
+        meuPagamento: i.meuPagamento,
         equipe: i.equipe,
       });
       current.ultimaDataInscricao = Math.max(current.ultimaDataInscricao, data || 0);
@@ -241,6 +577,12 @@ export default function AtletaTorneiosPage() {
           {header}
           <div className="flex items-center gap-2">
             <Link
+              href="/atleta/perfil"
+              className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm font-semibold"
+            >
+              Meu perfil
+            </Link>
+            <Link
               href="/atleta/jogos"
               className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm font-semibold"
             >
@@ -257,6 +599,7 @@ export default function AtletaTorneiosPage() {
         {flashOk && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{flashOk}</div>}
         {tab === "torneios" && erroTorneios && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{erroTorneios}</div>}
         {tab === "inscricoes" && erroInscricoes && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{erroInscricoes}</div>}
+        {tab === "inscricoes" && pixErro && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{pixErro}</div>}
 
         <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
           <button
@@ -275,7 +618,7 @@ export default function AtletaTorneiosPage() {
               tab === "inscricoes" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"
             }`}
           >
-            Meus torneios
+            Minhas inscrições
           </button>
         </div>
 
@@ -342,11 +685,30 @@ export default function AtletaTorneiosPage() {
                               <div className="min-w-0">
                                 <div className="font-semibold text-gray-900">{c.nome}</div>
                                 <div className="text-xs text-gray-600 mt-1">
-                                  {c.valorInscricao
-                                    ? `${Number(c.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} por atleta`
-                                    : "Sem taxa"}
+                                  {!t.superCampeonato && (t.valorPrimeiraInscricao || t.valorInscricaoAdicional) ? (
+                                    <>
+                                      {t.valorPrimeiraInscricao
+                                        ? `1ª: ${Number(t.valorPrimeiraInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+                                        : "1ª: —"}
+                                      <span className="mx-1">•</span>
+                                      {t.valorInscricaoAdicional
+                                        ? `adicional: ${Number(t.valorInscricaoAdicional).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+                                        : "adicional: —"}
+                                      {" por atleta"}
+                                    </>
+                                  ) : c.valorInscricao ? (
+                                    `${Number(c.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} por atleta`
+                                  ) : (
+                                    "Sem taxa"
+                                  )}
                                   <span className="mx-1">•</span>
                                   {c.inscritos} {c.inscritos === 1 ? "inscrito" : "inscritos"}
+                                  {c.dataHorario ? (
+                                    <>
+                                      <span className="mx-1">•</span>
+                                      {formatDataHora(c.dataHorario)}
+                                    </>
+                                  ) : null}
                                 </div>
                               </div>
                               <div className="flex flex-col items-end gap-2">
@@ -417,24 +779,56 @@ export default function AtletaTorneiosPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {meusTorneios.map((t) => (
-                  <div key={t.torneio.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
-                    <div className="p-6 border-b border-gray-100">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-base font-semibold text-gray-900 truncate">{t.torneio.nome}</div>
-                          <div className="text-sm text-gray-600 truncate mt-1">
-                            {t.categorias.length} {t.categorias.length === 1 ? "categoria" : "categorias"}
+                {meusTorneios.map((t) => {
+                  const pixOkTorneio = t.categorias.some((c) => Boolean(c.torneioPix?.chave && c.torneioPix?.nome && c.torneioPix?.cidade));
+                  const totalPendente = t.categorias.reduce((acc, c) => {
+                    const statusPg = String(c.meuPagamento?.status || (c.meuPagamento?.pago ? "PAGO" : "PENDENTE"));
+                    if (statusPg !== "PENDENTE") return acc;
+                    const valorRaw = (c.meuPagamento?.valorDevido ?? c.categoria?.valorInscricao ?? null) as string | null;
+                    const valorNum = valorRaw ? Number(String(valorRaw).replace(",", ".")) : 0;
+                    return valorNum > 0 ? acc + valorNum : acc;
+                  }, 0);
+                  const podePagarTotal = pixOkTorneio && totalPendente > 0;
+                  const totalLabel = totalPendente > 0 ? totalPendente.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : null;
+
+                  return (
+                    <div key={t.torneio.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
+                      <div className="p-6 border-b border-gray-100">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-base font-semibold text-gray-900 truncate">{t.torneio.nome}</div>
+                            <div className="text-sm text-gray-600 truncate mt-1">
+                              {t.categorias.length} {t.categorias.length === 1 ? "categoria" : "categorias"}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {podePagarTotal && (
+                              <button
+                                type="button"
+                                onClick={() => void abrirPixTotal({ torneioId: t.torneio.id, torneioNome: t.torneio.nome })}
+                                className="text-sm font-semibold text-emerald-700 hover:text-emerald-800"
+                              >
+                                Pagar PIX (total{totalLabel ? ` • ${totalLabel}` : ""})
+                              </button>
+                            )}
+                            {(t.torneioCamisetaOpcoes?.length || 0) > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => void abrirEditarCamiseta({ torneioId: t.torneio.id, torneioNome: t.torneio.nome })}
+                                className="text-sm font-semibold text-slate-700 hover:text-slate-900"
+                              >
+                                Camiseta{t.minhaCamisetaOpcao ? ` • ${t.minhaCamisetaOpcao}` : ""}
+                              </button>
+                            )}
+                            <Link href={`/torneios/${t.torneio.slug}`} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
+                              Ver
+                            </Link>
                           </div>
                         </div>
-                        <Link href={`/torneios/${t.torneio.slug}`} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
-                          Ver
-                        </Link>
                       </div>
-                    </div>
-                    <div className="p-6">
-                      <div className="space-y-3">
-                        {t.categorias.map((c) => (
+                      <div className="p-6">
+                        <div className="space-y-3">
+                          {t.categorias.map((c) => (
                           <div key={c.inscricaoId} className="rounded-lg border border-gray-200 p-4 space-y-2">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
@@ -455,27 +849,97 @@ export default function AtletaTorneiosPage() {
                               ))}
                             </div>
 
-                            <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-3">
-                              {c.categoria.slug ? (
-                                <Link
-                                  href={`/torneios/${t.torneio.slug}/categoria/${c.categoria.slug}`}
-                                  className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-                                >
-                                  Ver categoria
-                                </Link>
-                              ) : (
-                                <span />
-                              )}
-                              <Link href="/atleta/jogos" className="text-xs font-semibold text-gray-700 hover:text-gray-900">
-                                Meus jogos
-                              </Link>
-                            </div>
+                            {(() => {
+                              const pixOk = Boolean(c.torneioPix?.chave && c.torneioPix?.nome && c.torneioPix?.cidade);
+                              const valorRaw = (c.meuPagamento?.valorDevido ?? c.categoria?.valorInscricao ?? null) as string | null;
+                              const valorNum = valorRaw ? Number(String(valorRaw).replace(",", ".")) : 0;
+                              const valorLabel =
+                                valorNum > 0 ? valorNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : null;
+                              const statusPg = String(c.meuPagamento?.status || (c.meuPagamento?.pago ? "PAGO" : "PENDENTE"));
+                              const pago = statusPg === "PAGO";
+                              const processando = statusPg === "PROCESSANDO";
+                              const podePagar = pixOk && statusPg === "PENDENTE" && valorNum > 0;
+                              const podeEditar = statusPg === "PENDENTE";
+                              const podeCancelar = statusPg === "PENDENTE";
+                              const bloqueioAcao = pago ? "Bloqueado: pagamento já confirmado" : processando ? "Bloqueado: pagamento em processamento" : "Bloqueado";
+                              const statusLabel = pago ? "Pago" : processando ? "Em processamento" : "Pendente";
+                              const statusClass = pago ? "text-emerald-700 font-semibold" : processando ? "text-blue-700 font-semibold" : "text-amber-800 font-semibold";
+
+                              return (
+                                <>
+                                  <div className="pt-2 border-t border-gray-100 text-xs text-gray-700 flex items-center justify-between gap-2">
+                                    <span className="font-semibold">Pagamento:</span>
+                                    <span className={statusClass}>
+                                      {statusLabel}
+                                      {valorLabel ? ` • ${valorLabel}` : ""}
+                                    </span>
+                                  </div>
+
+                                  <div className="pt-2 flex items-center justify-between gap-3">
+                                    {c.categoria.slug ? (
+                                      <Link
+                                        href={`/torneios/${t.torneio.slug}/categoria/${c.categoria.slug}`}
+                                        className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                                      >
+                                        Ver categoria
+                                      </Link>
+                                    ) : (
+                                      <span />
+                                    )}
+
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        disabled={!podeEditar}
+                                        title={!podeEditar ? bloqueioAcao : undefined}
+                                        onClick={() =>
+                                          podeEditar
+                                            ? abrirEditarInscricao({
+                                                inscricaoId: c.inscricaoId,
+                                                torneioId: t.torneio.id,
+                                                torneioNome: t.torneio.nome,
+                                                categoriaNome: c.categoria.nome,
+                                                equipeNome: c.equipe.nome || "",
+                                              })
+                                            : undefined
+                                        }
+                                        className="text-xs font-semibold text-slate-700 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        Editar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={!podeCancelar || cancelandoInscricaoId === c.inscricaoId}
+                                        title={!podeCancelar ? bloqueioAcao : undefined}
+                                        onClick={() => (podeCancelar ? void cancelarInscricao(c.inscricaoId) : undefined)}
+                                        className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        Cancelar
+                                      </button>
+                                      {podePagar && (
+                                        <button
+                                          type="button"
+                                          onClick={() => void abrirPix({ inscricaoId: c.inscricaoId, torneioNome: t.torneio.nome, categoriaNome: c.categoria.nome })}
+                                          className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                                        >
+                                          Pagar PIX
+                                        </button>
+                                      )}
+                                      <Link href="/atleta/jogos" className="text-xs font-semibold text-gray-700 hover:text-gray-900">
+                                        Meus jogos
+                                      </Link>
+                                    </div>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -487,9 +951,22 @@ export default function AtletaTorneiosPage() {
           <div className="w-full max-w-xl bg-white rounded-xl shadow-lg" onMouseDown={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-6">
               <div>
+                {(() => {
+                  const categoriaSel = modalCategoria.torneio.categorias.find((c) => c.id === modalCategoria.categoriaId) ?? null;
+                  return (
+                    <>
                 <div className="text-xs text-gray-500">Inscrição</div>
                 <div className="text-lg font-semibold text-gray-900">{modalCategoria.torneio.nome}</div>
-                <div className="mt-1 text-sm text-gray-600">Informe os dados do parceiro para criar a dupla.</div>
+                <div className="mt-1 text-sm text-gray-600">
+                  <div>
+                    Categoria: {categoriaSel?.nome ?? "-"}
+                    {categoriaSel?.dataHorario ? ` • ${formatDataHora(categoriaSel.dataHorario)}` : ""}
+                  </div>
+                  <div>Informe os dados do parceiro para criar a dupla.</div>
+                </div>
+                    </>
+                  );
+                })()}
               </div>
               <button type="button" onClick={() => setModalCategoria(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors">
                 <X className="w-5 h-5" />
@@ -510,6 +987,29 @@ export default function AtletaTorneiosPage() {
                   />
                 </div>
               </div>
+
+              {(modalCategoria.torneio.camisetaOpcoes?.length || 0) > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Camiseta (torneio)</label>
+                  {camisetaCarregando ? (
+                    <div className="text-sm text-gray-600">Carregando opções…</div>
+                  ) : (
+                    <select
+                      value={camisetaSelecionada}
+                      onChange={(e) => setCamisetaSelecionada(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    >
+                      <option value="">Selecione…</option>
+                      {camisetaOpcoes.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {camisetaErro && <div className="text-sm text-red-600">{camisetaErro}</div>}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Buscar parceiro</label>
@@ -610,6 +1110,10 @@ export default function AtletaTorneiosPage() {
                         setErroModal("Selecione um parceiro com perfil no Play na Quadra");
                         return;
                       }
+                      if ((modalCategoria.torneio.camisetaOpcoes?.length || 0) > 0 && !camisetaSelecionada.trim()) {
+                        setErroModal("Selecione a camiseta para este torneio");
+                        return;
+                      }
                       setSalvando(true);
                       setErroModal(null);
                       setFlashOk(null);
@@ -619,6 +1123,7 @@ export default function AtletaTorneiosPage() {
                         body: JSON.stringify({
                           categoriaId: modalCategoria.categoriaId,
                           equipeNome: equipeNome.trim() || null,
+                          camisetaOpcao: camisetaSelecionada.trim() || null,
                           parceiro: {
                             playnaquadraAtletaId: parceiroSelecionado.id,
                             nome: parceiroSelecionado.nome,
@@ -645,6 +1150,309 @@ export default function AtletaTorneiosPage() {
                   {salvando ? "Enviando..." : "Confirmar inscrição"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {inscricaoEditar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setInscricaoEditar(null)}>
+          <div className="w-full max-w-xl bg-white rounded-xl shadow-lg" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-6">
+              <div>
+                <div className="text-xs text-gray-500">Editar inscrição</div>
+                <div className="text-lg font-semibold text-gray-900">{inscricaoEditar.torneioNome}</div>
+                <div className="mt-1 text-sm text-gray-600">{inscricaoEditar.categoriaNome}</div>
+              </div>
+              <button type="button" onClick={() => setInscricaoEditar(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-5 p-6">
+              {erroEditar && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{erroEditar}</div>}
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Nome da dupla (opcional)</label>
+                  <input
+                    value={inscricaoEditar.equipeNome}
+                    onChange={(e) => setInscricaoEditar((p) => (p ? { ...p, equipeNome: e.target.value } : p))}
+                    placeholder="Ex: Os Invencíveis"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Buscar novo parceiro</label>
+                <input
+                  value={buscaParceiroEditar}
+                  onChange={(e) => {
+                    setBuscaParceiroEditar(e.target.value);
+                    setParceiroSelecionadoEditar(null);
+                  }}
+                  placeholder="Digite nome ou telefone (mín. 2 caracteres)"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                />
+                {carregandoParceirosEditar && <div className="text-sm text-gray-600">Buscando...</div>}
+              </div>
+
+              {parceiroSelecionadoEditar ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex items-start gap-3">
+                    {parceiroSelecionadoEditar.fotoUrl ? (
+                      <img
+                        src={parceiroSelecionadoEditar.fotoUrl}
+                        alt={parceiroSelecionadoEditar.nome}
+                        className="h-10 w-10 rounded-full object-cover border border-gray-200 bg-white"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-sm font-semibold border border-gray-200">
+                        {getInitials(parceiroSelecionadoEditar.nome)}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-semibold text-gray-900 truncate">{parceiroSelecionadoEditar.nome}</div>
+                      <div className="text-sm text-gray-600 truncate">{parceiroSelecionadoEditar.email || "Sem email"}</div>
+                      {parceiroSelecionadoEditar.telefone && <div className="text-sm text-gray-600 truncate">{parceiroSelecionadoEditar.telefone}</div>}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setParceiroSelecionadoEditar(null)}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm font-semibold"
+                  >
+                    Trocar
+                  </button>
+                </div>
+              ) : parceirosEditar.length > 0 ? (
+                <div className="rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="max-h-64 overflow-auto divide-y divide-gray-100">
+                    {parceirosEditar.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setParceiroSelecionadoEditar(p)}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          {p.fotoUrl ? (
+                            <img
+                              src={p.fotoUrl}
+                              alt={p.nome}
+                              className="h-10 w-10 rounded-full object-cover border border-gray-200 bg-white"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-sm font-semibold border border-gray-200">
+                              {getInitials(p.nome)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="font-semibold text-gray-900">{p.nome}</div>
+                            <div className="text-sm text-gray-600 truncate">{p.email || "Sem email"}</div>
+                            {p.telefone && <div className="text-sm text-gray-600 truncate">{p.telefone}</div>}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : buscaParceiroEditar.trim().length >= 2 && !carregandoParceirosEditar ? (
+                <div className="text-sm text-gray-600">Nenhum atleta encontrado.</div>
+              ) : null}
+
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setInscricaoEditar(null)}
+                  disabled={salvandoEdicao}
+                  className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm font-semibold disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void salvarEdicaoInscricao()}
+                  disabled={salvandoEdicao || !parceiroSelecionadoEditar?.id || !parceiroSelecionadoEditar.email}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {salvandoEdicao ? "Salvando..." : "Salvar alterações"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {camisetaEditar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setCamisetaEditar(null)}>
+          <div className="w-full max-w-md bg-white rounded-xl shadow-lg" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-6">
+              <div className="min-w-0">
+                <div className="text-xs text-gray-500">Camiseta do torneio</div>
+                <div className="text-lg font-semibold text-gray-900 truncate">{camisetaEditar.torneioNome}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCamisetaEditar(null)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-6">
+              {camisetaErro && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{camisetaErro}</div>}
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Selecione</label>
+                <select
+                  value={camisetaEditar.selecionada}
+                  onChange={(e) => setCamisetaEditar((p) => (p ? { ...p, selecionada: e.target.value } : p))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                >
+                  <option value="">Selecione…</option>
+                  {camisetaEditar.opcoes.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCamisetaEditar(null)}
+                  disabled={camisetaSalvando}
+                  className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm font-semibold disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void salvarCamisetaEditar()}
+                  disabled={camisetaSalvando}
+                  className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-semibold disabled:opacity-50"
+                >
+                  {camisetaSalvando ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pixModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setPixModal(null)}>
+          <div className="w-full max-w-md bg-white rounded-xl shadow-lg" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-6">
+              <div className="min-w-0">
+                <div className="text-xs text-gray-500">Pagamento PIX</div>
+                <div className="text-lg font-semibold text-gray-900 truncate">{pixModal.torneioNome}</div>
+                <div className="mt-1 text-sm text-gray-600 truncate">{pixModal.categoriaNome}</div>
+              </div>
+              <button type="button" onClick={() => setPixModal(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-6">
+              {pixCarregando ? (
+                <div className="text-sm text-gray-600">Gerando QR Code…</div>
+              ) : (
+                <>
+                  {pixModal.valor && (
+                    <div className="text-sm font-semibold text-gray-900">
+                      Valor: {Number(pixModal.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </div>
+                  )}
+
+                  {pixModal.pago ? (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                      Este pagamento já está marcado como pago.
+                    </div>
+                  ) : pixModal.status === "PROCESSANDO" ? (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                      Pagamento em processamento. Aguarde a confirmação do organizador.
+                    </div>
+                  ) : null}
+
+                  {pixModal.svg ? (
+                    <div className="rounded-lg border border-gray-200 bg-white p-3 flex items-center justify-center">
+                      <div
+                        className="w-full max-w-[260px]"
+                        dangerouslySetInnerHTML={{ __html: pixModal.svg }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      Não foi possível gerar o QR Code.
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">PIX Copia e Cola</div>
+                    <textarea
+                      value={pixModal.payload}
+                      readOnly
+                      rows={4}
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-800"
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      {pixModal.payload && !pixModal.pago && pixModal.status !== "PROCESSANDO" && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setPixErro(null);
+                              const isTotal = pixModal.inscricaoId.startsWith("TOTAL:");
+                              if (isTotal) {
+                                const torneioId = pixModal.inscricaoId.slice("TOTAL:".length);
+                                const res = await fetch(`/api/v1/atleta/torneios/${torneioId}/pagamento-concluido`, { method: "POST" });
+                                const data = (await res.json().catch(() => null)) as any;
+                                if (!res.ok) throw new Error(data?.error || "Falha ao registrar pagamento");
+                              } else {
+                                const res = await fetch(`/api/v1/atleta/inscricoes/${pixModal.inscricaoId}/pagamento-concluido`, { method: "POST" });
+                                const data = (await res.json().catch(() => null)) as any;
+                                if (!res.ok) throw new Error(data?.error || "Falha ao registrar pagamento");
+                              }
+
+                              setPixModal(null);
+                              setFlashOk("Pagamento informado. Status em processamento até confirmação.");
+                              void carregarInscricoes();
+                            } catch (e: any) {
+                              setPixErro(e?.message || "Falha ao registrar pagamento");
+                            }
+                          }}
+                          className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-semibold"
+                        >
+                          Pagamento concluído
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(pixModal.payload);
+                            setFlashOk("Código PIX copiado.");
+                          } catch {
+                            setPixErro("Não foi possível copiar. Selecione e copie manualmente.");
+                          }
+                        }}
+                        className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors text-sm font-semibold"
+                      >
+                        Copiar
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

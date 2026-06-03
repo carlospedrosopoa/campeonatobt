@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 export type CriarInscricaoDTO = {
@@ -35,6 +35,8 @@ export class InscricoesService {
         atletaTelefone: usuarios.telefone,
         atletaFotoUrl: usuarios.fotoUrl,
         atletaPago: inscricaoPagamentos.pago,
+        atletaPagamentoStatus: inscricaoPagamentos.status,
+        atletaValorDevido: inscricaoPagamentos.valorDevido,
       })
       .from(inscricoes)
       .innerJoin(equipes, eq(inscricoes.equipeId, equipes.id))
@@ -49,7 +51,20 @@ export class InscricoesService {
         id: string;
         status: string;
         dataInscricao: Date;
-        equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null; fotoUrl: string | null; pago: boolean }[] };
+        equipe: {
+          id: string;
+          nome: string | null;
+          atletas: {
+            id: string;
+            nome: string;
+            email: string;
+            telefone: string | null;
+            fotoUrl: string | null;
+            pago: boolean;
+            pagamentoStatus?: string;
+            valorDevido?: string | null;
+          }[];
+        };
       }
     >();
 
@@ -71,7 +86,9 @@ export class InscricoesService {
                 email: r.atletaEmail,
                 telefone: r.atletaTelefone ?? null,
                 fotoUrl: r.atletaFotoUrl ?? null,
-                pago: Boolean(r.atletaPago),
+                pagamentoStatus: r.atletaPagamentoStatus ?? (Boolean(r.atletaPago) ? "PAGO" : "PENDENTE"),
+                pago: Boolean(r.atletaPago) || r.atletaPagamentoStatus === "PAGO",
+                valorDevido: r.atletaValorDevido ?? null,
               },
             ],
           },
@@ -83,7 +100,9 @@ export class InscricoesService {
           email: r.atletaEmail,
           telefone: r.atletaTelefone ?? null,
           fotoUrl: r.atletaFotoUrl ?? null,
-          pago: Boolean(r.atletaPago),
+          pagamentoStatus: r.atletaPagamentoStatus ?? (Boolean(r.atletaPago) ? "PAGO" : "PENDENTE"),
+          pago: Boolean(r.atletaPago) || r.atletaPagamentoStatus === "PAGO",
+          valorDevido: r.atletaValorDevido ?? null,
         });
       }
     }
@@ -148,6 +167,36 @@ export class InscricoesService {
     const equipeIdExistente = await this.buscarEquipePorDupla(dados.torneioId, atletaAId, atletaBId);
     const equipeId = equipeIdExistente ?? (await this.criarEquipeComIntegrantes(dados.torneioId, dados.equipeNome?.trim(), atletaAId, atletaBId));
 
+    const [torneioRow] = await db
+      .select({
+        valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
+        valorInscricaoAdicional: torneios.valorInscricaoAdicional,
+      })
+      .from(torneios)
+      .where(eq(torneios.id, dados.torneioId))
+      .limit(1);
+
+    const pagamentosPrevios = await db
+      .select({
+        usuarioId: inscricaoPagamentos.usuarioId,
+        total: sql<number>`coalesce(count(*), 0)::int`,
+      })
+      .from(inscricaoPagamentos)
+      .innerJoin(inscricoes, eq(inscricaoPagamentos.inscricaoId, inscricoes.id))
+      .where(and(eq(inscricoes.torneioId, dados.torneioId), inArray(inscricaoPagamentos.usuarioId, [atletaAId, atletaBId])))
+      .groupBy(inscricaoPagamentos.usuarioId);
+
+    const prevMap = new Map<string, number>(pagamentosPrevios.map((p) => [p.usuarioId, Number(p.total || 0)]));
+
+    const valorCategoria = categoria?.valorInscricao ?? null;
+    const valorPrimeira = torneioRow?.valorPrimeiraInscricao ?? null;
+    const valorAdicional = torneioRow?.valorInscricaoAdicional ?? null;
+    const valorPara = (usuarioId: string) => {
+      const jaTem = (prevMap.get(usuarioId) ?? 0) > 0;
+      if (!jaTem) return valorPrimeira ?? valorCategoria ?? null;
+      return valorAdicional ?? valorCategoria ?? null;
+    };
+
     const [novaInscricao] = await db
       .insert(inscricoes)
       .values({
@@ -161,8 +210,8 @@ export class InscricoesService {
     await db
       .insert(inscricaoPagamentos)
       .values([
-        { inscricaoId: novaInscricao.id, usuarioId: atletaAId, pago: false },
-        { inscricaoId: novaInscricao.id, usuarioId: atletaBId, pago: false },
+        { inscricaoId: novaInscricao.id, usuarioId: atletaAId, pago: false, valorDevido: valorPara(atletaAId) },
+        { inscricaoId: novaInscricao.id, usuarioId: atletaBId, pago: false, valorDevido: valorPara(atletaBId) },
       ])
       .onConflictDoNothing();
 

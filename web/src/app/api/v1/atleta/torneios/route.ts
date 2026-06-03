@@ -21,6 +21,9 @@ export async function GET(request: NextRequest) {
       torneioBannerUrl: torneios.bannerUrl,
       torneioLogoUrl: torneios.logoUrl,
       torneioSuperCampeonato: torneios.superCampeonato,
+      torneioValorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
+      torneioValorInscricaoAdicional: torneios.valorInscricaoAdicional,
+      torneioCamisetaOpcoes: torneios.camisetaOpcoes,
       esporteNome: esportes.nome,
       categoriaId: categorias.id,
       categoriaNome: categorias.nome,
@@ -28,6 +31,7 @@ export async function GET(request: NextRequest) {
       categoriaGenero: categorias.genero,
       categoriaValorInscricao: categorias.valorInscricao,
       categoriaVagasMaximas: categorias.vagasMaximas,
+      categoriaDataHorario: categorias.dataHorario,
       categoriaPartidasGeradas: sql<number>`count(distinct ${partidas.id})`.as("categoria_partidas_geradas"),
       categoriaInscritos: sql<number>`count(distinct ${inscricoes.id})`.as("categoria_inscritos"),
     })
@@ -55,12 +59,16 @@ export async function GET(request: NextRequest) {
       logoUrl: string | null;
       superCampeonato: boolean;
       esporteNome: string | null;
+      valorPrimeiraInscricao: string | null;
+      valorInscricaoAdicional: string | null;
+      camisetaOpcoes: string[] | null;
       categorias: {
         id: string;
         nome: string;
         genero: string;
         valorInscricao: string | null;
         vagasMaximas: number | null;
+        dataHorario: any;
         inscricoesAbertas: boolean;
       }[];
     }
@@ -82,6 +90,9 @@ export async function GET(request: NextRequest) {
         bannerUrl: r.torneioBannerUrl ?? null,
         logoUrl: r.torneioLogoUrl ?? null,
         superCampeonato: Boolean(r.torneioSuperCampeonato),
+        valorPrimeiraInscricao: r.torneioValorPrimeiraInscricao ?? null,
+        valorInscricaoAdicional: r.torneioValorInscricaoAdicional ?? null,
+        camisetaOpcoes: (r.torneioCamisetaOpcoes as string[] | null) ?? null,
         esporteNome: r.esporteNome ?? null,
         categorias: [],
       } as any);
@@ -96,6 +107,7 @@ export async function GET(request: NextRequest) {
         genero: r.categoriaGenero ?? "",
         valorInscricao: r.categoriaValorInscricao ?? null,
         vagasMaximas: r.categoriaVagasMaximas ?? null,
+        dataHorario: r.categoriaDataHorario ? (r.categoriaDataHorario as any) : null,
         inscritos: Number(r.categoriaInscritos || 0),
         inscricoesAbertas: Number(r.categoriaPartidasGeradas || 0) === 0,
       });

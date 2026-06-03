@@ -23,6 +23,12 @@ type Torneio = {
   status: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
   superCampeonato: boolean;
   oculto: boolean;
+  valorPrimeiraInscricao: string | null;
+  valorInscricaoAdicional: string | null;
+  pixChave: string | null;
+  pixNome: string | null;
+  pixCidade: string | null;
+  camisetaOpcoes: string[] | null;
   bannerUrl: string | null;
   logoUrl: string | null;
   templateUrl: string | null;
@@ -67,6 +73,12 @@ export default function AdminEditarDadosTorneioPage() {
     status: "RASCUNHO" as Torneio["status"],
     superCampeonato: false,
     oculto: false,
+    valorPrimeiraInscricao: "",
+    valorInscricaoAdicional: "",
+    pixChave: "",
+    pixNome: "",
+    pixCidade: "",
+    camisetaOpcoesTexto: "",
   });
 
   useEffect(() => {
@@ -109,6 +121,12 @@ export default function AdminEditarDadosTorneioPage() {
           status: t.status,
           superCampeonato: Boolean(t.superCampeonato),
           oculto: Boolean(t.oculto),
+          valorPrimeiraInscricao: t.valorPrimeiraInscricao ?? "",
+          valorInscricaoAdicional: t.valorInscricaoAdicional ?? "",
+          pixChave: t.pixChave ?? "",
+          pixNome: t.pixNome ?? "",
+          pixCidade: t.pixCidade ?? "",
+          camisetaOpcoesTexto: (t.camisetaOpcoes ?? []).join("\n"),
         });
       } catch (e: any) {
         if (ativo) setErro(e?.message || "Erro inesperado");
@@ -146,6 +164,10 @@ export default function AdminEditarDadosTorneioPage() {
 
     try {
       setSalvando(true);
+      const camisetaOpcoes = form.camisetaOpcoesTexto
+        .split(/\r?\n/g)
+        .map((s) => s.trim())
+        .filter(Boolean);
       const payload = {
         nome: form.nome,
         slug: form.slug,
@@ -160,6 +182,12 @@ export default function AdminEditarDadosTorneioPage() {
         status: form.status,
         superCampeonato: form.superCampeonato,
         oculto: form.oculto,
+        valorPrimeiraInscricao: form.valorPrimeiraInscricao?.trim() ? form.valorPrimeiraInscricao : null,
+        valorInscricaoAdicional: form.valorInscricaoAdicional?.trim() ? form.valorInscricaoAdicional : null,
+        pixChave: form.pixChave?.trim() ? form.pixChave : null,
+        pixNome: form.pixNome?.trim() ? form.pixNome : null,
+        pixCidade: form.pixCidade?.trim() ? form.pixCidade : null,
+        camisetaOpcoes: camisetaOpcoes.length > 0 ? camisetaOpcoes : null,
       };
 
       const res = await fetch(`/api/v1/torneios/${slugAtual}`, {
@@ -306,6 +334,71 @@ export default function AdminEditarDadosTorneioPage() {
                 <option value="SUPER">Super Campeonato</option>
               </select>
               <div className="text-xs text-slate-500">A classificação usa pontuação especial no Super Campeonato.</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Valor 1ª inscrição (por atleta)</label>
+              <input
+                value={form.valorPrimeiraInscricao}
+                onChange={(e) => setForm((prev) => ({ ...prev, valorPrimeiraInscricao: e.target.value }))}
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Valor inscrição adicional (por atleta)</label>
+              <input
+                value={form.valorInscricaoAdicional}
+                onChange={(e) => setForm((prev) => ({ ...prev, valorInscricaoAdicional: e.target.value }))}
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Chave PIX</label>
+              <input
+                value={form.pixChave}
+                onChange={(e) => setForm((prev) => ({ ...prev, pixChave: e.target.value }))}
+                placeholder="CPF, email, telefone, EVP…"
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Nome PIX</label>
+              <input
+                value={form.pixNome}
+                onChange={(e) => setForm((prev) => ({ ...prev, pixNome: e.target.value }))}
+                placeholder="Nome do recebedor"
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Cidade PIX</label>
+              <input
+                value={form.pixCidade}
+                onChange={(e) => setForm((prev) => ({ ...prev, pixCidade: e.target.value }))}
+                placeholder="Ex: PORTO ALEGRE"
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Opções de camiseta (uma por linha)</label>
+              <textarea
+                value={form.camisetaOpcoesTexto}
+                onChange={(e) => setForm((prev) => ({ ...prev, camisetaOpcoesTexto: e.target.value }))}
+                rows={4}
+                placeholder={"Ex:\nBaby Look M\nCamiseta M\nRegata G"}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
             </div>
 
             <div className="space-y-2">

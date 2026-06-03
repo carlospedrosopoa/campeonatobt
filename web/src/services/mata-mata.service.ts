@@ -57,6 +57,22 @@ export class MataMataService {
     const grupos = await classificacaoCategoriaService.obterClassificacao(params.categoriaId);
     if (grupos.length === 0) throw new Error("Nenhum grupo encontrado");
 
+    if (superCampeonato) {
+      const g0 = grupos[0];
+      const top6 = (g0?.equipes ?? []).slice(0, 6);
+      const qualificados = top6.map((e, idx) => ({
+        equipeId: e.equipeId,
+        grupoId: g0.grupoId,
+        rankGrupo: idx + 1,
+        pontos: e.pontos ?? 0,
+        saldoGames: e.saldoGames ?? 0,
+        gamesPro: e.gamesPro ?? 0,
+        setsPro: (e as any).setsPro ?? 0,
+        vitorias: e.jogosVencidos ?? 0,
+      }));
+      return { config, grupos, qualificados, superCampeonato, seeds: qualificados.map((s) => s.equipeId) };
+    }
+
     const qualificados: {
       equipeId: string;
       grupoId: string;
@@ -83,12 +99,6 @@ export class MataMataService {
           vitorias: e.jogosVencidos ?? 0,
         });
       }
-    }
-
-    if (superCampeonato) {
-      // Super Campeonato com 1 grupo único (todos contra todos) -> passam 6 (2 primeiros bye, 3..6 quartas)
-      const top6 = qualificados.slice(0, 6);
-      return { config, grupos, qualificados: top6, superCampeonato, seeds: top6.map((s) => s.equipeId) };
     }
 
     if (melhoresTerceiros > 0) {
@@ -372,7 +382,7 @@ export class MataMataService {
       await db.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), not(eq(partidas.fase, "GRUPOS"))));
 
       if (total !== 6) {
-        throw new Error("Super Campeonato precisa de exatamente 6 classificados para gerar o mata-mata (Quartas de Final para 3º a 6º).");
+        throw new Error("Super Campeonato precisa de pelo menos 6 equipes no Grupo Único para gerar o mata-mata (Quartas: 3ºx6º e 4ºx5º; 1º e 2º bye).");
       }
 
       const s1 = seedIds[0];

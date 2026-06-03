@@ -21,7 +21,16 @@ type Inscricao = {
   equipe: {
     id: string;
     nome: string | null;
-    atletas: { id: string; nome: string; email: string; telefone: string | null; fotoUrl?: string | null; pago: boolean }[];
+    atletas: {
+      id: string;
+      nome: string;
+      email: string;
+      telefone: string | null;
+      fotoUrl?: string | null;
+      pago: boolean;
+      pagamentoStatus?: string | null;
+      valorDevido?: string | null;
+    }[];
   };
 };
 
@@ -334,7 +343,9 @@ export default function AdminCategoriaInscricoesPage() {
             ...i,
             equipe: {
               ...i.equipe,
-              atletas: i.equipe.atletas.map((a) => (a.id === params.atletaId ? { ...a, pago: params.pago } : a)),
+              atletas: i.equipe.atletas.map((a) =>
+                a.id === params.atletaId ? { ...a, pago: params.pago, pagamentoStatus: params.pago ? "PAGO" : "PENDENTE" } : a
+              ),
             },
           };
         })
@@ -693,17 +704,27 @@ export default function AdminCategoriaInscricoesPage() {
                       {i.equipe.atletas.map((a) => {
                         const key = `${i.id}:${a.id}`;
                         const firstName = (a.nome || "").trim().split(/\s+/)[0] || "Atleta";
+                        const valor = (a.valorDevido ?? categoria?.valorInscricao ?? null) as string | null;
+                        const valorLabel = valor
+                          ? ` (${Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`
+                          : "";
+                        const statusPg = String(a.pagamentoStatus || (a.pago ? "PAGO" : "PENDENTE"));
+                        const pago = statusPg === "PAGO";
+                        const processando = statusPg === "PROCESSANDO";
+                        const statusLabel = pago ? "Pago" : processando ? "Processando" : "Pendente";
+                        const statusClass = pago ? "text-emerald-700" : processando ? "text-blue-700" : "text-amber-800";
                         return (
                           <label key={a.id} className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
                             <input
                               type="checkbox"
-                              checked={Boolean(a.pago)}
+                              checked={pago}
                               disabled={Boolean(pagando[key])}
                               onChange={(e) => void setAtletaPago({ inscricaoId: i.id, atletaId: a.id, pago: e.target.checked })}
                               className="h-4 w-4 accent-emerald-600"
                             />
-                            <span className={a.pago ? "text-emerald-700" : "text-amber-800"}>
-                              {firstName}: {a.pago ? "Pago" : "Pendente"}
+                            <span className={statusClass}>
+                              {firstName}: {statusLabel}
+                              {valorLabel}
                             </span>
                           </label>
                         );

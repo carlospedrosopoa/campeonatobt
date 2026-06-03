@@ -9,6 +9,7 @@ export type CategoriaResumoAdmin = {
   genero: "MASCULINO" | "FEMININO" | "MISTO";
   valorInscricao: string | null;
   vagasMaximas: number | null;
+  dataHorario: Date | null;
   criadoEm: Date;
   inscricoesTotal: number;
   inscricoesPendentes: number;
@@ -27,6 +28,7 @@ export class DashboardAdminService {
         genero: categorias.genero,
         valorInscricao: categorias.valorInscricao,
         vagasMaximas: categorias.vagasMaximas,
+        dataHorario: categorias.dataHorario,
         criadoEm: categorias.criadoEm,
         inscricoesTotal: sql<number>`coalesce(count(${inscricoes.id}), 0)::int`,
         inscricoesPendentes: sql<number>`coalesce(sum(case when ${inscricoes.status} = 'PENDENTE' then 1 else 0 end), 0)::int`,
@@ -45,4 +47,3 @@ export class DashboardAdminService {
 }
 
 export const dashboardAdminService = new DashboardAdminService();
-

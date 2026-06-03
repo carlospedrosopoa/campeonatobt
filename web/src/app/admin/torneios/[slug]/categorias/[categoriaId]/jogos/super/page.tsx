@@ -755,6 +755,17 @@ export default function AdminCategoriaJogosSuperPage() {
 
   const titulo = useMemo(() => (categoria ? `Jogos — ${categoria.nome} (Super Campeonato)` : "Jogos (Super Campeonato)"), [categoria]);
 
+  const semifinalistasBye = useMemo(() => {
+    const g0 = classificacao[0];
+    const a = g0?.equipes?.[0];
+    const b = g0?.equipes?.[1];
+    if (!a?.equipeId || !b?.equipeId) return null;
+    return {
+      s1: { equipeId: a.equipeId, equipeNome: (a.equipeNome || a.equipeId.slice(0, 8)).toString() },
+      s2: { equipeId: b.equipeId, equipeNome: (b.equipeNome || b.equipeId.slice(0, 8)).toString() },
+    };
+  }, [classificacao]);
+
   function formatPlacar(detalhes: Partida["detalhesPlacar"]) {
     if (!detalhes || detalhes.length === 0) return "X";
     return detalhes
@@ -1587,6 +1598,23 @@ export default function AdminCategoriaJogosSuperPage() {
               <p className="text-sm text-slate-600">Fase {fase}.</p>
             </div>
           </div>
+          {(fase === "QUARTAS" || fase === "SEMI") && semifinalistasBye ? (
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Semifinalistas (bye)</div>
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">1º colocado</div>
+                  <div className="mt-1 font-semibold text-slate-900">{semifinalistasBye.s1.equipeNome}</div>
+                  <div className="mt-1 text-xs text-slate-500">Aguardando o pior classificado entre os vencedores das quartas</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">2º colocado</div>
+                  <div className="mt-1 font-semibold text-slate-900">{semifinalistasBye.s2.equipeNome}</div>
+                  <div className="mt-1 text-xs text-slate-500">Aguardando o outro vencedor das quartas</div>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {partidasFiltradas.length === 0 ? (
               <div className="col-span-full py-10 text-center text-slate-500">

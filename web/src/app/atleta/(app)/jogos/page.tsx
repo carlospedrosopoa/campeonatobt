@@ -128,10 +128,15 @@ export default function AtletaJogosPage() {
               <div className="text-xs text-slate-500">Informe o placar e aguarde a aprovação do gestor do torneio.</div>
             </div>
           </div>
-          <Link href="/atleta/torneios" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/atleta/perfil" className="text-sm font-semibold text-slate-700 hover:text-slate-900">
+              Meu perfil
+            </Link>
+            <Link href="/atleta/torneios" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Link>
+          </div>
         </div>
       </header>
 

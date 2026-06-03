@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, inscricoes, partidas, torneios, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, partidas, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { inscricoesService } from "@/services/inscricoes.service";
 
@@ -30,15 +30,24 @@ export async function GET(request: NextRequest) {
       torneioId: torneios.id,
       torneioNome: torneios.nome,
       torneioSlug: torneios.slug,
+      torneioPixChave: torneios.pixChave,
+      torneioPixNome: torneios.pixNome,
+      torneioPixCidade: torneios.pixCidade,
+      torneioCamisetaOpcoes: torneios.camisetaOpcoes,
+      minhaCamisetaOpcao: torneioAtletaPrefs.camisetaOpcao,
       categoriaId: categorias.id,
       categoriaNome: categorias.nome,
       categoriaSlug: categorias.slug,
+      categoriaValorInscricao: categorias.valorInscricao,
       equipeId: equipes.id,
       equipeNome: equipes.nome,
       atletaId: usuarios.id,
       atletaNome: usuarios.nome,
       atletaEmail: usuarios.email,
       atletaTelefone: usuarios.telefone,
+      meuPago: inscricaoPagamentos.pago,
+      meuPagamentoStatus: inscricaoPagamentos.status,
+      meuValorDevido: inscricaoPagamentos.valorDevido,
     })
     .from(inscricoes)
     .innerJoin(equipes, eq(inscricoes.equipeId, equipes.id))
@@ -46,6 +55,14 @@ export async function GET(request: NextRequest) {
     .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
     .innerJoin(torneios, eq(inscricoes.torneioId, torneios.id))
     .innerJoin(categorias, eq(inscricoes.categoriaId, categorias.id))
+    .leftJoin(
+      torneioAtletaPrefs,
+      and(eq(torneioAtletaPrefs.torneioId, torneios.id), eq(torneioAtletaPrefs.usuarioId, auth.user.id))
+    )
+    .leftJoin(
+      inscricaoPagamentos,
+      and(eq(inscricaoPagamentos.inscricaoId, inscricoes.id), eq(inscricaoPagamentos.usuarioId, auth.user.id))
+    )
     .where(inArray(inscricoes.id, ids))
     .orderBy(desc(inscricoes.dataInscricao));
 
@@ -56,7 +73,11 @@ export async function GET(request: NextRequest) {
       status: string;
       dataInscricao: Date;
       torneio: { id: string; nome: string; slug: string };
-      categoria: { id: string; nome: string; slug: string };
+      torneioCamisetaOpcoes: string[] | null;
+      minhaCamisetaOpcao: string | null;
+      categoria: { id: string; nome: string; slug: string; valorInscricao: string | null };
+      torneioPix: { chave: string | null; nome: string | null; cidade: string | null };
+      meuPagamento: { pago: boolean; status: string; valorDevido: string | null };
       equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null }[] };
     }
   >();
@@ -70,7 +91,15 @@ export async function GET(request: NextRequest) {
         status: r.status,
         dataInscricao: r.dataInscricao,
         torneio: { id: r.torneioId, nome: r.torneioNome, slug: r.torneioSlug },
-        categoria: { id: r.categoriaId, nome: r.categoriaNome, slug: r.categoriaSlug },
+        torneioCamisetaOpcoes: (r.torneioCamisetaOpcoes as string[] | null) ?? null,
+        minhaCamisetaOpcao: r.minhaCamisetaOpcao ?? null,
+        categoria: { id: r.categoriaId, nome: r.categoriaNome, slug: r.categoriaSlug, valorInscricao: r.categoriaValorInscricao ?? null },
+        torneioPix: { chave: r.torneioPixChave ?? null, nome: r.torneioPixNome ?? null, cidade: r.torneioPixCidade ?? null },
+        meuPagamento: {
+          pago: Boolean(r.meuPago) || r.meuPagamentoStatus === "PAGO",
+          status: r.meuPagamentoStatus ?? (Boolean(r.meuPago) ? "PAGO" : "PENDENTE"),
+          valorDevido: r.meuValorDevido ?? null,
+        },
         equipe: {
           id: r.equipeId,
           nome: r.equipeNome,
@@ -104,6 +133,7 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as any;
   const categoriaId = (body?.categoriaId as string | undefined)?.trim();
   const equipeNome = (body?.equipeNome as string | undefined)?.trim();
+  const camisetaOpcaoRaw = typeof body?.camisetaOpcao === "string" ? body.camisetaOpcao.trim() : "";
   const parceiro = body?.parceiro as any;
 
   const parceiroNome = (parceiro?.nome as string | undefined)?.trim();
@@ -128,13 +158,32 @@ export async function POST(request: NextRequest) {
   if (!categoria) return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
 
   const t = await db
-    .select({ id: torneios.id, status: torneios.status })
+    .select({ id: torneios.id, status: torneios.status, camisetaOpcoes: torneios.camisetaOpcoes })
     .from(torneios)
     .where(eq(torneios.id, categoria.torneioId))
     .limit(1);
   const torneio = t[0];
   if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
   if (torneio.status !== "ABERTO") return NextResponse.json({ error: "Inscrições não estão abertas para este torneio" }, { status: 400 });
+
+  const opcoes = Array.isArray(torneio.camisetaOpcoes) ? (torneio.camisetaOpcoes as any[]).map((s) => String(s)) : [];
+  const normalize = (v: string) => (v || "").trim().replace(/\s+/g, " ");
+  const mapLower = new Map(opcoes.map((o) => [normalize(o).toLowerCase(), o]));
+  const match = camisetaOpcaoRaw ? mapLower.get(normalize(camisetaOpcaoRaw).toLowerCase()) ?? null : null;
+  if (opcoes.length > 0 && camisetaOpcaoRaw && !match) {
+    return NextResponse.json({ error: "Opção de camiseta inválida para este torneio" }, { status: 400 });
+  }
+
+  if (opcoes.length > 0 && !match) {
+    const pref = await db
+      .select({ id: torneioAtletaPrefs.id })
+      .from(torneioAtletaPrefs)
+      .where(and(eq(torneioAtletaPrefs.torneioId, torneio.id), eq(torneioAtletaPrefs.usuarioId, auth.user.id)))
+      .limit(1);
+    if (!pref[0]) {
+      return NextResponse.json({ error: "Selecione o tamanho/modelo de camiseta para este torneio" }, { status: 400 });
+    }
+  }
 
   const partidasExistentes = await db.select({ id: partidas.id }).from(partidas).where(eq(partidas.categoriaId, categoriaId)).limit(1);
   if (partidasExistentes.length > 0) {
@@ -179,6 +228,16 @@ export async function POST(request: NextRequest) {
       },
       status: "PENDENTE",
     });
+
+    if (match) {
+      await db
+        .insert(torneioAtletaPrefs)
+        .values({ torneioId: torneio.id, usuarioId: auth.user.id, camisetaOpcao: match })
+        .onConflictDoUpdate({
+          target: [torneioAtletaPrefs.torneioId, torneioAtletaPrefs.usuarioId],
+          set: { camisetaOpcao: match, atualizadoEm: new Date() },
+        });
+    }
     return NextResponse.json(inscricao, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Falha ao criar inscrição" }, { status: 400 });

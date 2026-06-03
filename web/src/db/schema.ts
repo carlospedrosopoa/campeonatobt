@@ -42,6 +42,12 @@ export const torneios = pgTable('torneios', {
   status: statusTorneioEnum('status').default('RASCUNHO').notNull(),
   oculto: boolean('oculto').default(false).notNull(),
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
+  valorPrimeiraInscricao: decimal('valor_primeira_inscricao', { precision: 10, scale: 2 }),
+  valorInscricaoAdicional: decimal('valor_inscricao_adicional', { precision: 10, scale: 2 }),
+  pixChave: text('pix_chave'),
+  pixNome: text('pix_nome'),
+  pixCidade: text('pix_cidade'),
+  camisetaOpcoes: json('camiseta_opcoes').$type<string[]>(),
   esporteId: uuid('esporte_id').references(() => esportes.id),
   organizadorId: uuid('organizador_id').references(() => usuarios.id).notNull(),
   bannerUrl: text('banner_url'),
@@ -59,6 +65,7 @@ export const categorias = pgTable('categorias', {
   genero: generoCategoriaEnum('genero').notNull(),
   valorInscricao: decimal('valor_inscricao', { precision: 10, scale: 2 }).default('0'), // Valor por atleta
   vagasMaximas: integer('vagas_maximas'),
+  dataHorario: timestamp('data_horario'),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
 }, (t) => ({
   unq: unique().on(t.torneioId, t.slug),
@@ -105,11 +112,28 @@ export const inscricaoPagamentos = pgTable('inscricao_pagamentos', {
   id: uuid('id').defaultRandom().primaryKey(),
   inscricaoId: uuid('inscricao_id').references(() => inscricoes.id, { onDelete: "cascade" }).notNull(),
   usuarioId: uuid('usuario_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+  status: text('status').default('PENDENTE').notNull(),
+  valorDevido: decimal('valor_devido', { precision: 10, scale: 2 }),
   pago: boolean('pago').default(false).notNull(),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
 }, (t) => ({
   unq: unique().on(t.inscricaoId, t.usuarioId),
 }));
+
+export const torneioAtletaPrefs = pgTable(
+  'torneio_atleta_prefs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    torneioId: uuid('torneio_id').references(() => torneios.id, { onDelete: "cascade" }).notNull(),
+    usuarioId: uuid('usuario_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+    camisetaOpcao: text('camiseta_opcao'),
+    criadoEm: timestamp('criado_em').defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+  },
+  (t) => ({
+    unq: unique().on(t.torneioId, t.usuarioId),
+  })
+);
 
 export const grupos = pgTable('grupos', {
   id: uuid('id').defaultRandom().primaryKey(),

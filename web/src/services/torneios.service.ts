@@ -30,10 +30,49 @@ export type CriarTorneioDTO = {
   esporteId: string;
   superCampeonato?: boolean;
   oculto?: boolean;
+  valorPrimeiraInscricao?: string | number | null;
+  valorInscricaoAdicional?: string | number | null;
+  pixChave?: string | null;
+  pixNome?: string | null;
+  pixCidade?: string | null;
+  camisetaOpcoes?: string[] | null;
   organizadorId?: string;
   bannerUrl?: string;
   logoUrl?: string;
   templateUrl?: string;
+};
+
+const normalizeDecimal = (value: string | number | null | undefined) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const normalizeText = (value: string | null | undefined) => {
+  if (value === undefined) return undefined;
+  const trimmed = (value || "").trim();
+  return trimmed ? trimmed : null;
+};
+
+const normalizeStringArray = (value: unknown) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (!Array.isArray(value)) return null;
+  const cleaned = value
+    .map((v) => String(v ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 80);
+  const seen = new Set<string>();
+  const dedup: string[] = [];
+  for (const item of cleaned) {
+    const key = item.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    dedup.push(item);
+  }
+  return dedup.length > 0 ? dedup : null;
 };
 
 export class TorneiosService {
@@ -55,6 +94,12 @@ export class TorneiosService {
         templateUrl: torneios.templateUrl,
         superCampeonato: torneios.superCampeonato,
         oculto: torneios.oculto,
+        valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
+        valorInscricaoAdicional: torneios.valorInscricaoAdicional,
+        pixChave: torneios.pixChave,
+        pixNome: torneios.pixNome,
+        pixCidade: torneios.pixCidade,
+        camisetaOpcoes: torneios.camisetaOpcoes,
         esporteNome: esportes.nome,
       })
       .from(torneios)
@@ -85,6 +130,12 @@ export class TorneiosService {
         templateUrl: torneios.templateUrl,
         superCampeonato: torneios.superCampeonato,
         oculto: torneios.oculto,
+        valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
+        valorInscricaoAdicional: torneios.valorInscricaoAdicional,
+        pixChave: torneios.pixChave,
+        pixNome: torneios.pixNome,
+        pixCidade: torneios.pixCidade,
+        camisetaOpcoes: torneios.camisetaOpcoes,
         esporteNome: esportes.nome,
       })
       .from(torneios)
@@ -114,6 +165,12 @@ export class TorneiosService {
       logoUrl: torneios.logoUrl,
       templateUrl: torneios.templateUrl,
       superCampeonato: torneios.superCampeonato,
+      valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
+      valorInscricaoAdicional: torneios.valorInscricaoAdicional,
+      pixChave: torneios.pixChave,
+      pixNome: torneios.pixNome,
+      pixCidade: torneios.pixCidade,
+      camisetaOpcoes: torneios.camisetaOpcoes,
       organizadorId: torneios.organizadorId,
       esporteId: torneios.esporteId,
       esporteNome: esportes.nome
@@ -145,6 +202,12 @@ export class TorneiosService {
 
     const [novoTorneio] = await db.insert(torneios).values({
       ...dados,
+      valorPrimeiraInscricao: normalizeDecimal(dados.valorPrimeiraInscricao),
+      valorInscricaoAdicional: normalizeDecimal(dados.valorInscricaoAdicional),
+      pixChave: normalizeText(dados.pixChave),
+      pixNome: normalizeText(dados.pixNome),
+      pixCidade: normalizeText(dados.pixCidade),
+      camisetaOpcoes: normalizeStringArray(dados.camisetaOpcoes),
       oculto: dados.oculto ?? false,
       organizadorId,
       superCampeonato: dados.superCampeonato ?? false,
@@ -165,6 +228,12 @@ export class TorneiosService {
       .update(torneios)
       .set({
         ...dados,
+        valorPrimeiraInscricao: normalizeDecimal(dados.valorPrimeiraInscricao),
+        valorInscricaoAdicional: normalizeDecimal(dados.valorInscricaoAdicional),
+        pixChave: normalizeText(dados.pixChave),
+        pixNome: normalizeText(dados.pixNome),
+        pixCidade: normalizeText(dados.pixCidade),
+        camisetaOpcoes: normalizeStringArray((dados as any).camisetaOpcoes),
         atualizadoEm: new Date(),
       })
       .where(eq(torneios.slug, slug))

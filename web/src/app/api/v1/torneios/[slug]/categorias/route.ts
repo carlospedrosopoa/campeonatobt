@@ -39,6 +39,11 @@ export async function POST(
     const genero = body?.genero as "MASCULINO" | "FEMININO" | "MISTO" | undefined;
     const valorInscricao = body?.valorInscricao as string | number | undefined;
     const vagasMaximas = body?.vagasMaximas as number | null | undefined;
+    const dataHorarioRaw = body?.dataHorario as string | null | undefined;
+    const dataHorario = dataHorarioRaw ? new Date(dataHorarioRaw) : dataHorarioRaw === null ? null : undefined;
+    if (dataHorario instanceof Date && Number.isNaN(dataHorario.getTime())) {
+      return NextResponse.json({ error: "Data/hora inválida" }, { status: 400 });
+    }
 
     if (!nome || !genero) {
       return NextResponse.json({ error: "Campos obrigatórios faltando" }, { status: 400 });
@@ -50,6 +55,7 @@ export async function POST(
       genero,
       valorInscricao,
       vagasMaximas,
+      dataHorario: dataHorario as any,
     });
 
     return NextResponse.json(nova, { status: 201 });
@@ -58,4 +64,3 @@ export async function POST(
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
-

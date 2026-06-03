@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
+import { db } from "@/db";
+import { usuarios } from "@/db/schema";
 import { playBuscarAtletas } from "@/services/playnaquadra-client";
+import { and, eq, or, sql } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
@@ -15,7 +18,33 @@ export async function GET(request: NextRequest) {
 
   try {
     const tokenPlay = request.cookies.get("play_token")?.value || "";
-    if (!tokenPlay) return NextResponse.json({ error: "Sessão do Play na Quadra expirada. Faça login novamente." }, { status: 401 });
+    if (!tokenPlay) {
+      const term = `%${q.toLowerCase()}%`;
+      const qDigits = q.replace(/\D/g, "");
+      const where = and(
+        eq(usuarios.perfil, "ATLETA"),
+        sql`${usuarios.playnaquadraAtletaId} is not null`,
+        or(
+          sql`lower(${usuarios.nome}) like ${term}`,
+          sql`lower(${usuarios.email}) like ${term}`,
+          ...(qDigits.length >= 2 ? [sql`regexp_replace(coalesce(${usuarios.telefone}, ''), '\\D', '', 'g') like ${`%${qDigits}%`}`] : [])
+        )
+      );
+
+      const rows = await db
+        .select({
+          id: usuarios.playnaquadraAtletaId,
+          nome: usuarios.nome,
+          email: usuarios.email,
+          telefone: usuarios.telefone,
+          fotoUrl: usuarios.fotoUrl,
+        })
+        .from(usuarios)
+        .where(where)
+        .limit(limite);
+
+      return NextResponse.json({ atletas: rows, total: rows.length }, { headers: { "Cache-Control": "no-store", Vary: "Authorization" } });
+    }
 
     const result = await playBuscarAtletas({ token: tokenPlay, q, limite });
     if (result.res.status === 401) {

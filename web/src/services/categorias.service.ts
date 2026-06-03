@@ -9,6 +9,7 @@ export type CriarCategoriaDTO = {
   genero: "MASCULINO" | "FEMININO" | "MISTO";
   valorInscricao?: string | number | null;
   vagasMaximas?: number | null;
+  dataHorario?: Date | null;
 };
 
 export type AtualizarCategoriaDTO = {
@@ -16,6 +17,7 @@ export type AtualizarCategoriaDTO = {
   genero?: "MASCULINO" | "FEMININO" | "MISTO";
   valorInscricao?: string | number | null;
   vagasMaximas?: number | null;
+  dataHorario?: Date | null;
 };
 
 export class CategoriasService {
@@ -58,6 +60,7 @@ export class CategoriasService {
             ? undefined
             : String(dados.valorInscricao),
         vagasMaximas: dados.vagasMaximas ?? undefined,
+        dataHorario: dados.dataHorario === undefined ? undefined : dados.dataHorario,
       })
       .returning();
     return nova;
@@ -73,6 +76,7 @@ export class CategoriasService {
             ? null
             : String(dados.valorInscricao),
       vagasMaximas: dados.vagasMaximas === undefined ? undefined : dados.vagasMaximas,
+      dataHorario: dados.dataHorario === undefined ? undefined : dados.dataHorario,
     };
 
     if (dados.nome) {

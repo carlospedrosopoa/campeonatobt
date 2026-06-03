@@ -44,10 +44,10 @@ export async function PUT(
 
     const [saved] = await db
       .insert(inscricaoPagamentos)
-      .values({ inscricaoId, usuarioId: atletaId, pago })
+      .values({ inscricaoId, usuarioId: atletaId, pago, status: pago ? "PAGO" : "PENDENTE" })
       .onConflictDoUpdate({
         target: [inscricaoPagamentos.inscricaoId, inscricaoPagamentos.usuarioId],
-        set: { pago },
+        set: { pago, status: pago ? "PAGO" : "PENDENTE" },
       })
       .returning();
 
@@ -57,4 +57,3 @@ export async function PUT(
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
-

@@ -28,6 +28,7 @@ type Categoria = {
   genero: "MASCULINO" | "FEMININO" | "MISTO";
   valorInscricao: string | null;
   vagasMaximas: number | null;
+  dataHorario: string | null;
   criadoEm: string | Date;
   inscricoesTotal: number;
   inscricoesPendentes: number;
@@ -66,7 +67,25 @@ export default function AdminTorneioDashboardPage() {
     genero: "MISTO" as Categoria["genero"],
     valorInscricao: "",
     vagasMaximas: "",
+    dataHorario: "",
   });
+
+  function formatDataHora(value?: string | null) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const data = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return `${data} ${hora}`;
+  }
+
+  function toLocalDateTimeInput(value: string | null | undefined) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
 
   useEffect(() => {
     let ativo = true;
@@ -107,7 +126,7 @@ export default function AdminTorneioDashboardPage() {
   function abrirNovaCategoria() {
     setMostraFormCategoria(true);
     setEditandoCategoriaId(null);
-    setFormCategoria({ nome: "", genero: "MISTO", valorInscricao: "", vagasMaximas: "" });
+    setFormCategoria({ nome: "", genero: "MISTO", valorInscricao: "", vagasMaximas: "", dataHorario: "" });
     setErroCategorias(null);
   }
 
@@ -119,6 +138,7 @@ export default function AdminTorneioDashboardPage() {
       genero: cat.genero,
       valorInscricao: cat.valorInscricao ?? "",
       vagasMaximas: cat.vagasMaximas === null ? "" : String(cat.vagasMaximas),
+      dataHorario: toLocalDateTimeInput(cat.dataHorario),
     });
     setErroCategorias(null);
   }
@@ -126,7 +146,7 @@ export default function AdminTorneioDashboardPage() {
   function cancelarCategoria() {
     setMostraFormCategoria(false);
     setEditandoCategoriaId(null);
-    setFormCategoria({ nome: "", genero: "MISTO", valorInscricao: "", vagasMaximas: "" });
+    setFormCategoria({ nome: "", genero: "MISTO", valorInscricao: "", vagasMaximas: "", dataHorario: "" });
     setErroCategorias(null);
   }
 
@@ -157,6 +177,7 @@ export default function AdminTorneioDashboardPage() {
 
       if (formCategoria.valorInscricao.trim()) payload.valorInscricao = Number(formCategoria.valorInscricao);
       if (formCategoria.vagasMaximas.trim()) payload.vagasMaximas = Number(formCategoria.vagasMaximas);
+      payload.dataHorario = formCategoria.dataHorario.trim() ? new Date(formCategoria.dataHorario).toISOString() : null;
 
       const url = editandoCategoriaId
         ? `/api/v1/torneios/${slugAtual}/categorias/${editandoCategoriaId}`
@@ -598,6 +619,16 @@ export default function AdminTorneioDashboardPage() {
                       className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                     />
                   </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Data/Hora da categoria</label>
+                    <input
+                      value={formCategoria.dataHorario}
+                      onChange={(e) => setFormCategoria((p) => ({ ...p, dataHorario: e.target.value }))}
+                      type="datetime-local"
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-3">
@@ -627,6 +658,7 @@ export default function AdminTorneioDashboardPage() {
                     <th className="py-3 pr-4 font-medium">Nome</th>
                     <th className="py-3 pr-4 font-medium">Gênero</th>
                     <th className="py-3 pr-4 font-medium">Taxa (por atleta)</th>
+                    <th className="py-3 pr-4 font-medium">Data/Hora</th>
                     <th className="py-3 pr-4 font-medium">Vagas</th>
                     <th className="py-3 text-right font-medium">Ações</th>
                   </tr>
@@ -634,7 +666,7 @@ export default function AdminTorneioDashboardPage() {
                 <tbody>
                   {categorias.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-10 text-center text-slate-500">
+                      <td colSpan={6} className="py-10 text-center text-slate-500">
                         Nenhuma categoria cadastrada.
                       </td>
                     </tr>
@@ -661,6 +693,7 @@ export default function AdminTorneioDashboardPage() {
                         <td className="py-4 pr-4 text-slate-700">
                           {cat.valorInscricao ? Number(cat.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "-"}
                         </td>
+                        <td className="py-4 pr-4 text-slate-700">{formatDataHora(cat.dataHorario) || "-"}</td>
                         <td className="py-4 pr-4 text-slate-700">
                           <div className="space-y-1 min-w-[180px]">
                             <div className="flex items-center justify-between text-xs text-slate-600">
