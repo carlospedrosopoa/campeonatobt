@@ -114,6 +114,43 @@ function summarizePayloadForLog(payload: any) {
   };
 }
 
+function summarizePayloadDeepForLog(payload: any) {
+  const message = getMessageCandidate(payload);
+
+  return {
+    dataKeys: payload?.data && typeof payload.data === "object" ? Object.keys(payload.data).slice(0, 30) : [],
+    messageKeys: message && typeof message === "object" ? Object.keys(message).slice(0, 40) : [],
+    nestedMessageKeys:
+      message?.message && typeof message.message === "object" ? Object.keys(message.message).slice(0, 40) : [],
+    candidateTexts: {
+      messageConversation: cleanString(message?.message?.conversation) || null,
+      extendedText: cleanString(message?.message?.extendedTextMessage?.text) || null,
+      imageCaption: cleanString(message?.message?.imageMessage?.caption) || null,
+      messageText: cleanString(message?.text) || null,
+      messageBody: cleanString(message?.body) || null,
+      payloadDataText: cleanString(payload?.data?.text) || null,
+      payloadDataBody: cleanString(payload?.data?.body) || null,
+      payloadDataMessageString: typeof payload?.data?.message === "string" ? cleanString(payload.data.message) : null,
+    },
+    candidatePhones: {
+      messagePhone: cleanString(message?.phone) || null,
+      messageFrom: cleanString(message?.from) || null,
+      messageTo: cleanString(message?.to) || null,
+      messageRemoteJid: cleanString(message?.remoteJid) || cleanString(message?.remote_jid) || null,
+      messageKeyRemoteJid: cleanString(message?.key?.remoteJid) || cleanString(message?.key?.remote_jid) || null,
+      payloadPhone: cleanString(payload?.phone) || null,
+      payloadFrom: cleanString(payload?.from) || null,
+      payloadDataPhone: cleanString(payload?.data?.phone) || null,
+      payloadDataFrom: cleanString(payload?.data?.from) || null,
+    },
+    ids: {
+      messageId: cleanString(message?.messageId) || cleanString(message?.id) || null,
+      messageKeyId: cleanString(message?.key?.id) || cleanString(message?.key_id) || null,
+      payloadMessageId: cleanString(payload?.messageId) || cleanString(payload?.data?.messageId) || null,
+    },
+  };
+}
+
 function parseIncomingGzappyPayload(payload: any): ParsedGzappyInbound | null {
   const message = getMessageCandidate(payload);
 
@@ -227,7 +264,9 @@ export async function POST(request: NextRequest) {
     if (!payload) return NextResponse.json({ ok: false, error: "Payload inválido" }, { status: 400 });
 
     const payloadSummary = summarizePayloadForLog(payload);
+    const payloadDeepSummary = summarizePayloadDeepForLog(payload);
     console.log("[gzappy:webhook] payload_recebido", payloadSummary);
+    console.log("[gzappy:webhook] payload_estrutura", payloadDeepSummary);
 
     const inbound = parseIncomingGzappyPayload(payload);
     console.log("[gzappy:webhook] inbound_parseado", {
@@ -238,6 +277,7 @@ export async function POST(request: NextRequest) {
       console.warn("[gzappy:webhook] ignorado", {
         reason: "payload_sem_telefone",
         payloadSummary,
+        payloadDeepSummary,
       });
       return NextResponse.json({ ok: true, ignored: true, reason: "payload_sem_telefone" }, { status: 200 });
     }
@@ -247,6 +287,7 @@ export async function POST(request: NextRequest) {
         reason: "mensagem_saida",
         inbound,
         payloadSummary,
+        payloadDeepSummary,
       });
       return NextResponse.json({ ok: true, ignored: true, reason: "mensagem_saida" }, { status: 200 });
     }
@@ -256,6 +297,7 @@ export async function POST(request: NextRequest) {
         reason: "mensagem_sem_texto",
         inbound,
         payloadSummary,
+        payloadDeepSummary,
       });
       return NextResponse.json({ ok: true, ignored: true, reason: "mensagem_sem_texto" }, { status: 200 });
     }
