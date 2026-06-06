@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save } from "lucide-react";
+import { Eye, EyeOff, Save } from "lucide-react";
 
 type GzappyConfig = {
   ativo: boolean;
@@ -14,6 +14,7 @@ export default function AdminConfiguracoesPage() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [mostrarApiKey, setMostrarApiKey] = useState(false);
   const [config, setConfig] = useState<GzappyConfig>({ ativo: false, apiKey: null, instanceId: null, whatsappArbitragem: null });
 
   useEffect(() => {
@@ -95,14 +96,25 @@ export default function AdminConfiguracoesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="space-y-1">
             <div className="text-sm font-medium text-slate-700">JWT Token (API Key)</div>
-            <input
-              type="password"
-              value={config.apiKey || ""}
-              onChange={(e) => setConfig((p) => ({ ...p, apiKey: e.target.value }))}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-              placeholder="Bearer token da Gzappy"
-              autoComplete="off"
-            />
+            <div className="relative">
+              <input
+                type={mostrarApiKey ? "text" : "password"}
+                value={config.apiKey || ""}
+                onChange={(e) => setConfig((p) => ({ ...p, apiKey: e.target.value }))}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 pr-11 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                placeholder="Bearer token da Gzappy"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarApiKey((value) => !value)}
+                className="absolute inset-y-0 right-0 inline-flex items-center justify-center px-3 text-slate-500 hover:text-slate-700"
+                aria-label={mostrarApiKey ? "Ocultar API Key" : "Mostrar API Key"}
+                title={mostrarApiKey ? "Ocultar API Key" : "Mostrar API Key"}
+              >
+                {mostrarApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </label>
 
           <label className="space-y-1">
@@ -131,4 +143,3 @@ export default function AdminConfiguracoesPage() {
     </div>
   );
 }
-
