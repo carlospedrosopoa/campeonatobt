@@ -23,6 +23,7 @@ type Torneio = {
   status: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
   superCampeonato: boolean;
   oculto: boolean;
+  inscricaoComIa: boolean;
   valorPrimeiraInscricao: string | null;
   valorInscricaoAdicional: string | null;
   pixChave: string | null;
@@ -73,6 +74,7 @@ export default function AdminEditarDadosTorneioPage() {
     status: "RASCUNHO" as Torneio["status"],
     superCampeonato: false,
     oculto: false,
+    inscricaoComIa: false,
     valorPrimeiraInscricao: "",
     valorInscricaoAdicional: "",
     pixChave: "",
@@ -121,6 +123,7 @@ export default function AdminEditarDadosTorneioPage() {
           status: t.status,
           superCampeonato: Boolean(t.superCampeonato),
           oculto: Boolean(t.oculto),
+          inscricaoComIa: Boolean(t.inscricaoComIa),
           valorPrimeiraInscricao: t.valorPrimeiraInscricao ?? "",
           valorInscricaoAdicional: t.valorInscricaoAdicional ?? "",
           pixChave: t.pixChave ?? "",
@@ -182,6 +185,7 @@ export default function AdminEditarDadosTorneioPage() {
         status: form.status,
         superCampeonato: form.superCampeonato,
         oculto: form.oculto,
+        inscricaoComIa: form.inscricaoComIa,
         valorPrimeiraInscricao: form.valorPrimeiraInscricao?.trim() ? form.valorPrimeiraInscricao : null,
         valorInscricaoAdicional: form.valorInscricaoAdicional?.trim() ? form.valorInscricaoAdicional : null,
         pixChave: form.pixChave?.trim() ? form.pixChave : null,
@@ -412,6 +416,19 @@ export default function AdminEditarDadosTorneioPage() {
                 Oculto (não aparece para usuários)
               </label>
               <div className="text-xs text-slate-500">Quando marcado, o torneio não aparece no site público.</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Inscrição com IA</label>
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.inscricaoComIa)}
+                  onChange={(e) => setForm((prev) => ({ ...prev, inscricaoComIa: e.target.checked }))}
+                />
+                Habilitar inscrição via WhatsApp com IA neste torneio
+              </label>
+              <div className="text-xs text-slate-500">Controla a exibição do botão público e se o agente pode atender inscrições deste torneio.</div>
             </div>
 
             <div className="space-y-2">
