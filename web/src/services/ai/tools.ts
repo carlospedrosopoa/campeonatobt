@@ -675,6 +675,7 @@ async function createTournamentRegistration(args: CreateTournamentRegistrationAr
       torneioId: categorias.torneioId,
       torneioNome: torneios.nome,
       torneioStatus: torneios.status,
+      torneioInscricaoComIa: torneios.inscricaoComIa,
     })
     .from(categorias)
     .innerJoin(torneios, eq(categorias.torneioId, torneios.id))
@@ -706,6 +707,20 @@ async function createTournamentRegistration(args: CreateTournamentRegistrationAr
       data: {
         tournamentId: args.tournamentId,
         tournamentStatus: categoria.torneioStatus,
+      },
+    };
+  }
+
+  if (!categoria.torneioInscricaoComIa) {
+    return {
+      ok: false,
+      tool: "create_tournament_registration",
+      status: "ai_registration_disabled",
+      message: "A inscricao via WhatsApp com IA nao esta habilitada para este torneio.",
+      nextAction: "informar_canal_alternativo_de_inscricao",
+      data: {
+        tournamentId: args.tournamentId,
+        tournamentName: categoria.torneioNome,
       },
     };
   }
