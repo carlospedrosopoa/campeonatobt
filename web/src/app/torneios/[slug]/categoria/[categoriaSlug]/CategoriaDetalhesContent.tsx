@@ -421,8 +421,17 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                   <div className="flex items-center gap-2">
                                     <Calendar className="w-3.5 h-3.5 text-slate-500" />
                                     <span className="font-semibold text-slate-800">
-                                      {new Date(p.dataHorario).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às{" "}
-                                      {new Date(p.dataHorario).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                      {new Date(p.dataHorario).toLocaleDateString("pt-BR", {
+                                        timeZone: "America/Sao_Paulo",
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                      })}{" "}
+                                      às{" "}
+                                      {new Date(p.dataHorario).toLocaleTimeString("pt-BR", {
+                                        timeZone: "America/Sao_Paulo",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
                                     </span>
                                   </div>
                                 ) : (

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { apoiadoresService } from "@/services/apoiadores.service";
-import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket } from "lucide-react";
+import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket, Smartphone } from "lucide-react";
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
 
@@ -25,17 +25,20 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
   const session = await getSession();
   const isAtleta = session?.user?.perfil === "ATLETA";
   const nextInscricao = `/atleta/torneios?torneioSlug=${encodeURIComponent(torneio.slug)}`;
-  const hrefInscricao = isAtleta ? nextInscricao : `/atleta/login?next=${encodeURIComponent(nextInscricao)}`;
+  const hrefInscricao = isAtleta ? nextInscricao : `/atleta/sso/iniciar?next=${encodeURIComponent(nextInscricao)}`;
 
   function formatarDataHoraCategoria(value: any) {
     if (!value) return null;
-    const d = new Date(value);
+    const d = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(d.getTime())) return null;
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mi = String(d.getMinutes()).padStart(2, "0");
-    return `${dd}/${mm} ${hh}:${mi}`;
+    const s = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(d);
+    return s.replace(",", "");
   }
 
   return (
@@ -80,7 +83,7 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
       </div>
 
       {/* Conteúdo Principal */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 pb-28 lg:pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* Coluna Esquerda: Informações e Categorias */}
@@ -201,7 +204,7 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                   className="w-full mt-4 bg-orange-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-orange-600"
                 >
                   <Ticket className="h-5 w-5" />
-                  {isAtleta ? "Inscrever" : "Entrar para inscrever"}
+                  {isAtleta ? "Inscrever" : "Entrar/Criar perfil e inscrever"}
                 </Link>
 
                 <Link
@@ -223,6 +226,18 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
+        <div className="container mx-auto px-4 py-3">
+          <Link
+            href={hrefInscricao}
+            className="w-full bg-orange-500 text-white font-extrabold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-orange-600"
+          >
+            <Smartphone className="h-5 w-5" />
+            {isAtleta ? "Inscrever agora" : "Inscrever (1 toque)"}
+          </Link>
         </div>
       </div>
     </div>

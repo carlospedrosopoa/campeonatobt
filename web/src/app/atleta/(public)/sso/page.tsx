@@ -11,6 +11,10 @@ export default function AtletaSsoPage() {
     async function run() {
       try {
         setErro(null);
+        const spSearch = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+        const nextRaw = (spSearch.get("next") || "").trim();
+        const next =
+          nextRaw && nextRaw.startsWith("/") && !nextRaw.startsWith("//") && !nextRaw.includes("://") ? nextRaw : "/atleta/torneios";
         const hash = typeof window !== "undefined" ? window.location.hash : "";
         const sp = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
         const token = sp.get("token") || "";
@@ -27,8 +31,8 @@ export default function AtletaSsoPage() {
         const data = (await res.json().catch(() => null)) as any;
         if (!res.ok) throw new Error(data?.error || "Falha no SSO");
 
-        window.history.replaceState({}, document.title, "/atleta/torneios");
-        router.replace("/atleta/torneios");
+        window.history.replaceState({}, document.title, next);
+        router.replace(next);
         router.refresh();
       } catch (e: any) {
         setErro(e?.message || "Erro ao autenticar");
@@ -51,4 +55,3 @@ export default function AtletaSsoPage() {
     </div>
   );
 }
-

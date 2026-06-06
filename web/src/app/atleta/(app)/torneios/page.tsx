@@ -59,8 +59,8 @@ function formatDateRange(ini?: string | null, fim?: string | null) {
   const d1 = ini ? new Date(ini) : null;
   const d2 = fim ? new Date(fim) : null;
   if (!d1 || Number.isNaN(d1.getTime()) || !d2 || Number.isNaN(d2.getTime())) return null;
-  const a = d1.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-  const b = d2.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const a = d1.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
+  const b = d2.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
   return `${a}–${b}`;
 }
 
@@ -68,8 +68,8 @@ function formatDataHora(value?: string | null) {
   if (!value) return "";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "";
-  const data = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-  const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const data = d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
+  const hora = d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
   return `${data} ${hora}`;
 }
 

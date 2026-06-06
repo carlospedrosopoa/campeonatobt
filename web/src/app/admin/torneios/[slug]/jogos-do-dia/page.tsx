@@ -181,7 +181,7 @@ export default function AdminJogosDoDiaPage() {
     if (!value) return null;
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
   }
 
   function abrirModalPlacar(p: Partida) {

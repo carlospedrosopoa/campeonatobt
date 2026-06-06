@@ -155,6 +155,7 @@ function formatarDataHora(value?: string | null) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "Data a definir";
   return d.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
