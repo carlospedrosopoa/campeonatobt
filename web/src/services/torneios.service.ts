@@ -30,6 +30,7 @@ export type CriarTorneioDTO = {
   esporteId: string;
   superCampeonato?: boolean;
   oculto?: boolean;
+  inscricaoComIa?: boolean;
   valorPrimeiraInscricao?: string | number | null;
   valorInscricaoAdicional?: string | number | null;
   pixChave?: string | null;
@@ -94,6 +95,7 @@ export class TorneiosService {
         templateUrl: torneios.templateUrl,
         superCampeonato: torneios.superCampeonato,
         oculto: torneios.oculto,
+        inscricaoComIa: torneios.inscricaoComIa,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
         valorInscricaoAdicional: torneios.valorInscricaoAdicional,
         pixChave: torneios.pixChave,
@@ -130,6 +132,7 @@ export class TorneiosService {
         templateUrl: torneios.templateUrl,
         superCampeonato: torneios.superCampeonato,
         oculto: torneios.oculto,
+        inscricaoComIa: torneios.inscricaoComIa,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
         valorInscricaoAdicional: torneios.valorInscricaoAdicional,
         pixChave: torneios.pixChave,
@@ -161,6 +164,7 @@ export class TorneiosService {
       local: torneios.local,
       status: torneios.status,
       oculto: torneios.oculto,
+      inscricaoComIa: torneios.inscricaoComIa,
       bannerUrl: torneios.bannerUrl,
       logoUrl: torneios.logoUrl,
       templateUrl: torneios.templateUrl,
@@ -209,6 +213,7 @@ export class TorneiosService {
       pixCidade: normalizeText(dados.pixCidade),
       camisetaOpcoes: normalizeStringArray(dados.camisetaOpcoes),
       oculto: dados.oculto ?? false,
+      inscricaoComIa: dados.inscricaoComIa ?? false,
       organizadorId,
       superCampeonato: dados.superCampeonato ?? false,
       status: 'RASCUNHO'
@@ -222,6 +227,7 @@ export class TorneiosService {
       status?: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
       superCampeonato?: boolean;
       oculto?: boolean;
+      inscricaoComIa?: boolean;
     }
   ) {
     const [atualizado] = await db

@@ -22,6 +22,7 @@ type CriarTorneioPayload = {
   esporteId: string;
   superCampeonato?: boolean;
   oculto?: boolean;
+  inscricaoComIa?: boolean;
   valorPrimeiraInscricao?: string | null;
   valorInscricaoAdicional?: string | null;
   pixChave?: string | null;
@@ -61,6 +62,7 @@ export default function AdminNovoTorneioPage() {
     esporteId: "",
     superCampeonato: false,
     oculto: false,
+    inscricaoComIa: false,
     valorPrimeiraInscricao: "",
     valorInscricaoAdicional: "",
     pixChave: "",
@@ -127,6 +129,7 @@ export default function AdminNovoTorneioPage() {
         esporteId: form.esporteId,
         superCampeonato: form.superCampeonato,
         oculto: form.oculto,
+        inscricaoComIa: form.inscricaoComIa,
         valorPrimeiraInscricao: form.valorPrimeiraInscricao?.trim() ? form.valorPrimeiraInscricao : null,
         valorInscricaoAdicional: form.valorInscricaoAdicional?.trim() ? form.valorInscricaoAdicional : null,
         pixChave: form.pixChave?.trim() ? form.pixChave : null,
@@ -326,6 +329,19 @@ export default function AdminNovoTorneioPage() {
               Oculto (não aparece para usuários)
             </label>
             <div className="text-xs text-slate-500">Use enquanto organiza o evento. Depois é só desmarcar.</div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Inscrição com IA</label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={Boolean(form.inscricaoComIa)}
+                onChange={(e) => setForm((prev) => ({ ...prev, inscricaoComIa: e.target.checked }))}
+              />
+              Habilitar inscrição via WhatsApp com IA neste torneio
+            </label>
+            <div className="text-xs text-slate-500">Quando marcado, o torneio pode aparecer no fluxo do agente e exibe o CTA público do WhatsApp.</div>
           </div>
 
           <div className="space-y-2">

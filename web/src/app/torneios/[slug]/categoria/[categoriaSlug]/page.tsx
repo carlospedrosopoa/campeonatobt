@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import CategoriaDetalhesContent from "./CategoriaDetalhesContent";
 
@@ -25,6 +25,12 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
     notFound();
   }
 
+  const inscricaoComIaHabilitada = torneio.inscricaoComIa;
+  const whatsappInscricoes = "5551983234600";
+  const hrefInscricaoWhatsapp = `https://wa.me/${whatsappInscricoes}?text=${encodeURIComponent(
+    `Ola! Quero me inscrever no torneio ${torneio.nome} na categoria ${categoria.nome}.`
+  )}`;
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header da Página */}
@@ -38,19 +44,32 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
             <span className="text-slate-900 font-medium">{categoria.nome}</span>
           </div>
           
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-slate-900">{categoria.nome}</h1>
               <p className="text-slate-500 mt-1">{categoria.genero}</p>
             </div>
             
-            <Link 
-              href={`/torneios/${slug}`}
-              className="hidden md:flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Voltar para o torneio
-            </Link>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              {inscricaoComIaHabilitada ? (
+                <a
+                  href={hrefInscricaoWhatsapp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Inscrever via WhatsApp
+                </a>
+              ) : null}
+              <Link 
+                href={`/torneios/${slug}`}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Voltar para o torneio
+              </Link>
+            </div>
           </div>
         </div>
       </div>

@@ -262,6 +262,7 @@ async function listCategoriesForTournament(params: GetAvailableCategoriesArgs, a
       torneioSlug: torneios.slug,
       torneioDescricao: torneios.descricao,
       torneioStatus: torneios.status,
+      torneioInscricaoComIa: torneios.inscricaoComIa,
       categoriaId: categorias.id,
       categoriaNome: categorias.nome,
       categoriaGenero: categorias.genero,
@@ -275,7 +276,7 @@ async function listCategoriesForTournament(params: GetAvailableCategoriesArgs, a
     .leftJoin(categorias, eq(categorias.torneioId, torneios.id))
     .leftJoin(partidas, eq(partidas.categoriaId, categorias.id))
     .leftJoin(inscricoes, eq(inscricoes.categoriaId, categorias.id))
-    .where(whereTournament)
+    .where(and(whereTournament, eq(torneios.inscricaoComIa, true)))
     .groupBy(torneios.id, categorias.id)
     .orderBy(desc(torneios.criadoEm));
 

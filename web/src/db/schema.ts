@@ -41,6 +41,7 @@ export const torneios = pgTable('torneios', {
   local: text('local').notNull(),
   status: statusTorneioEnum('status').default('RASCUNHO').notNull(),
   oculto: boolean('oculto').default(false).notNull(),
+  inscricaoComIa: boolean('inscricao_com_ia').default(false).notNull(),
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
   valorPrimeiraInscricao: decimal('valor_primeira_inscricao', { precision: 10, scale: 2 }),
   valorInscricaoAdicional: decimal('valor_inscricao_adicional', { precision: 10, scale: 2 }),

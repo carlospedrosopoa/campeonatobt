@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { apoiadoresService } from "@/services/apoiadores.service";
-import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket, Smartphone } from "lucide-react";
+import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket, Smartphone, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
 
@@ -26,6 +26,11 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
   const isAtleta = session?.user?.perfil === "ATLETA";
   const nextInscricao = `/atleta/torneios?torneioSlug=${encodeURIComponent(torneio.slug)}`;
   const hrefInscricao = isAtleta ? nextInscricao : `/atleta/sso/iniciar?next=${encodeURIComponent(nextInscricao)}`;
+  const inscricaoComIaHabilitada = torneio.inscricaoComIa;
+  const whatsappInscricoes = "5551983234600";
+  const hrefInscricaoWhatsapp = `https://wa.me/${whatsappInscricoes}?text=${encodeURIComponent(
+    `Ola! Quero me inscrever no torneio ${torneio.nome}.`
+  )}`;
 
   function formatarDataHoraCategoria(value: any) {
     if (!value) return null;
@@ -207,6 +212,18 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                   {isAtleta ? "Inscrever" : "Entrar/Criar perfil e inscrever"}
                 </Link>
 
+                {inscricaoComIaHabilitada ? (
+                  <a
+                    href={hrefInscricaoWhatsapp}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full mt-3 bg-green-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-600"
+                  >
+                    <MessageCircle className="h-5 w-5" />
+                    Inscrever via WhatsApp
+                  </a>
+                ) : null}
+
                 <Link
                   href={`/torneios/${torneio.slug}/atletas`}
                   className="w-full mt-3 bg-slate-900 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-slate-800"
@@ -231,13 +248,26 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
 
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
         <div className="container mx-auto px-4 py-3">
-          <Link
-            href={hrefInscricao}
-            className="w-full bg-orange-500 text-white font-extrabold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-orange-600"
-          >
-            <Smartphone className="h-5 w-5" />
-            {isAtleta ? "Inscrever agora" : "Inscrever (1 toque)"}
-          </Link>
+          <div className={`grid gap-3 ${inscricaoComIaHabilitada ? "grid-cols-2" : "grid-cols-1"}`}>
+            <Link
+              href={hrefInscricao}
+              className="bg-orange-500 text-white font-extrabold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-orange-600"
+            >
+              <Smartphone className="h-5 w-5" />
+              {isAtleta ? "App" : "1 toque"}
+            </Link>
+            {inscricaoComIaHabilitada ? (
+              <a
+                href={hrefInscricaoWhatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-green-500 text-white font-extrabold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-green-600"
+              >
+                <MessageCircle className="h-5 w-5" />
+                WhatsApp
+              </a>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
