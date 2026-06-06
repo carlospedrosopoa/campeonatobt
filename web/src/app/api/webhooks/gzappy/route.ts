@@ -54,6 +54,66 @@ function getMessageCandidate(payload: any) {
   return null;
 }
 
+function summarizePayloadForLog(payload: any) {
+  const message = getMessageCandidate(payload);
+  const textCandidate = cleanString(
+    firstDefined(
+      message?.message?.conversation,
+      message?.message?.extendedTextMessage?.text,
+      message?.conversation,
+      message?.text,
+      message?.body,
+      typeof payload?.message === "string" ? payload.message : undefined,
+      payload?.text,
+      payload?.body
+    )
+  );
+
+  return {
+    topLevelKeys: payload && typeof payload === "object" ? Object.keys(payload).slice(0, 20) : [],
+    event: cleanString(firstDefined(payload?.event, payload?.eventType, payload?.type, payload?.name, payload?.data?.event, payload?.data?.type)) || null,
+    hasMessagesArray: Array.isArray(payload?.messages),
+    hasDataMessagesArray: Array.isArray(payload?.data?.messages),
+    hasMessageObject: Boolean(message),
+    rawPhoneSample: cleanString(
+      firstDefined(
+        message?.phone,
+        message?.from,
+        message?.to,
+        message?.remote_jid,
+        message?.remoteJid,
+        message?.key?.remoteJid,
+        payload?.phone,
+        payload?.from,
+        payload?.remoteJid,
+        payload?.remote_jid,
+        payload?.data?.phone,
+        payload?.data?.from
+      )
+    ) || null,
+    normalizedPhone: normalizePhone(
+      firstDefined(
+        message?.phone,
+        message?.from,
+        message?.to,
+        message?.remote_jid,
+        message?.remoteJid,
+        message?.key?.remoteJid,
+        payload?.phone,
+        payload?.from,
+        payload?.remoteJid,
+        payload?.remote_jid,
+        payload?.data?.phone,
+        payload?.data?.from
+      )
+    ) || null,
+    messageId: cleanString(firstDefined(message?.messageId, message?.id, message?.key?.id, payload?.messageId, payload?.id, payload?.data?.messageId)) || null,
+    fromMeRaw: firstDefined(payload?.fromMe, payload?.isFromMe, payload?.data?.fromMe, payload?.data?.key_from_me, message?.fromMe, message?.key?.fromMe, message?.key_from_me),
+    direction: cleanString(firstDefined(payload?.direction, payload?.data?.direction, message?.direction)).toUpperCase() || null,
+    textPreview: textCandidate ? textCandidate.slice(0, 120) : null,
+  };
+}
+
 function parseIncomingGzappyPayload(payload: any): ParsedGzappyInbound | null {
   const message = getMessageCandidate(payload);
 
@@ -166,16 +226,37 @@ export async function POST(request: NextRequest) {
     const payload = (await request.json().catch(() => null)) as any;
     if (!payload) return NextResponse.json({ ok: false, error: "Payload inválido" }, { status: 400 });
 
+    const payloadSummary = summarizePayloadForLog(payload);
+    console.log("[gzappy:webhook] payload_recebido", payloadSummary);
+
     const inbound = parseIncomingGzappyPayload(payload);
+    console.log("[gzappy:webhook] inbound_parseado", {
+      ok: Boolean(inbound),
+      inbound,
+    });
     if (!inbound) {
+      console.warn("[gzappy:webhook] ignorado", {
+        reason: "payload_sem_telefone",
+        payloadSummary,
+      });
       return NextResponse.json({ ok: true, ignored: true, reason: "payload_sem_telefone" }, { status: 200 });
     }
 
     if (inbound.fromMe) {
+      console.warn("[gzappy:webhook] ignorado", {
+        reason: "mensagem_saida",
+        inbound,
+        payloadSummary,
+      });
       return NextResponse.json({ ok: true, ignored: true, reason: "mensagem_saida" }, { status: 200 });
     }
 
     if (!inbound.text) {
+      console.warn("[gzappy:webhook] ignorado", {
+        reason: "mensagem_sem_texto",
+        inbound,
+        payloadSummary,
+      });
       return NextResponse.json({ ok: true, ignored: true, reason: "mensagem_sem_texto" }, { status: 200 });
     }
 
@@ -185,6 +266,12 @@ export async function POST(request: NextRequest) {
       messageText: inbound.text,
       messageId: inbound.messageId,
     });
+    console.log("[gzappy:webhook] agent_resultado", {
+      ok: agentResult.ok,
+      threadId: agentResult.threadId,
+      usedTools: agentResult.usedTools,
+      replyPreview: agentResult.replyText ? agentResult.replyText.slice(0, 200) : null,
+    });
 
     const outbound = agentResult.replyText
       ? await enviarMensagemGzappy({
@@ -192,6 +279,7 @@ export async function POST(request: NextRequest) {
           mensagem: agentResult.replyText,
         })
       : null;
+    console.log("[gzappy:webhook] outbound_resultado", outbound);
 
     return NextResponse.json(
       {
