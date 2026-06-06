@@ -165,6 +165,7 @@ function parseIncomingGzappyPayload(payload: any): ParsedGzappyInbound | null {
       typeof payload?.message === "string" ? payload.message : undefined,
       payload?.text,
       payload?.body,
+      typeof payload?.data?.message === "string" ? payload.data.message : undefined,
       payload?.data?.text,
       payload?.data?.body,
       payload?.messageData?.text,
