@@ -39,20 +39,32 @@ function isLinkValue(value: string) {
   return /^https?:\/\//i.test(value) || /^\/[a-z0-9/_-]+$/i.test(value);
 }
 
+function normalizeClickableLink(value: string) {
+  return String(value || "").trim().replace(/[),.;!?]+$/g, "");
+}
+
+function toHref(value: string) {
+  const normalized = normalizeClickableLink(value);
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  if (/^\//.test(normalized) && typeof window !== "undefined") return new URL(normalized, window.location.origin).toString();
+  return normalized;
+}
+
 function renderLineValue(value: string, key: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
+  const normalizedLink = normalizeClickableLink(trimmed);
 
-  if (isLinkValue(trimmed)) {
+  if (isLinkValue(normalizedLink)) {
     return (
       <a
         key={key}
-        href={trimmed}
-        target={/^https?:\/\//i.test(trimmed) ? "_blank" : undefined}
-        rel={/^https?:\/\//i.test(trimmed) ? "noopener noreferrer" : undefined}
+        href={toHref(normalizedLink)}
+        target="_blank"
+        rel="noopener noreferrer"
         className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-800"
       >
-        {trimmed.startsWith("/") ? "Abrir perfil" : "Abrir link"}
+        {normalizedLink.startsWith("/") ? "Abrir perfil" : "Abrir link"}
       </a>
     );
   }
@@ -114,16 +126,17 @@ function renderAssistantMessage(content: string) {
       return (
         <div key={`text-${index}`} className="text-[13px] leading-6 text-slate-700 whitespace-pre-wrap break-words">
           {inlineParts.map((part, partIndex) => {
-            if (isLinkValue(part)) {
+            const normalizedLink = normalizeClickableLink(part);
+            if (isLinkValue(normalizedLink)) {
               return (
                 <a
                   key={`link-${index}-${partIndex}`}
-                  href={part}
-                  target={/^https?:\/\//i.test(part) ? "_blank" : undefined}
-                  rel={/^https?:\/\//i.test(part) ? "noopener noreferrer" : undefined}
+                  href={toHref(normalizedLink)}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="font-semibold text-slate-900 underline underline-offset-2"
                 >
-                  {part}
+                  {normalizedLink}
                 </a>
               );
             }
