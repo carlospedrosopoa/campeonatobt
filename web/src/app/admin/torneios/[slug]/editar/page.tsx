@@ -426,9 +426,9 @@ export default function AdminEditarDadosTorneioPage() {
                   checked={Boolean(form.inscricaoComIa)}
                   onChange={(e) => setForm((prev) => ({ ...prev, inscricaoComIa: e.target.checked }))}
                 />
-                Habilitar inscrição via WhatsApp com IA neste torneio
+                Habilitar atendimento virtual com IA neste torneio
               </label>
-              <div className="text-xs text-slate-500">Controla a exibição do botão público e se o agente pode atender inscrições deste torneio.</div>
+              <div className="text-xs text-slate-500">Controla a exibição do chat público e se o agente pode atender inscrições deste torneio.</div>
             </div>
 
             <div className="space-y-2">

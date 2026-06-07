@@ -26,6 +26,58 @@ type Props = {
   categoryName?: string | null;
 };
 
+function formatMessageContent(content: string) {
+  return String(content || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function renderAssistantMessage(content: string) {
+  const lines = formatMessageContent(content)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line, index, arr) => line.length > 0 || arr[index - 1]?.length > 0);
+
+  return lines.map((line, index) => {
+    if (!line) {
+      return <div key={`space-${index}`} className="h-1.5" />;
+    }
+
+    if (/^valor\b/i.test(line)) {
+      return (
+        <div key={`value-${index}`} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] font-semibold text-amber-900">
+          {line}
+        </div>
+      );
+    }
+
+    if (/^(categorias disponiveis|categorias abertas|proximo passo|pr[oó]ximo passo)\b/i.test(line)) {
+      return (
+        <div key={`label-${index}`} className="pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+          {line}
+        </div>
+      );
+    }
+
+    if (line.startsWith("• ")) {
+      return (
+        <div key={`item-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] leading-5 text-slate-700 shadow-sm">
+          {line.slice(2)}
+        </div>
+      );
+    }
+
+    return (
+      <div key={`text-${index}`} className="text-[13px] leading-6 text-slate-700 whitespace-pre-wrap break-words">
+        {line}
+      </div>
+    );
+  });
+}
+
 function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -241,7 +293,11 @@ export default function TournamentRegistrationChat(props: Props) {
                         : "border border-slate-200 bg-slate-50 text-slate-700"
                     }`}
                   >
-                    {message.content}
+                    {message.role === "assistant" ? (
+                      <div className="space-y-2">{renderAssistantMessage(message.content)}</div>
+                    ) : (
+                      <div className="whitespace-pre-wrap break-words">{formatMessageContent(message.content)}</div>
+                    )}
                   </div>
                 </div>
               ))}

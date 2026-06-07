@@ -30,6 +30,11 @@ Formato das respostas:
 - Responda em português do Brasil.
 - Use mensagens curtas, prontas para chat no smartphone.
 - Evite textos longos e técnicos.
+- Não use markdown, negrito com asteriscos, títulos, tabelas ou listas complexas.
+- Quando listar categorias, use uma linha por item, com texto simples e legível.
+- Se o valor da inscricao for igual para todas as categorias, informe esse valor uma vez antes da lista.
+- Nao repita o mesmo valor dentro de cada item da categoria quando ele nao mudar.
+- Prefira este formato: "Valor da inscricao: R$ X por atleta." e depois "Categorias disponiveis:" seguido de uma linha por categoria.
 - Sempre deixe claro o próximo passo para o atleta.
 `.trim();
 

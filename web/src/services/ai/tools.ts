@@ -674,6 +674,10 @@ async function getAvailableCategories(args: GetAvailableCategoriesArgs, context:
     ...c,
     lotado: c.vagasMaximas !== null && c.inscritos >= c.vagasMaximas,
   }));
+  const valoresValidos = categories
+    .map((c) => (typeof c.valorInscricao === "string" ? c.valorInscricao.trim() : ""))
+    .filter(Boolean);
+  const valorUnicoPorAtleta = valoresValidos.length > 0 && new Set(valoresValidos).size === 1 ? valoresValidos[0] : null;
 
   return {
     ok: true,
@@ -688,6 +692,10 @@ async function getAvailableCategories(args: GetAvailableCategoriesArgs, context:
         slug: tournament.slug,
         descricao: tournament.descricao,
         status: tournament.status,
+      },
+      feeSummary: {
+        sameFeeForAllCategories: Boolean(valorUnicoPorAtleta),
+        amountPerAthlete: valorUnicoPorAtleta,
       },
       categories,
       categoryContext: context.categorySlug
