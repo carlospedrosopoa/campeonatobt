@@ -235,6 +235,15 @@ function normalizeEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeComparableText(value?: string | null) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function parseArgs<T>(input: string): T {
   try {
     return JSON.parse(input) as T;
@@ -324,6 +333,10 @@ function maskPhone(phone?: string | null) {
   if (!digits) return null;
   if (digits.length <= 4) return digits;
   return `${"*".repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+function getFirstComparableToken(value?: string | null) {
+  return normalizeComparableText(value).split(" ").filter(Boolean)[0] || "";
 }
 
 function buildPixPayload(params: {
@@ -1006,6 +1019,13 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
   const partnerWhatsapp = normalizePhone(args.partnerWhatsapp);
   const athleteLookup = await getContextAthleteLookup(context);
   const athleteId = athleteLookup.status === "found" ? athleteLookup.matches[0]?.id : null;
+  const athleteKnownNames = [
+    context.identity?.nome || null,
+    context.contactName || null,
+    athleteLookup.status === "found" ? athleteLookup.matches[0]?.nome || null : null,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
 
   if (!partnerName && !partnerWhatsapp) {
     return {
@@ -1016,6 +1036,33 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
       nextAction: "solicitar_nome_ou_whatsapp_do_parceiro",
       data: {},
     };
+  }
+
+  if (partnerName && !partnerWhatsapp) {
+    const normalizedPartnerName = normalizeComparableText(partnerName);
+    const partnerFirstToken = getFirstComparableToken(partnerName);
+    const seemsToBeAthleteName = athleteKnownNames.some((athleteName) => {
+      const normalizedAthleteName = normalizeComparableText(athleteName);
+      const athleteFirstToken = getFirstComparableToken(athleteName);
+      return (
+        normalizedPartnerName === normalizedAthleteName ||
+        (partnerFirstToken && athleteFirstToken && partnerFirstToken === athleteFirstToken)
+      );
+    });
+
+    if (seemsToBeAthleteName) {
+      return {
+        ok: true,
+        tool: "validate_partner",
+        status: "partner_not_informed",
+        message: "Ainda nao recebi o nome do parceiro. O nome informado parece ser o nome do proprio atleta.",
+        nextAction: "solicitar_nome_completo_ou_whatsapp_do_parceiro",
+        data: {
+          athleteName: athleteKnownNames[0] || null,
+          providedName: partnerName,
+        },
+      };
+    }
   }
 
   const conditions = [];
