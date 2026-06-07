@@ -3,6 +3,8 @@ import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, inscricaoPagamentos, inscricoes, partidas, torneios, usuarios } from "@/db/schema";
 import { inscricoesService } from "@/services/inscricoes.service";
+import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
+import { playBuscarAtletas } from "@/services/playnaquadra-client";
 
 export type AiToolName =
   | "check_player_registration"
@@ -337,6 +339,151 @@ function maskPhone(phone?: string | null) {
 
 function getFirstComparableToken(value?: string | null) {
   return normalizeComparableText(value).split(" ").filter(Boolean)[0] || "";
+}
+
+function getComparableTokens(value?: string | null) {
+  return Array.from(new Set(normalizeComparableText(value).split(" ").filter((token) => token.length >= 2)));
+}
+
+function scorePartnerCandidate(row: AthleteRow, params: { partnerName?: string; partnerWhatsapp?: string }) {
+  let score = 0;
+  const normalizedCandidateName = normalizeComparableText(row.nome);
+  const normalizedPartnerName = normalizeComparableText(params.partnerName);
+  const queryTokens = getComparableTokens(params.partnerName);
+  const candidateTokens = getComparableTokens(row.nome);
+
+  if (normalizedPartnerName) {
+    if (normalizedCandidateName === normalizedPartnerName) score += 1000;
+    else if (normalizedCandidateName.includes(normalizedPartnerName)) score += 700;
+
+    const matchedTokens = queryTokens.filter((token) => candidateTokens.includes(token));
+    if (matchedTokens.length === queryTokens.length && queryTokens.length > 0) score += 500;
+    score += matchedTokens.length * 120;
+  }
+
+  const partnerDigits = normalizePhone(params.partnerWhatsapp);
+  const candidateDigits = normalizePhone(row.telefone);
+  if (partnerDigits && candidateDigits) {
+    if (candidateDigits.endsWith(partnerDigits)) score += 1000;
+    else if (candidateDigits.includes(partnerDigits.slice(-8))) score += 300;
+  }
+
+  if (row.playnaquadraAtletaId?.trim()) score += 40;
+  return score;
+}
+
+function dedupeAthleteRows(rows: AthleteRow[]) {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
+}
+
+async function findLocalAthletesByPlayIds(playIds: string[]): Promise<AthleteRow[]> {
+  const ids = Array.from(new Set(playIds.map((value) => String(value || "").trim()).filter(Boolean)));
+  if (ids.length === 0) return [];
+
+  return await db
+    .select({
+      id: usuarios.id,
+      nome: usuarios.nome,
+      email: usuarios.email,
+      telefone: usuarios.telefone,
+      fotoUrl: usuarios.fotoUrl,
+      playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
+    })
+    .from(usuarios)
+    .where(and(eq(usuarios.perfil, "ATLETA"), inArray(usuarios.playnaquadraAtletaId, ids)))
+    .limit(20);
+}
+
+async function searchPlayAthletesByName(query: string): Promise<AthleteRow[]> {
+  const trimmedQuery = String(query || "").trim();
+  if (trimmedQuery.length < 2) return [];
+
+  try {
+    const token = await getPlayAdminToken();
+    const result = await playBuscarAtletas({ token, q: trimmedQuery, limite: 10 });
+    if (!result.res.ok || !result.data) return [];
+
+    const candidates = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+    const playIds = candidates
+      .map((item: any) => String(item?.id || item?._id || item?.atletaId || item?.usuarioId || "").trim())
+      .filter(Boolean);
+
+    const localMatches = await findLocalAthletesByPlayIds(playIds);
+    if (localMatches.length > 0) return localMatches;
+
+    return candidates.map((item: any, index: number) => ({
+      id: `play:${String(item?.id || item?._id || item?.atletaId || item?.usuarioId || index)}`,
+      nome: String(item?.nome || item?.usuario?.nome || item?.atleta?.nome || "").trim(),
+      email: String(item?.email || item?.usuario?.email || item?.atleta?.email || "").trim(),
+      telefone: String(item?.telefone || item?.usuario?.telefone || item?.atleta?.telefone || "").trim() || null,
+      fotoUrl: null,
+      playnaquadraAtletaId: String(item?.id || item?._id || item?.atletaId || item?.usuarioId || "").trim() || null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function searchPartnerCandidates(params: {
+  partnerName?: string;
+  partnerWhatsapp?: string;
+  excludeAthleteId?: string | null;
+}) {
+  const partnerName = String(params.partnerName || "").trim();
+  const partnerWhatsapp = normalizePhone(params.partnerWhatsapp);
+  const tokens = getComparableTokens(partnerName);
+  const conditions = [];
+
+  if (partnerName) {
+    const q = `%${partnerName}%`;
+    conditions.push(ilike(usuarios.nome, q), ilike(usuarios.email, q));
+    for (const token of tokens) {
+      const tokenPattern = `%${token}%`;
+      conditions.push(ilike(usuarios.nome, tokenPattern), ilike(usuarios.email, tokenPattern));
+    }
+  }
+
+  if (partnerWhatsapp) {
+    conditions.push(sql`regexp_replace(coalesce(${usuarios.telefone}, ''), '\\D', '', 'g') like ${`%${partnerWhatsapp}`}`);
+    if (partnerWhatsapp.length >= 8) {
+      conditions.push(sql`regexp_replace(coalesce(${usuarios.telefone}, ''), '\\D', '', 'g') like ${`%${partnerWhatsapp.slice(-8)}`}`);
+    }
+  }
+
+  let localMatches: AthleteRow[] = [];
+  if (conditions.length > 0) {
+    localMatches = await db
+      .select({
+        id: usuarios.id,
+        nome: usuarios.nome,
+        email: usuarios.email,
+        telefone: usuarios.telefone,
+        fotoUrl: usuarios.fotoUrl,
+        playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
+      })
+      .from(usuarios)
+      .where(and(eq(usuarios.perfil, "ATLETA"), or(...conditions)))
+      .limit(25);
+  }
+
+  const filteredLocal = localMatches.filter((row) => row.id !== params.excludeAthleteId);
+  const playFallback = filteredLocal.length === 0 && partnerName ? await searchPlayAthletesByName(partnerName) : [];
+  const merged = dedupeAthleteRows(
+    [...filteredLocal, ...playFallback.filter((row) => row.id !== params.excludeAthleteId)]
+      .filter((row) => String(row.nome || "").trim().length > 0)
+      .sort((a, b) => scorePartnerCandidate(b, { partnerName, partnerWhatsapp }) - scorePartnerCandidate(a, { partnerName, partnerWhatsapp }))
+  );
+
+  return merged.slice(0, 10);
+}
+
+function isLocalRegistrationReadyCandidate(row: AthleteRow) {
+  return !String(row.id || "").startsWith("play:") && Boolean(row.playnaquadraAtletaId?.trim());
 }
 
 function buildPixPayload(params: {
@@ -1065,35 +1212,12 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
     }
   }
 
-  const conditions = [];
-  if (partnerName) {
-    const q = `%${partnerName}%`;
-    conditions.push(ilike(usuarios.nome, q), ilike(usuarios.email, q));
-  }
-  if (partnerWhatsapp) {
-    conditions.push(sql`regexp_replace(coalesce(${usuarios.telefone}, ''), '\\D', '', 'g') like ${`%${partnerWhatsapp.slice(-11)}`}`);
-  }
-
-  const rows = await db
-    .select({
-      id: usuarios.id,
-      nome: usuarios.nome,
-      email: usuarios.email,
-      telefone: usuarios.telefone,
-      fotoUrl: usuarios.fotoUrl,
-      playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
-    })
-    .from(usuarios)
-    .where(
-      and(
-        eq(usuarios.perfil, "ATLETA"),
-        or(...conditions)
-      )
-    )
-    .limit(10);
-
-  const filtered = rows.filter((row) => row.id !== athleteId);
-  const readyForRegistration = filtered.filter((row) => Boolean(row.playnaquadraAtletaId?.trim()));
+  const filtered = await searchPartnerCandidates({
+    partnerName,
+    partnerWhatsapp,
+    excludeAthleteId: athleteId,
+  });
+  const readyForRegistration = filtered.filter((row) => isLocalRegistrationReadyCandidate(row));
   if (filtered.length === 0) {
     return {
       ok: true,
@@ -1125,6 +1249,27 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
   if (readyForRegistration.length === 0) {
     if (filtered.length === 1) {
       const partner = filtered[0];
+      if (String(partner.id).startsWith("play:")) {
+        return {
+          ok: true,
+          tool: "validate_partner",
+          status: "found_on_play_only",
+          message: "Encontrei um atleta com esse nome no Play na Quadra, mas ainda nao localizei um cadastro interno pronto para inscricao.",
+          nextAction: "confirmar_nome_completo_ou_regularizar_cadastro_do_parceiro",
+          data: {
+            partner: {
+              id: null,
+              nome: partner.nome,
+              email: partner.email,
+              telefone: partner.telefone,
+              playnaquadraAtletaId: partner.playnaquadraAtletaId,
+            },
+            candidates: serializeAthleteCandidates(filtered),
+            partnerSignupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+          },
+        };
+      }
+
       return {
         ok: true,
         tool: "validate_partner",

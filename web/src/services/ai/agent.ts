@@ -545,7 +545,7 @@ function updateThreadStateFromToolResult(
           status: "not_found",
         };
         state.awaitingField = "partner";
-      } else if (result.status === "found_without_profile") {
+      } else if (result.status === "found_without_profile" || result.status === "found_on_play_only") {
         const partnerData = (result.data?.partner ?? null) as Record<string, unknown> | null;
         state.partner = {
           id: String(partnerData?.id || "").trim() || null,
