@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, MessageCircle, SendHorizonal, User, Mail, Phone, X } from "lucide-react";
 
 type ChatMessage = {
@@ -35,6 +35,31 @@ function formatMessageContent(content: string) {
     .trim();
 }
 
+function isLinkValue(value: string) {
+  return /^https?:\/\//i.test(value) || /^\/[a-z0-9/_-]+$/i.test(value);
+}
+
+function renderLineValue(value: string, key: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (isLinkValue(trimmed)) {
+    return (
+      <a
+        key={key}
+        href={trimmed}
+        target={/^https?:\/\//i.test(trimmed) ? "_blank" : undefined}
+        rel={/^https?:\/\//i.test(trimmed) ? "noopener noreferrer" : undefined}
+        className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-800"
+      >
+        {trimmed.startsWith("/") ? "Abrir perfil" : "Abrir link"}
+      </a>
+    );
+  }
+
+  return <div key={key} className="text-[13px] leading-5 text-slate-700 break-words">{trimmed}</div>;
+}
+
 function renderAssistantMessage(content: string) {
   const lines = formatMessageContent(content)
     .split("\n")
@@ -62,10 +87,48 @@ function renderAssistantMessage(content: string) {
       );
     }
 
+    const labeledMatch = line.match(
+      /^(cadastro|status|foto|faltando|perfil|link do perfil|criar conta|categoria selecionada|torneio|pr[oó]ximo passo)\s*:\s*(.+)$/i
+    );
+    if (labeledMatch) {
+      const label = labeledMatch[1];
+      const value = labeledMatch[2];
+      return (
+        <div key={`info-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
+          {renderLineValue(value, `info-value-${index}`)}
+        </div>
+      );
+    }
+
     if (line.startsWith("• ")) {
       return (
         <div key={`item-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] leading-5 text-slate-700 shadow-sm">
           {line.slice(2)}
+        </div>
+      );
+    }
+
+    const inlineParts = line.split(/(https?:\/\/\S+|\/atleta\/perfil\b)/g).filter(Boolean);
+    if (inlineParts.length > 1) {
+      return (
+        <div key={`text-${index}`} className="text-[13px] leading-6 text-slate-700 whitespace-pre-wrap break-words">
+          {inlineParts.map((part, partIndex) => {
+            if (isLinkValue(part)) {
+              return (
+                <a
+                  key={`link-${index}-${partIndex}`}
+                  href={part}
+                  target={/^https?:\/\//i.test(part) ? "_blank" : undefined}
+                  rel={/^https?:\/\//i.test(part) ? "noopener noreferrer" : undefined}
+                  className="font-semibold text-slate-900 underline underline-offset-2"
+                >
+                  {part}
+                </a>
+              );
+            }
+            return <Fragment key={`part-${index}-${partIndex}`}>{part}</Fragment>;
+          })}
         </div>
       );
     }

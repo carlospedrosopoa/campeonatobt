@@ -6,6 +6,7 @@ import { inscricoesService } from "@/services/inscricoes.service";
 
 export type AiToolName =
   | "check_player_registration"
+  | "get_player_profile_status"
   | "get_available_categories"
   | "validate_partner"
   | "create_tournament_registration";
@@ -48,6 +49,13 @@ type GetAvailableCategoriesArgs = {
   tournamentId?: string;
   tournamentSlug?: string;
   tournamentQuery?: string;
+};
+
+type GetPlayerProfileStatusArgs = {
+  whatsapp?: string;
+  telefone?: string;
+  email?: string;
+  athleteUserId?: string;
 };
 
 type ValidatePartnerArgs = {
@@ -105,6 +113,36 @@ export const aiTools: ChatCompletionTool[] = [
           athleteUserId: {
             type: "string",
             description: "ID interno do atleta quando já conhecido pelo sistema.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_player_profile_status",
+      description:
+        "Consulta o status cadastral do atleta atual, incluindo conta, dados faltantes, integracao PlayNaQuadra, foto de perfil e se o perfil esta pronto para aparecer bem nos cards do torneio.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          whatsapp: {
+            type: "string",
+            description: "Numero de WhatsApp do atleta em formato numerico ou internacional.",
+          },
+          telefone: {
+            type: "string",
+            description: "Telefone do atleta quando informado no chat do site.",
+          },
+          email: {
+            type: "string",
+            description: "Email do atleta quando informado no chat do site.",
+          },
+          athleteUserId: {
+            type: "string",
+            description: "ID interno do atleta quando ja conhecido pelo sistema.",
           },
         },
       },
@@ -382,6 +420,40 @@ function serializeAthleteCandidates(matches: AthleteRow[]) {
   }));
 }
 
+function buildPlayerProfileStatusData(player: AthleteRow) {
+  const missingFields: string[] = [];
+  if (!player.email?.trim()) missingFields.push("email");
+  if (!player.telefone?.trim()) missingFields.push("telefone");
+  if (!player.playnaquadraAtletaId?.trim()) missingFields.push("perfilPlayNaQuadra");
+  if (!player.fotoUrl?.trim()) missingFields.push("foto");
+
+  const hasPhoto = Boolean(player.fotoUrl?.trim());
+  const registrationReady = missingFields.filter((item) => item !== "foto").length === 0;
+
+  return {
+    player: {
+      id: player.id,
+      nome: player.nome,
+      email: player.email,
+      telefone: player.telefone,
+      playnaquadraAtletaId: player.playnaquadraAtletaId,
+      fotoUrl: player.fotoUrl,
+    },
+    hasAccount: true,
+    hasPhoto,
+    registrationReady,
+    missingFields,
+    profileGuidance: {
+      signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+      profileUrl: "/atleta/perfil",
+      missingPhotoAffectsCards: !hasPhoto,
+      photoTip: hasPhoto
+        ? "Voce ja tem foto no perfil, entao ela pode aparecer normalmente nos cards do torneio."
+        : "Vale adicionar uma foto no perfil para ela aparecer nos cards e artes do torneio.",
+    },
+  };
+}
+
 async function listCategoriesForTournament(params: GetAvailableCategoriesArgs, athleteUserId?: string) {
   const tournamentId = String(params.tournamentId || "").trim();
   const tournamentSlug = String(params.tournamentSlug || "").trim();
@@ -618,6 +690,75 @@ async function checkPlayerRegistration(args: CheckPlayerRegistrationArgs, contex
       },
       missingFields,
     },
+  };
+}
+
+async function getPlayerProfileStatus(args: GetPlayerProfileStatusArgs, context: ToolExecutionContext): Promise<ToolResult> {
+  const lookup = await findAthleteByIdentity({
+    athleteUserId: args.athleteUserId || context.identity?.userId || null,
+    email: args.email || context.identity?.email || null,
+    phone: args.telefone || context.identity?.telefone || null,
+    whatsapp: args.whatsapp || context.whatsapp || null,
+  });
+
+  if (lookup.status === "invalid") {
+    return {
+      ok: true,
+      tool: "get_player_profile_status",
+      status: "missing_identity",
+      message: "Ainda nao tenho dados suficientes para localizar seu cadastro.",
+      nextAction: "solicitar_email_ou_telefone_do_atleta",
+      data: {
+        signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+        profileUrl: "/atleta/perfil",
+      },
+    };
+  }
+
+  if (lookup.status === "not_found") {
+    return {
+      ok: true,
+      tool: "get_player_profile_status",
+      status: "not_found",
+      message: "Nao encontrei cadastro de atleta com os dados informados.",
+      nextAction: "orientar_cadastro_do_atleta",
+      data: {
+        email: normalizeEmail(args.email || context.identity?.email || null) || null,
+        telefone: normalizePhone(args.telefone || context.identity?.telefone || context.whatsapp || null) || null,
+        signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+      },
+    };
+  }
+
+  if (lookup.status === "ambiguous") {
+    return {
+      ok: true,
+      tool: "get_player_profile_status",
+      status: "ambiguous",
+      message: "Encontrei mais de um atleta com estes dados. Preciso de confirmacao manual.",
+      nextAction: "encaminhar_para_atendimento_humano",
+      data: {
+        candidates: serializeAthleteCandidates(lookup.matches),
+      },
+    };
+  }
+
+  const player = lookup.matches[0];
+  const profileStatus = buildPlayerProfileStatusData(player);
+  const cadastroPendente = profileStatus.missingFields.length > 0;
+  const faltaFoto = profileStatus.missingFields.includes("foto");
+
+  return {
+    ok: true,
+    tool: "get_player_profile_status",
+    status: cadastroPendente ? "incomplete_profile" : "complete_profile",
+    message: cadastroPendente
+      ? faltaFoto
+        ? "Encontrei seu cadastro, mas ainda ha ajustes pendentes no perfil, incluindo a foto."
+        : "Encontrei seu cadastro, mas ainda ha ajustes pendentes no perfil."
+      : "Encontrei seu cadastro e ele esta completo para seguir com a inscricao.",
+    nextAction: cadastroPendente ? "orientar_ajustes_no_perfil" : "seguir_com_fluxo_normal",
+    data: profileStatus,
   };
 }
 
@@ -1001,6 +1142,8 @@ export async function executeAiTool(name: string, rawArgs: string, context: Tool
   switch (name as AiToolName) {
     case "check_player_registration":
       return await checkPlayerRegistration(parseArgs<CheckPlayerRegistrationArgs>(rawArgs), context);
+    case "get_player_profile_status":
+      return await getPlayerProfileStatus(parseArgs<GetPlayerProfileStatusArgs>(rawArgs), context);
     case "get_available_categories":
       return await getAvailableCategories(parseArgs<GetAvailableCategoriesArgs>(rawArgs), context);
     case "validate_partner":
