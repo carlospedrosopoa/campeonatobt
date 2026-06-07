@@ -79,7 +79,7 @@ function renderAssistantMessage(content: string) {
       );
     }
 
-    if (/^(categorias disponiveis|categorias abertas|proximo passo|pr[oó]ximo passo)\b/i.test(line)) {
+    if (/^(categorias disponiveis|categorias abertas|programacao|proximo passo|pr[oó]ximo passo)\b/i.test(line)) {
       return (
         <div key={`label-${index}`} className="pt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
           {line}

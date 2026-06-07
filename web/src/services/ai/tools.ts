@@ -8,6 +8,7 @@ export type AiToolName =
   | "check_player_registration"
   | "get_player_profile_status"
   | "get_available_categories"
+  | "get_tournament_schedule"
   | "validate_partner"
   | "create_tournament_registration";
 
@@ -46,6 +47,12 @@ type CheckPlayerRegistrationArgs = {
 };
 
 type GetAvailableCategoriesArgs = {
+  tournamentId?: string;
+  tournamentSlug?: string;
+  tournamentQuery?: string;
+};
+
+type GetTournamentScheduleArgs = {
   tournamentId?: string;
   tournamentSlug?: string;
   tournamentQuery?: string;
@@ -167,6 +174,23 @@ export const aiTools: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "get_tournament_schedule",
+      description:
+        "Consulta a programacao do torneio, com categorias ordenadas por data e hora, para responder sobre dias de jogo e horarios.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          tournamentId: { type: "string", description: "ID interno do torneio, quando conhecido." },
+          tournamentSlug: { type: "string", description: "Slug publico do torneio, quando conhecido." },
+          tournamentQuery: { type: "string", description: "Nome ou trecho do nome do torneio informado pelo atleta." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "validate_partner",
       description: "Verifica se o parceiro informado pelo atleta existe no sistema para compor a dupla.",
       parameters: {
@@ -252,6 +276,38 @@ function formatAmount(value: string | null | undefined) {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return null;
   return n.toFixed(2);
+}
+
+function formatDateTimeParts(value: Date | null | undefined) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    return {
+      data: null,
+      hora: null,
+      texto: "Horario ainda nao definido",
+      sortTime: Number.POSITIVE_INFINITY,
+    };
+  }
+
+  return {
+    data: value.toLocaleDateString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+    }),
+    hora: value.toLocaleTimeString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    texto: value.toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    sortTime: value.getTime(),
+  };
 }
 
 function maskEmail(email?: string | null) {
@@ -849,6 +905,102 @@ async function getAvailableCategories(args: GetAvailableCategoriesArgs, context:
   };
 }
 
+async function getTournamentSchedule(args: GetTournamentScheduleArgs, context: ToolExecutionContext): Promise<ToolResult> {
+  const tournaments = await listCategoriesForTournament({
+    tournamentId: args.tournamentId,
+    tournamentSlug: args.tournamentSlug || context.tournamentSlug || undefined,
+    tournamentQuery: args.tournamentQuery || context.tournamentName || undefined,
+  });
+
+  if (tournaments.length === 0) {
+    return {
+      ok: true,
+      tool: "get_tournament_schedule",
+      status: "not_found",
+      message: "Nao encontrei torneios abertos com este identificador para consultar a programacao.",
+      nextAction: "pedir_nome_correto_do_torneio",
+      data: {
+        filters: {
+          tournamentId: args.tournamentId || null,
+          tournamentSlug: args.tournamentSlug || context.tournamentSlug || null,
+          tournamentQuery: args.tournamentQuery || context.tournamentName || null,
+        },
+      },
+    };
+  }
+
+  if (tournaments.length > 1) {
+    return {
+      ok: true,
+      tool: "get_tournament_schedule",
+      status: "ambiguous_tournament",
+      message: "Encontrei mais de um torneio parecido. Preciso que o atleta confirme qual torneio deseja para ver a programacao.",
+      nextAction: "pedir_confirmacao_do_torneio",
+      data: {
+        tournaments: tournaments.map((t) => ({
+          id: t.id,
+          nome: t.nome,
+          slug: t.slug,
+          status: t.status,
+          totalCategorias: t.categorias.length,
+        })),
+      },
+    };
+  }
+
+  const tournament = tournaments[0];
+  const categories = tournament.categorias
+    .map((category) => {
+      const dt = formatDateTimeParts(category.dataHorario);
+      return {
+        id: category.id,
+        nome: category.nome,
+        genero: category.genero,
+        data: dt.data,
+        hora: dt.hora,
+        dataHorario: category.dataHorario ? category.dataHorario.toISOString() : null,
+        dataHorarioTexto: dt.texto,
+        sortTime: dt.sortTime,
+      };
+    })
+    .sort((a, b) => {
+      if (a.sortTime !== b.sortTime) return a.sortTime - b.sortTime;
+      return a.nome.localeCompare(b.nome, "pt-BR");
+    });
+
+  const categoriesByDay = categories.reduce<Record<string, Array<Omit<(typeof categories)[number], "sortTime">>>>((acc, category) => {
+    const key = category.data || "Sem data definida";
+    const { sortTime: _, ...rest } = category;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(rest);
+    return acc;
+  }, {});
+
+  return {
+    ok: true,
+    tool: "get_tournament_schedule",
+    status: "ok",
+    message: "Programacao do torneio localizada com sucesso.",
+    nextAction: "informar_programacao_ao_atleta",
+    data: {
+      tournament: {
+        id: tournament.id,
+        nome: tournament.nome,
+        slug: tournament.slug,
+        status: tournament.status,
+      },
+      categories,
+      categoriesByDay,
+      categoryContext: context.categorySlug
+        ? {
+            slug: context.categorySlug,
+            nome: context.categoryName || null,
+          }
+        : null,
+    },
+  };
+}
+
 async function validatePartner(args: ValidatePartnerArgs, context: ToolExecutionContext): Promise<ToolResult> {
   const partnerName = String(args.partnerName || "").trim();
   const partnerWhatsapp = normalizePhone(args.partnerWhatsapp);
@@ -1146,6 +1298,8 @@ export async function executeAiTool(name: string, rawArgs: string, context: Tool
       return await getPlayerProfileStatus(parseArgs<GetPlayerProfileStatusArgs>(rawArgs), context);
     case "get_available_categories":
       return await getAvailableCategories(parseArgs<GetAvailableCategoriesArgs>(rawArgs), context);
+    case "get_tournament_schedule":
+      return await getTournamentSchedule(parseArgs<GetTournamentScheduleArgs>(rawArgs), context);
     case "validate_partner":
       return await validatePartner(parseArgs<ValidatePartnerArgs>(rawArgs), context);
     case "create_tournament_registration":
