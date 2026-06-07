@@ -50,6 +50,7 @@ export default function AdminCategoriaInscricoesPage() {
   const categoriaId = params.categoriaId;
 
   const [categoria, setCategoria] = useState<Categoria | null>(null);
+  const [categoriasTorneio, setCategoriasTorneio] = useState<Categoria[]>([]);
   const [torneioNome, setTorneioNome] = useState("Torneio");
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
@@ -116,6 +117,7 @@ export default function AdminCategoriaInscricoesPage() {
       }
 
       const cats = (await resCat.json()) as Categoria[];
+      setCategoriasTorneio(cats);
       const cat = cats.find((c) => c.id === categoriaId) ?? null;
       setCategoria(cat);
 
@@ -142,9 +144,18 @@ export default function AdminCategoriaInscricoesPage() {
           status: i.status,
           dataInscricao: i.dataInscricao,
           equipeNome: i.equipe.nome ?? "Dupla",
+          categoriaId,
           categoriaDataHorario: categoria?.dataHorario ?? null,
           atletas: (i.equipe.atletas ?? []).map((a) => ({ id: a.id, nome: a.nome, fotoUrl: a.fotoUrl ?? null })),
         },
+        categoriasProgramacao: (
+          categoriasTorneio.map((c) => ({
+            id: c.id,
+            nome: c.nome,
+            genero: c.genero,
+            dataHorario: c.dataHorario ?? null,
+          }))
+        ),
       });
       const url = (result?.url || "").trim();
       if (url) window.open(url, "_blank");

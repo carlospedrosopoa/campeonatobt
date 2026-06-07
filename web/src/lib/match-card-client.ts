@@ -34,6 +34,7 @@ type InscricaoCardInfo = {
   status?: string | null;
   dataInscricao?: string | null;
   equipeNome?: string | null;
+  categoriaId?: string | null;
   categoriaDataHorario?: string | null;
   atletas?: { id: string; nome: string; fotoUrl?: string | null }[];
 };
@@ -46,6 +47,7 @@ type GerarCardInscricaoParams = {
   salvarNoGcs?: boolean;
   uploadFolder?: string | null;
   download?: boolean;
+  categoriasProgramacao?: ProgramacaoCategoriaInfo[];
   inscricao: InscricaoCardInfo;
 };
 
@@ -162,6 +164,32 @@ function formatarDataHora(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatarDataProgramacao(value?: string | null) {
+  if (!value) return { data: "A definir", hora: "--:--" };
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return { data: "A definir", hora: "--:--" };
+  return {
+    data: d.toLocaleDateString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+    }),
+    hora: d.toLocaleTimeString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+}
+
+function normalizeCardText(value?: string | null) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function formatarPlacarPartida(partida: PartidaCardInfo) {
@@ -596,27 +624,31 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
     })
   );
 
-  ctx.fillStyle = "rgba(34,197,94,0.18)";
-  const tagX = 70;
-  const tagY = 270;
-  const tagW = 940;
-  const tagH = 64;
-  ctx.fillRect(tagX, tagY, tagW, tagH);
-  ctx.strokeStyle = "rgba(34,197,94,0.55)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(tagX, tagY, tagW, tagH);
-  ctx.fillStyle = "#dcfce7";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "900 34px Inter, Arial, sans-serif";
-  ctx.fillText("INSCRIÇÃO", tagX + tagW / 2, tagY + tagH / 2);
+  const categoriasProgramacaoOrdenadas = (params.categoriasProgramacao ?? [])
+    .slice()
+    .sort((a, b) => {
+      const ta = a.dataHorario ? new Date(a.dataHorario).getTime() : Number.POSITIVE_INFINITY;
+      const tb = b.dataHorario ? new Date(b.dataHorario).getTime() : Number.POSITIVE_INFINITY;
+      if (ta !== tb) return ta - tb;
+      return (a.nome || "").localeCompare(b.nome || "");
+    });
 
-  const tamanhoAvatar = 275;
+  const categoriaAtualNormalizada = normalizeCardText(params.categoriaNome);
+  const indiceCategoriaAtual = categoriasProgramacaoOrdenadas.findIndex(
+    (categoriaItem) =>
+      categoriaItem.id === params.inscricao.categoriaId || normalizeCardText(categoriaItem.nome) === categoriaAtualNormalizada
+  );
+  const maxRows = Math.min(categoriasProgramacaoOrdenadas.length, 14);
+  const programacaoInicio =
+    indiceCategoriaAtual >= maxRows && maxRows > 0 ? Math.max(0, indiceCategoriaAtual - (maxRows - 1)) : 0;
+  const categoriasProgramacao = categoriasProgramacaoOrdenadas.slice(programacaoInicio, programacaoInicio + maxRows);
+
+  const tamanhoAvatar = 330;
   const larguraNome = 360;
-  const ajusteNomesY = 44;
+  const ajusteNomesY = 42;
   const posicoes = [
-    { x: 190, y: 720, atleta: atletas[0], imagem: fotos[0] },
-    { x: 615, y: 720, atleta: atletas[1], imagem: fotos[1] },
+    { x: 130, y: 710, atleta: atletas[0], imagem: fotos[0] },
+    { x: 620, y: 710, atleta: atletas[1], imagem: fotos[1] },
   ];
   for (const p of posicoes) {
     const nome = p.atleta?.nome || "Atleta";
@@ -627,53 +659,89 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
     }
   }
 
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.fillStyle = "#e2e8f0";
-  ctx.font = "700 42px Inter, Arial, sans-serif";
-  const linhaX = 76;
-  const valorX = 360;
-  const yCategoria = 378;
-  const yDataCat = 448;
-  const yDupla = 518;
-  const yStatus = 588;
-  ctx.fillText("Categoria:", linhaX, yCategoria);
-  ctx.fillText("Data:", linhaX, yDataCat);
-  ctx.fillText("Dupla:", linhaX, yDupla);
-  ctx.fillText("Status:", linhaX, yStatus);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#dcfce7";
+  ctx.font = "900 48px Inter, Arial, sans-serif";
+  ctx.fillText("DUPLA CONFIRMADA", width / 2, 520);
 
-  ctx.font = "700 34px Inter, Arial, sans-serif";
   ctx.fillStyle = "#ffffff";
-  drawTextLeft(ctx, params.categoriaNome || "A definir", valorX, yCategoria + 10, 620, 40);
-  drawTextLeft(ctx, formatarDataHora(params.inscricao.categoriaDataHorario), valorX, yDataCat + 10, 620, 40);
-  drawTextLeft(ctx, (params.inscricao.equipeNome || "Dupla").trim(), valorX, yDupla + 10, 620, 40);
-  drawTextLeft(ctx, (params.inscricao.status || "-").toString(), valorX, yStatus + 10, 620, 40);
+  ctx.font = "800 38px Inter, Arial, sans-serif";
+  drawTextCenter(ctx, params.categoriaNome || "Categoria", width / 2, 580, 840, 44);
 
-  const inscricaoData = params.inscricao.dataInscricao ? formatarDataHora(params.inscricao.dataInscricao) : "";
-  if (inscricaoData) {
-    ctx.fillStyle = "rgba(148,163,184,0.18)";
-    const boxX = 70;
-    const boxY = 1620;
-    const boxW = 940;
-    const boxH = 92;
-    ctx.fillRect(boxX, boxY, boxW, boxH);
-    ctx.strokeStyle = "rgba(148,163,184,0.55)";
+  const programacaoBoxX = 90;
+  const programacaoBoxY = 1110;
+  const programacaoBoxW = 900;
+  const columnGap = 18;
+  const boxPaddingX = 18;
+  const rowHeight = 58;
+  const titleHeight = 52;
+  const contentTopPadding = 10;
+  const boxPaddingBottom = 16;
+  const rowsPerColumn = Math.ceil(categoriasProgramacao.length / 2);
+  const columnWidth = (programacaoBoxW - boxPaddingX * 2 - columnGap) / 2;
+  const programacaoBoxH = titleHeight + contentTopPadding + rowsPerColumn * rowHeight + boxPaddingBottom;
+
+  if (categoriasProgramacao.length > 0) {
+    ctx.fillStyle = "rgba(15,23,42,0.62)";
+    ctx.fillRect(programacaoBoxX, programacaoBoxY, programacaoBoxW, programacaoBoxH);
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(boxX, boxY, boxW, boxH);
+    ctx.strokeRect(programacaoBoxX, programacaoBoxY, programacaoBoxW, programacaoBoxH);
+
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "700 32px Inter, Arial, sans-serif";
-    ctx.fillText(`INSCRITO EM: ${inscricaoData}`, boxX + boxW / 2, boxY + boxH / 2);
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = "800 28px Inter, Arial, sans-serif";
+    ctx.fillText("PROGRAMACAO DAS CATEGORIAS", width / 2, programacaoBoxY + titleHeight / 2);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(programacaoBoxX + programacaoBoxW / 2, programacaoBoxY + titleHeight + 10);
+    ctx.lineTo(programacaoBoxX + programacaoBoxW / 2, programacaoBoxY + programacaoBoxH - 12);
+    ctx.stroke();
+
+    categoriasProgramacao.forEach((categoriaItem, index) => {
+      const columnIndex = Math.floor(index / rowsPerColumn);
+      const rowIndex = index % rowsPerColumn;
+      const x = programacaoBoxX + boxPaddingX + columnIndex * (columnWidth + columnGap);
+      const y = programacaoBoxY + titleHeight + contentTopPadding + rowIndex * rowHeight;
+      const isCurrent =
+        categoriaItem.id === params.inscricao.categoriaId || normalizeCardText(categoriaItem.nome) === categoriaAtualNormalizada;
+      const programacao = formatarDataProgramacao(categoriaItem.dataHorario);
+
+      if (isCurrent) {
+        ctx.fillStyle = "rgba(249,115,22,0.24)";
+        ctx.fillRect(x, y + 2, columnWidth, rowHeight - 8);
+        ctx.strokeStyle = "rgba(249,115,22,0.65)";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y + 2, columnWidth, rowHeight - 8);
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.04)";
+        ctx.fillRect(x, y + 2, columnWidth, rowHeight - 8);
+      }
+
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = isCurrent ? "#ffedd5" : "#f8fafc";
+      ctx.font = isCurrent ? "800 18px Inter, Arial, sans-serif" : "700 17px Inter, Arial, sans-serif";
+      drawTextLeft(ctx, categoriaItem.nome || "Categoria", x + 14, y + 10, columnWidth - 28, 24);
+
+      ctx.textAlign = "left";
+      ctx.fillStyle = isCurrent ? "#fdba74" : "#cbd5e1";
+      ctx.font = isCurrent ? "800 15px Inter, Arial, sans-serif" : "700 15px Inter, Arial, sans-serif";
+      ctx.fillText(`${programacao.data}  ${programacao.hora}`, x + 14, y + 33);
+    });
   }
 
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.fillStyle = "#ffffff";
-  ctx.font = "700 22px Inter, Arial, sans-serif";
+  ctx.font = "700 24px Inter, Arial, sans-serif";
   for (const p of posicoes) {
     const nome = p.atleta?.nome || "Atleta";
-    drawTextCenter(ctx, nome, p.x + tamanhoAvatar / 2, p.y + tamanhoAvatar + ajusteNomesY, larguraNome, 28);
+    drawTextCenter(ctx, nome, p.x + tamanhoAvatar / 2, p.y - 50, larguraNome, 28);
   }
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));

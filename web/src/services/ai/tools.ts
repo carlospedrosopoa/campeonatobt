@@ -11,10 +11,21 @@ export type AiToolName =
   | "create_tournament_registration";
 
 export type ToolExecutionContext = {
+  channel: "whatsapp" | "webchat";
   whatsapp: string;
   contactName?: string | null;
   threadId: string;
   inboundText: string;
+  tournamentSlug?: string | null;
+  tournamentName?: string | null;
+  categorySlug?: string | null;
+  categoryName?: string | null;
+  identity?: {
+    userId?: string | null;
+    nome?: string | null;
+    email?: string | null;
+    telefone?: string | null;
+  } | null;
 };
 
 export type ToolResult = {
@@ -27,7 +38,10 @@ export type ToolResult = {
 };
 
 type CheckPlayerRegistrationArgs = {
-  whatsapp: string;
+  whatsapp?: string;
+  telefone?: string;
+  email?: string;
+  athleteUserId?: string;
 };
 
 type GetAvailableCategoriesArgs = {
@@ -44,7 +58,10 @@ type ValidatePartnerArgs = {
 type CreateTournamentRegistrationArgs = {
   tournamentId: string;
   categoryId: string;
-  athleteWhatsapp: string;
+  athleteWhatsapp?: string;
+  athletePhone?: string;
+  athleteEmail?: string;
+  athleteUserId?: string;
   partnerId: string;
   teamName?: string;
 };
@@ -58,12 +75,17 @@ type AthleteRow = {
   playnaquadraAtletaId: string | null;
 };
 
+type AthleteLookupResult = {
+  status: "invalid" | "not_found" | "found" | "ambiguous";
+  matches: AthleteRow[];
+};
+
 export const aiTools: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
       name: "check_player_registration",
-      description: "Verifica se o atleta do WhatsApp já está cadastrado e apto para seguir com a inscrição no torneio.",
+      description: "Verifica se o atleta do atendimento atual já está cadastrado e apto para seguir com a inscrição no torneio, usando WhatsApp, telefone, email ou ID interno.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -72,8 +94,19 @@ export const aiTools: ChatCompletionTool[] = [
             type: "string",
             description: "Número de WhatsApp do atleta em formato numérico ou internacional.",
           },
+          telefone: {
+            type: "string",
+            description: "Telefone do atleta quando informado no chat do site.",
+          },
+          email: {
+            type: "string",
+            description: "Email do atleta quando informado no chat do site.",
+          },
+          athleteUserId: {
+            type: "string",
+            description: "ID interno do atleta quando já conhecido pelo sistema.",
+          },
         },
-        required: ["whatsapp"],
       },
     },
   },
@@ -119,11 +152,14 @@ export const aiTools: ChatCompletionTool[] = [
         properties: {
           tournamentId: { type: "string", description: "ID do torneio." },
           categoryId: { type: "string", description: "ID da categoria escolhida." },
-          athleteWhatsapp: { type: "string", description: "WhatsApp do atleta solicitante." },
+          athleteWhatsapp: { type: "string", description: "WhatsApp do atleta solicitante, quando conhecido." },
+          athletePhone: { type: "string", description: "Telefone do atleta solicitante, quando conhecido." },
+          athleteEmail: { type: "string", description: "Email do atleta solicitante, quando conhecido." },
+          athleteUserId: { type: "string", description: "ID interno do atleta solicitante, quando conhecido." },
           partnerId: { type: "string", description: "ID interno do parceiro validado no sistema." },
           teamName: { type: "string", description: "Nome opcional da dupla." },
         },
-        required: ["tournamentId", "categoryId", "athleteWhatsapp", "partnerId"],
+        required: ["tournamentId", "categoryId", "partnerId"],
       },
     },
   },
@@ -131,6 +167,10 @@ export const aiTools: ChatCompletionTool[] = [
 
 function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeEmail(value?: string | null) {
+  return String(value || "").trim().toLowerCase();
 }
 
 function parseArgs<T>(input: string): T {
@@ -174,6 +214,22 @@ function formatAmount(value: string | null | undefined) {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return null;
   return n.toFixed(2);
+}
+
+function maskEmail(email?: string | null) {
+  const normalized = normalizeEmail(email);
+  if (!normalized || !normalized.includes("@")) return null;
+  const [user, domain] = normalized.split("@");
+  if (!user || !domain) return null;
+  const visible = user.slice(0, Math.min(2, user.length));
+  return `${visible}${"*".repeat(Math.max(0, user.length - visible.length))}@${domain}`;
+}
+
+function maskPhone(phone?: string | null) {
+  const digits = normalizePhone(phone);
+  if (!digits) return null;
+  if (digits.length <= 4) return digits;
+  return `${"*".repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
 }
 
 function buildPixPayload(params: {
@@ -237,6 +293,93 @@ async function findAthleteByWhatsapp(whatsappRaw: string) {
   if (rows.length === 1) return { status: "found" as const, matches: rows };
   if (rows.length > 1) return { status: "ambiguous" as const, matches: rows };
   return { status: "not_found" as const, matches: [] as AthleteRow[] };
+}
+
+async function findAthleteByEmail(emailRaw: string): Promise<AthleteLookupResult> {
+  const email = normalizeEmail(emailRaw);
+  if (!email) return { status: "invalid", matches: [] };
+
+  const rows = await db
+    .select({
+      id: usuarios.id,
+      nome: usuarios.nome,
+      email: usuarios.email,
+      telefone: usuarios.telefone,
+      fotoUrl: usuarios.fotoUrl,
+      playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
+    })
+    .from(usuarios)
+    .where(and(eq(usuarios.perfil, "ATLETA"), ilike(usuarios.email, email)))
+    .limit(10);
+
+  if (rows.length === 1) return { status: "found", matches: rows };
+  if (rows.length > 1) return { status: "ambiguous", matches: rows };
+  return { status: "not_found", matches: [] };
+}
+
+async function findAthleteByUserId(userIdRaw: string): Promise<AthleteLookupResult> {
+  const userId = String(userIdRaw || "").trim();
+  if (!userId) return { status: "invalid", matches: [] };
+
+  const rows = await db
+    .select({
+      id: usuarios.id,
+      nome: usuarios.nome,
+      email: usuarios.email,
+      telefone: usuarios.telefone,
+      fotoUrl: usuarios.fotoUrl,
+      playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
+    })
+    .from(usuarios)
+    .where(and(eq(usuarios.id, userId), eq(usuarios.perfil, "ATLETA")))
+    .limit(1);
+
+  if (rows.length === 1) return { status: "found", matches: rows };
+  return { status: "not_found", matches: [] };
+}
+
+async function findAthleteByIdentity(input: {
+  athleteUserId?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+}): Promise<AthleteLookupResult> {
+  if (input.athleteUserId) {
+    const byUserId = await findAthleteByUserId(input.athleteUserId);
+    if (byUserId.status === "found" || byUserId.status === "ambiguous") return byUserId;
+  }
+
+  if (input.email) {
+    const byEmail = await findAthleteByEmail(input.email);
+    if (byEmail.status === "found" || byEmail.status === "ambiguous") return byEmail;
+  }
+
+  const phone = input.whatsapp || input.phone;
+  if (phone) {
+    const byPhone = await findAthleteByWhatsapp(phone);
+    if (byPhone.status === "found" || byPhone.status === "ambiguous") return byPhone;
+    if (byPhone.status === "not_found") return byPhone;
+  }
+
+  return { status: "invalid", matches: [] };
+}
+
+function getContextAthleteLookup(context: ToolExecutionContext) {
+  return findAthleteByIdentity({
+    athleteUserId: context.identity?.userId ?? null,
+    email: context.identity?.email ?? null,
+    phone: context.identity?.telefone ?? null,
+    whatsapp: context.whatsapp || null,
+  });
+}
+
+function serializeAthleteCandidates(matches: AthleteRow[]) {
+  return matches.map((m) => ({
+    id: m.id,
+    nome: m.nome,
+    emailMasked: maskEmail(m.email),
+    telefoneMasked: maskPhone(m.telefone),
+  }));
 }
 
 async function listCategoriesForTournament(params: GetAvailableCategoriesArgs, athleteUserId?: string) {
@@ -396,18 +539,41 @@ async function buildPixForRegistration(inscricaoId: string, athleteUserId: strin
 }
 
 async function checkPlayerRegistration(args: CheckPlayerRegistrationArgs, context: ToolExecutionContext): Promise<ToolResult> {
-  const whatsapp = normalizePhone(args.whatsapp || context.whatsapp);
-  const lookup = await findAthleteByWhatsapp(whatsapp);
+  const lookup = await findAthleteByIdentity({
+    athleteUserId: args.athleteUserId || context.identity?.userId || null,
+    email: args.email || context.identity?.email || null,
+    phone: args.telefone || context.identity?.telefone || null,
+    whatsapp: args.whatsapp || context.whatsapp || null,
+  });
+
+  if (lookup.status === "invalid") {
+    return {
+      ok: true,
+      tool: "check_player_registration",
+      status: "missing_identity",
+      message: "Ainda nao tenho dados suficientes para localizar seu cadastro.",
+      nextAction: "solicitar_email_ou_telefone_do_atleta",
+      data: {
+        identityHint: {
+          email: normalizeEmail(args.email || context.identity?.email || null) || null,
+          telefone: normalizePhone(args.telefone || context.identity?.telefone || null) || null,
+          whatsapp: normalizePhone(args.whatsapp || context.whatsapp || null) || null,
+        },
+        signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+      },
+    };
+  }
 
   if (lookup.status === "not_found") {
     return {
       ok: true,
       tool: "check_player_registration",
       status: "not_found",
-      message: "Nao encontrei um atleta cadastrado com este WhatsApp.",
+      message: "Nao encontrei um atleta cadastrado com os dados informados.",
       nextAction: "orientar_cadastro_do_atleta",
       data: {
-        whatsapp,
+        email: normalizeEmail(args.email || context.identity?.email || null) || null,
+        telefone: normalizePhone(args.telefone || context.identity?.telefone || context.whatsapp || null) || null,
         signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
       },
     };
@@ -418,16 +584,10 @@ async function checkPlayerRegistration(args: CheckPlayerRegistrationArgs, contex
       ok: true,
       tool: "check_player_registration",
       status: "ambiguous",
-      message: "Encontrei mais de um atleta com este telefone. Preciso de confirmacao manual.",
+      message: "Encontrei mais de um atleta com estes dados. Preciso de confirmacao manual.",
       nextAction: "encaminhar_para_atendimento_humano",
       data: {
-        whatsapp,
-        candidates: lookup.matches.map((m) => ({
-          id: m.id,
-          nome: m.nome,
-          email: m.email,
-          telefone: m.telefone,
-        })),
+        candidates: serializeAthleteCandidates(lookup.matches),
       },
     };
   }
@@ -447,7 +607,8 @@ async function checkPlayerRegistration(args: CheckPlayerRegistrationArgs, contex
         : "Atleta localizado e apto para seguir com a inscricao.",
     nextAction: missingFields.length > 0 ? "solicitar_regularizacao_cadastral" : "seguir_para_categorias",
     data: {
-      whatsapp,
+      email: player.email,
+      telefone: player.telefone,
       player: {
         id: player.id,
         nome: player.nome,
@@ -461,9 +622,16 @@ async function checkPlayerRegistration(args: CheckPlayerRegistrationArgs, contex
 }
 
 async function getAvailableCategories(args: GetAvailableCategoriesArgs, context: ToolExecutionContext): Promise<ToolResult> {
-  const athleteLookup = await findAthleteByWhatsapp(context.whatsapp);
+  const athleteLookup = await getContextAthleteLookup(context);
   const athleteId = athleteLookup.status === "found" ? athleteLookup.matches[0]?.id : undefined;
-  const tournaments = await listCategoriesForTournament(args, athleteId);
+  const tournaments = await listCategoriesForTournament(
+    {
+      tournamentId: args.tournamentId,
+      tournamentSlug: args.tournamentSlug || context.tournamentSlug || undefined,
+      tournamentQuery: args.tournamentQuery || context.tournamentName || undefined,
+    },
+    athleteId
+  );
 
   if (tournaments.length === 0) {
     return {
@@ -475,8 +643,8 @@ async function getAvailableCategories(args: GetAvailableCategoriesArgs, context:
       data: {
         filters: {
           tournamentId: args.tournamentId || null,
-          tournamentSlug: args.tournamentSlug || null,
-          tournamentQuery: args.tournamentQuery || null,
+          tournamentSlug: args.tournamentSlug || context.tournamentSlug || null,
+          tournamentQuery: args.tournamentQuery || context.tournamentName || null,
         },
       },
     };
@@ -522,6 +690,12 @@ async function getAvailableCategories(args: GetAvailableCategoriesArgs, context:
         status: tournament.status,
       },
       categories,
+      categoryContext: context.categorySlug
+        ? {
+            slug: context.categorySlug,
+            nome: context.categoryName || null,
+          }
+        : null,
     },
   };
 }
@@ -529,7 +703,7 @@ async function getAvailableCategories(args: GetAvailableCategoriesArgs, context:
 async function validatePartner(args: ValidatePartnerArgs, context: ToolExecutionContext): Promise<ToolResult> {
   const partnerName = String(args.partnerName || "").trim();
   const partnerWhatsapp = normalizePhone(args.partnerWhatsapp);
-  const athleteLookup = await findAthleteByWhatsapp(context.whatsapp);
+  const athleteLookup = await getContextAthleteLookup(context);
   const athleteId = athleteLookup.status === "found" ? athleteLookup.matches[0]?.id : null;
 
   if (!partnerName && !partnerWhatsapp) {
@@ -595,13 +769,7 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
       message: "Encontrei mais de um parceiro possivel. Preciso que o atleta confirme quem e o parceiro correto.",
       nextAction: "pedir_confirmacao_do_parceiro",
       data: {
-        candidates: filtered.map((row) => ({
-          id: row.id,
-          nome: row.nome,
-          email: row.email,
-          telefone: row.telefone,
-          playnaquadraAtletaId: row.playnaquadraAtletaId,
-        })),
+        candidates: serializeAthleteCandidates(filtered),
       },
     };
   }
@@ -625,17 +793,24 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
   };
 }
 
-async function createTournamentRegistration(args: CreateTournamentRegistrationArgs): Promise<ToolResult> {
-  const athleteLookup = await findAthleteByWhatsapp(args.athleteWhatsapp);
+async function createTournamentRegistration(args: CreateTournamentRegistrationArgs, context: ToolExecutionContext): Promise<ToolResult> {
+  const athleteLookup = await findAthleteByIdentity({
+    athleteUserId: args.athleteUserId || context.identity?.userId || null,
+    email: args.athleteEmail || context.identity?.email || null,
+    phone: args.athletePhone || context.identity?.telefone || null,
+    whatsapp: args.athleteWhatsapp || context.whatsapp || null,
+  });
   if (athleteLookup.status !== "found") {
     return {
       ok: false,
       tool: "create_tournament_registration",
       status: "athlete_not_found",
-      message: "Nao foi possivel localizar o atleta solicitante pelo WhatsApp informado.",
+      message: "Nao foi possivel localizar o atleta solicitante com os dados informados.",
       nextAction: "validar_cadastro_do_atleta",
       data: {
-        athleteWhatsapp: normalizePhone(args.athleteWhatsapp),
+        athleteUserId: args.athleteUserId || context.identity?.userId || null,
+        athleteEmail: normalizeEmail(args.athleteEmail || context.identity?.email || null) || null,
+        athletePhone: normalizePhone(args.athletePhone || context.identity?.telefone || context.whatsapp || null) || null,
       },
     };
   }
@@ -716,7 +891,10 @@ async function createTournamentRegistration(args: CreateTournamentRegistrationAr
       ok: false,
       tool: "create_tournament_registration",
       status: "ai_registration_disabled",
-      message: "A inscricao via WhatsApp com IA nao esta habilitada para este torneio.",
+      message:
+        context.channel === "webchat"
+          ? "O atendimento virtual de inscricao nao esta habilitado para este torneio."
+          : "A inscricao via WhatsApp com IA nao esta habilitada para este torneio.",
       nextAction: "informar_canal_alternativo_de_inscricao",
       data: {
         tournamentId: args.tournamentId,
@@ -820,7 +998,7 @@ export async function executeAiTool(name: string, rawArgs: string, context: Tool
     case "validate_partner":
       return await validatePartner(parseArgs<ValidatePartnerArgs>(rawArgs), context);
     case "create_tournament_registration":
-      return await createTournamentRegistration(parseArgs<CreateTournamentRegistrationArgs>(rawArgs));
+      return await createTournamentRegistration(parseArgs<CreateTournamentRegistrationArgs>(rawArgs), context);
     default:
       return {
         ok: false,

@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
-import { ChevronLeft, MessageCircle } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import CategoriaDetalhesContent from "./CategoriaDetalhesContent";
+import TournamentRegistrationChat from "@/components/public/TournamentRegistrationChat";
 
 export const dynamic = 'force-dynamic';
 
@@ -26,10 +27,6 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
   }
 
   const inscricaoComIaHabilitada = torneio.inscricaoComIa;
-  const whatsappInscricoes = "5551983234600";
-  const hrefInscricaoWhatsapp = `https://wa.me/${whatsappInscricoes}?text=${encodeURIComponent(
-    `Ola! Quero me inscrever no torneio ${torneio.nome} na categoria ${categoria.nome}.`
-  )}`;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -51,17 +48,6 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
             </div>
             
             <div className="flex flex-col gap-3 sm:flex-row">
-              {inscricaoComIaHabilitada ? (
-                <a
-                  href={hrefInscricaoWhatsapp}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  Inscrever via WhatsApp
-                </a>
-              ) : null}
               <Link 
                 href={`/torneios/${slug}`}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
@@ -94,6 +80,15 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
           }}
         />
       </div>
+
+      {inscricaoComIaHabilitada ? (
+        <TournamentRegistrationChat
+          tournamentSlug={torneio.slug}
+          tournamentName={torneio.nome}
+          categorySlug={categoria.slug}
+          categoryName={categoria.nome}
+        />
+      ) : null}
     </div>
   );
 }

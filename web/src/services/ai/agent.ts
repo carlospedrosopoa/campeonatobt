@@ -1,4 +1,4 @@
-import { desc, inArray } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import OpenAI from "openai";
 import type {
   ChatCompletionAssistantMessageParam,
@@ -11,10 +11,22 @@ import { buildTournamentRegistrationPrompt } from "@/services/ai/prompts";
 import { aiTools, executeAiTool, type ToolExecutionContext, type ToolResult } from "@/services/ai/tools";
 
 export type AgentInput = {
-  whatsapp: string;
+  channel?: "whatsapp" | "webchat";
+  whatsapp?: string | null;
   messageText: string;
   contactName?: string | null;
   messageId?: string | null;
+  threadId?: string | null;
+  tournamentSlug?: string | null;
+  tournamentName?: string | null;
+  categorySlug?: string | null;
+  categoryName?: string | null;
+  identity?: {
+    userId?: string | null;
+    nome?: string | null;
+    email?: string | null;
+    telefone?: string | null;
+  } | null;
 };
 
 export type AgentResult = {
@@ -54,8 +66,20 @@ function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
 }
 
-function toThreadId(whatsapp: string) {
-  return `gzappy:${normalizePhone(whatsapp) || "unknown"}`;
+function sanitizeThreadKey(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9:_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function toThreadId(input: AgentInput) {
+  const channel = input.channel || "whatsapp";
+  const explicitThread = sanitizeThreadKey(input.threadId);
+  if (explicitThread) return `${channel}:${explicitThread}`;
+  if (channel === "webchat") return `webchat:${crypto.randomUUID()}`;
+  return `gzappy:${normalizePhone(input.whatsapp) || "unknown"}`;
 }
 
 function assistantContentToText(content: string | Array<{ type: string; text?: string }> | null | undefined) {
@@ -96,7 +120,38 @@ function normalizeComparableText(value?: string | null) {
     .trim();
 }
 
-async function checkTournamentAiAvailability(messageText: string): Promise<TournamentAiAvailabilityResult | null> {
+async function checkTournamentAiAvailability(params: {
+  messageText: string;
+  tournamentSlug?: string | null;
+  tournamentName?: string | null;
+  channel: "whatsapp" | "webchat";
+}): Promise<TournamentAiAvailabilityResult | null> {
+  const tournamentSlug = String(params.tournamentSlug || "").trim();
+  if (tournamentSlug) {
+    const exactTournament = await db
+      .select({
+        id: torneios.id,
+        nome: torneios.nome,
+        slug: torneios.slug,
+        inscricaoComIa: torneios.inscricaoComIa,
+      })
+      .from(torneios)
+      .where(eq(torneios.slug, tournamentSlug))
+      .limit(1);
+
+    const tournament = exactTournament[0];
+    if (tournament && !tournament.inscricaoComIa) {
+      return {
+        shouldBlock: true,
+        replyText:
+          params.channel === "webchat"
+            ? `O atendimento virtual de inscricao nao esta habilitado para o torneio ${tournament.nome} no momento.`
+            : `A inscricao via WhatsApp com IA nao esta habilitada para o torneio ${tournament.nome} no momento.`,
+      };
+    }
+    if (tournament && tournament.inscricaoComIa) return null;
+  }
+
   const openTournaments = await db
     .select({
       id: torneios.id,
@@ -115,11 +170,13 @@ async function checkTournamentAiAvailability(messageText: string): Promise<Tourn
     return {
       shouldBlock: true,
       replyText:
-        "No momento nao ha torneios com inscricao via WhatsApp com IA habilitada. Fale com a organizacao ou use os canais normais de inscricao.",
+        params.channel === "webchat"
+          ? "No momento nao ha torneios com atendimento virtual de inscricao habilitado. Fale com a organizacao ou use os canais normais de inscricao."
+          : "No momento nao ha torneios com inscricao via WhatsApp com IA habilitada. Fale com a organizacao ou use os canais normais de inscricao.",
     };
   }
 
-  const normalizedMessage = normalizeComparableText(messageText);
+  const normalizedMessage = normalizeComparableText(`${params.tournamentName || ""} ${params.messageText}`);
   if (!normalizedMessage) return null;
 
   const match = openTournaments
@@ -137,7 +194,10 @@ async function checkTournamentAiAvailability(messageText: string): Promise<Tourn
   if (match && !match.tournament.inscricaoComIa) {
     return {
       shouldBlock: true,
-      replyText: `A inscricao via WhatsApp com IA nao esta habilitada para o torneio ${match.tournament.nome} no momento.`,
+      replyText:
+        params.channel === "webchat"
+          ? `O atendimento virtual de inscricao nao esta habilitado para o torneio ${match.tournament.nome} no momento.`
+          : `A inscricao via WhatsApp com IA nao esta habilitada para o torneio ${match.tournament.nome} no momento.`,
     };
   }
 
@@ -145,10 +205,16 @@ async function checkTournamentAiAvailability(messageText: string): Promise<Tourn
 }
 
 export async function runTournamentRegistrationAgent(input: AgentInput): Promise<AgentResult> {
+  const channel = input.channel || "whatsapp";
   const whatsapp = normalizePhone(input.whatsapp);
-  const threadId = toThreadId(whatsapp);
+  const threadId = toThreadId(input);
   const history = threadStore.get(threadId) ?? [];
-  const availabilityCheck = await checkTournamentAiAvailability(input.messageText);
+  const availabilityCheck = await checkTournamentAiAvailability({
+    messageText: input.messageText,
+    tournamentSlug: input.tournamentSlug,
+    tournamentName: input.tournamentName,
+    channel,
+  });
   if (availabilityCheck?.shouldBlock) {
     saveThread(threadId, [
       ...history,
@@ -166,8 +232,14 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
   }
 
   const systemPrompt = buildTournamentRegistrationPrompt({
+    channel,
     whatsapp,
     contactName: input.contactName,
+    tournamentSlug: input.tournamentSlug,
+    tournamentName: input.tournamentName,
+    categorySlug: input.categorySlug,
+    categoryName: input.categoryName,
+    identity: input.identity,
   });
 
   const client = getOpenAIClient();
@@ -194,10 +266,16 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
   const toolResults: ToolResult[] = [];
   const usedTools: string[] = [];
   const toolContext: ToolExecutionContext = {
+    channel,
     whatsapp,
     contactName: input.contactName,
     threadId,
     inboundText: input.messageText,
+    tournamentSlug: input.tournamentSlug,
+    tournamentName: input.tournamentName,
+    categorySlug: input.categorySlug,
+    categoryName: input.categoryName,
+    identity: input.identity ?? null,
   };
 
   let finalReply = "";
