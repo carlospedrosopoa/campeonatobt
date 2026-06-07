@@ -1087,13 +1087,13 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
     .where(
       and(
         eq(usuarios.perfil, "ATLETA"),
-        sql`${usuarios.playnaquadraAtletaId} is not null`,
         or(...conditions)
       )
     )
     .limit(10);
 
   const filtered = rows.filter((row) => row.id !== athleteId);
+  const readyForRegistration = filtered.filter((row) => Boolean(row.playnaquadraAtletaId?.trim()));
   if (filtered.length === 0) {
     return {
       ok: true,
@@ -1109,7 +1109,7 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
     };
   }
 
-  if (filtered.length > 1) {
+  if (readyForRegistration.length > 1) {
     return {
       ok: true,
       tool: "validate_partner",
@@ -1122,7 +1122,42 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
     };
   }
 
-  const partner = filtered[0];
+  if (readyForRegistration.length === 0) {
+    if (filtered.length === 1) {
+      const partner = filtered[0];
+      return {
+        ok: true,
+        tool: "validate_partner",
+        status: "found_without_profile",
+        message: "Encontrei o parceiro no sistema, mas o perfil dele ainda nao esta pronto para inscricao.",
+        nextAction: "orientar_ajustes_no_cadastro_do_parceiro",
+        data: {
+          partner: {
+            id: partner.id,
+            nome: partner.nome,
+            email: partner.email,
+            telefone: partner.telefone,
+            playnaquadraAtletaId: partner.playnaquadraAtletaId,
+          },
+          missingFields: ["perfilPlayNaQuadra"],
+          partnerProfileUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      tool: "validate_partner",
+      status: "ambiguous",
+      message: "Encontrei mais de um parceiro com esse nome, mas nenhum deles esta com o perfil pronto para inscricao.",
+      nextAction: "pedir_confirmacao_do_parceiro",
+      data: {
+        candidates: serializeAthleteCandidates(filtered),
+      },
+    };
+  }
+
+  const partner = readyForRegistration[0];
   return {
     ok: true,
     tool: "validate_partner",

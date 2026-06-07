@@ -545,6 +545,14 @@ function updateThreadStateFromToolResult(
           status: "not_found",
         };
         state.awaitingField = "partner";
+      } else if (result.status === "found_without_profile") {
+        const partnerData = (result.data?.partner ?? null) as Record<string, unknown> | null;
+        state.partner = {
+          id: String(partnerData?.id || "").trim() || null,
+          nome: String(partnerData?.nome || "").trim() || null,
+          status: "mentioned",
+        };
+        state.awaitingField = "partner";
       } else if (result.status === "invalid_input" || result.status === "partner_not_informed" || result.status === "blocked_by_flow") {
         state.awaitingField = state.selectedCategory?.id ? "partner" : "category";
       }
