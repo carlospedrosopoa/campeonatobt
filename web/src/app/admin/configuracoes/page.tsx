@@ -107,7 +107,7 @@ export default function AdminConfiguracoesPage() {
               />
               <button
                 type="button"
-                onClick={() => setMostrarApiKey((value) => !value)}
+                onClick={() => setMostrarApiKey((current) => !current)}
                 className="absolute inset-y-0 right-0 inline-flex items-center justify-center px-3 text-slate-500 hover:text-slate-700"
                 aria-label={mostrarApiKey ? "Ocultar API Key" : "Mostrar API Key"}
                 title={mostrarApiKey ? "Ocultar API Key" : "Mostrar API Key"}
