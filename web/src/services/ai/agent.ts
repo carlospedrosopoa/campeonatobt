@@ -43,10 +43,52 @@ type StoredThreadMessage = {
   content: string;
 };
 
+type ConversationIntent = "unknown" | "registration" | "schedule" | "profile";
+type ConversationStage =
+  | "initial"
+  | "awaiting_category"
+  | "awaiting_partner"
+  | "awaiting_partner_confirmation"
+  | "ready_to_register"
+  | "registration_created";
+type AwaitingField = "none" | "category" | "partner" | "partner_confirmation";
+
+type SelectedTournamentState = {
+  id?: string | null;
+  nome?: string | null;
+  slug?: string | null;
+};
+
+type SelectedCategoryState = {
+  id?: string | null;
+  nome?: string | null;
+  slug?: string | null;
+  tournamentId?: string | null;
+  tournamentName?: string | null;
+  tournamentSlug?: string | null;
+};
+
+type PartnerState = {
+  id?: string | null;
+  nome?: string | null;
+  status: "unknown" | "mentioned" | "valid" | "ambiguous" | "not_found";
+};
+
+type StoredThreadState = {
+  intent: ConversationIntent;
+  stage: ConversationStage;
+  awaitingField: AwaitingField;
+  selectedTournament: SelectedTournamentState | null;
+  selectedCategory: SelectedCategoryState | null;
+  partner: PartnerState | null;
+  lastTool: string | null;
+};
+
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const MAX_TOOL_ROUNDS = 4;
 const MAX_STORED_MESSAGES = 12;
 const threadStore = new Map<string, StoredThreadMessage[]>();
+const threadStateStore = new Map<string, StoredThreadState>();
 
 let openaiClient: OpenAI | null = null;
 
@@ -118,6 +160,409 @@ function normalizeComparableText(value?: string | null) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function parseToolArgs<T>(rawArgs: string): T {
+  try {
+    return JSON.parse(rawArgs) as T;
+  } catch {
+    return {} as T;
+  }
+}
+
+function tokenizeComparableText(value?: string | null) {
+  return normalizeComparableText(value).split(" ").filter(Boolean);
+}
+
+function levenshteinDistance(a: string, b: string) {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+
+  const prev = Array.from({ length: b.length + 1 }, (_, index) => index);
+  const curr = new Array<number>(b.length + 1).fill(0);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+
+    for (let j = 0; j <= b.length; j += 1) {
+      prev[j] = curr[j];
+    }
+  }
+
+  return prev[b.length];
+}
+
+function detectIntentFromText(messageText: string, currentIntent: ConversationIntent): ConversationIntent {
+  const normalized = normalizeComparableText(messageText);
+  if (!normalized) return currentIntent;
+
+  const hasScheduleIntent = /(programacao|horario|horarios|dia|dias|data|datas)/.test(normalized);
+  const hasProfileIntent = /(cadastro|perfil|foto|conta|email|telefone)/.test(normalized);
+  const hasRegistrationIntent = /(inscri|inscricao|jogar|categoria|parceiro|dupla)/.test(normalized);
+
+  if (hasRegistrationIntent) return "registration";
+  if (hasProfileIntent && !hasScheduleIntent) return "profile";
+  if (hasScheduleIntent) return "schedule";
+  return currentIntent;
+}
+
+function hasExplicitPartnerSignal(messageText: string) {
+  const normalized = normalizeComparableText(messageText);
+  if (!normalized) return false;
+
+  return (
+    normalized.includes("parceiro") ||
+    normalized.includes("dupla com") ||
+    normalized.includes("jogar com") ||
+    normalized.includes("jogo com") ||
+    normalized.includes("quero jogar com") ||
+    normalized.includes("gostaria de jogar com") ||
+    normalized.includes("tem algum")
+  );
+}
+
+function createInitialThreadState(input: AgentInput): StoredThreadState {
+  return {
+    intent: "unknown",
+    stage: "initial",
+    awaitingField: "none",
+    selectedTournament:
+      input.tournamentName || input.tournamentSlug
+        ? {
+            nome: input.tournamentName || null,
+            slug: input.tournamentSlug || null,
+          }
+        : null,
+    selectedCategory: null,
+    partner: null,
+    lastTool: null,
+  };
+}
+
+function mergeThreadStateWithInput(state: StoredThreadState, input: AgentInput) {
+  if (!state.selectedTournament && (input.tournamentName || input.tournamentSlug)) {
+    state.selectedTournament = {
+      nome: input.tournamentName || null,
+      slug: input.tournamentSlug || null,
+    };
+  }
+
+  state.intent = detectIntentFromText(input.messageText, state.intent);
+  return syncThreadState(state);
+}
+
+function syncThreadState(state: StoredThreadState) {
+  if (state.stage === "registration_created") {
+    state.awaitingField = "none";
+    return state;
+  }
+
+  if (state.selectedCategory?.id && state.partner?.status === "valid") {
+    state.stage = "ready_to_register";
+    state.awaitingField = "none";
+    return state;
+  }
+
+  if (state.partner?.status === "ambiguous" || state.awaitingField === "partner_confirmation") {
+    state.stage = "awaiting_partner_confirmation";
+    state.awaitingField = "partner_confirmation";
+    return state;
+  }
+
+  if (state.selectedCategory?.id) {
+    state.stage = "awaiting_partner";
+    state.awaitingField = "partner";
+    return state;
+  }
+
+  if (state.partner?.status === "valid") {
+    state.stage = "awaiting_category";
+    state.awaitingField = "category";
+    return state;
+  }
+
+  if (state.intent === "registration") {
+    state.stage = "awaiting_category";
+    state.awaitingField = "category";
+    return state;
+  }
+
+  state.stage = "initial";
+  state.awaitingField = "none";
+  return state;
+}
+
+function formatIntentLabel(intent: ConversationIntent) {
+  switch (intent) {
+    case "registration":
+      return "inscricao";
+    case "schedule":
+      return "programacao";
+    case "profile":
+      return "cadastro";
+    default:
+      return "indefinida";
+  }
+}
+
+function formatStageLabel(stage: ConversationStage) {
+  switch (stage) {
+    case "awaiting_category":
+      return "aguardando categoria";
+    case "awaiting_partner":
+      return "aguardando parceiro";
+    case "awaiting_partner_confirmation":
+      return "aguardando confirmacao do parceiro";
+    case "ready_to_register":
+      return "pronto para concluir a inscricao";
+    case "registration_created":
+      return "inscricao ja criada";
+    default:
+      return "inicio do atendimento";
+  }
+}
+
+function buildConversationStateSummary(state: StoredThreadState) {
+  const lines = [
+    `- Intencao atual: ${formatIntentLabel(state.intent)}`,
+    `- Etapa atual: ${formatStageLabel(state.stage)}`,
+    `- Torneio ja identificado: ${state.selectedTournament?.nome || state.selectedTournament?.slug || "ainda nao"}`,
+    `- Categoria ja escolhida pelo atleta: ${state.selectedCategory?.nome || "ainda nao"}`,
+    `- Parceiro atual: ${
+      state.partner?.nome
+        ? `${state.partner.nome} (${state.partner.status === "valid" ? "validado" : state.partner.status})`
+        : "ainda nao informado"
+    }`,
+  ];
+
+  if (state.selectedCategory?.nome) {
+    lines.push("- Nao pergunte novamente qual categoria o atleta quer, a menos que ele mude a escolha.");
+  }
+
+  if (state.partner?.status === "valid") {
+    lines.push("- Nao pergunte novamente quem e o parceiro, porque ele ja foi validado.");
+  }
+
+  if (state.awaitingField === "partner") {
+    lines.push("- Falta apenas identificar ou confirmar o parceiro antes de concluir a inscricao.");
+  }
+
+  if (state.stage === "ready_to_register") {
+    lines.push("- Categoria e parceiro ja estao resolvidos; avance sem voltar etapas.");
+  }
+
+  return lines.join("\n");
+}
+
+function resolveSelectedCategory(
+  categories: Array<Record<string, unknown>>,
+  messageText: string
+): SelectedCategoryState | null {
+  const normalizedMessage = normalizeComparableText(messageText);
+  const messageTokens = tokenizeComparableText(messageText);
+  if (!normalizedMessage || messageTokens.length === 0) return null;
+
+  const scoredMatches = categories
+    .map((category) => {
+      const categoryName = String(category.nome || "").trim();
+      const normalizedCategory = normalizeComparableText(categoryName);
+      const categoryTokens = tokenizeComparableText(categoryName);
+      if (!normalizedCategory || categoryTokens.length === 0) return null;
+
+      let bestScore = 0;
+      if (normalizedMessage === normalizedCategory) {
+        bestScore = 1;
+      } else if (normalizedMessage.includes(normalizedCategory)) {
+        bestScore = 0.99;
+      } else {
+        const minWindowSize = Math.max(1, categoryTokens.length);
+        const maxWindowSize = Math.min(messageTokens.length, categoryTokens.length + 2);
+
+        for (let windowSize = minWindowSize; windowSize <= maxWindowSize; windowSize += 1) {
+          for (let start = 0; start <= messageTokens.length - windowSize; start += 1) {
+            const windowText = messageTokens.slice(start, start + windowSize).join(" ");
+            const distance = levenshteinDistance(windowText, normalizedCategory);
+            const score = 1 - distance / Math.max(windowText.length, normalizedCategory.length);
+            if (score > bestScore) bestScore = score;
+          }
+        }
+      }
+
+      return {
+        score: bestScore,
+        category,
+      };
+    })
+    .filter((item): item is { score: number; category: Record<string, unknown> } => Boolean(item))
+    .sort((a, b) => b.score - a.score);
+
+  const best = scoredMatches[0];
+  const second = scoredMatches[1];
+  if (!best || best.score < 0.72) return null;
+  if (second && second.score >= 0.68 && best.score - second.score < 0.08) return null;
+
+  return {
+    id: String(best.category.id || "").trim() || null,
+    nome: String(best.category.nome || "").trim() || null,
+    slug: String(best.category.slug || "").trim() || null,
+  };
+}
+
+function updateTournamentStateFromToolResult(state: StoredThreadState, result: ToolResult) {
+  const tournamentData = (result.data?.tournament ?? null) as Record<string, unknown> | null;
+  if (!tournamentData) return;
+
+  state.selectedTournament = {
+    id: String(tournamentData.id || "").trim() || state.selectedTournament?.id || null,
+    nome: String(tournamentData.nome || "").trim() || state.selectedTournament?.nome || null,
+    slug: String(tournamentData.slug || "").trim() || state.selectedTournament?.slug || null,
+  };
+}
+
+function updateThreadStateFromToolResult(
+  state: StoredThreadState,
+  toolName: string,
+  result: ToolResult,
+  input: AgentInput
+) {
+  state.lastTool = toolName;
+
+  switch (toolName) {
+    case "get_available_categories": {
+      updateTournamentStateFromToolResult(state, result);
+      const categories = Array.isArray(result.data?.categories) ? (result.data.categories as Array<Record<string, unknown>>) : [];
+      const selectedCategory = resolveSelectedCategory(categories, input.messageText);
+
+      if (selectedCategory) {
+        state.selectedCategory = {
+          ...state.selectedCategory,
+          ...selectedCategory,
+          tournamentId: String((result.data?.tournament as Record<string, unknown> | undefined)?.id || "").trim() || null,
+          tournamentName: String((result.data?.tournament as Record<string, unknown> | undefined)?.nome || "").trim() || null,
+          tournamentSlug: String((result.data?.tournament as Record<string, unknown> | undefined)?.slug || "").trim() || null,
+        };
+      } else if (!state.selectedCategory?.id && state.intent === "registration") {
+        state.awaitingField = "category";
+      }
+      break;
+    }
+    case "get_tournament_schedule":
+      updateTournamentStateFromToolResult(state, result);
+      break;
+    case "validate_partner": {
+      if (result.status === "valid") {
+        const partnerData = (result.data?.partner ?? null) as Record<string, unknown> | null;
+        state.partner = {
+          id: String(partnerData?.id || "").trim() || null,
+          nome: String(partnerData?.nome || "").trim() || null,
+          status: "valid",
+        };
+      } else if (result.status === "ambiguous") {
+        state.partner = {
+          id: state.partner?.id || null,
+          nome: state.partner?.nome || null,
+          status: "ambiguous",
+        };
+        state.awaitingField = "partner_confirmation";
+      } else if (result.status === "not_found") {
+        state.partner = {
+          id: null,
+          nome: String(result.data?.partnerName || "").trim() || null,
+          status: "not_found",
+        };
+        state.awaitingField = "partner";
+      } else if (result.status === "invalid_input" || result.status === "partner_not_informed" || result.status === "blocked_by_flow") {
+        state.awaitingField = state.selectedCategory?.id ? "partner" : "category";
+      }
+      break;
+    }
+    case "create_tournament_registration":
+      if (result.status === "created") {
+        state.stage = "registration_created";
+        state.awaitingField = "none";
+      }
+      break;
+    default:
+      break;
+  }
+
+  syncThreadState(state);
+}
+
+function buildBlockedPartnerValidationResult(state: StoredThreadState): ToolResult {
+  return {
+    ok: true,
+    tool: "validate_partner",
+    status: "blocked_by_flow",
+    message:
+      "Ainda nao ha parceiro explicitamente informado nesta mensagem. Nao use o nome do atleta ou do contato como parceiro.",
+    nextAction: state.selectedCategory?.id ? "solicitar_nome_ou_whatsapp_do_parceiro" : "seguir_definindo_categoria",
+    data: {
+      selectedCategory: state.selectedCategory?.nome || null,
+      currentStage: state.stage,
+    },
+  };
+}
+
+function buildBlockedRegistrationCreationResult(state: StoredThreadState): ToolResult {
+  return {
+    ok: true,
+    tool: "create_tournament_registration",
+    status: "blocked_by_flow",
+    message: "A inscricao ainda nao pode ser criada porque faltam etapas obrigatorias do fluxo.",
+    nextAction: !state.selectedCategory?.id
+      ? "solicitar_categoria_ao_atleta"
+      : state.partner?.status !== "valid"
+        ? "solicitar_confirmacao_do_parceiro"
+        : "seguir_fluxo_normal",
+    data: {
+      selectedCategory: state.selectedCategory?.nome || null,
+      partnerStatus: state.partner?.status || "unknown",
+      currentStage: state.stage,
+    },
+  };
+}
+
+function maybeGuardToolCall(params: {
+  toolName: string;
+  rawArgs: string;
+  input: AgentInput;
+  state: StoredThreadState;
+}): ToolResult | null {
+  if (params.toolName === "validate_partner") {
+    const args = parseToolArgs<{ partnerName?: string; partnerWhatsapp?: string }>(params.rawArgs);
+    const partnerName = String(args.partnerName || "").trim();
+    const partnerWhatsapp = normalizePhone(args.partnerWhatsapp);
+    const canValidatePartner =
+      params.state.awaitingField === "partner" ||
+      params.state.awaitingField === "partner_confirmation" ||
+      hasExplicitPartnerSignal(params.input.messageText);
+
+    if (!canValidatePartner || (!partnerName && !partnerWhatsapp)) {
+      return buildBlockedPartnerValidationResult(params.state);
+    }
+  }
+
+  if (params.toolName === "create_tournament_registration") {
+    const args = parseToolArgs<{ categoryId?: string; partnerId?: string }>(params.rawArgs);
+    const hasCategoryReady = Boolean(params.state.selectedCategory?.id) && (
+      !args.categoryId || params.state.selectedCategory?.id === args.categoryId
+    );
+    const hasPartnerReady = params.state.partner?.status === "valid" && (
+      !args.partnerId || params.state.partner?.id === args.partnerId
+    );
+
+    if (!hasCategoryReady || !hasPartnerReady) {
+      return buildBlockedRegistrationCreationResult(params.state);
+    }
+  }
+
+  return null;
 }
 
 async function checkTournamentAiAvailability(params: {
@@ -209,6 +654,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
   const whatsapp = normalizePhone(input.whatsapp);
   const threadId = toThreadId(input);
   const history = threadStore.get(threadId) ?? [];
+  const threadState = mergeThreadStateWithInput(threadStateStore.get(threadId) ?? createInitialThreadState(input), input);
   const availabilityCheck = await checkTournamentAiAvailability({
     messageText: input.messageText,
     tournamentSlug: input.tournamentSlug,
@@ -221,6 +667,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
       { role: "user", content: input.messageText },
       { role: "assistant", content: availabilityCheck.replyText },
     ]);
+    threadStateStore.set(threadId, threadState);
     return {
       ok: false,
       threadId,
@@ -239,6 +686,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     tournamentName: input.tournamentName,
     categorySlug: input.categorySlug,
     categoryName: input.categoryName,
+    conversationStateSummary: buildConversationStateSummary(threadState),
     identity: input.identity,
   });
 
@@ -247,6 +695,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     const replyText =
       "Nosso atendimento inteligente ainda nao esta configurado. Por favor, tente novamente mais tarde ou fale com a organizacao.";
     saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: replyText }]);
+    threadStateStore.set(threadId, threadState);
     return {
       ok: false,
       threadId,
@@ -300,9 +749,17 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
 
     if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       for (const call of assistantMessage.tool_calls) {
-        const result = await executeAiTool(call.function.name, call.function.arguments, toolContext);
+        const guardedResult =
+          maybeGuardToolCall({
+            toolName: call.function.name,
+            rawArgs: call.function.arguments,
+            input,
+            state: threadState,
+          }) ?? null;
+        const result = guardedResult ?? (await executeAiTool(call.function.name, call.function.arguments, toolContext));
         toolResults.push(result);
         usedTools.push(call.function.name);
+        updateThreadStateFromToolResult(threadState, call.function.name, result, input);
 
         messages.push({
           role: "tool",
@@ -323,6 +780,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
   }
 
   saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
+  threadStateStore.set(threadId, threadState);
 
   return {
     ok: true,

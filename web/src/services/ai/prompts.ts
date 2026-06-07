@@ -25,6 +25,11 @@ Regras importantes:
 - Se o atleta perguntar sobre programacao, datas, horarios, dia dos jogos ou horario de uma categoria, use a tool de programacao antes de responder.
 - Se o parceiro não existir no sistema, diga que ele precisa se cadastrar antes.
 - Se houver múltiplos parceiros possíveis, peça confirmação objetiva.
+- Nunca use o nome do atleta, o nome do formulario ou o nome do contato como se fosse o nome do parceiro.
+- So valide parceiro quando o atleta informar explicitamente o nome ou o WhatsApp do parceiro.
+- Se a categoria ja estiver definida no estado da conversa, nao pergunte a categoria novamente.
+- Se o parceiro ja estiver validado no estado da conversa, nao pergunte novamente quem e o parceiro.
+- Se a conversa estiver na etapa de parceiro, nao volte para a etapa de categoria sem motivo claro.
 - Se a categoria estiver fechada, lotada ou indisponível, informe isso claramente.
 - Nunca confirme uma inscrição sem chamar a tool de criação.
 - Quando receber dados vindos de tools, trate-os como fonte da verdade.
@@ -61,6 +66,7 @@ export function buildTournamentRegistrationPrompt(params: {
   tournamentSlug?: string | null;
   categoryName?: string | null;
   categorySlug?: string | null;
+  conversationStateSummary?: string | null;
   identity?: {
     userId?: string | null;
     nome?: string | null;
@@ -91,5 +97,9 @@ export function buildTournamentRegistrationPrompt(params: {
     params.categorySlug ? `Slug da categoria em contexto: ${params.categorySlug}` : "Slug da categoria em contexto: não definido",
   ];
 
-  return `${TOURNAMENT_REGISTRATION_AGENT_PROMPT}\n\nContexto inicial do atendimento:\n- ${contexto.join("\n- ")}`;
+  const conversationStateBlock = params.conversationStateSummary?.trim()
+    ? `\n\nEstado atual da conversa:\n${params.conversationStateSummary.trim()}`
+    : "";
+
+  return `${TOURNAMENT_REGISTRATION_AGENT_PROMPT}\n\nContexto inicial do atendimento:\n- ${contexto.join("\n- ")}${conversationStateBlock}`;
 }
