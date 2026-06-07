@@ -252,11 +252,11 @@ function createInitialThreadState(input: AgentInput): ConversationStateSnapshot 
   };
 }
 
-function normalizeConversationHistory(history?: AgentConversationMessage[] | null) {
+function normalizeConversationHistory(history?: AgentConversationMessage[] | null): AgentConversationMessage[] {
   if (!Array.isArray(history)) return [];
 
   return history
-    .map((item) => ({
+    .map<AgentConversationMessage>((item) => ({
       role: item?.role === "assistant" ? "assistant" : "user",
       content: String(item?.content || "").trim(),
     }))
