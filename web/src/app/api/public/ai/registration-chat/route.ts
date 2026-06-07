@@ -1,11 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import type { AgentConversationMessage, ConversationStateSnapshot } from "@/services/ai/agent";
 import { runTournamentRegistrationAgent } from "@/services/ai/agent";
 
 export const dynamic = "force-dynamic";
 
 function cleanString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function cleanHistory(value: unknown): AgentConversationMessage[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => ({
+      role: item?.role === "assistant" ? "assistant" : "user",
+      content: cleanString(item?.content),
+    }))
+    .filter((item) => item.content.length > 0);
+}
+
+function cleanConversationState(value: any): ConversationStateSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+
+  return {
+    intent: cleanString(value.intent) as ConversationStateSnapshot["intent"],
+    stage: cleanString(value.stage) as ConversationStateSnapshot["stage"],
+    awaitingField: cleanString(value.awaitingField) as ConversationStateSnapshot["awaitingField"],
+    selectedTournament: value.selectedTournament && typeof value.selectedTournament === "object"
+      ? {
+          id: cleanString(value.selectedTournament.id) || null,
+          nome: cleanString(value.selectedTournament.nome) || null,
+          slug: cleanString(value.selectedTournament.slug) || null,
+        }
+      : null,
+    selectedCategory: value.selectedCategory && typeof value.selectedCategory === "object"
+      ? {
+          id: cleanString(value.selectedCategory.id) || null,
+          nome: cleanString(value.selectedCategory.nome) || null,
+          slug: cleanString(value.selectedCategory.slug) || null,
+          tournamentId: cleanString(value.selectedCategory.tournamentId) || null,
+          tournamentName: cleanString(value.selectedCategory.tournamentName) || null,
+          tournamentSlug: cleanString(value.selectedCategory.tournamentSlug) || null,
+        }
+      : null,
+    partner: value.partner && typeof value.partner === "object"
+      ? {
+          id: cleanString(value.partner.id) || null,
+          nome: cleanString(value.partner.nome) || null,
+          status: cleanString(value.partner.status) as NonNullable<ConversationStateSnapshot["partner"]>["status"],
+        }
+      : null,
+    lastTool: cleanString(value.lastTool) || null,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -37,6 +84,8 @@ export async function POST(request: NextRequest) {
       tournamentName: cleanString(body?.tournamentName) || null,
       categorySlug: cleanString(body?.categorySlug) || null,
       categoryName: cleanString(body?.categoryName) || null,
+      history: cleanHistory(body?.history),
+      conversationState: cleanConversationState(body?.conversationState),
       identity,
     });
 
@@ -47,6 +96,7 @@ export async function POST(request: NextRequest) {
         replyText: result.replyText,
         usedTools: result.usedTools,
         toolResults: result.toolResults,
+        conversationState: result.conversationState,
       },
       { status: 200, headers: { "Cache-Control": "no-store" } }
     );
