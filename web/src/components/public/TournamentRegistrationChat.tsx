@@ -9,6 +9,31 @@ type ChatMessage = {
   content: string;
 };
 
+type ConversationState = {
+  intent: string;
+  stage: string;
+  awaitingField: string;
+  selectedTournament: {
+    id?: string | null;
+    nome?: string | null;
+    slug?: string | null;
+  } | null;
+  selectedCategory: {
+    id?: string | null;
+    nome?: string | null;
+    slug?: string | null;
+    tournamentId?: string | null;
+    tournamentName?: string | null;
+    tournamentSlug?: string | null;
+  } | null;
+  partner: {
+    id?: string | null;
+    nome?: string | null;
+    status: string;
+  } | null;
+  lastTool?: string | null;
+};
+
 type StoredChatState = {
   threadId: string;
   identity: {
@@ -17,6 +42,7 @@ type StoredChatState = {
     telefone: string;
   };
   messages: ChatMessage[];
+  conversationState: ConversationState | null;
 };
 
 type Props = {
@@ -184,6 +210,7 @@ export default function TournamentRegistrationChat(props: Props) {
   const [threadId, setThreadId] = useState("");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
+  const [conversationState, setConversationState] = useState<ConversationState | null>(null);
   const [identity, setIdentity] = useState({
     nome: "",
     email: "",
@@ -207,6 +234,9 @@ export default function TournamentRegistrationChat(props: Props) {
       if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
         setMessages(parsed.messages);
       }
+      if (parsed.conversationState) {
+        setConversationState(parsed.conversationState);
+      }
     } catch {
       setMessages([welcomeMessage]);
     }
@@ -218,10 +248,11 @@ export default function TournamentRegistrationChat(props: Props) {
         threadId,
         identity,
         messages,
+        conversationState,
       };
       window.localStorage.setItem(storageKey, JSON.stringify(payload));
     } catch {}
-  }, [identity, messages, storageKey, threadId]);
+  }, [conversationState, identity, messages, storageKey, threadId]);
 
   useEffect(() => {
     if (!isOpen || didTryPrefill) return;
@@ -252,6 +283,10 @@ export default function TournamentRegistrationChat(props: Props) {
     if (!text || isSending) return;
 
     const userMessage = createMessage("user", text);
+    const requestHistory = messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
     setMessages((current) => [...current, userMessage]);
     setInput("");
     setIsSending(true);
@@ -267,6 +302,8 @@ export default function TournamentRegistrationChat(props: Props) {
           tournamentName: props.tournamentName,
           categorySlug: props.categorySlug || null,
           categoryName: props.categoryName || null,
+          history: requestHistory,
+          conversationState,
           identity,
         }),
       });
@@ -277,6 +314,7 @@ export default function TournamentRegistrationChat(props: Props) {
       }
 
       if (data?.threadId) setThreadId(String(data.threadId));
+      if (data?.conversationState) setConversationState(data.conversationState as ConversationState);
       setMessages((current) => [
         ...current,
         createMessage("assistant", String(data?.replyText || "Recebi sua mensagem. Vamos continuar sua inscricao.")),
@@ -293,6 +331,7 @@ export default function TournamentRegistrationChat(props: Props) {
 
   function resetChat() {
     setThreadId("");
+    setConversationState(null);
     setMessages([welcomeMessage]);
     setInput("");
     try {

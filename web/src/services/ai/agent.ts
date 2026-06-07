@@ -21,6 +21,8 @@ export type AgentInput = {
   tournamentName?: string | null;
   categorySlug?: string | null;
   categoryName?: string | null;
+  history?: AgentConversationMessage[] | null;
+  conversationState?: ConversationStateSnapshot | null;
   identity?: {
     userId?: string | null;
     nome?: string | null;
@@ -35,10 +37,11 @@ export type AgentResult = {
   replyText: string;
   usedTools: string[];
   toolResults: ToolResult[];
+  conversationState: ConversationStateSnapshot;
   messageId?: string | null;
 };
 
-type StoredThreadMessage = {
+export type AgentConversationMessage = {
   role: "user" | "assistant";
   content: string;
 };
@@ -74,7 +77,7 @@ type PartnerState = {
   status: "unknown" | "mentioned" | "valid" | "ambiguous" | "not_found";
 };
 
-type StoredThreadState = {
+export type ConversationStateSnapshot = {
   intent: ConversationIntent;
   stage: ConversationStage;
   awaitingField: AwaitingField;
@@ -87,8 +90,8 @@ type StoredThreadState = {
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const MAX_TOOL_ROUNDS = 4;
 const MAX_STORED_MESSAGES = 12;
-const threadStore = new Map<string, StoredThreadMessage[]>();
-const threadStateStore = new Map<string, StoredThreadState>();
+const threadStore = new Map<string, AgentConversationMessage[]>();
+const threadStateStore = new Map<string, ConversationStateSnapshot>();
 
 let openaiClient: OpenAI | null = null;
 
@@ -119,7 +122,12 @@ function sanitizeThreadKey(value?: string | null) {
 function toThreadId(input: AgentInput) {
   const channel = input.channel || "whatsapp";
   const explicitThread = sanitizeThreadKey(input.threadId);
-  if (explicitThread) return `${channel}:${explicitThread}`;
+  if (explicitThread) {
+    if (explicitThread.startsWith("webchat:") || explicitThread.startsWith("gzappy:")) {
+      return explicitThread;
+    }
+    return `${channel}:${explicitThread}`;
+  }
   if (channel === "webchat") return `webchat:${crypto.randomUUID()}`;
   return `gzappy:${normalizePhone(input.whatsapp) || "unknown"}`;
 }
@@ -135,7 +143,7 @@ function assistantContentToText(content: string | Array<{ type: string; text?: s
 
 function buildConversationMessages(params: {
   systemPrompt: string;
-  history: StoredThreadMessage[];
+  history: AgentConversationMessage[];
   inboundText: string;
 }): ChatCompletionMessageParam[] {
   const messages: ChatCompletionMessageParam[] = [
@@ -149,7 +157,7 @@ function buildConversationMessages(params: {
   return messages;
 }
 
-function saveThread(threadId: string, history: StoredThreadMessage[]) {
+function saveThread(threadId: string, history: AgentConversationMessage[]) {
   threadStore.set(threadId, history.slice(-MAX_STORED_MESSAGES));
 }
 
@@ -226,7 +234,7 @@ function hasExplicitPartnerSignal(messageText: string) {
   );
 }
 
-function createInitialThreadState(input: AgentInput): StoredThreadState {
+function createInitialThreadState(input: AgentInput): ConversationStateSnapshot {
   return {
     intent: "unknown",
     stage: "initial",
@@ -244,7 +252,68 @@ function createInitialThreadState(input: AgentInput): StoredThreadState {
   };
 }
 
-function mergeThreadStateWithInput(state: StoredThreadState, input: AgentInput) {
+function normalizeConversationHistory(history?: AgentConversationMessage[] | null) {
+  if (!Array.isArray(history)) return [];
+
+  return history
+    .map((item) => ({
+      role: item?.role === "assistant" ? "assistant" : "user",
+      content: String(item?.content || "").trim(),
+    }))
+    .filter((item) => item.content.length > 0)
+    .slice(-MAX_STORED_MESSAGES);
+}
+
+function normalizeConversationStateSnapshot(
+  snapshot: ConversationStateSnapshot | null | undefined
+): ConversationStateSnapshot | null {
+  if (!snapshot) return null;
+
+  const validIntent = new Set<ConversationIntent>(["unknown", "registration", "schedule", "profile"]);
+  const validStage = new Set<ConversationStage>([
+    "initial",
+    "awaiting_category",
+    "awaiting_partner",
+    "awaiting_partner_confirmation",
+    "ready_to_register",
+    "registration_created",
+  ]);
+  const validAwaitingFields = new Set<AwaitingField>(["none", "category", "partner", "partner_confirmation"]);
+  const validPartnerStatuses = new Set<PartnerState["status"]>(["unknown", "mentioned", "valid", "ambiguous", "not_found"]);
+
+  return {
+    intent: validIntent.has(snapshot.intent) ? snapshot.intent : "unknown",
+    stage: validStage.has(snapshot.stage) ? snapshot.stage : "initial",
+    awaitingField: validAwaitingFields.has(snapshot.awaitingField) ? snapshot.awaitingField : "none",
+    selectedTournament: snapshot.selectedTournament
+      ? {
+          id: String(snapshot.selectedTournament.id || "").trim() || null,
+          nome: String(snapshot.selectedTournament.nome || "").trim() || null,
+          slug: String(snapshot.selectedTournament.slug || "").trim() || null,
+        }
+      : null,
+    selectedCategory: snapshot.selectedCategory
+      ? {
+          id: String(snapshot.selectedCategory.id || "").trim() || null,
+          nome: String(snapshot.selectedCategory.nome || "").trim() || null,
+          slug: String(snapshot.selectedCategory.slug || "").trim() || null,
+          tournamentId: String(snapshot.selectedCategory.tournamentId || "").trim() || null,
+          tournamentName: String(snapshot.selectedCategory.tournamentName || "").trim() || null,
+          tournamentSlug: String(snapshot.selectedCategory.tournamentSlug || "").trim() || null,
+        }
+      : null,
+    partner: snapshot.partner
+      ? {
+          id: String(snapshot.partner.id || "").trim() || null,
+          nome: String(snapshot.partner.nome || "").trim() || null,
+          status: validPartnerStatuses.has(snapshot.partner.status) ? snapshot.partner.status : "unknown",
+        }
+      : null,
+    lastTool: String(snapshot.lastTool || "").trim() || null,
+  };
+}
+
+function mergeThreadStateWithInput(state: ConversationStateSnapshot, input: AgentInput) {
   if (!state.selectedTournament && (input.tournamentName || input.tournamentSlug)) {
     state.selectedTournament = {
       nome: input.tournamentName || null,
@@ -256,7 +325,7 @@ function mergeThreadStateWithInput(state: StoredThreadState, input: AgentInput) 
   return syncThreadState(state);
 }
 
-function syncThreadState(state: StoredThreadState) {
+function syncThreadState(state: ConversationStateSnapshot) {
   if (state.stage === "registration_created") {
     state.awaitingField = "none";
     return state;
@@ -327,7 +396,7 @@ function formatStageLabel(stage: ConversationStage) {
   }
 }
 
-function buildConversationStateSummary(state: StoredThreadState) {
+function buildConversationStateSummary(state: ConversationStateSnapshot) {
   const lines = [
     `- Intencao atual: ${formatIntentLabel(state.intent)}`,
     `- Etapa atual: ${formatStageLabel(state.stage)}`,
@@ -413,7 +482,7 @@ function resolveSelectedCategory(
   };
 }
 
-function updateTournamentStateFromToolResult(state: StoredThreadState, result: ToolResult) {
+function updateTournamentStateFromToolResult(state: ConversationStateSnapshot, result: ToolResult) {
   const tournamentData = (result.data?.tournament ?? null) as Record<string, unknown> | null;
   if (!tournamentData) return;
 
@@ -494,7 +563,7 @@ function updateThreadStateFromToolResult(
   syncThreadState(state);
 }
 
-function buildBlockedPartnerValidationResult(state: StoredThreadState): ToolResult {
+function buildBlockedPartnerValidationResult(state: ConversationStateSnapshot): ToolResult {
   return {
     ok: true,
     tool: "validate_partner",
@@ -509,7 +578,7 @@ function buildBlockedPartnerValidationResult(state: StoredThreadState): ToolResu
   };
 }
 
-function buildBlockedRegistrationCreationResult(state: StoredThreadState): ToolResult {
+function buildBlockedRegistrationCreationResult(state: ConversationStateSnapshot): ToolResult {
   return {
     ok: true,
     tool: "create_tournament_registration",
@@ -532,7 +601,7 @@ function maybeGuardToolCall(params: {
   toolName: string;
   rawArgs: string;
   input: AgentInput;
-  state: StoredThreadState;
+  state: ConversationStateSnapshot;
 }): ToolResult | null {
   if (params.toolName === "validate_partner") {
     const args = parseToolArgs<{ partnerName?: string; partnerWhatsapp?: string }>(params.rawArgs);
@@ -653,8 +722,13 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
   const channel = input.channel || "whatsapp";
   const whatsapp = normalizePhone(input.whatsapp);
   const threadId = toThreadId(input);
-  const history = threadStore.get(threadId) ?? [];
-  const threadState = mergeThreadStateWithInput(threadStateStore.get(threadId) ?? createInitialThreadState(input), input);
+  const clientHistory = normalizeConversationHistory(input.history);
+  const history = threadStore.get(threadId) ?? clientHistory;
+  const baseThreadState =
+    threadStateStore.get(threadId) ??
+    normalizeConversationStateSnapshot(input.conversationState) ??
+    createInitialThreadState(input);
+  const threadState = mergeThreadStateWithInput(baseThreadState, input);
   const availabilityCheck = await checkTournamentAiAvailability({
     messageText: input.messageText,
     tournamentSlug: input.tournamentSlug,
@@ -674,6 +748,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
       replyText: availabilityCheck.replyText,
       usedTools: [],
       toolResults: [],
+      conversationState: threadState,
       messageId: input.messageId ?? null,
     };
   }
@@ -702,6 +777,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
       replyText,
       usedTools: [],
       toolResults: [],
+      conversationState: threadState,
       messageId: input.messageId ?? null,
     };
   }
@@ -788,6 +864,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     replyText: finalReply,
     usedTools,
     toolResults,
+    conversationState: threadState,
     messageId: input.messageId ?? null,
   };
 }
