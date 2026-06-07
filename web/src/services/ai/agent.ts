@@ -494,7 +494,7 @@ function updateTournamentStateFromToolResult(state: ConversationStateSnapshot, r
 }
 
 function updateThreadStateFromToolResult(
-  state: StoredThreadState,
+  state: ConversationStateSnapshot,
   toolName: string,
   result: ToolResult,
   input: AgentInput
