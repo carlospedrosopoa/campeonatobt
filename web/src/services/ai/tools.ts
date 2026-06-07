@@ -538,8 +538,10 @@ async function searchPlayAthletesByName(query: string): Promise<AthleteRow[]> {
     const result = await playBuscarAtletas({ token, q: trimmedQuery, limite: 10 });
     if (!result.res.ok || !result.data) return [];
 
-    const candidates = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
-    const parsed = candidates.map((item) => extractPlayAthleteCandidate(item)).filter((item): item is PlayAthleteCandidate => Boolean(item));
+    const candidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+    const parsed = candidates
+      .map<PlayAthleteCandidate | null>((item: any) => extractPlayAthleteCandidate(item))
+      .filter((item): item is PlayAthleteCandidate => Boolean(item));
     const synced: AthleteRow[] = [];
 
     for (const candidate of parsed) {
