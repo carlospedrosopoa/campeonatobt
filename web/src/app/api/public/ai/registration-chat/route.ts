@@ -13,7 +13,7 @@ function cleanHistory(value: unknown): AgentConversationMessage[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item) => ({
+    .map<AgentConversationMessage>((item) => ({
       role: item?.role === "assistant" ? "assistant" : "user",
       content: cleanString(item?.content),
     }))
