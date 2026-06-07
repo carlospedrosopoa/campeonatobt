@@ -97,6 +97,14 @@ type AthleteLookupResult = {
   matches: AthleteRow[];
 };
 
+type PlayAthleteCandidate = {
+  playnaquadraAtletaId: string | null;
+  nome: string;
+  email: string;
+  telefone: string | null;
+  fotoUrl: string | null;
+};
+
 export const aiTools: ChatCompletionTool[] = [
   {
     type: "function",
@@ -381,6 +389,128 @@ function dedupeAthleteRows(rows: AthleteRow[]) {
   });
 }
 
+function extractPlayAthleteCandidate(item: any): PlayAthleteCandidate | null {
+  const playnaquadraAtletaId = String(item?.id || item?._id || item?.atletaId || item?.usuarioId || "").trim() || null;
+  const nome = String(item?.nome || item?.usuario?.nome || item?.atleta?.nome || "").trim();
+  const email = String(item?.email || item?.usuario?.email || item?.atleta?.email || "").trim().toLowerCase();
+  const telefone = String(item?.telefone || item?.usuario?.telefone || item?.atleta?.telefone || "").trim() || null;
+  const fotoUrl = String(item?.fotoUrl || item?.foto_url || item?.usuario?.fotoUrl || item?.atleta?.fotoUrl || "").trim() || null;
+
+  if (!nome && !email && !playnaquadraAtletaId) return null;
+
+  return {
+    playnaquadraAtletaId,
+    nome: nome || email || playnaquadraAtletaId || "Atleta",
+    email,
+    telefone,
+    fotoUrl,
+  };
+}
+
+async function getAthleteRowByUserId(userId: string): Promise<AthleteRow | null> {
+  const rows = await db
+    .select({
+      id: usuarios.id,
+      nome: usuarios.nome,
+      email: usuarios.email,
+      telefone: usuarios.telefone,
+      fotoUrl: usuarios.fotoUrl,
+      playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
+    })
+    .from(usuarios)
+    .where(and(eq(usuarios.id, userId), eq(usuarios.perfil, "ATLETA")))
+    .limit(1);
+
+  return rows[0] || null;
+}
+
+async function upsertAthleteFromPlayCandidate(candidate: PlayAthleteCandidate): Promise<AthleteRow | null> {
+  const playId = String(candidate.playnaquadraAtletaId || "").trim();
+  const email = normalizeEmail(candidate.email);
+
+  if (!playId && !email) {
+    return {
+      id: `play:${candidate.nome}`,
+      nome: candidate.nome,
+      email: candidate.email || "",
+      telefone: candidate.telefone,
+      fotoUrl: candidate.fotoUrl,
+      playnaquadraAtletaId: candidate.playnaquadraAtletaId,
+    };
+  }
+
+  if (playId) {
+    const existingByPlay = await db
+      .select({ id: usuarios.id })
+      .from(usuarios)
+      .where(eq(usuarios.playnaquadraAtletaId, playId))
+      .limit(1);
+
+    if (existingByPlay.length > 0) {
+      const userId = existingByPlay[0].id;
+      await db
+        .update(usuarios)
+        .set({
+          nome: candidate.nome,
+          email: email || candidate.email || `${playId}@playnaquadra.local`,
+          telefone: candidate.telefone ?? null,
+          fotoUrl: candidate.fotoUrl ?? null,
+          atualizadoEm: new Date(),
+        })
+        .where(eq(usuarios.id, userId));
+      return await getAthleteRowByUserId(userId);
+    }
+  }
+
+  if (email) {
+    const existingByEmail = await db
+      .select({ id: usuarios.id, perfil: usuarios.perfil })
+      .from(usuarios)
+      .where(eq(usuarios.email, email))
+      .limit(1);
+
+    if (existingByEmail.length > 0 && existingByEmail[0].perfil === "ATLETA") {
+      const userId = existingByEmail[0].id;
+      await db
+        .update(usuarios)
+        .set({
+          nome: candidate.nome,
+          telefone: candidate.telefone ?? null,
+          fotoUrl: candidate.fotoUrl ?? null,
+          playnaquadraAtletaId: playId || null,
+          atualizadoEm: new Date(),
+        })
+        .where(eq(usuarios.id, userId));
+      return await getAthleteRowByUserId(userId);
+    }
+  }
+
+  if (!email) {
+    return {
+      id: `play:${playId || candidate.nome}`,
+      nome: candidate.nome,
+      email: candidate.email || "",
+      telefone: candidate.telefone,
+      fotoUrl: candidate.fotoUrl,
+      playnaquadraAtletaId: candidate.playnaquadraAtletaId,
+    };
+  }
+
+  const [created] = await db
+    .insert(usuarios)
+    .values({
+      nome: candidate.nome,
+      email,
+      telefone: candidate.telefone ?? null,
+      perfil: "ATLETA",
+      playnaquadraAtletaId: playId || null,
+      fotoUrl: candidate.fotoUrl ?? null,
+    })
+    .returning({ id: usuarios.id });
+
+  return await getAthleteRowByUserId(created.id);
+}
+
 async function findLocalAthletesByPlayIds(playIds: string[]): Promise<AthleteRow[]> {
   const ids = Array.from(new Set(playIds.map((value) => String(value || "").trim()).filter(Boolean)));
   if (ids.length === 0) return [];
@@ -409,21 +539,17 @@ async function searchPlayAthletesByName(query: string): Promise<AthleteRow[]> {
     if (!result.res.ok || !result.data) return [];
 
     const candidates = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
-    const playIds = candidates
-      .map((item: any) => String(item?.id || item?._id || item?.atletaId || item?.usuarioId || "").trim())
-      .filter(Boolean);
+    const parsed = candidates.map((item) => extractPlayAthleteCandidate(item)).filter((item): item is PlayAthleteCandidate => Boolean(item));
+    const synced: AthleteRow[] = [];
 
+    for (const candidate of parsed) {
+      const syncedRow = await upsertAthleteFromPlayCandidate(candidate);
+      if (syncedRow) synced.push(syncedRow);
+    }
+
+    const playIds = parsed.map((item) => String(item.playnaquadraAtletaId || "").trim()).filter(Boolean);
     const localMatches = await findLocalAthletesByPlayIds(playIds);
-    if (localMatches.length > 0) return localMatches;
-
-    return candidates.map((item: any, index: number) => ({
-      id: `play:${String(item?.id || item?._id || item?.atletaId || item?.usuarioId || index)}`,
-      nome: String(item?.nome || item?.usuario?.nome || item?.atleta?.nome || "").trim(),
-      email: String(item?.email || item?.usuario?.email || item?.atleta?.email || "").trim(),
-      telefone: String(item?.telefone || item?.usuario?.telefone || item?.atleta?.telefone || "").trim() || null,
-      fotoUrl: null,
-      playnaquadraAtletaId: String(item?.id || item?._id || item?.atletaId || item?.usuarioId || "").trim() || null,
-    }));
+    return dedupeAthleteRows([...synced, ...localMatches]);
   } catch {
     return [];
   }
@@ -471,10 +597,10 @@ async function searchPartnerCandidates(params: {
       .limit(25);
   }
 
+  const playPriority = partnerName ? await searchPlayAthletesByName(partnerName) : [];
   const filteredLocal = localMatches.filter((row) => row.id !== params.excludeAthleteId);
-  const playFallback = filteredLocal.length === 0 && partnerName ? await searchPlayAthletesByName(partnerName) : [];
   const merged = dedupeAthleteRows(
-    [...filteredLocal, ...playFallback.filter((row) => row.id !== params.excludeAthleteId)]
+    [...playPriority.filter((row) => row.id !== params.excludeAthleteId), ...filteredLocal]
       .filter((row) => String(row.nome || "").trim().length > 0)
       .sort((a, b) => scorePartnerCandidate(b, { partnerName, partnerWhatsapp }) - scorePartnerCandidate(a, { partnerName, partnerWhatsapp }))
   );
