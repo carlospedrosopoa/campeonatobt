@@ -1458,6 +1458,7 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
         nome: partner.nome,
         email: partner.email,
         telefone: partner.telefone,
+        fotoUrl: partner.fotoUrl,
         playnaquadraAtletaId: partner.playnaquadraAtletaId,
       },
     },
@@ -1552,6 +1553,7 @@ async function createTournamentRegistration(args: CreateTournamentRegistrationAr
       nextAction: "informar_torneio_fechado",
       data: {
         tournamentId: args.tournamentId,
+        tournamentName: categoria.torneioNome,
         tournamentStatus: categoria.torneioStatus,
       },
     };
@@ -1570,6 +1572,8 @@ async function createTournamentRegistration(args: CreateTournamentRegistrationAr
       data: {
         tournamentId: args.tournamentId,
         tournamentName: categoria.torneioNome,
+        categoryId: args.categoryId,
+        categoryName: categoria.nome,
       },
     };
   }
@@ -1588,6 +1592,9 @@ async function createTournamentRegistration(args: CreateTournamentRegistrationAr
       nextAction: "informar_categoria_encerrada",
       data: {
         categoryId: args.categoryId,
+        categoryName: categoria.nome,
+        tournamentId: args.tournamentId,
+        tournamentName: categoria.torneioNome,
       },
     };
   }
@@ -1653,8 +1660,11 @@ async function createTournamentRegistration(args: CreateTournamentRegistrationAr
       nextAction: "informar_falha_na_inscricao",
       data: {
         tournamentId: args.tournamentId,
+        tournamentName: categoria.torneioNome,
         categoryId: args.categoryId,
+        categoryName: categoria.nome,
         partnerId: args.partnerId,
+        errorDetail: e?.message || "Falha ao criar inscricao",
       },
     };
   }

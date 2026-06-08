@@ -80,6 +80,28 @@ function renderLineValue(value: string, key: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const normalizedLink = normalizeClickableLink(trimmed);
+  const isImage = /^https?:\/\/\S+\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(normalizedLink);
+
+  if (isImage) {
+    return (
+      <div key={key} className="space-y-2">
+        <img
+          src={normalizedLink}
+          alt="Foto do perfil"
+          className="h-28 w-28 rounded-2xl object-cover ring-1 ring-slate-200"
+          loading="lazy"
+        />
+        <a
+          href={normalizedLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-800"
+        >
+          Abrir foto
+        </a>
+      </div>
+    );
+  }
 
   if (isLinkValue(normalizedLink)) {
     return (
@@ -126,7 +148,7 @@ function renderAssistantMessage(content: string) {
     }
 
     const labeledMatch = line.match(
-      /^(cadastro|status|foto|faltando|perfil|link do perfil|criar conta|categoria selecionada|torneio|pr[oó]ximo passo)\s*:\s*(.+)$/i
+      /^(cadastro|status|foto|foto do parceiro|faltando|perfil|link do perfil|criar conta|categoria selecionada|torneio|motivo|pr[oó]ximo passo)\s*:\s*(.+)$/i
     );
     if (labeledMatch) {
       const label = labeledMatch[1];

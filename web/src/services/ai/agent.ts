@@ -650,6 +650,64 @@ function buildPartnerReplyFromToolResult(result: ToolResult): string | null {
     return `Encontrei este parceiro no sistema:\n${optionsText}\nO cadastro dele ainda nao esta pronto para inscricao. Se for esse mesmo parceiro, eu te explico o que falta ajustar.`;
   }
 
+  if (result.status === "valid") {
+    const partner = (result.data?.partner ?? null) as Record<string, unknown> | null;
+    if (!partner) return null;
+
+    const nome = String(partner.nome || "").trim();
+    const fotoUrl = String(partner.fotoUrl || "").trim();
+    const details = [
+      nome ? `Nome no cadastro: ${nome}` : "",
+      fotoUrl ? `Foto: ${fotoUrl}` : "",
+    ].filter(Boolean);
+
+    if (details.length > 0) {
+      return `Encontrei este parceiro:\n${details.join("\n")}\nSe estiver certo, eu sigo com a inscricao na categoria selecionada.`;
+    }
+  }
+
+  return null;
+}
+
+function buildRegistrationReplyFromToolResult(result: ToolResult): string | null {
+  if (result.tool !== "create_tournament_registration") return null;
+
+  const tournamentName = String(result.data?.tournamentName || "").trim();
+  const categoryName = String(result.data?.categoryName || "").trim();
+  const errorDetail = String(result.data?.errorDetail || result.message || "").trim();
+
+  if (result.status === "created") {
+    return null;
+  }
+
+  if (result.status === "category_closed") {
+    return `${categoryName || "Esta categoria"} nao esta mais disponivel para inscricao porque os jogos ja foram gerados.${tournamentName ? ` Torneio: ${tournamentName}.` : ""}`;
+  }
+
+  if (result.status === "tournament_closed") {
+    return `${tournamentName || "Este torneio"} nao esta com inscricoes abertas no momento.`;
+  }
+
+  if (result.status === "ai_registration_disabled") {
+    return result.message;
+  }
+
+  if (result.status === "partner_invalid") {
+    return "Nao consegui concluir a inscricao porque o parceiro informado nao esta valido para esta etapa. Posso te mostrar novamente os dados do parceiro para confirmar.";
+  }
+
+  if (result.status === "athlete_not_found") {
+    return "Nao consegui concluir a inscricao porque nao localizei seu cadastro com seguranca. Posso verificar seus dados cadastrais antes de tentar de novo.";
+  }
+
+  if (result.status === "category_not_found") {
+    return `Nao consegui concluir a inscricao porque a categoria selecionada nao foi localizada corretamente${tournamentName ? ` no torneio ${tournamentName}` : ""}.`;
+  }
+
+  if (result.status === "error") {
+    return `Nao consegui concluir a inscricao.${categoryName ? ` Categoria: ${categoryName}.` : ""}${errorDetail ? ` Motivo: ${errorDetail}.` : ""}`;
+  }
+
   return null;
 }
 
@@ -901,7 +959,9 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
       }
 
       const lastToolResult = toolResults[toolResults.length - 1] ?? null;
-      const forcedReply = lastToolResult ? buildPartnerReplyFromToolResult(lastToolResult) : null;
+      const forcedReply = lastToolResult
+        ? buildPartnerReplyFromToolResult(lastToolResult) || buildRegistrationReplyFromToolResult(lastToolResult)
+        : null;
       if (forcedReply) {
         finalReply = forcedReply;
         break;
