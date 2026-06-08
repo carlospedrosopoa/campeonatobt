@@ -577,7 +577,7 @@ function updateThreadStateFromToolResult(
           nome: String(partnerData?.nome || "").trim() || null,
           status: "mentioned",
         };
-        state.awaitingField = "partner";
+        state.awaitingField = "partner_confirmation";
       } else if (result.status === "invalid_input" || result.status === "partner_not_informed" || result.status === "blocked_by_flow") {
         state.awaitingField = state.selectedCategory?.id ? "partner" : "category";
       }
@@ -961,6 +961,66 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     identity: input.identity ?? null,
   };
 
+  let finalReply = "";
+
+  if (
+    threadState.awaitingField === "partner_confirmation" &&
+    isAffirmativeConfirmation(input.messageText) &&
+    threadState.partner?.nome
+  ) {
+    const validationArgs = {
+      partnerName: threadState.partner.nome,
+    };
+    const validationResult = await executeAiTool("validate_partner", JSON.stringify(validationArgs), toolContext);
+    toolResults.push(validationResult);
+    usedTools.push("validate_partner");
+    updateThreadStateFromToolResult(threadState, "validate_partner", validationResult, input);
+
+    if (
+      threadState.stage === "ready_to_register" &&
+      threadState.selectedCategory?.id &&
+      (threadState.selectedCategory?.tournamentId || threadState.selectedTournament?.id) &&
+      threadState.partner?.id
+    ) {
+      const registrationArgs = {
+        tournamentId: threadState.selectedCategory.tournamentId || threadState.selectedTournament?.id,
+        categoryId: threadState.selectedCategory.id,
+        athleteWhatsapp: whatsapp || undefined,
+        athletePhone: input.identity?.telefone || undefined,
+        athleteEmail: input.identity?.email || undefined,
+        athleteUserId: input.identity?.userId || undefined,
+        partnerId: threadState.partner.id,
+      };
+      const registrationResult = await executeAiTool(
+        "create_tournament_registration",
+        JSON.stringify(registrationArgs),
+        toolContext
+      );
+      toolResults.push(registrationResult);
+      usedTools.push("create_tournament_registration");
+      updateThreadStateFromToolResult(threadState, "create_tournament_registration", registrationResult, input);
+    }
+
+    const lastToolResult = toolResults[toolResults.length - 1] ?? validationResult;
+    finalReply =
+      buildRegistrationReplyFromToolResult(lastToolResult) ||
+      buildPartnerReplyFromToolResult(lastToolResult) ||
+      "Recebi sua confirmacao e estou seguindo com a inscricao.";
+
+    saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
+    threadStateStore.set(threadId, threadState);
+
+    return {
+      ok: lastToolResult.ok,
+      threadId,
+      replyText: finalReply,
+      usedTools,
+      toolResults,
+      conversationState: threadState,
+      messageId: input.messageId ?? null,
+    };
+  }
+
   if (
     threadState.stage === "ready_to_register" &&
     isAffirmativeConfirmation(input.messageText) &&
@@ -1000,8 +1060,6 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
       messageId: input.messageId ?? null,
     };
   }
-
-  let finalReply = "";
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const completion = await client.chat.completions.create({
