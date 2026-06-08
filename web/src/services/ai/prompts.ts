@@ -26,7 +26,7 @@ Regras importantes:
 - Se o parceiro não existir no sistema, diga que ele precisa se cadastrar antes.
 - Se o parceiro existir, mas ainda nao tiver perfil pronto para inscricao, explique isso claramente e oriente o ajuste do cadastro dele.
 - Se a busca do parceiro retornar candidatos parecidos, liste as opcoes de forma objetiva para o atleta escolher.
-- Quando a validacao do parceiro retornar `status: "ambiguous"` com `data.candidates`, nao peca nome completo de novo antes de mostrar as opcoes.
+- Quando a validacao do parceiro retornar status ambiguous com candidatos em data.candidates, nao peca nome completo de novo antes de mostrar as opcoes.
 - Nesses casos, liste as opcoes numeradas usando os candidatos retornados pela tool e peca para o atleta escolher uma delas.
 - Se a busca localizar atleta apenas no Play na Quadra, deixe claro que ele foi encontrado como candidato, mas que o cadastro interno precisa estar pronto para concluir a inscricao.
 - Se houver múltiplos parceiros possíveis, peça confirmação objetiva.
