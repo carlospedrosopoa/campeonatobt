@@ -234,6 +234,31 @@ function hasExplicitPartnerSignal(messageText: string) {
   );
 }
 
+function isAffirmativeConfirmation(messageText: string) {
+  const normalized = normalizeComparableText(messageText);
+  if (!normalized) return false;
+
+  return new Set([
+    "sim",
+    "s",
+    "ok",
+    "okay",
+    "certo",
+    "ta certo",
+    "tá certo",
+    "esta certo",
+    "está certo",
+    "isso",
+    "isso mesmo",
+    "pode seguir",
+    "pode prosseguir",
+    "vamos seguir",
+    "pode continuar",
+    "confirmo",
+    "confirmado",
+  ]).has(normalized);
+}
+
 function createInitialThreadState(input: AgentInput): ConversationStateSnapshot {
   return {
     intent: "unknown",
@@ -675,9 +700,28 @@ function buildRegistrationReplyFromToolResult(result: ToolResult): string | null
   const tournamentName = String(result.data?.tournamentName || "").trim();
   const categoryName = String(result.data?.categoryName || "").trim();
   const errorDetail = String(result.data?.errorDetail || result.message || "").trim();
+  const pix = result.data?.pix && typeof result.data.pix === "object" ? (result.data.pix as Record<string, unknown>) : null;
+  const pixPayload = String(pix?.payload || "").trim();
+  const pixValor = String(pix?.valor || "").trim();
 
   if (result.status === "created") {
-    return null;
+    const lines = [
+      `Inscricao criada com sucesso${categoryName ? ` na categoria ${categoryName}` : ""}${tournamentName ? ` do torneio ${tournamentName}` : ""}.`,
+    ];
+
+    if (pixValor) {
+      lines.push(`Valor: R$ ${pixValor}.`);
+    }
+
+    if (pixPayload) {
+      lines.push(`Pix Copia e Cola: ${pixPayload}`);
+    }
+
+    if (!pixPayload) {
+      lines.push("Proximo passo: aguarde a confirmacao da organizacao sobre o pagamento.");
+    }
+
+    return lines.join("\n");
   }
 
   if (result.status === "category_closed") {
@@ -916,6 +960,46 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     categoryName: input.categoryName,
     identity: input.identity ?? null,
   };
+
+  if (
+    threadState.stage === "ready_to_register" &&
+    isAffirmativeConfirmation(input.messageText) &&
+    threadState.selectedCategory?.id &&
+    threadState.selectedCategory?.tournamentId &&
+    threadState.partner?.id
+  ) {
+    const registrationArgs = {
+      tournamentId: threadState.selectedCategory.tournamentId,
+      categoryId: threadState.selectedCategory.id,
+      athleteWhatsapp: whatsapp || undefined,
+      athletePhone: input.identity?.telefone || undefined,
+      athleteEmail: input.identity?.email || undefined,
+      athleteUserId: input.identity?.userId || undefined,
+      partnerId: threadState.partner.id,
+    };
+
+    const result = await executeAiTool("create_tournament_registration", JSON.stringify(registrationArgs), toolContext);
+    toolResults.push(result);
+    usedTools.push("create_tournament_registration");
+    updateThreadStateFromToolResult(threadState, "create_tournament_registration", result, input);
+
+    finalReply =
+      buildRegistrationReplyFromToolResult(result) ||
+      "Nao consegui concluir a inscricao agora. Posso revisar seus dados e tentar novamente.";
+
+    saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
+    threadStateStore.set(threadId, threadState);
+
+    return {
+      ok: result.ok,
+      threadId,
+      replyText: finalReply,
+      usedTools,
+      toolResults,
+      conversationState: threadState,
+      messageId: input.messageId ?? null,
+    };
+  }
 
   let finalReply = "";
 
