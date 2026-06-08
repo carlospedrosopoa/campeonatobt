@@ -764,6 +764,15 @@ function serializeAthleteCandidates(matches: AthleteRow[]) {
   }));
 }
 
+function buildCandidateOptionsText(matches: AthleteRow[]) {
+  return serializeAthleteCandidates(matches)
+    .map((candidate, index) => {
+      const details = [candidate.emailMasked, candidate.telefoneMasked].filter(Boolean).join(" - ");
+      return `${index + 1}. ${candidate.nome}${details ? ` (${details})` : ""}`;
+    })
+    .join("\n");
+}
+
 function buildPlayerProfileStatusData(player: AthleteRow) {
   const missingFields: string[] = [];
   if (!player.email?.trim()) missingFields.push("email");
@@ -1362,14 +1371,16 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
   }
 
   if (readyForRegistration.length > 1) {
+    const candidateOptionsText = buildCandidateOptionsText(filtered);
     return {
       ok: true,
       tool: "validate_partner",
       status: "ambiguous",
-      message: "Encontrei mais de um parceiro possivel. Preciso que o atleta confirme quem e o parceiro correto.",
-      nextAction: "pedir_confirmacao_do_parceiro",
+      message: "Encontrei mais de um parceiro possivel. Liste as opcoes encontradas e peca para o atleta escolher uma delas.",
+      nextAction: "listar_opcoes_do_parceiro_e_pedir_confirmacao",
       data: {
         candidates: serializeAthleteCandidates(filtered),
+        candidateOptionsText,
       },
     };
   }
@@ -1422,10 +1433,11 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
       ok: true,
       tool: "validate_partner",
       status: "ambiguous",
-      message: "Encontrei mais de um parceiro com esse nome, mas nenhum deles esta com o perfil pronto para inscricao.",
-      nextAction: "pedir_confirmacao_do_parceiro",
+      message: "Encontrei mais de um parceiro com esse nome, mas nenhum deles esta com o perfil pronto para inscricao. Liste as opcoes para o atleta confirmar.",
+      nextAction: "listar_opcoes_do_parceiro_e_pedir_confirmacao",
       data: {
         candidates: serializeAthleteCandidates(filtered),
+        candidateOptionsText: buildCandidateOptionsText(filtered),
       },
     };
   }
