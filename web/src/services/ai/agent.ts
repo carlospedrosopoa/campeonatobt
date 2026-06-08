@@ -605,6 +605,54 @@ function buildBlockedRegistrationCreationResult(state: ConversationStateSnapshot
   };
 }
 
+function formatPartnerCandidatesFromToolResult(result: ToolResult) {
+  const candidates = Array.isArray(result.data?.candidates)
+    ? result.data.candidates.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    : [];
+
+  if (candidates.length > 0) {
+    return candidates
+      .map((candidate, index) => {
+        const nome = String(candidate.nome || "").trim() || "Parceiro";
+        const details = [String(candidate.emailMasked || "").trim(), String(candidate.telefoneMasked || "").trim()]
+          .filter(Boolean)
+          .join(" - ");
+        return `${index + 1}. ${nome}${details ? ` (${details})` : ""}`;
+      })
+      .join("\n");
+  }
+
+  const partner = result.data?.partner;
+  if (partner && typeof partner === "object") {
+    const partnerRecord = partner as Record<string, unknown>;
+    const nome = String(partnerRecord.nome || "").trim();
+    if (nome) return `1. ${nome}`;
+  }
+
+  return "";
+}
+
+function buildPartnerReplyFromToolResult(result: ToolResult): string | null {
+  if (result.tool !== "validate_partner") return null;
+
+  const optionsText =
+    String(result.data?.candidateOptionsText || "").trim() || formatPartnerCandidatesFromToolResult(result);
+
+  if (result.status === "ambiguous" && optionsText) {
+    return `Encontrei estas opcoes de parceiro:\n${optionsText}\nQual deles voce quer escolher?`;
+  }
+
+  if (result.status === "found_on_play_only" && optionsText) {
+    return `Encontrei este parceiro no Play na Quadra:\n${optionsText}\nE esse mesmo? Se sim, eu sigo com ele como parceiro.`;
+  }
+
+  if (result.status === "found_without_profile" && optionsText) {
+    return `Encontrei este parceiro no sistema:\n${optionsText}\nO cadastro dele ainda nao esta pronto para inscricao. Se for esse mesmo parceiro, eu te explico o que falta ajustar.`;
+  }
+
+  return null;
+}
+
 function maybeGuardToolCall(params: {
   toolName: string;
   rawArgs: string;
@@ -851,6 +899,14 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
           content: JSON.stringify(result),
         } satisfies ChatCompletionToolMessageParam);
       }
+
+      const lastToolResult = toolResults[toolResults.length - 1] ?? null;
+      const forcedReply = lastToolResult ? buildPartnerReplyFromToolResult(lastToolResult) : null;
+      if (forcedReply) {
+        finalReply = forcedReply;
+        break;
+      }
+
       continue;
     }
 

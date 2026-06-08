@@ -1393,8 +1393,8 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
           ok: true,
           tool: "validate_partner",
           status: "found_on_play_only",
-          message: "Encontrei um atleta com esse nome no Play na Quadra, mas ainda nao localizei um cadastro interno pronto para inscricao.",
-          nextAction: "confirmar_nome_completo_ou_regularizar_cadastro_do_parceiro",
+          message: "Encontrei um atleta com esse nome no Play na Quadra. Confirme com o atleta se esta e a pessoa correta antes de pedir mais dados.",
+          nextAction: "confirmar_parceiro_encontrado_no_play",
           data: {
             partner: {
               id: null,
@@ -1404,6 +1404,7 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
               playnaquadraAtletaId: partner.playnaquadraAtletaId,
             },
             candidates: serializeAthleteCandidates(filtered),
+            candidateOptionsText: buildCandidateOptionsText(filtered),
             partnerSignupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
           },
         };
@@ -1413,8 +1414,8 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
         ok: true,
         tool: "validate_partner",
         status: "found_without_profile",
-        message: "Encontrei o parceiro no sistema, mas o perfil dele ainda nao esta pronto para inscricao.",
-        nextAction: "orientar_ajustes_no_cadastro_do_parceiro",
+        message: "Encontrei o parceiro no sistema. Confirme com o atleta se esta e a pessoa correta e explique que o cadastro dele ainda nao esta pronto para inscricao.",
+        nextAction: "confirmar_parceiro_e_orientar_ajustes_no_cadastro",
         data: {
           partner: {
             id: partner.id,
@@ -1423,6 +1424,8 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
             telefone: partner.telefone,
             playnaquadraAtletaId: partner.playnaquadraAtletaId,
           },
+          candidates: serializeAthleteCandidates(filtered),
+          candidateOptionsText: buildCandidateOptionsText(filtered),
           missingFields: ["perfilPlayNaQuadra"],
           partnerProfileUrl: "https://atleta.playnaquadra.com.br/criar-conta",
         },

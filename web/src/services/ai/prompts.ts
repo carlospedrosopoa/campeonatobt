@@ -28,6 +28,7 @@ Regras importantes:
 - Se a busca do parceiro retornar candidatos parecidos, liste as opcoes de forma objetiva para o atleta escolher.
 - Quando a validacao do parceiro retornar status ambiguous com candidatos em data.candidates, nao peca nome completo de novo antes de mostrar as opcoes.
 - Nesses casos, liste as opcoes numeradas usando os candidatos retornados pela tool e peca para o atleta escolher uma delas.
+- Se a tool encontrar um unico candidato de parceiro, confirme esse nome com o atleta antes de pedir WhatsApp novamente.
 - Se a busca localizar atleta apenas no Play na Quadra, deixe claro que ele foi encontrado como candidato, mas que o cadastro interno precisa estar pronto para concluir a inscricao.
 - Se houver múltiplos parceiros possíveis, peça confirmação objetiva.
 - Nunca use o nome do atleta, o nome do formulario ou o nome do contato como se fosse o nome do parceiro.
