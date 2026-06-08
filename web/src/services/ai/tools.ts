@@ -72,6 +72,13 @@ type ValidatePartnerArgs = {
   partnerWhatsapp?: string;
 };
 
+type AthleteIdentityLookupInput = {
+  athleteUserId?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+};
+
 type CreateTournamentRegistrationArgs = {
   tournamentId: string;
   categoryId: string;
@@ -557,6 +564,103 @@ async function searchPlayAthletesByName(query: string): Promise<AthleteRow[]> {
   }
 }
 
+async function searchPlayAthleteCandidatesByIdentity(input: AthleteIdentityLookupInput): Promise<PlayAthleteCandidate[]> {
+  const queries = Array.from(
+    new Set(
+      [
+        normalizeEmail(input.email),
+        normalizePhone(input.whatsapp || input.phone),
+        (() => {
+          const phone = normalizePhone(input.whatsapp || input.phone);
+          return phone.length >= 8 ? phone.slice(-8) : "";
+        })(),
+      ]
+        .map((value) => String(value || "").trim())
+        .filter((value) => value.length >= 2)
+    )
+  );
+
+  if (queries.length === 0) return [];
+
+  try {
+    const token = await getPlayAdminToken();
+    const allCandidates: PlayAthleteCandidate[] = [];
+
+    for (const query of queries) {
+      const result = await playBuscarAtletas({ token, q: query, limite: 10 });
+      if (!result.res.ok || !result.data) continue;
+
+      const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+      const parsed = rawCandidates
+        .map<PlayAthleteCandidate | null>((item: any) => extractPlayAthleteCandidate(item))
+        .filter((item): item is PlayAthleteCandidate => Boolean(item));
+
+      allCandidates.push(...parsed);
+    }
+
+    const unique = new Map<string, PlayAthleteCandidate>();
+    for (const candidate of allCandidates) {
+      const key = String(candidate.playnaquadraAtletaId || candidate.email || candidate.nome || "").trim();
+      if (!key || unique.has(key)) continue;
+      unique.set(key, candidate);
+    }
+
+    return Array.from(unique.values());
+  } catch {
+    return [];
+  }
+}
+
+function scorePlayCandidateForIdentity(candidate: PlayAthleteCandidate, input: AthleteIdentityLookupInput) {
+  const candidateEmail = normalizeEmail(candidate.email);
+  const inputEmail = normalizeEmail(input.email);
+  const candidatePhone = normalizePhone(candidate.telefone);
+  const inputPhone = normalizePhone(input.whatsapp || input.phone);
+  let score = 0;
+
+  if (inputEmail && candidateEmail === inputEmail) score += 100;
+  if (inputPhone && candidatePhone && candidatePhone === inputPhone) score += 100;
+  if (inputPhone && candidatePhone && candidatePhone.endsWith(inputPhone.slice(-8))) score += 40;
+  if (candidate.playnaquadraAtletaId?.trim()) score += 10;
+  if (candidate.fotoUrl?.trim()) score += 5;
+
+  return score;
+}
+
+async function syncAthleteFromPlayByIdentity(input: AthleteIdentityLookupInput, localMatch?: AthleteRow | null): Promise<AthleteRow | null> {
+  const candidates = await searchPlayAthleteCandidatesByIdentity(input);
+  if (candidates.length === 0) return localMatch || null;
+
+  const ranked = [...candidates].sort((a, b) => scorePlayCandidateForIdentity(b, input) - scorePlayCandidateForIdentity(a, input));
+  const best = ranked[0];
+  if (!best || scorePlayCandidateForIdentity(best, input) <= 0) return localMatch || null;
+
+  const synced = await upsertAthleteFromPlayCandidate(best);
+  if (!synced) return localMatch || null;
+
+  if (localMatch?.id && synced.id !== localMatch.id) {
+    await db
+      .update(usuarios)
+      .set({
+        nome: best.nome,
+        email: normalizeEmail(best.email) || localMatch.email,
+        telefone: best.telefone ?? localMatch.telefone ?? null,
+        fotoUrl: best.fotoUrl ?? localMatch.fotoUrl ?? null,
+        playnaquadraAtletaId: String(best.playnaquadraAtletaId || "").trim() || localMatch.playnaquadraAtletaId || null,
+        atualizadoEm: new Date(),
+      })
+      .where(eq(usuarios.id, localMatch.id));
+    return await getAthleteRowByUserId(localMatch.id);
+  }
+
+  return synced;
+}
+
+function athleteNeedsProfileSync(row: AthleteRow | null | undefined) {
+  if (!row) return true;
+  return !row.telefone?.trim() || !row.fotoUrl?.trim() || !row.playnaquadraAtletaId?.trim();
+}
+
 async function searchPartnerCandidates(params: {
   partnerName?: string;
   partnerWhatsapp?: string;
@@ -720,30 +824,41 @@ async function findAthleteByUserId(userIdRaw: string): Promise<AthleteLookupResu
   return { status: "not_found", matches: [] };
 }
 
-async function findAthleteByIdentity(input: {
-  athleteUserId?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  whatsapp?: string | null;
-}): Promise<AthleteLookupResult> {
+async function findAthleteByIdentity(input: AthleteIdentityLookupInput): Promise<AthleteLookupResult> {
   if (input.athleteUserId) {
     const byUserId = await findAthleteByUserId(input.athleteUserId);
-    if (byUserId.status === "found" || byUserId.status === "ambiguous") return byUserId;
+    if (byUserId.status === "found") {
+      const enriched = athleteNeedsProfileSync(byUserId.matches[0]) ? await syncAthleteFromPlayByIdentity(input, byUserId.matches[0]) : byUserId.matches[0];
+      return enriched ? { status: "found", matches: [enriched] } : byUserId;
+    }
+    if (byUserId.status === "ambiguous") return byUserId;
   }
 
   if (input.email) {
     const byEmail = await findAthleteByEmail(input.email);
-    if (byEmail.status === "found" || byEmail.status === "ambiguous") return byEmail;
+    if (byEmail.status === "found") {
+      const enriched = athleteNeedsProfileSync(byEmail.matches[0]) ? await syncAthleteFromPlayByIdentity(input, byEmail.matches[0]) : byEmail.matches[0];
+      return enriched ? { status: "found", matches: [enriched] } : byEmail;
+    }
+    if (byEmail.status === "ambiguous") return byEmail;
   }
 
   const phone = input.whatsapp || input.phone;
   if (phone) {
     const byPhone = await findAthleteByWhatsapp(phone);
-    if (byPhone.status === "found" || byPhone.status === "ambiguous") return byPhone;
-    if (byPhone.status === "not_found") return byPhone;
+    if (byPhone.status === "found") {
+      const enriched = athleteNeedsProfileSync(byPhone.matches[0]) ? await syncAthleteFromPlayByIdentity(input, byPhone.matches[0]) : byPhone.matches[0];
+      return enriched ? { status: "found", matches: [enriched] } : byPhone;
+    }
+    if (byPhone.status === "ambiguous") return byPhone;
   }
 
-  return { status: "invalid", matches: [] };
+  const syncedFromPlay = await syncAthleteFromPlayByIdentity(input, null);
+  if (syncedFromPlay) {
+    return { status: "found", matches: [syncedFromPlay] };
+  }
+
+  return input.email || input.phone || input.whatsapp ? { status: "not_found", matches: [] } : { status: "invalid", matches: [] };
 }
 
 function getContextAthleteLookup(context: ToolExecutionContext) {
