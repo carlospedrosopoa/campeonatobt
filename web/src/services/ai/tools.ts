@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { categorias, equipeIntegrantes, inscricaoPagamentos, inscricoes, partidas, torneios, usuarios } from "@/db/schema";
 import { inscricoesService } from "@/services/inscricoes.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
-import { playBuscarAtletas } from "@/services/playnaquadra-client";
+import { playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
 
 export type AiToolName =
   | "check_player_registration"
@@ -111,6 +111,9 @@ type PlayAthleteCandidate = {
   telefone: string | null;
   fotoUrl: string | null;
 };
+
+const PLAY_PROFILE_URL = "https://torneios.playnaquadra.com.br/atleta/perfil";
+const PLAY_SIGNUP_URL = "https://atleta.playnaquadra.com.br/criar-conta";
 
 export const aiTools: ChatCompletionTool[] = [
   {
@@ -611,6 +614,20 @@ async function searchPlayAthleteCandidatesByIdentity(input: AthleteIdentityLooku
   }
 }
 
+async function getPlayCandidateByAthleteId(playAthleteId?: string | null): Promise<PlayAthleteCandidate | null> {
+  const athleteId = String(playAthleteId || "").trim();
+  if (!athleteId) return null;
+
+  try {
+    const token = await getPlayAdminToken();
+    const result = await playGetAtletaById({ token, atletaId: athleteId });
+    if (!result.res.ok || !result.data) return null;
+    return extractPlayAthleteCandidate(result.data);
+  } catch {
+    return null;
+  }
+}
+
 function scorePlayCandidateForIdentity(candidate: PlayAthleteCandidate, input: AthleteIdentityLookupInput) {
   const candidateEmail = normalizeEmail(candidate.email);
   const inputEmail = normalizeEmail(input.email);
@@ -628,12 +645,25 @@ function scorePlayCandidateForIdentity(candidate: PlayAthleteCandidate, input: A
 }
 
 async function syncAthleteFromPlayByIdentity(input: AthleteIdentityLookupInput, localMatch?: AthleteRow | null): Promise<AthleteRow | null> {
-  const candidates = await searchPlayAthleteCandidatesByIdentity(input);
+  const effectiveInput: AthleteIdentityLookupInput = {
+    athleteUserId: input.athleteUserId || null,
+    email: normalizeEmail(input.email || localMatch?.email || null) || null,
+    phone: normalizePhone(input.phone || localMatch?.telefone || null) || null,
+    whatsapp: normalizePhone(input.whatsapp || null) || null,
+  };
+
+  const exactCandidate = await getPlayCandidateByAthleteId(localMatch?.playnaquadraAtletaId);
+  const candidates = [
+    ...(exactCandidate ? [exactCandidate] : []),
+    ...(await searchPlayAthleteCandidatesByIdentity(effectiveInput)),
+  ];
   if (candidates.length === 0) return localMatch || null;
 
-  const ranked = [...candidates].sort((a, b) => scorePlayCandidateForIdentity(b, input) - scorePlayCandidateForIdentity(a, input));
+  const ranked = [...candidates].sort(
+    (a, b) => scorePlayCandidateForIdentity(b, effectiveInput) - scorePlayCandidateForIdentity(a, effectiveInput)
+  );
   const best = ranked[0];
-  if (!best || scorePlayCandidateForIdentity(best, input) <= 0) return localMatch || null;
+  if (!best || scorePlayCandidateForIdentity(best, effectiveInput) <= 0) return localMatch || null;
 
   const synced = await upsertAthleteFromPlayCandidate(best);
   if (!synced) return localMatch || null;
@@ -825,32 +855,39 @@ async function findAthleteByUserId(userIdRaw: string): Promise<AthleteLookupResu
 }
 
 async function findAthleteByIdentity(input: AthleteIdentityLookupInput): Promise<AthleteLookupResult> {
+  let localMatch: AthleteRow | null = null;
+
   if (input.athleteUserId) {
     const byUserId = await findAthleteByUserId(input.athleteUserId);
     if (byUserId.status === "found") {
-      const enriched = athleteNeedsProfileSync(byUserId.matches[0]) ? await syncAthleteFromPlayByIdentity(input, byUserId.matches[0]) : byUserId.matches[0];
-      return enriched ? { status: "found", matches: [enriched] } : byUserId;
+      localMatch = byUserId.matches[0];
+    } else if (byUserId.status === "ambiguous") {
+      return byUserId;
     }
-    if (byUserId.status === "ambiguous") return byUserId;
   }
 
-  if (input.email) {
+  if (!localMatch && input.email) {
     const byEmail = await findAthleteByEmail(input.email);
     if (byEmail.status === "found") {
-      const enriched = athleteNeedsProfileSync(byEmail.matches[0]) ? await syncAthleteFromPlayByIdentity(input, byEmail.matches[0]) : byEmail.matches[0];
-      return enriched ? { status: "found", matches: [enriched] } : byEmail;
+      localMatch = byEmail.matches[0];
+    } else if (byEmail.status === "ambiguous") {
+      return byEmail;
     }
-    if (byEmail.status === "ambiguous") return byEmail;
   }
 
   const phone = input.whatsapp || input.phone;
-  if (phone) {
+  if (!localMatch && phone) {
     const byPhone = await findAthleteByWhatsapp(phone);
     if (byPhone.status === "found") {
-      const enriched = athleteNeedsProfileSync(byPhone.matches[0]) ? await syncAthleteFromPlayByIdentity(input, byPhone.matches[0]) : byPhone.matches[0];
-      return enriched ? { status: "found", matches: [enriched] } : byPhone;
+      localMatch = byPhone.matches[0];
+    } else if (byPhone.status === "ambiguous") {
+      return byPhone;
     }
-    if (byPhone.status === "ambiguous") return byPhone;
+  }
+
+  if (localMatch) {
+    const synced = await syncAthleteFromPlayByIdentity(input, localMatch);
+    return synced ? { status: "found", matches: [synced] } : { status: "found", matches: [localMatch] };
   }
 
   const syncedFromPlay = await syncAthleteFromPlayByIdentity(input, null);
@@ -912,12 +949,12 @@ function buildPlayerProfileStatusData(player: AthleteRow) {
     registrationReady,
     missingFields,
     profileGuidance: {
-      signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
-      profileUrl: "/atleta/perfil",
+      signupUrl: PLAY_SIGNUP_URL,
+      profileUrl: PLAY_PROFILE_URL,
       missingPhotoAffectsCards: !hasPhoto,
       photoTip: hasPhoto
         ? "Voce ja tem foto no perfil, entao ela pode aparecer normalmente nos cards do torneio."
-        : "Vale adicionar uma foto no perfil para ela aparecer nos cards e artes do torneio.",
+        : "Vale adicionar uma foto no seu perfil do Play na Quadra para ela aparecer nos cards e artes do torneio.",
     },
   };
 }
@@ -1099,7 +1136,7 @@ async function checkPlayerRegistration(args: CheckPlayerRegistrationArgs, contex
           telefone: normalizePhone(args.telefone || context.identity?.telefone || null) || null,
           whatsapp: normalizePhone(args.whatsapp || context.whatsapp || null) || null,
         },
-        signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+        signupUrl: PLAY_SIGNUP_URL,
       },
     };
   }
@@ -1114,7 +1151,7 @@ async function checkPlayerRegistration(args: CheckPlayerRegistrationArgs, contex
       data: {
         email: normalizeEmail(args.email || context.identity?.email || null) || null,
         telefone: normalizePhone(args.telefone || context.identity?.telefone || context.whatsapp || null) || null,
-        signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+        signupUrl: PLAY_SIGNUP_URL,
       },
     };
   }
@@ -1177,8 +1214,8 @@ async function getPlayerProfileStatus(args: GetPlayerProfileStatusArgs, context:
       message: "Ainda nao tenho dados suficientes para localizar seu cadastro.",
       nextAction: "solicitar_email_ou_telefone_do_atleta",
       data: {
-        signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
-        profileUrl: "/atleta/perfil",
+        signupUrl: PLAY_SIGNUP_URL,
+        profileUrl: PLAY_PROFILE_URL,
       },
     };
   }
@@ -1193,7 +1230,7 @@ async function getPlayerProfileStatus(args: GetPlayerProfileStatusArgs, context:
       data: {
         email: normalizeEmail(args.email || context.identity?.email || null) || null,
         telefone: normalizePhone(args.telefone || context.identity?.telefone || context.whatsapp || null) || null,
-        signupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+        signupUrl: PLAY_SIGNUP_URL,
       },
     };
   }
@@ -1480,7 +1517,7 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
       data: {
         partnerName: partnerName || null,
         partnerWhatsapp: partnerWhatsapp || null,
-        partnerSignupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+        partnerSignupUrl: PLAY_SIGNUP_URL,
       },
     };
   }
@@ -1520,7 +1557,7 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
             },
             candidates: serializeAthleteCandidates(filtered),
             candidateOptionsText: buildCandidateOptionsText(filtered),
-            partnerSignupUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+            partnerSignupUrl: PLAY_SIGNUP_URL,
           },
         };
       }
@@ -1542,7 +1579,7 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
           candidates: serializeAthleteCandidates(filtered),
           candidateOptionsText: buildCandidateOptionsText(filtered),
           missingFields: ["perfilPlayNaQuadra"],
-          partnerProfileUrl: "https://atleta.playnaquadra.com.br/criar-conta",
+          partnerProfileUrl: PLAY_PROFILE_URL,
         },
       };
     }
