@@ -1184,9 +1184,10 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
   if (
     threadState.awaitingField === "partner_confirmation" &&
     isAffirmativeConfirmation(input.messageText) &&
-    threadState.partner?.nome
+    (threadState.partner?.id || threadState.partner?.nome)
   ) {
     const validationArgs = {
+      partnerId: threadState.partner?.id || undefined,
       partnerName: threadState.partner.nome,
     };
     const validationResult = await executeAiTool("validate_partner", JSON.stringify(validationArgs), toolContext);

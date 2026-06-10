@@ -720,18 +720,10 @@ async function syncAthleteFromPlayByIdentity(input: AthleteIdentityLookupInput, 
   if (!synced) return localMatch || null;
 
   if (localMatch?.id && synced.id !== localMatch.id) {
-    await db
-      .update(usuarios)
-      .set({
-        nome: best.nome,
-        email: normalizeEmail(best.email) || localMatch.email,
-        telefone: best.telefone ?? localMatch.telefone ?? null,
-        fotoUrl: best.fotoUrl ?? localMatch.fotoUrl ?? null,
-        playnaquadraAtletaId: String(best.playnaquadraAtletaId || "").trim() || localMatch.playnaquadraAtletaId || null,
-        atualizadoEm: new Date(),
-      })
-      .where(eq(usuarios.id, localMatch.id));
-    return await getAthleteRowByUserId(localMatch.id);
+    // Avoid merging two different athlete rows during chat lookup. This can
+    // overwrite the logged-in athlete with data that already belongs to another
+    // local user and trigger unique constraint failures on email/play IDs.
+    return localMatch;
   }
 
   return synced;
