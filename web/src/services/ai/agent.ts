@@ -730,9 +730,15 @@ function formatPartnerCandidatesFromToolResult(result: ToolResult) {
     return candidates
       .map((candidate, index) => {
         const nome = String(candidate.nome || "").trim() || "Parceiro";
-        const details = [String(candidate.emailMasked || "").trim(), String(candidate.telefoneMasked || "").trim()]
+        const details = [
+          String(candidate.emailMasked || "").trim() ? `email: ${String(candidate.emailMasked || "").trim()}` : "",
+          String(candidate.whatsappSuffix || "").trim() ? `final do WhatsApp: ${String(candidate.whatsappSuffix || "").trim()}` : "",
+          !String(candidate.whatsappSuffix || "").trim() && String(candidate.telefoneMasked || "").trim()
+            ? `WhatsApp: ${String(candidate.telefoneMasked || "").trim()}`
+            : "",
+        ]
           .filter(Boolean)
-          .join(" - ");
+          .join(" | ");
         return `${index + 1}. ${nome}${details ? ` (${details})` : ""}`;
       })
       .join("\n");

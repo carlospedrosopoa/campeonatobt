@@ -365,6 +365,12 @@ function maskPhone(phone?: string | null) {
   return `${"*".repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
 }
 
+function phoneSuffix(phone?: string | null) {
+  const digits = normalizePhone(phone);
+  if (!digits) return null;
+  return digits.length <= 4 ? digits : digits.slice(-4);
+}
+
 function getFirstComparableToken(value?: string | null) {
   return normalizeComparableText(value).split(" ").filter(Boolean)[0] || "";
 }
@@ -967,13 +973,19 @@ function serializeAthleteCandidates(matches: AthleteRow[]) {
     nome: m.nome,
     emailMasked: maskEmail(m.email),
     telefoneMasked: maskPhone(m.telefone),
+    whatsappSuffix: phoneSuffix(m.telefone),
   }));
 }
 
 function buildCandidateOptionsText(matches: AthleteRow[]) {
   return serializeAthleteCandidates(matches)
     .map((candidate, index) => {
-      const details = [candidate.emailMasked, candidate.telefoneMasked].filter(Boolean).join(" - ");
+      const details = [
+        candidate.emailMasked ? `email: ${candidate.emailMasked}` : "",
+        candidate.whatsappSuffix ? `final do WhatsApp: ${candidate.whatsappSuffix}` : "",
+      ]
+        .filter(Boolean)
+        .join(" | ");
       return `${index + 1}. ${candidate.nome}${details ? ` (${details})` : ""}`;
     })
     .join("\n");
