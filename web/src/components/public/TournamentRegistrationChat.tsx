@@ -83,12 +83,13 @@ function renderLineValue(value: string, key: string) {
   if (!trimmed) return null;
   const normalizedLink = normalizeClickableLink(trimmed);
   const isImage = /^https?:\/\/\S+\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(normalizedLink);
+  const imageSrc = isImage ? `/api/image-proxy?url=${encodeURIComponent(normalizedLink)}` : normalizedLink;
 
   if (isImage) {
     return (
       <div key={key} className="space-y-2">
         <img
-          src={normalizedLink}
+          src={imageSrc}
           alt="Foto do perfil"
           className="h-28 w-28 rounded-2xl object-cover ring-1 ring-slate-200"
           loading="lazy"

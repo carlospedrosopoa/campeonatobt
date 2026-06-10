@@ -693,11 +693,17 @@ function buildPartnerReplyFromToolResult(result: ToolResult): string | null {
   }
 
   if (result.status === "found_on_play_only" && optionsText) {
-    return `Encontrei este parceiro no Play na Quadra:\n${optionsText}\nE esse mesmo? Se sim, eu sigo com ele como parceiro.`;
+    const partner = (result.data?.partner ?? null) as Record<string, unknown> | null;
+    const fotoUrl = String(partner?.fotoUrl || "").trim();
+    const details = [optionsText, fotoUrl ? `Foto: ${fotoUrl}` : ""].filter(Boolean).join("\n");
+    return `Encontrei este parceiro no Play na Quadra:\n${details}\nE esse mesmo? Se sim, eu sigo com ele como parceiro.`;
   }
 
   if (result.status === "found_without_profile" && optionsText) {
-    return `Encontrei este parceiro no sistema:\n${optionsText}\nO cadastro dele ainda nao esta pronto para inscricao. Se for esse mesmo parceiro, eu te explico o que falta ajustar.`;
+    const partner = (result.data?.partner ?? null) as Record<string, unknown> | null;
+    const fotoUrl = String(partner?.fotoUrl || "").trim();
+    const details = [optionsText, fotoUrl ? `Foto: ${fotoUrl}` : ""].filter(Boolean).join("\n");
+    return `Encontrei este parceiro no sistema:\n${details}\nO cadastro dele ainda nao esta pronto para inscricao. Se for esse mesmo parceiro, eu te explico o que falta ajustar.`;
   }
 
   if (result.status === "valid") {
