@@ -240,7 +240,7 @@ function isAffirmativeConfirmation(messageText: string) {
   const normalized = normalizeComparableText(messageText);
   if (!normalized) return false;
 
-  return new Set([
+  if (new Set([
     "sim",
     "s",
     "ok",
@@ -258,7 +258,15 @@ function isAffirmativeConfirmation(messageText: string) {
     "pode continuar",
     "confirmo",
     "confirmado",
-  ]).has(normalized);
+  ]).has(normalized)) {
+    return true;
+  }
+
+  return (
+    /^(esse|este) mesmo$/.test(normalized) ||
+    /^(perfeito|exato|correto)$/.test(normalized) ||
+    /^(perfeito|exato|correto) (esse|este) mesmo$/.test(normalized)
+  );
 }
 
 function createInitialThreadState(input: AgentInput): ConversationStateSnapshot {
@@ -918,6 +926,9 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     normalizeConversationStateSnapshot(input.conversationState) ??
     createInitialThreadState(input);
   const threadState = mergeThreadStateWithInput(baseThreadState, input);
+  // #region debug-point A:agent-state-entry
+  fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "partner-confirm-reset", runId: "pre-fix", hypothesisId: "A", location: "agent.ts:921", msg: "[DEBUG] Agent state entry", data: { threadId, messageText: input.messageText, normalizedMessage: normalizeComparableText(input.messageText), historySize: history.length, state: threadState }, ts: Date.now() }) }).catch(() => {});
+  // #endregion
   const availabilityCheck = await checkTournamentAiAvailability({
     messageText: input.messageText,
     tournamentSlug: input.tournamentSlug,
@@ -999,6 +1010,9 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     isAffirmativeConfirmation(input.messageText) &&
     threadState.partner?.nome
   ) {
+    // #region debug-point B:partner-confirmation-branch
+    fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "partner-confirm-reset", runId: "pre-fix", hypothesisId: "B", location: "agent.ts:1005", msg: "[DEBUG] Entered partner confirmation branch", data: { threadId, messageText: input.messageText, normalizedMessage: normalizeComparableText(input.messageText), partner: threadState.partner, selectedCategory: threadState.selectedCategory }, ts: Date.now() }) }).catch(() => {});
+    // #endregion
     const validationArgs = {
       partnerName: threadState.partner.nome,
     };
@@ -1059,6 +1073,9 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     threadState.selectedCategory?.tournamentId &&
     threadState.partner?.id
   ) {
+    // #region debug-point B:ready-to-register-branch
+    fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "partner-confirm-reset", runId: "pre-fix", hypothesisId: "B", location: "agent.ts:1072", msg: "[DEBUG] Entered ready_to_register affirmative branch", data: { threadId, messageText: input.messageText, selectedCategory: threadState.selectedCategory, partner: threadState.partner }, ts: Date.now() }) }).catch(() => {});
+    // #endregion
     const registrationArgs = {
       tournamentId: threadState.selectedCategory.tournamentId,
       categoryId: threadState.selectedCategory.id,
@@ -1148,10 +1165,16 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
   }
 
   if (!finalReply) {
+    // #region debug-point E:fallback-reply
+    fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "partner-confirm-reset", runId: "pre-fix", hypothesisId: "E", location: "agent.ts:1154", msg: "[DEBUG] Falling back to generic registration greeting", data: { threadId, messageText: input.messageText, normalizedMessage: normalizeComparableText(input.messageText), isAffirmative: isAffirmativeConfirmation(input.messageText), state: threadState, usedTools, toolResults }, ts: Date.now() }) }).catch(() => {});
+    // #endregion
     finalReply =
       "Recebi sua mensagem e ja estou te ajudando com a inscricao. Pode me dizer o nome do torneio ou a categoria que voce deseja jogar?";
   }
 
+  // #region debug-point C:agent-final-state
+  fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "partner-confirm-reset", runId: "pre-fix", hypothesisId: "C", location: "agent.ts:1159", msg: "[DEBUG] Agent final state", data: { threadId, replyText: finalReply, usedTools, state: threadState }, ts: Date.now() }) }).catch(() => {});
+  // #endregion
   saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
   threadStateStore.set(threadId, threadState);
 
