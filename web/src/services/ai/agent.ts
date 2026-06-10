@@ -270,6 +270,61 @@ function isAffirmativeConfirmation(messageText: string) {
   );
 }
 
+function inferPartnerValidationArgsFromMessage(messageText: string) {
+  const rawText = String(messageText || "").trim();
+  if (!rawText) {
+    return { partnerName: "", partnerWhatsapp: "" };
+  }
+
+  const partnerWhatsapp = normalizePhone(rawText);
+  let candidateName = rawText.replace(/^[\s,.;:!?-]+|[\s,.;:!?-]+$/g, "");
+  const extractionPatterns = [
+    /(?:quero jogar com|gostaria de jogar com|vou jogar com|irei jogar com|jogar com|jogo com|dupla com)\s+(.+)$/i,
+    /(?:parceiro(?: sera| será| e| é| eh)?|com o|com a)\s+(.+)$/i,
+    /^(?:e o|e a|o|a)\s+(.+)$/i,
+    /^(?:nao|não)\s+desculpa[, ]*(.+)$/i,
+    /^(?:desculpa[, ]*)(.+)$/i,
+  ];
+
+  for (const pattern of extractionPatterns) {
+    const match = rawText.match(pattern);
+    if (match?.[1]) {
+      candidateName = match[1].trim();
+      break;
+    }
+  }
+
+  candidateName = candidateName
+    .replace(/^esta categoria\s+/i, "")
+    .replace(/[?!.;,]+$/g, "")
+    .trim();
+
+  const normalizedCandidateName = normalizeComparableText(candidateName);
+  const invalidNameTokens = new Set([
+    "",
+    "sim",
+    "ok",
+    "okay",
+    "certo",
+    "isso",
+    "esse mesmo",
+    "este mesmo",
+    "nao",
+    "não",
+    "ele",
+    "ela",
+  ]);
+
+  if (invalidNameTokens.has(normalizedCandidateName) || /^\d+$/.test(candidateName.replace(/\s+/g, ""))) {
+    candidateName = "";
+  }
+
+  return {
+    partnerName: candidateName,
+    partnerWhatsapp: partnerWhatsapp.length >= 8 ? partnerWhatsapp : "",
+  };
+}
+
 function createInitialThreadState(input: AgentInput): ConversationStateSnapshot {
   return {
     intent: "unknown",
@@ -699,6 +754,10 @@ function buildPartnerReplyFromToolResult(result: ToolResult): string | null {
   const optionsText =
     String(result.data?.candidateOptionsText || "").trim() || formatPartnerCandidatesFromToolResult(result);
 
+  if (result.status === "invalid_input" || result.status === "partner_not_informed") {
+    return "Me informe o nome completo ou o WhatsApp do parceiro para eu validar a dupla.";
+  }
+
   if (result.status === "ambiguous" && optionsText) {
     return `Encontrei estas opcoes de parceiro:\n${optionsText}\nQual deles voce quer escolher?`;
   }
@@ -731,6 +790,15 @@ function buildPartnerReplyFromToolResult(result: ToolResult): string | null {
     if (details.length > 0) {
       return `Encontrei este parceiro:\n${details.join("\n")}\nSe estiver certo, eu sigo com a inscricao na categoria selecionada.`;
     }
+  }
+
+  if (result.status === "not_found") {
+    const partnerName = String(result.data?.partnerName || "").trim();
+    const partnerWhatsapp = String(result.data?.partnerWhatsapp || "").trim();
+    const reference = partnerName || partnerWhatsapp;
+    return reference
+      ? `Nao consegui localizar o parceiro com estes dados: ${reference}.\nSe quiser, me envie o nome completo ou o WhatsApp com DDD para eu tentar novamente.`
+      : "Nao consegui localizar o parceiro com os dados informados. Me envie o nome completo ou o WhatsApp com DDD para eu tentar novamente.";
   }
 
   return null;
@@ -1069,6 +1137,37 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
       conversationState: threadState,
       messageId: input.messageId ?? null,
     };
+  }
+
+  if (
+    (threadState.awaitingField === "partner" || threadState.awaitingField === "partner_confirmation") &&
+    !isAffirmativeConfirmation(input.messageText)
+  ) {
+    const inferredPartnerArgs = inferPartnerValidationArgsFromMessage(input.messageText);
+    if (inferredPartnerArgs.partnerName || inferredPartnerArgs.partnerWhatsapp) {
+      const validationResult = await executeAiTool("validate_partner", JSON.stringify(inferredPartnerArgs), toolContext);
+      toolResults.push(validationResult);
+      usedTools.push("validate_partner");
+      updateThreadStateFromToolResult(threadState, "validate_partner", validationResult, input);
+
+      finalReply =
+        buildPartnerReplyFromToolResult(validationResult) ||
+        "Estou validando esse parceiro para seguir com a inscricao.";
+      finalReply = applyProactivePrefix(finalReply);
+
+      saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
+      threadStateStore.set(threadId, threadState);
+
+      return {
+        ok: validationResult.ok,
+        threadId,
+        replyText: finalReply,
+        usedTools,
+        toolResults,
+        conversationState: threadState,
+        messageId: input.messageId ?? null,
+      };
+    }
   }
 
   if (

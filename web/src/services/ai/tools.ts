@@ -776,7 +776,18 @@ async function searchPartnerCandidates(params: {
       .limit(25);
   }
 
-  const playPriority = partnerName ? await searchPlayAthletesByName(partnerName) : [];
+  const playQueries = Array.from(
+    new Set(
+      [
+        partnerName,
+        partnerWhatsapp,
+        partnerWhatsapp.length >= 8 ? partnerWhatsapp.slice(-8) : "",
+      ]
+        .map((value) => String(value || "").trim())
+        .filter((value) => value.length >= 2)
+    )
+  );
+  const playPriority = dedupeAthleteRows((await Promise.all(playQueries.map((query) => searchPlayAthletesByName(query)))).flat());
   const filteredLocal = localMatches.filter((row) => row.id !== params.excludeAthleteId);
   const merged = dedupeAthleteRows(
     [...playPriority.filter((row) => row.id !== params.excludeAthleteId), ...filteredLocal]
