@@ -23,10 +23,11 @@ function cleanHistory(value: unknown): AgentConversationMessage[] {
 function cleanConversationState(value: any): ConversationStateSnapshot | null {
   if (!value || typeof value !== "object") return null;
 
-  return {
+  const cleanedState: ConversationStateSnapshot = {
     intent: cleanString(value.intent) as ConversationStateSnapshot["intent"],
     stage: cleanString(value.stage) as ConversationStateSnapshot["stage"],
     awaitingField: cleanString(value.awaitingField) as ConversationStateSnapshot["awaitingField"],
+    hasShownExistingRegistrations: Boolean(value.hasShownExistingRegistrations),
     selectedTournament: value.selectedTournament && typeof value.selectedTournament === "object"
       ? {
           id: cleanString(value.selectedTournament.id) || null,
@@ -53,6 +54,8 @@ function cleanConversationState(value: any): ConversationStateSnapshot | null {
       : null,
     lastTool: cleanString(value.lastTool) || null,
   };
+
+  return cleanedState;
 }
 
 export async function POST(request: NextRequest) {
@@ -74,6 +77,24 @@ export async function POST(request: NextRequest) {
       email: cleanString(body?.identity?.email) || (isAtleta ? cleanString(sessionUser?.email) || null : null),
       telefone: cleanString(body?.identity?.telefone) || null,
     };
+
+    const missingIdentityFields: string[] = [];
+    if (!identity.nome) missingIdentityFields.push("nome");
+    if (!identity.email) missingIdentityFields.push("email");
+    if (!identity.telefone) missingIdentityFields.push("whatsapp");
+    if (missingIdentityFields.length > 0) {
+      return NextResponse.json(
+        {
+          ok: true,
+          threadId: cleanString(body?.threadId) || null,
+          replyText: `Para usar este recurso, preciso que voce preencha seu Nome, Email e WhatsApp.\nFaltando: ${missingIdentityFields.join(", ")}.`,
+          usedTools: [],
+          toolResults: [],
+          conversationState: cleanConversationState(body?.conversationState),
+        },
+        { status: 200, headers: { "Cache-Control": "no-store" } }
+      );
+    }
 
     const result = await runTournamentRegistrationAgent({
       channel: "webchat",
