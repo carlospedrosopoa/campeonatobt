@@ -115,6 +115,10 @@ type PlayAthleteCandidate = {
 const PLAY_PROFILE_URL = "https://torneios.playnaquadra.com.br/atleta/perfil";
 const PLAY_SIGNUP_URL = "https://atleta.playnaquadra.com.br/criar-conta";
 
+function logPlayLookupFailure(scope: string, details: Record<string, unknown>) {
+  console.warn(`[PlayLookup:${scope}]`, details);
+}
+
 export const aiTools: ChatCompletionTool[] = [
   {
     type: "function",
@@ -546,7 +550,14 @@ async function searchPlayAthletesByName(query: string): Promise<AthleteRow[]> {
   try {
     const token = await getPlayAdminToken();
     const result = await playBuscarAtletas({ token, q: trimmedQuery, limite: 10 });
-    if (!result.res.ok || !result.data) return [];
+    if (!result.res.ok || !result.data) {
+      logPlayLookupFailure("searchByName", {
+        query: trimmedQuery,
+        status: result.res.status,
+        data: result.data,
+      });
+      return [];
+    }
 
     const candidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
     const parsed = candidates
@@ -562,7 +573,11 @@ async function searchPlayAthletesByName(query: string): Promise<AthleteRow[]> {
     const playIds = parsed.map((item) => String(item.playnaquadraAtletaId || "").trim()).filter(Boolean);
     const localMatches = await findLocalAthletesByPlayIds(playIds);
     return dedupeAthleteRows([...synced, ...localMatches]);
-  } catch {
+  } catch (error: any) {
+    logPlayLookupFailure("searchByName", {
+      query: trimmedQuery,
+      error: error?.message || String(error),
+    });
     return [];
   }
 }
@@ -591,7 +606,14 @@ async function searchPlayAthleteCandidatesByIdentity(input: AthleteIdentityLooku
 
     for (const query of queries) {
       const result = await playBuscarAtletas({ token, q: query, limite: 10 });
-      if (!result.res.ok || !result.data) continue;
+      if (!result.res.ok || !result.data) {
+        logPlayLookupFailure("searchByIdentity", {
+          query,
+          status: result.res.status,
+          data: result.data,
+        });
+        continue;
+      }
 
       const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
       const parsed = rawCandidates
@@ -609,7 +631,11 @@ async function searchPlayAthleteCandidatesByIdentity(input: AthleteIdentityLooku
     }
 
     return Array.from(unique.values());
-  } catch {
+  } catch (error: any) {
+    logPlayLookupFailure("searchByIdentity", {
+      queries,
+      error: error?.message || String(error),
+    });
     return [];
   }
 }
@@ -621,9 +647,20 @@ async function getPlayCandidateByAthleteId(playAthleteId?: string | null): Promi
   try {
     const token = await getPlayAdminToken();
     const result = await playGetAtletaById({ token, atletaId: athleteId });
-    if (!result.res.ok || !result.data) return null;
+    if (!result.res.ok || !result.data) {
+      logPlayLookupFailure("getByAtletaId", {
+        athleteId,
+        status: result.res.status,
+        data: result.data,
+      });
+      return null;
+    }
     return extractPlayAthleteCandidate(result.data);
-  } catch {
+  } catch (error: any) {
+    logPlayLookupFailure("getByAtletaId", {
+      athleteId,
+      error: error?.message || String(error),
+    });
     return null;
   }
 }
