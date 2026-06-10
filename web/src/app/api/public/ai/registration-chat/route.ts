@@ -75,10 +75,6 @@ export async function POST(request: NextRequest) {
       telefone: cleanString(body?.identity?.telefone) || null,
     };
 
-    // #region debug-point D:public-route-inbound
-    fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "partner-confirm-reset", runId: "pre-fix", hypothesisId: "D", location: "registration-chat/route.ts:78", msg: "[DEBUG] Public route inbound", data: { threadId: cleanString(body?.threadId) || null, messageText, tournamentId: cleanString(body?.tournamentId) || null, categoryId: cleanString(body?.categoryId) || null, historySize: Array.isArray(body?.history) ? body.history.length : 0, conversationState: cleanConversationState(body?.conversationState) }, ts: Date.now() }) }).catch(() => {});
-    // #endregion
-
     const result = await runTournamentRegistrationAgent({
       channel: "webchat",
       threadId: cleanString(body?.threadId) || null,
@@ -94,10 +90,6 @@ export async function POST(request: NextRequest) {
       conversationState: cleanConversationState(body?.conversationState),
       identity,
     });
-
-    // #region debug-point D:public-route-outbound
-    fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "partner-confirm-reset", runId: "pre-fix", hypothesisId: "D", location: "registration-chat/route.ts:97", msg: "[DEBUG] Public route outbound", data: { threadId: result.threadId, replyText: result.replyText, usedTools: result.usedTools, conversationState: result.conversationState }, ts: Date.now() }) }).catch(() => {});
-    // #endregion
 
     return NextResponse.json(
       {
