@@ -242,6 +242,12 @@ export default function TournamentRegistrationChat(props: Props) {
     telefone: "",
   });
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const missingIdentityFields = [
+    !identity.nome.trim() ? "nome" : null,
+    !identity.email.trim() ? "email" : null,
+    !identity.telefone.trim() ? "whatsapp" : null,
+  ].filter((value): value is string => Boolean(value));
+  const isIdentityComplete = missingIdentityFields.length === 0;
 
   useEffect(() => {
     try {
@@ -307,10 +313,6 @@ export default function TournamentRegistrationChat(props: Props) {
     const text = input.trim();
     if (!text || isSending) return;
 
-    const missingIdentityFields: string[] = [];
-    if (!identity.nome.trim()) missingIdentityFields.push("nome");
-    if (!identity.email.trim()) missingIdentityFields.push("email");
-    if (!identity.telefone.trim()) missingIdentityFields.push("whatsapp");
     if (missingIdentityFields.length > 0) {
       setMessages((current) => [
         ...current,
@@ -441,6 +443,12 @@ export default function TournamentRegistrationChat(props: Props) {
             </div>
 
             <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-white px-3 py-4">
+              {!isIdentityComplete ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-900">
+                  Preencha `nome`, `email` e `whatsapp` para liberar o atendimento.
+                </div>
+              ) : null}
+
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
@@ -474,6 +482,7 @@ export default function TournamentRegistrationChat(props: Props) {
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
+                  disabled={!isIdentityComplete || isSending}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -481,13 +490,17 @@ export default function TournamentRegistrationChat(props: Props) {
                     }
                   }}
                   rows={2}
-                  placeholder="Digite sua mensagem..."
-                  className="min-h-[52px] flex-1 resize-none rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/5"
+                  placeholder={
+                    isIdentityComplete
+                      ? "Digite sua mensagem..."
+                      : `Preencha antes: ${missingIdentityFields.join(", ")}`
+                  }
+                  className="min-h-[52px] flex-1 resize-none rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 />
                 <button
                   type="button"
                   onClick={() => void sendMessage()}
-                  disabled={isSending || !input.trim()}
+                  disabled={!isIdentityComplete || isSending || !input.trim()}
                   className="inline-flex h-[52px] w-[52px] items-center justify-center rounded-2xl bg-slate-900 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <SendHorizonal className="h-4 w-4" />
