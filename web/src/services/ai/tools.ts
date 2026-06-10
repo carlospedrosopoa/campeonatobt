@@ -747,10 +747,14 @@ async function searchPartnerCandidates(params: {
 }) {
   const partnerName = String(params.partnerName || "").trim();
   const partnerWhatsapp = normalizePhone(params.partnerWhatsapp);
+  const normalizedPartnerEmail = normalizeEmail(partnerName);
+  const partnerNameLooksLikeEmail = normalizedPartnerEmail.includes("@");
   const tokens = getComparableTokens(partnerName);
   const conditions = [];
 
-  if (partnerName) {
+  if (partnerNameLooksLikeEmail) {
+    conditions.push(ilike(usuarios.email, normalizedPartnerEmail));
+  } else if (partnerName) {
     const q = `%${partnerName}%`;
     conditions.push(ilike(usuarios.nome, q), ilike(usuarios.email, q));
     for (const token of tokens) {
@@ -782,18 +786,38 @@ async function searchPartnerCandidates(params: {
       .limit(25);
   }
 
-  const playQueries = Array.from(
-    new Set(
-      [
-        partnerName,
-        partnerWhatsapp,
-        partnerWhatsapp.length >= 8 ? partnerWhatsapp.slice(-8) : "",
-      ]
-        .map((value) => String(value || "").trim())
-        .filter((value) => value.length >= 2)
-    )
+  const playPriorityCandidates = partnerNameLooksLikeEmail || Boolean(partnerWhatsapp)
+    ? await searchPlayAthleteCandidatesByIdentity({
+        email: partnerNameLooksLikeEmail ? normalizedPartnerEmail : null,
+        phone: partnerWhatsapp || null,
+        whatsapp: partnerWhatsapp || null,
+      })
+    : [];
+  const playPriorityFromIdentity = dedupeAthleteRows(
+    (
+      await Promise.all(
+        playPriorityCandidates.map(async (candidate) => {
+          const synced = await upsertAthleteFromPlayCandidate(candidate);
+          return synced;
+        })
+      )
+    ).filter((item): item is AthleteRow => Boolean(item))
   );
-  const playPriority = dedupeAthleteRows((await Promise.all(playQueries.map((query) => searchPlayAthletesByName(query)))).flat());
+  const playQueries = partnerNameLooksLikeEmail
+    ? []
+    : Array.from(
+        new Set(
+          [
+            partnerName,
+            partnerWhatsapp,
+            partnerWhatsapp.length >= 8 ? partnerWhatsapp.slice(-8) : "",
+          ]
+            .map((value) => String(value || "").trim())
+            .filter((value) => value.length >= 2)
+        )
+      );
+  const playPriorityFromName = dedupeAthleteRows((await Promise.all(playQueries.map((query) => searchPlayAthletesByName(query)))).flat());
+  const playPriority = dedupeAthleteRows([...playPriorityFromIdentity, ...playPriorityFromName]);
   const filteredLocal = localMatches.filter((row) => row.id !== params.excludeAthleteId);
   const merged = dedupeAthleteRows(
     [...playPriority.filter((row) => row.id !== params.excludeAthleteId), ...filteredLocal]

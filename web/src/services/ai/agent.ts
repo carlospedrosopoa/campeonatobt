@@ -296,6 +296,7 @@ function inferPartnerValidationArgsFromMessage(messageText: string) {
 
   candidateName = candidateName
     .replace(/^esta categoria\s+/i, "")
+    .replace(/^[\[\](){}"'`]+|[\[\](){}"'`]+$/g, "")
     .replace(/[?!.;,]+$/g, "")
     .trim();
 
@@ -765,7 +766,7 @@ function buildPartnerReplyFromToolResult(result: ToolResult): string | null {
   }
 
   if (result.status === "ambiguous" && optionsText) {
-    return `Encontrei estas opcoes de parceiro:\n${optionsText}\nQual deles voce quer escolher?`;
+    return `Encontrei estas opcoes de parceiro:\n${optionsText}\nPode me responder com o email exibido, com o final do WhatsApp ou com o nome completo para eu confirmar qual deles voce quer escolher.`;
   }
 
   if (result.status === "found_on_play_only" && optionsText) {
