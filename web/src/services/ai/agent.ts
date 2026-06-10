@@ -360,6 +360,7 @@ function resolvePartnerCandidateSelection(messageText: string, candidates: Partn
     if (optionIndex >= 0 && optionIndex < candidates.length) {
       const selected = candidates[optionIndex];
       return {
+        partnerId: selected.id || "",
         partnerName: selected.email || selected.nome || "",
         partnerWhatsapp: normalizePhone(selected.telefone),
       };
@@ -371,6 +372,7 @@ function resolvePartnerCandidateSelection(messageText: string, candidates: Partn
     const selected = candidates.find((candidate) => String(candidate.email || "").trim().toLowerCase() === normalizedEmail);
     if (selected) {
       return {
+        partnerId: selected.id || "",
         partnerName: selected.email || selected.nome || "",
         partnerWhatsapp: normalizePhone(selected.telefone),
       };
@@ -389,6 +391,7 @@ function resolvePartnerCandidateSelection(messageText: string, candidates: Partn
     });
     if (selected) {
       return {
+        partnerId: selected.id || "",
         partnerName: selected.email || selected.nome || "",
         partnerWhatsapp: normalizePhone(selected.telefone),
       };
@@ -400,6 +403,7 @@ function resolvePartnerCandidateSelection(messageText: string, candidates: Partn
     const selected = candidates.find((candidate) => normalizeComparableText(candidate.nome) === normalizedText);
     if (selected) {
       return {
+        partnerId: selected.id || "",
         partnerName: selected.email || selected.nome || "",
         partnerWhatsapp: normalizePhone(selected.telefone),
       };

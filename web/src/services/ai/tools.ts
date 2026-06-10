@@ -74,6 +74,7 @@ type GetPlayerProfileStatusArgs = {
 };
 
 type ValidatePartnerArgs = {
+  partnerId?: string;
   partnerName?: string;
   partnerWhatsapp?: string;
 };
@@ -228,6 +229,7 @@ export const aiTools: ChatCompletionTool[] = [
         additionalProperties: false,
         properties: {
           partnerName: { type: "string", description: "Nome do parceiro informado pelo atleta." },
+          partnerId: { type: "string", description: "ID exato do parceiro quando ele ja foi escolhido em uma lista de opcoes." },
           partnerWhatsapp: { type: "string", description: "WhatsApp do parceiro, se o atleta souber." },
         },
       },
@@ -1642,6 +1644,7 @@ async function getTournamentSchedule(args: GetTournamentScheduleArgs, context: T
 }
 
 async function validatePartner(args: ValidatePartnerArgs, context: ToolExecutionContext): Promise<ToolResult> {
+  const partnerId = String(args.partnerId || "").trim();
   const partnerName = String(args.partnerName || "").trim();
   const partnerWhatsapp = normalizePhone(args.partnerWhatsapp);
   const athleteLookup = await getContextAthleteLookup(context);
@@ -1654,7 +1657,7 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
     .map((value) => String(value || "").trim())
     .filter(Boolean);
 
-  if (!partnerName && !partnerWhatsapp) {
+  if (!partnerId && !partnerName && !partnerWhatsapp) {
     return {
       ok: false,
       tool: "validate_partner",
@@ -1663,6 +1666,53 @@ async function validatePartner(args: ValidatePartnerArgs, context: ToolExecution
       nextAction: "solicitar_nome_ou_whatsapp_do_parceiro",
       data: {},
     };
+  }
+
+  if (partnerId) {
+    const exactPartner = !partnerId.startsWith("play:") ? await getAthleteRowByUserId(partnerId) : null;
+    if (exactPartner && exactPartner.id !== athleteId) {
+      if (isLocalRegistrationReadyCandidate(exactPartner)) {
+        return {
+          ok: true,
+          tool: "validate_partner",
+          status: "valid",
+          message: "Parceiro validado com sucesso.",
+          nextAction: "seguir_para_confirmacao_da_inscricao",
+          data: {
+            partner: {
+              id: exactPartner.id,
+              nome: exactPartner.nome,
+              email: exactPartner.email,
+              telefone: exactPartner.telefone,
+              fotoUrl: exactPartner.fotoUrl,
+              playnaquadraAtletaId: exactPartner.playnaquadraAtletaId,
+            },
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        tool: "validate_partner",
+        status: "found_without_profile",
+        message: "Encontrei o parceiro no sistema. Confirme com o atleta se esta e a pessoa correta e explique que o cadastro dele ainda nao esta pronto para inscricao.",
+        nextAction: "confirmar_parceiro_e_orientar_ajustes_no_cadastro",
+        data: {
+          partner: {
+            id: exactPartner.id,
+            nome: exactPartner.nome,
+            email: exactPartner.email,
+            telefone: exactPartner.telefone,
+            fotoUrl: exactPartner.fotoUrl,
+            playnaquadraAtletaId: exactPartner.playnaquadraAtletaId,
+          },
+          candidates: serializeAthleteCandidates([exactPartner]),
+          candidateOptionsText: buildCandidateOptionsText([exactPartner]),
+          missingFields: ["perfilPlayNaQuadra"],
+          partnerProfileUrl: PLAY_PROFILE_URL,
+        },
+      };
+    }
   }
 
   if (partnerName && !partnerWhatsapp) {
