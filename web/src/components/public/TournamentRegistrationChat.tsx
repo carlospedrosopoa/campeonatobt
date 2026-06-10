@@ -307,6 +307,21 @@ export default function TournamentRegistrationChat(props: Props) {
     const text = input.trim();
     if (!text || isSending) return;
 
+    const missingIdentityFields: string[] = [];
+    if (!identity.nome.trim()) missingIdentityFields.push("nome");
+    if (!identity.email.trim()) missingIdentityFields.push("email");
+    if (!identity.telefone.trim()) missingIdentityFields.push("whatsapp");
+    if (missingIdentityFields.length > 0) {
+      setMessages((current) => [
+        ...current,
+        createMessage(
+          "assistant",
+          `Para usar este recurso, preciso que voce preencha seu Nome, Email e WhatsApp no topo do atendimento.\nFaltando: ${missingIdentityFields.join(", ")}.`
+        ),
+      ]);
+      return;
+    }
+
     const userMessage = createMessage("user", text);
     const requestHistory = messages.map((message) => ({
       role: message.role,
@@ -417,7 +432,7 @@ export default function TournamentRegistrationChat(props: Props) {
                   <input
                     value={identity.telefone}
                     onChange={(e) => setIdentity((current) => ({ ...current, telefone: e.target.value }))}
-                    placeholder="Seu WhatsApp ou telefone"
+                    placeholder="Seu WhatsApp"
                     inputMode="tel"
                     className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
                   />

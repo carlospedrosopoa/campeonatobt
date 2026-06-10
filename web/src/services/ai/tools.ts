@@ -41,6 +41,12 @@ export type ToolResult = {
   nextAction?: string;
 };
 
+export type AthleteTournamentRegistrationSummary = {
+  categoryId: string;
+  categoryName: string;
+  partnerName: string | null;
+};
+
 type CheckPlayerRegistrationArgs = {
   whatsapp?: string;
   telefone?: string;
@@ -1038,13 +1044,42 @@ async function listCategoriesForTournament(params: GetAvailableCategoriesArgs, a
     .orderBy(desc(torneios.criadoEm));
 
   const categoriasJaInscritas = new Set<string>();
+  const partnerByCategoryId = new Map<string, string | null>();
   if (athleteUserId) {
     const athleteInscricoes = await db
-      .select({ categoriaId: inscricoes.categoriaId })
+      .select({ categoriaId: inscricoes.categoriaId, equipeId: inscricoes.equipeId })
       .from(inscricoes)
       .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, inscricoes.equipeId))
       .where(eq(equipeIntegrantes.usuarioId, athleteUserId));
-    for (const row of athleteInscricoes) categoriasJaInscritas.add(row.categoriaId);
+
+    for (const row of athleteInscricoes) {
+      categoriasJaInscritas.add(row.categoriaId);
+    }
+
+    const teamIds = Array.from(new Set(athleteInscricoes.map((row) => row.equipeId).filter(Boolean)));
+    if (teamIds.length > 0) {
+      const partnerRows = await db
+        .select({
+          equipeId: equipeIntegrantes.equipeId,
+          usuarioId: equipeIntegrantes.usuarioId,
+          parceiroNome: usuarios.nome,
+        })
+        .from(equipeIntegrantes)
+        .innerJoin(usuarios, eq(usuarios.id, equipeIntegrantes.usuarioId))
+        .where(inArray(equipeIntegrantes.equipeId, teamIds));
+
+      const partnerByTeamId = new Map<string, string>();
+      for (const row of partnerRows) {
+        if (row.usuarioId === athleteUserId) continue;
+        if (!partnerByTeamId.has(row.equipeId)) {
+          partnerByTeamId.set(row.equipeId, row.parceiroNome);
+        }
+      }
+
+      for (const row of athleteInscricoes) {
+        partnerByCategoryId.set(row.categoriaId, partnerByTeamId.get(row.equipeId) ?? null);
+      }
+    }
   }
 
   const tournamentMap = new Map<
@@ -1065,6 +1100,7 @@ async function listCategoriesForTournament(params: GetAvailableCategoriesArgs, a
         inscritos: number;
         inscricoesAbertas: boolean;
         jaInscrito: boolean;
+        parceiroNome: string | null;
       }>;
     }
   >();
@@ -1094,11 +1130,80 @@ async function listCategoriesForTournament(params: GetAvailableCategoriesArgs, a
         inscritos: Number(r.categoriaInscritos || 0),
         inscricoesAbertas: Number(r.categoriaPartidasGeradas || 0) === 0,
         jaInscrito: categoriasJaInscritas.has(r.categoriaId),
+        parceiroNome: partnerByCategoryId.get(r.categoriaId) ?? null,
       });
     }
   }
 
   return Array.from(tournamentMap.values());
+}
+
+export async function getAthleteRegistrationsSummaryForTournament(params: {
+  tournamentId: string;
+  athleteUserId?: string | null;
+  email?: string | null;
+  telefone?: string | null;
+  whatsapp?: string | null;
+}): Promise<{ athleteId: string | null; registrations: AthleteTournamentRegistrationSummary[] }> {
+  const tournamentId = String(params.tournamentId || "").trim();
+  if (!tournamentId) return { athleteId: null, registrations: [] };
+
+  const lookup = await findAthleteByIdentity({
+    athleteUserId: params.athleteUserId ?? null,
+    email: params.email ?? null,
+    phone: params.telefone ?? null,
+    whatsapp: params.whatsapp ?? null,
+  });
+  if (lookup.status !== "found") return { athleteId: null, registrations: [] };
+
+  const athleteId = lookup.matches[0].id;
+  const rows = await db
+    .select({
+      categoriaId: inscricoes.categoriaId,
+      categoriaNome: categorias.nome,
+      equipeId: inscricoes.equipeId,
+    })
+    .from(inscricoes)
+    .innerJoin(categorias, eq(categorias.id, inscricoes.categoriaId))
+    .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, inscricoes.equipeId))
+    .where(and(eq(inscricoes.torneioId, tournamentId), eq(equipeIntegrantes.usuarioId, athleteId)));
+
+  if (rows.length === 0) return { athleteId, registrations: [] };
+
+  const teamIds = Array.from(new Set(rows.map((row) => row.equipeId).filter(Boolean)));
+  const partnerByTeamId = new Map<string, string>();
+  if (teamIds.length > 0) {
+    const partnerRows = await db
+      .select({
+        equipeId: equipeIntegrantes.equipeId,
+        usuarioId: equipeIntegrantes.usuarioId,
+        parceiroNome: usuarios.nome,
+      })
+      .from(equipeIntegrantes)
+      .innerJoin(usuarios, eq(usuarios.id, equipeIntegrantes.usuarioId))
+      .where(inArray(equipeIntegrantes.equipeId, teamIds));
+
+    for (const row of partnerRows) {
+      if (row.usuarioId === athleteId) continue;
+      if (!partnerByTeamId.has(row.equipeId)) {
+        partnerByTeamId.set(row.equipeId, row.parceiroNome);
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  const registrations: AthleteTournamentRegistrationSummary[] = [];
+  for (const row of rows) {
+    if (seen.has(row.categoriaId)) continue;
+    seen.add(row.categoriaId);
+    registrations.push({
+      categoryId: row.categoriaId,
+      categoryName: String(row.categoriaNome || "").trim() || "Categoria",
+      partnerName: partnerByTeamId.get(row.equipeId) ?? null,
+    });
+  }
+
+  return { athleteId, registrations };
 }
 
 async function buildPixForRegistration(inscricaoId: string, athleteUserId: string) {

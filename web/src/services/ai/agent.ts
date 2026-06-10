@@ -8,7 +8,7 @@ import type {
 import { db } from "@/db";
 import { torneios } from "@/db/schema";
 import { buildTournamentRegistrationPrompt } from "@/services/ai/prompts";
-import { aiTools, executeAiTool, type ToolExecutionContext, type ToolResult } from "@/services/ai/tools";
+import { aiTools, executeAiTool, getAthleteRegistrationsSummaryForTournament, type ToolExecutionContext, type ToolResult } from "@/services/ai/tools";
 
 export type AgentInput = {
   channel?: "whatsapp" | "webchat";
@@ -83,6 +83,7 @@ export type ConversationStateSnapshot = {
   intent: ConversationIntent;
   stage: ConversationStage;
   awaitingField: AwaitingField;
+  hasShownExistingRegistrations: boolean;
   selectedTournament: SelectedTournamentState | null;
   selectedCategory: SelectedCategoryState | null;
   partner: PartnerState | null;
@@ -274,6 +275,7 @@ function createInitialThreadState(input: AgentInput): ConversationStateSnapshot 
     intent: "unknown",
     stage: "initial",
     awaitingField: "none",
+    hasShownExistingRegistrations: false,
     selectedTournament:
       input.tournamentId || input.tournamentName || input.tournamentSlug
         ? {
@@ -331,6 +333,7 @@ function normalizeConversationStateSnapshot(
     intent: validIntent.has(snapshot.intent) ? snapshot.intent : "unknown",
     stage: validStage.has(snapshot.stage) ? snapshot.stage : "initial",
     awaitingField: validAwaitingFields.has(snapshot.awaitingField) ? snapshot.awaitingField : "none",
+    hasShownExistingRegistrations: Boolean(snapshot.hasShownExistingRegistrations),
     selectedTournament: snapshot.selectedTournament
       ? {
           id: String(snapshot.selectedTournament.id || "").trim() || null,
@@ -739,28 +742,9 @@ function buildRegistrationReplyFromToolResult(result: ToolResult): string | null
   const tournamentName = String(result.data?.tournamentName || "").trim();
   const categoryName = String(result.data?.categoryName || "").trim();
   const errorDetail = String(result.data?.errorDetail || result.message || "").trim();
-  const pix = result.data?.pix && typeof result.data.pix === "object" ? (result.data.pix as Record<string, unknown>) : null;
-  const pixPayload = String(pix?.payload || "").trim();
-  const pixValor = String(pix?.valor || "").trim();
 
   if (result.status === "created") {
-    const lines = [
-      `Inscricao criada com sucesso${categoryName ? ` na categoria ${categoryName}` : ""}${tournamentName ? ` do torneio ${tournamentName}` : ""}.`,
-    ];
-
-    if (pixValor) {
-      lines.push(`Valor: R$ ${pixValor}.`);
-    }
-
-    if (pixPayload) {
-      lines.push(`Pix Copia e Cola: ${pixPayload}`);
-    }
-
-    if (!pixPayload) {
-      lines.push("Proximo passo: aguarde a confirmacao da organizacao sobre o pagamento.");
-    }
-
-    return lines.join("\n");
+    return `Inscricao concluida${categoryName ? ` na categoria ${categoryName}` : ""}${tournamentName ? ` do torneio ${tournamentName}` : ""}.\nEla sera validada pela Gestao do Torneio.\nA organizacao entrara em contato para informar sobre o pagamento.`;
   }
 
   if (result.status === "category_closed") {
@@ -1000,6 +984,32 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     identity: input.identity ?? null,
   };
 
+  const tournamentIdForExisting =
+    threadState.selectedCategory?.tournamentId || threadState.selectedTournament?.id || input.tournamentId || null;
+  let proactivePrefix = "";
+  if (!threadState.hasShownExistingRegistrations && tournamentIdForExisting) {
+    const existing = await getAthleteRegistrationsSummaryForTournament({
+      tournamentId: tournamentIdForExisting,
+      athleteUserId: input.identity?.userId ?? null,
+      email: input.identity?.email ?? null,
+      telefone: input.identity?.telefone ?? null,
+      whatsapp: whatsapp || null,
+    });
+
+    if (existing.athleteId) {
+      threadState.hasShownExistingRegistrations = true;
+    }
+
+    if (existing.registrations.length > 0) {
+      const items = existing.registrations
+        .map((r) => `- ${r.categoryName}${r.partnerName ? ` (parceiro: ${r.partnerName})` : ""}`)
+        .join("\n");
+      proactivePrefix = `Vi que voce ja esta inscrito neste torneio em:\n${items}`;
+    }
+  }
+
+  const applyProactivePrefix = (replyText: string) => (proactivePrefix ? `${proactivePrefix}\n\n${replyText}` : replyText);
+
   let finalReply = "";
 
   if (
@@ -1045,6 +1055,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
       buildRegistrationReplyFromToolResult(lastToolResult) ||
       buildPartnerReplyFromToolResult(lastToolResult) ||
       "Recebi sua confirmacao e estou seguindo com a inscricao.";
+    finalReply = applyProactivePrefix(finalReply);
 
     saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
     threadStateStore.set(threadId, threadState);
@@ -1085,6 +1096,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     finalReply =
       buildRegistrationReplyFromToolResult(result) ||
       "Nao consegui concluir a inscricao agora. Posso revisar seus dados e tentar novamente.";
+    finalReply = applyProactivePrefix(finalReply);
 
     saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
     threadStateStore.set(threadId, threadState);
@@ -1159,6 +1171,7 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     finalReply =
       "Recebi sua mensagem e ja estou te ajudando com a inscricao. Pode me dizer o nome do torneio ou a categoria que voce deseja jogar?";
   }
+  finalReply = applyProactivePrefix(finalReply);
   saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
   threadStateStore.set(threadId, threadState);
 
