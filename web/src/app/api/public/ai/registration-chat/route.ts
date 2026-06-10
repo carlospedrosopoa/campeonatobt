@@ -52,6 +52,17 @@ function cleanConversationState(value: any): ConversationStateSnapshot | null {
           status: cleanString(value.partner.status) as NonNullable<ConversationStateSnapshot["partner"]>["status"],
         }
       : null,
+    partnerCandidates: Array.isArray(value.partnerCandidates)
+      ? value.partnerCandidates
+          .filter((item: any) => item && typeof item === "object")
+          .map((item: any) => ({
+            id: cleanString(item.id) || null,
+            nome: cleanString(item.nome) || null,
+            email: cleanString(item.email) || null,
+            telefone: cleanString(item.telefone) || null,
+            whatsappSuffix: cleanString(item.whatsappSuffix) || null,
+          }))
+      : [],
     lastTool: cleanString(value.lastTool) || null,
   };
 

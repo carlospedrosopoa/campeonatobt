@@ -79,6 +79,14 @@ type PartnerState = {
   status: "unknown" | "mentioned" | "valid" | "ambiguous" | "not_found";
 };
 
+type PartnerCandidateState = {
+  id?: string | null;
+  nome?: string | null;
+  email?: string | null;
+  telefone?: string | null;
+  whatsappSuffix?: string | null;
+};
+
 export type ConversationStateSnapshot = {
   intent: ConversationIntent;
   stage: ConversationStage;
@@ -87,6 +95,7 @@ export type ConversationStateSnapshot = {
   selectedTournament: SelectedTournamentState | null;
   selectedCategory: SelectedCategoryState | null;
   partner: PartnerState | null;
+  partnerCandidates: PartnerCandidateState[];
   lastTool: string | null;
 };
 
@@ -326,6 +335,80 @@ function inferPartnerValidationArgsFromMessage(messageText: string) {
   };
 }
 
+function normalizePartnerCandidates(value: unknown): PartnerCandidateState[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item) => ({
+      id: String(item.id || "").trim() || null,
+      nome: String(item.nome || "").trim() || null,
+      email: String(item.email || "").trim() || null,
+      telefone: String(item.telefone || "").trim() || null,
+      whatsappSuffix: String(item.whatsappSuffix || "").trim() || null,
+    }))
+    .filter((item) => Boolean(item.nome || item.email || item.telefone || item.id));
+}
+
+function resolvePartnerCandidateSelection(messageText: string, candidates: PartnerCandidateState[]) {
+  const rawText = String(messageText || "").trim();
+  if (!rawText || candidates.length === 0) return null;
+
+  const numericMatch = rawText.match(/^\D*(\d{1,2})\D*$/);
+  if (numericMatch) {
+    const optionIndex = Number(numericMatch[1]) - 1;
+    if (optionIndex >= 0 && optionIndex < candidates.length) {
+      const selected = candidates[optionIndex];
+      return {
+        partnerName: selected.email || selected.nome || "",
+        partnerWhatsapp: normalizePhone(selected.telefone),
+      };
+    }
+  }
+
+  const normalizedEmail = String(rawText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "").trim().toLowerCase();
+  if (normalizedEmail) {
+    const selected = candidates.find((candidate) => String(candidate.email || "").trim().toLowerCase() === normalizedEmail);
+    if (selected) {
+      return {
+        partnerName: selected.email || selected.nome || "",
+        partnerWhatsapp: normalizePhone(selected.telefone),
+      };
+    }
+  }
+
+  const typedDigits = normalizePhone(rawText);
+  if (typedDigits.length >= 4) {
+    const selected = candidates.find((candidate) => {
+      const candidatePhone = normalizePhone(candidate.telefone);
+      const suffix = String(candidate.whatsappSuffix || "").trim();
+      return (
+        (candidatePhone && candidatePhone.endsWith(typedDigits)) ||
+        (suffix && suffix === typedDigits.slice(-suffix.length))
+      );
+    });
+    if (selected) {
+      return {
+        partnerName: selected.email || selected.nome || "",
+        partnerWhatsapp: normalizePhone(selected.telefone),
+      };
+    }
+  }
+
+  const normalizedText = normalizeComparableText(rawText);
+  if (normalizedText) {
+    const selected = candidates.find((candidate) => normalizeComparableText(candidate.nome) === normalizedText);
+    if (selected) {
+      return {
+        partnerName: selected.email || selected.nome || "",
+        partnerWhatsapp: normalizePhone(selected.telefone),
+      };
+    }
+  }
+
+  return null;
+}
+
 function createInitialThreadState(input: AgentInput): ConversationStateSnapshot {
   return {
     intent: "unknown",
@@ -352,6 +435,7 @@ function createInitialThreadState(input: AgentInput): ConversationStateSnapshot 
           }
         : null,
     partner: null,
+    partnerCandidates: [],
     lastTool: null,
   };
 }
@@ -414,6 +498,7 @@ function normalizeConversationStateSnapshot(
           status: validPartnerStatuses.has(snapshot.partner.status) ? snapshot.partner.status : "unknown",
         }
       : null,
+    partnerCandidates: normalizePartnerCandidates(snapshot.partnerCandidates),
     lastTool: String(snapshot.lastTool || "").trim() || null,
   };
 }
@@ -648,12 +733,14 @@ function updateThreadStateFromToolResult(
           nome: String(partnerData?.nome || "").trim() || null,
           status: "valid",
         };
+        state.partnerCandidates = [];
       } else if (result.status === "ambiguous") {
         state.partner = {
           id: state.partner?.id || null,
           nome: state.partner?.nome || null,
           status: "ambiguous",
         };
+        state.partnerCandidates = normalizePartnerCandidates(result.data?.candidates);
         state.awaitingField = "partner_confirmation";
       } else if (result.status === "not_found") {
         state.partner = {
@@ -661,6 +748,7 @@ function updateThreadStateFromToolResult(
           nome: String(result.data?.partnerName || "").trim() || null,
           status: "not_found",
         };
+        state.partnerCandidates = [];
         state.awaitingField = "partner";
       } else if (result.status === "found_without_profile" || result.status === "found_on_play_only") {
         const partnerData = (result.data?.partner ?? null) as Record<string, unknown> | null;
@@ -669,8 +757,10 @@ function updateThreadStateFromToolResult(
           nome: String(partnerData?.nome || "").trim() || null,
           status: "mentioned",
         };
+        state.partnerCandidates = [];
         state.awaitingField = "partner_confirmation";
       } else if (result.status === "invalid_input" || result.status === "partner_not_informed" || result.status === "blocked_by_flow") {
+        state.partnerCandidates = [];
         state.awaitingField = state.selectedCategory?.id ? "partner" : "category";
       }
       break;
@@ -732,7 +822,7 @@ function formatPartnerCandidatesFromToolResult(result: ToolResult) {
       .map((candidate, index) => {
         const nome = String(candidate.nome || "").trim() || "Parceiro";
         const details = [
-          String(candidate.emailMasked || "").trim() ? `email: ${String(candidate.emailMasked || "").trim()}` : "",
+          String(candidate.email || "").trim() ? `email: ${String(candidate.email || "").trim()}` : "",
           String(candidate.whatsappSuffix || "").trim() ? `final do WhatsApp: ${String(candidate.whatsappSuffix || "").trim()}` : "",
           !String(candidate.whatsappSuffix || "").trim() && String(candidate.telefoneMasked || "").trim()
             ? `WhatsApp: ${String(candidate.telefoneMasked || "").trim()}`
@@ -766,7 +856,7 @@ function buildPartnerReplyFromToolResult(result: ToolResult): string | null {
   }
 
   if (result.status === "ambiguous" && optionsText) {
-    return `Encontrei estas opcoes de parceiro:\n${optionsText}\nPode me responder com o email exibido, com o final do WhatsApp ou com o nome completo para eu confirmar qual deles voce quer escolher.`;
+    return `Encontrei estas opcoes de parceiro:\n${optionsText}\nVoce pode responder com o numero da opcao, com o email exibido, com o final do WhatsApp ou com o nome completo para eu confirmar qual deles voce quer escolher.`;
   }
 
   if (result.status === "found_on_play_only" && optionsText) {
@@ -1144,6 +1234,34 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
       conversationState: threadState,
       messageId: input.messageId ?? null,
     };
+  }
+
+  if (threadState.awaitingField === "partner_confirmation" && threadState.partnerCandidates.length > 1) {
+    const selectedPartner = resolvePartnerCandidateSelection(input.messageText, threadState.partnerCandidates);
+    if (selectedPartner && (selectedPartner.partnerName || selectedPartner.partnerWhatsapp)) {
+      const validationResult = await executeAiTool("validate_partner", JSON.stringify(selectedPartner), toolContext);
+      toolResults.push(validationResult);
+      usedTools.push("validate_partner");
+      updateThreadStateFromToolResult(threadState, "validate_partner", validationResult, input);
+
+      finalReply =
+        buildPartnerReplyFromToolResult(validationResult) ||
+        "Perfeito, ja identifiquei o parceiro escolhido e vou seguir com a inscricao.";
+      finalReply = applyProactivePrefix(finalReply);
+
+      saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
+      threadStateStore.set(threadId, threadState);
+
+      return {
+        ok: validationResult.ok,
+        threadId,
+        replyText: finalReply,
+        usedTools,
+        toolResults,
+        conversationState: threadState,
+        messageId: input.messageId ?? null,
+      };
+    }
   }
 
   if (

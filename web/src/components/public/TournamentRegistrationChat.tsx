@@ -31,6 +31,13 @@ type ConversationState = {
     nome?: string | null;
     status: string;
   } | null;
+  partnerCandidates?: Array<{
+    id?: string | null;
+    nome?: string | null;
+    email?: string | null;
+    telefone?: string | null;
+    whatsappSuffix?: string | null;
+  }>;
   lastTool?: string | null;
 };
 

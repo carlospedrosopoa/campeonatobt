@@ -995,7 +995,9 @@ function serializeAthleteCandidates(matches: AthleteRow[]) {
   return matches.map((m) => ({
     id: m.id,
     nome: m.nome,
+    email: m.email || null,
     emailMasked: maskEmail(m.email),
+    telefone: m.telefone || null,
     telefoneMasked: maskPhone(m.telefone),
     whatsappSuffix: phoneSuffix(m.telefone),
   }));
@@ -1005,7 +1007,7 @@ function buildCandidateOptionsText(matches: AthleteRow[]) {
   return serializeAthleteCandidates(matches)
     .map((candidate, index) => {
       const details = [
-        candidate.emailMasked ? `email: ${candidate.emailMasked}` : "",
+        candidate.email ? `email: ${candidate.email}` : "",
         candidate.whatsappSuffix ? `final do WhatsApp: ${candidate.whatsappSuffix}` : "",
       ]
         .filter(Boolean)
