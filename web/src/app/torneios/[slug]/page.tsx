@@ -247,7 +247,7 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
       </div>
 
       {inscricaoComIaHabilitada ? (
-        <TournamentRegistrationChat tournamentSlug={torneio.slug} tournamentName={torneio.nome} />
+        <TournamentRegistrationChat tournamentId={torneio.id} tournamentSlug={torneio.slug} tournamentName={torneio.nome} />
       ) : null}
     </div>
   );

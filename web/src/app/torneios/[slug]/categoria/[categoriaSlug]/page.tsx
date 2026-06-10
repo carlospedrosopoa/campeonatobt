@@ -83,8 +83,10 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
 
       {inscricaoComIaHabilitada ? (
         <TournamentRegistrationChat
+          tournamentId={torneio.id}
           tournamentSlug={torneio.slug}
           tournamentName={torneio.nome}
+          categoryId={categoria.id}
           categorySlug={categoria.slug}
           categoryName={categoria.nome}
         />

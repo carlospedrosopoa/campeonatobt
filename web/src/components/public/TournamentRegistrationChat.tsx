@@ -46,8 +46,10 @@ type StoredChatState = {
 };
 
 type Props = {
+  tournamentId?: string | null;
   tournamentSlug: string;
   tournamentName: string;
+  categoryId?: string | null;
   categorySlug?: string | null;
   categoryName?: string | null;
 };
@@ -320,8 +322,10 @@ export default function TournamentRegistrationChat(props: Props) {
         body: JSON.stringify({
           threadId: threadId || null,
           messageText: text,
+          tournamentId: props.tournamentId || null,
           tournamentSlug: props.tournamentSlug,
           tournamentName: props.tournamentName,
+          categoryId: props.categoryId || null,
           categorySlug: props.categorySlug || null,
           categoryName: props.categoryName || null,
           history: requestHistory,

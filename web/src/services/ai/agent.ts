@@ -17,8 +17,10 @@ export type AgentInput = {
   contactName?: string | null;
   messageId?: string | null;
   threadId?: string | null;
+  tournamentId?: string | null;
   tournamentSlug?: string | null;
   tournamentName?: string | null;
+  categoryId?: string | null;
   categorySlug?: string | null;
   categoryName?: string | null;
   history?: AgentConversationMessage[] | null;
@@ -265,13 +267,24 @@ function createInitialThreadState(input: AgentInput): ConversationStateSnapshot 
     stage: "initial",
     awaitingField: "none",
     selectedTournament:
-      input.tournamentName || input.tournamentSlug
+      input.tournamentId || input.tournamentName || input.tournamentSlug
         ? {
+            id: input.tournamentId || null,
             nome: input.tournamentName || null,
             slug: input.tournamentSlug || null,
           }
         : null,
-    selectedCategory: null,
+    selectedCategory:
+      input.categoryId || input.categoryName || input.categorySlug
+        ? {
+            id: input.categoryId || null,
+            nome: input.categoryName || null,
+            slug: input.categorySlug || null,
+            tournamentId: input.tournamentId || null,
+            tournamentName: input.tournamentName || null,
+            tournamentSlug: input.tournamentSlug || null,
+          }
+        : null,
     partner: null,
     lastTool: null,
   };
@@ -339,10 +352,22 @@ function normalizeConversationStateSnapshot(
 }
 
 function mergeThreadStateWithInput(state: ConversationStateSnapshot, input: AgentInput) {
-  if (!state.selectedTournament && (input.tournamentName || input.tournamentSlug)) {
+  if (!state.selectedTournament && (input.tournamentId || input.tournamentName || input.tournamentSlug)) {
     state.selectedTournament = {
+      id: input.tournamentId || null,
       nome: input.tournamentName || null,
       slug: input.tournamentSlug || null,
+    };
+  }
+
+  if (!state.selectedCategory && (input.categoryId || input.categoryName || input.categorySlug)) {
+    state.selectedCategory = {
+      id: input.categoryId || null,
+      nome: input.categoryName || null,
+      slug: input.categorySlug || null,
+      tournamentId: input.tournamentId || state.selectedTournament?.id || null,
+      tournamentName: input.tournamentName || state.selectedTournament?.nome || null,
+      tournamentSlug: input.tournamentSlug || state.selectedTournament?.slug || null,
     };
   }
 
