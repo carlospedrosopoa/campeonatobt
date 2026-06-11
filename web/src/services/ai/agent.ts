@@ -335,6 +335,29 @@ function inferPartnerValidationArgsFromMessage(messageText: string) {
   };
 }
 
+function shouldForcePartnerValidation(params: {
+  state: ConversationStateSnapshot;
+  messageText: string;
+  inferredArgs: { partnerName?: string; partnerWhatsapp?: string };
+}) {
+  if (params.state.awaitingField === "partner" || params.state.awaitingField === "partner_confirmation") {
+    return true;
+  }
+
+  if (!params.state.selectedCategory?.id || params.state.partner?.status === "valid") {
+    return false;
+  }
+
+  const normalized = normalizeComparableText(params.messageText);
+  if (!normalized) return false;
+
+  if (/(categoria|torneio|programacao|horario|horarios|dia|dias|data|datas|cadastro|perfil)/.test(normalized)) {
+    return false;
+  }
+
+  return Boolean(params.inferredArgs.partnerName || params.inferredArgs.partnerWhatsapp);
+}
+
 function normalizePartnerCandidates(value: unknown): PartnerCandidateState[] {
   if (!Array.isArray(value)) return [];
 
@@ -1269,12 +1292,15 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     }
   }
 
-  if (
-    (threadState.awaitingField === "partner" || threadState.awaitingField === "partner_confirmation") &&
-    !isAffirmativeConfirmation(input.messageText)
-  ) {
+  if (!isAffirmativeConfirmation(input.messageText)) {
     const inferredPartnerArgs = inferPartnerValidationArgsFromMessage(input.messageText);
-    if (inferredPartnerArgs.partnerName || inferredPartnerArgs.partnerWhatsapp) {
+    if (
+      shouldForcePartnerValidation({
+        state: threadState,
+        messageText: input.messageText,
+        inferredArgs: inferredPartnerArgs,
+      })
+    ) {
       const validationResult = await executeAiTool("validate_partner", JSON.stringify(inferredPartnerArgs), toolContext);
       toolResults.push(validationResult);
       usedTools.push("validate_partner");
