@@ -657,13 +657,62 @@ function buildConversationStateSummary(state: ConversationStateSnapshot) {
   return lines.join("\n");
 }
 
+function extractRelevantCategoryTokens(messageText: string) {
+  const ignoredTokens = new Set([
+    "quero",
+    "queria",
+    "gostaria",
+    "vou",
+    "me",
+    "inscrever",
+    "inscricao",
+    "jogar",
+    "na",
+    "no",
+    "de",
+    "do",
+    "da",
+    "categoria",
+    "torneio",
+    "a",
+    "o",
+    "uma",
+    "um",
+  ]);
+
+  return tokenizeComparableText(messageText).filter((token) => !ignoredTokens.has(token));
+}
+
 function resolveSelectedCategory(
   categories: Array<Record<string, unknown>>,
   messageText: string
 ): SelectedCategoryState | null {
   const normalizedMessage = normalizeComparableText(messageText);
   const messageTokens = tokenizeComparableText(messageText);
+  const relevantTokens = extractRelevantCategoryTokens(messageText);
   if (!normalizedMessage || messageTokens.length === 0) return null;
+
+  if (relevantTokens.length > 0) {
+    const tokenMatches = categories.filter((category) => {
+      const categoryName = String(category.nome || "").trim();
+      const categoryTokens = tokenizeComparableText(categoryName);
+      if (!categoryName || categoryTokens.length === 0) return false;
+      return relevantTokens.every((token) => categoryTokens.includes(token));
+    });
+
+    if (tokenMatches.length === 1) {
+      const category = tokenMatches[0];
+      return {
+        id: String(category.id || "").trim() || null,
+        nome: String(category.nome || "").trim() || null,
+        slug: String(category.slug || "").trim() || null,
+      };
+    }
+
+    if (tokenMatches.length > 1) {
+      return null;
+    }
+  }
 
   const scoredMatches = categories
     .map((category) => {
@@ -709,6 +758,49 @@ function resolveSelectedCategory(
     nome: String(best.category.nome || "").trim() || null,
     slug: String(best.category.slug || "").trim() || null,
   };
+}
+
+function buildCategoryReplyFromToolResult(
+  result: ToolResult,
+  selectedCategory: SelectedCategoryState | null
+): string | null {
+  if (result.tool !== "get_available_categories" || result.status !== "ok") return null;
+
+  const categories = Array.isArray(result.data?.categories)
+    ? result.data.categories.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    : [];
+  const feeSummary = result.data?.feeSummary && typeof result.data.feeSummary === "object"
+    ? (result.data.feeSummary as Record<string, unknown>)
+    : null;
+
+  if (selectedCategory?.id) {
+    const categoryData = categories.find((item) => String(item.id || "").trim() === selectedCategory.id) || null;
+    const categoryName = selectedCategory.nome || String(categoryData?.nome || "").trim() || "Categoria";
+    const categoryFee = String(categoryData?.valorInscricao || "").trim();
+    const lines = [`A categoria "${categoryName}" está disponível.`];
+
+    if (categoryFee) {
+      lines.push(`Valor da inscrição: R$ ${categoryFee} por atleta.`);
+    } else if (String(feeSummary?.amountPerAthlete || "").trim()) {
+      lines.push(`Valor da inscrição: R$ ${String(feeSummary?.amountPerAthlete).trim()} por atleta.`);
+    }
+
+    lines.push("Agora, por favor, me informe o nome ou o WhatsApp do seu parceiro.");
+    return lines.join("\n");
+  }
+
+  if (categories.length === 0) {
+    return "Não encontrei categorias abertas para inscrição neste torneio agora.";
+  }
+
+  const lines: string[] = [];
+  if (String(feeSummary?.amountPerAthlete || "").trim() && feeSummary?.sameFeeForAllCategories) {
+    lines.push(`Valor da inscrição: R$ ${String(feeSummary.amountPerAthlete).trim()} por atleta.`);
+  }
+  lines.push("Categorias disponíveis:");
+  lines.push(...categories.map((item) => `• ${String(item.nome || "").trim()}`));
+  lines.push("Me diga exatamente qual categoria você quer jogar.");
+  return lines.join("\n");
 }
 
 function updateTournamentStateFromToolResult(state: ConversationStateSnapshot, result: ToolResult) {
@@ -1205,6 +1297,47 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
   let finalReply = "";
 
   if (
+    threadState.intent === "registration" &&
+    !threadState.selectedCategory?.id &&
+    (input.tournamentId ||
+      input.tournamentSlug ||
+      input.tournamentName ||
+      threadState.selectedTournament?.id ||
+      threadState.selectedTournament?.slug ||
+      threadState.selectedTournament?.nome)
+  ) {
+    const categoryLookupResult = await executeAiTool(
+      "get_available_categories",
+      JSON.stringify({
+        tournamentId: input.tournamentId || threadState.selectedTournament?.id || undefined,
+        tournamentSlug: input.tournamentSlug || threadState.selectedTournament?.slug || undefined,
+        tournamentQuery: input.tournamentName || threadState.selectedTournament?.nome || undefined,
+      }),
+      toolContext
+    );
+    toolResults.push(categoryLookupResult);
+    usedTools.push("get_available_categories");
+    updateThreadStateFromToolResult(threadState, "get_available_categories", categoryLookupResult, input);
+
+    const categoryReply = buildCategoryReplyFromToolResult(categoryLookupResult, threadState.selectedCategory);
+    if (categoryReply) {
+      finalReply = applyProactivePrefix(categoryReply);
+      saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
+      threadStateStore.set(threadId, threadState);
+
+      return {
+        ok: categoryLookupResult.ok,
+        threadId,
+        replyText: finalReply,
+        usedTools,
+        toolResults,
+        conversationState: threadState,
+        messageId: input.messageId ?? null,
+      };
+    }
+  }
+
+  if (
     threadState.awaitingField === "partner_confirmation" &&
     isAffirmativeConfirmation(input.messageText) &&
     (threadState.partner?.id || threadState.partner?.nome)
@@ -1408,7 +1541,9 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
 
       const lastToolResult = toolResults[toolResults.length - 1] ?? null;
       const forcedReply = lastToolResult
-        ? buildPartnerReplyFromToolResult(lastToolResult) || buildRegistrationReplyFromToolResult(lastToolResult)
+        ? buildCategoryReplyFromToolResult(lastToolResult, threadState.selectedCategory) ||
+          buildPartnerReplyFromToolResult(lastToolResult) ||
+          buildRegistrationReplyFromToolResult(lastToolResult)
         : null;
       if (forcedReply) {
         finalReply = forcedReply;
