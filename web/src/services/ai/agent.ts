@@ -194,6 +194,15 @@ function tokenizeComparableText(value?: string | null) {
   return normalizeComparableText(value).split(" ").filter(Boolean);
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsWholeComparablePhrase(haystack: string, needle: string) {
+  if (!haystack || !needle) return false;
+  return new RegExp(`(^| )${escapeRegExp(needle)}($| )`).test(haystack);
+}
+
 function levenshteinDistance(a: string, b: string) {
   if (a === b) return 0;
   if (!a) return b.length;
@@ -721,6 +730,20 @@ function resolveSelectedCategory(
   const relevantTokens = extractRelevantCategoryTokens(messageText);
   if (!normalizedMessage || messageTokens.length === 0) return null;
 
+  const exactPhraseMatches = categories.filter((category) => {
+    const normalizedCategory = normalizeComparableText(String(category.nome || "").trim());
+    return Boolean(normalizedCategory) && containsWholeComparablePhrase(normalizedMessage, normalizedCategory);
+  });
+
+  if (exactPhraseMatches.length === 1) {
+    const category = exactPhraseMatches[0];
+    return {
+      id: String(category.id || "").trim() || null,
+      nome: String(category.nome || "").trim() || null,
+      slug: String(category.slug || "").trim() || null,
+    };
+  }
+
   if (relevantTokens.length > 0) {
     const tokenMatches = categories.filter((category) => {
       const categoryName = String(category.nome || "").trim();
@@ -728,6 +751,20 @@ function resolveSelectedCategory(
       if (!categoryName || categoryTokens.length === 0) return false;
       return relevantTokens.every((token) => categoryTokens.includes(token));
     });
+
+    const exactTokenMatches = tokenMatches.filter((category) => {
+      const categoryTokens = tokenizeComparableText(String(category.nome || "").trim());
+      return categoryTokens.length === relevantTokens.length && categoryTokens.every((token, index) => token === relevantTokens[index]);
+    });
+
+    if (exactTokenMatches.length === 1) {
+      const category = exactTokenMatches[0];
+      return {
+        id: String(category.id || "").trim() || null,
+        nome: String(category.nome || "").trim() || null,
+        slug: String(category.slug || "").trim() || null,
+      };
+    }
 
     if (tokenMatches.length === 1) {
       const category = tokenMatches[0];
