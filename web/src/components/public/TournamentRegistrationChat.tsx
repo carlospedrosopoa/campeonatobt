@@ -85,11 +85,13 @@ function toHref(value: string) {
   return normalized;
 }
 
-function renderLineValue(value: string, key: string) {
+function renderLineValue(value: string, key: string, options?: { preferImage?: boolean }) {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const normalizedLink = normalizeClickableLink(trimmed);
-  const isImage = /^https?:\/\/\S+\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(normalizedLink);
+  const isImage =
+    /^https?:\/\/\S+\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(normalizedLink) ||
+    (Boolean(options?.preferImage) && /^https?:\/\/\S+$/i.test(normalizedLink));
   const imageSrc = isImage ? `/api/image-proxy?url=${encodeURIComponent(normalizedLink)}` : normalizedLink;
 
   if (isImage) {
@@ -163,10 +165,11 @@ function renderAssistantMessage(content: string) {
     if (labeledMatch) {
       const label = labeledMatch[1];
       const value = labeledMatch[2];
+      const preferImage = /^(foto|foto do parceiro)$/i.test(label);
       return (
         <div key={`info-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
           <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
-          {renderLineValue(value, `info-value-${index}`)}
+          {renderLineValue(value, `info-value-${index}`, { preferImage })}
         </div>
       );
     }
