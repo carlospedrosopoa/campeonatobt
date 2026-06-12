@@ -335,6 +335,35 @@ function inferPartnerValidationArgsFromMessage(messageText: string) {
   };
 }
 
+function messageHasPartnerIdentitySignal(
+  messageText: string,
+  inferredArgs: { partnerName?: string; partnerWhatsapp?: string }
+) {
+  const rawMessage = String(messageText || "").trim();
+  const rawPartnerName = String(inferredArgs.partnerName || "").trim();
+  const normalizedMessage = normalizeComparableText(rawMessage);
+  const normalizedPartnerName = normalizeComparableText(rawPartnerName);
+
+  if (String(inferredArgs.partnerWhatsapp || "").trim()) {
+    return true;
+  }
+
+  if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(rawMessage)) {
+    return true;
+  }
+
+  if (hasExplicitPartnerSignal(rawMessage)) {
+    return true;
+  }
+
+  return Boolean(
+    normalizedPartnerName &&
+      normalizedPartnerName !== normalizedMessage &&
+      rawPartnerName &&
+      rawPartnerName.length < rawMessage.length
+  );
+}
+
 function shouldForcePartnerValidation(params: {
   state: ConversationStateSnapshot;
   messageText: string;
@@ -760,10 +789,10 @@ function resolveSelectedCategory(
   };
 }
 
-function buildCategoryReplyFromToolResult(
+function buildCategoryConfirmationLines(
   result: ToolResult,
   selectedCategory: SelectedCategoryState | null
-): string | null {
+): string[] | null {
   if (result.tool !== "get_available_categories" || result.status !== "ok") return null;
 
   const categories = Array.isArray(result.data?.categories)
@@ -785,9 +814,29 @@ function buildCategoryReplyFromToolResult(
       lines.push(`Valor da inscrição: R$ ${String(feeSummary?.amountPerAthlete).trim()} por atleta.`);
     }
 
-    lines.push("Agora, por favor, me informe o nome ou o WhatsApp do seu parceiro.");
-    return lines.join("\n");
+    return lines;
   }
+
+  return null;
+}
+
+function buildCategoryReplyFromToolResult(
+  result: ToolResult,
+  selectedCategory: SelectedCategoryState | null
+): string | null {
+  const confirmationLines = buildCategoryConfirmationLines(result, selectedCategory);
+  if (confirmationLines) {
+    return [...confirmationLines, "Agora, por favor, me informe o nome ou o WhatsApp do seu parceiro."].join("\n");
+  }
+
+  if (result.tool !== "get_available_categories" || result.status !== "ok") return null;
+
+  const categories = Array.isArray(result.data?.categories)
+    ? result.data.categories.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    : [];
+  const feeSummary = result.data?.feeSummary && typeof result.data.feeSummary === "object"
+    ? (result.data.feeSummary as Record<string, unknown>)
+    : null;
 
   if (categories.length === 0) {
     return "Não encontrei categorias abertas para inscrição neste torneio agora.";
@@ -1319,14 +1368,34 @@ export async function runTournamentRegistrationAgent(input: AgentInput): Promise
     usedTools.push("get_available_categories");
     updateThreadStateFromToolResult(threadState, "get_available_categories", categoryLookupResult, input);
 
+    let sameTurnPartnerResult: ToolResult | null = null;
+    if (threadState.selectedCategory?.id && !isAffirmativeConfirmation(input.messageText)) {
+      const inferredPartnerArgs = inferPartnerValidationArgsFromMessage(input.messageText);
+      if (messageHasPartnerIdentitySignal(input.messageText, inferredPartnerArgs)) {
+        sameTurnPartnerResult = await executeAiTool(
+          "validate_partner",
+          JSON.stringify(inferredPartnerArgs),
+          toolContext
+        );
+        toolResults.push(sameTurnPartnerResult);
+        usedTools.push("validate_partner");
+        updateThreadStateFromToolResult(threadState, "validate_partner", sameTurnPartnerResult, input);
+      }
+    }
+
     const categoryReply = buildCategoryReplyFromToolResult(categoryLookupResult, threadState.selectedCategory);
-    if (categoryReply) {
-      finalReply = applyProactivePrefix(categoryReply);
+    const categoryConfirmationLines = buildCategoryConfirmationLines(categoryLookupResult, threadState.selectedCategory);
+    const partnerReply = sameTurnPartnerResult ? buildPartnerReplyFromToolResult(sameTurnPartnerResult) : null;
+    if (categoryReply || partnerReply) {
+      finalReply = partnerReply && categoryConfirmationLines
+        ? `${categoryConfirmationLines.join("\n")}\n${partnerReply}`
+        : partnerReply || categoryReply || "";
+      finalReply = applyProactivePrefix(finalReply);
       saveThread(threadId, [...history, { role: "user", content: input.messageText }, { role: "assistant", content: finalReply }]);
       threadStateStore.set(threadId, threadState);
 
       return {
-        ok: categoryLookupResult.ok,
+        ok: (sameTurnPartnerResult ?? categoryLookupResult).ok,
         threadId,
         replyText: finalReply,
         usedTools,
