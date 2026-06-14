@@ -32,6 +32,7 @@ type CriarTorneioPayload = {
   bannerUrl?: string;
   logoUrl?: string;
   templateUrl?: string;
+  templateInscricaoUrl?: string;
 };
 
 type TorneioForm = Omit<CriarTorneioPayload, "camisetaOpcoes"> & { camisetaOpcoesTexto: string };
@@ -72,6 +73,7 @@ export default function AdminNovoTorneioPage() {
     bannerUrl: "",
     logoUrl: "",
     templateUrl: "",
+    templateInscricaoUrl: "",
   });
 
   useEffect(() => {
@@ -139,6 +141,7 @@ export default function AdminNovoTorneioPage() {
         bannerUrl: form.bannerUrl?.trim() ? form.bannerUrl : undefined,
         logoUrl: form.logoUrl?.trim() ? form.logoUrl : undefined,
         templateUrl: form.templateUrl?.trim() ? form.templateUrl : undefined,
+        templateInscricaoUrl: form.templateInscricaoUrl?.trim() ? form.templateInscricaoUrl : undefined,
       };
 
       const res = await fetch("/api/v1/torneios", {
@@ -376,7 +379,7 @@ export default function AdminNovoTorneioPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="space-y-2">
             <ImageUpload
               label="Banner do Torneio"
@@ -397,12 +400,21 @@ export default function AdminNovoTorneioPage() {
           </div>
           <div className="space-y-2">
             <ImageUpload
-              label="Template dos Cards"
+              label="Template dos Cards de Jogos"
               value={form.templateUrl}
               onChange={(url) => setForm((prev) => ({ ...prev, templateUrl: url }))}
               folder="campeonatos/templates"
             />
             <p className="text-xs text-slate-500">Recomendado: 1080x1350px (4:5) ou 1080x1080px (1:1)</p>
+          </div>
+          <div className="space-y-2">
+            <ImageUpload
+              label="Template dos Cards de Inscrição"
+              value={form.templateInscricaoUrl}
+              onChange={(url) => setForm((prev) => ({ ...prev, templateInscricaoUrl: url }))}
+              folder="campeonatos/templates"
+            />
+            <p className="text-xs text-slate-500">Usado nos cards de dupla confirmada. Mesmo formato recomendado do template dos jogos.</p>
           </div>
         </div>
 

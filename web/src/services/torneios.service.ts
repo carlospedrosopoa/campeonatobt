@@ -41,6 +41,7 @@ export type CriarTorneioDTO = {
   bannerUrl?: string;
   logoUrl?: string;
   templateUrl?: string;
+  templateInscricaoUrl?: string;
 };
 
 const normalizeDecimal = (value: string | number | null | undefined) => {
@@ -93,6 +94,7 @@ export class TorneiosService {
         bannerUrl: torneios.bannerUrl,
         logoUrl: torneios.logoUrl,
         templateUrl: torneios.templateUrl,
+        templateInscricaoUrl: torneios.templateInscricaoUrl,
         superCampeonato: torneios.superCampeonato,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
@@ -130,6 +132,7 @@ export class TorneiosService {
         bannerUrl: torneios.bannerUrl,
         logoUrl: torneios.logoUrl,
         templateUrl: torneios.templateUrl,
+        templateInscricaoUrl: torneios.templateInscricaoUrl,
         superCampeonato: torneios.superCampeonato,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
@@ -168,6 +171,7 @@ export class TorneiosService {
       bannerUrl: torneios.bannerUrl,
       logoUrl: torneios.logoUrl,
       templateUrl: torneios.templateUrl,
+      templateInscricaoUrl: torneios.templateInscricaoUrl,
       superCampeonato: torneios.superCampeonato,
       valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
       valorInscricaoAdicional: torneios.valorInscricaoAdicional,

@@ -33,6 +33,7 @@ type Torneio = {
   bannerUrl: string | null;
   logoUrl: string | null;
   templateUrl: string | null;
+  templateInscricaoUrl: string | null;
   organizadorId: string;
   esporteId: string | null;
   esporteNome: string | null;
@@ -71,6 +72,7 @@ export default function AdminEditarDadosTorneioPage() {
     bannerUrl: "",
     logoUrl: "",
     templateUrl: "",
+    templateInscricaoUrl: "",
     status: "RASCUNHO" as Torneio["status"],
     superCampeonato: false,
     oculto: false,
@@ -120,6 +122,7 @@ export default function AdminEditarDadosTorneioPage() {
           bannerUrl: t.bannerUrl ?? "",
           logoUrl: t.logoUrl ?? "",
           templateUrl: t.templateUrl ?? "",
+          templateInscricaoUrl: t.templateInscricaoUrl ?? "",
           status: t.status,
           superCampeonato: Boolean(t.superCampeonato),
           oculto: Boolean(t.oculto),
@@ -182,6 +185,7 @@ export default function AdminEditarDadosTorneioPage() {
         bannerUrl: form.bannerUrl?.trim() ? form.bannerUrl : null,
         logoUrl: form.logoUrl?.trim() ? form.logoUrl : null,
         templateUrl: form.templateUrl?.trim() ? form.templateUrl : null,
+        templateInscricaoUrl: form.templateInscricaoUrl?.trim() ? form.templateInscricaoUrl : null,
         status: form.status,
         superCampeonato: form.superCampeonato,
         oculto: form.oculto,
@@ -471,7 +475,7 @@ export default function AdminEditarDadosTorneioPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="space-y-2">
               <ImageUpload
                 label="Banner do Torneio"
@@ -492,12 +496,21 @@ export default function AdminEditarDadosTorneioPage() {
           </div>
           <div className="space-y-2">
             <ImageUpload
-              label="Template dos Cards"
+              label="Template dos Cards de Jogos"
               value={form.templateUrl}
               onChange={(url) => setForm((prev) => ({ ...prev, templateUrl: url }))}
               folder="campeonatos/templates"
             />
             <p className="text-xs text-slate-500">Recomendado: 1080x1350px (4:5) ou 1080x1080px (1:1)</p>
+          </div>
+          <div className="space-y-2">
+            <ImageUpload
+              label="Template dos Cards de Inscrição"
+              value={form.templateInscricaoUrl}
+              onChange={(url) => setForm((prev) => ({ ...prev, templateInscricaoUrl: url }))}
+              folder="campeonatos/templates"
+            />
+            <p className="text-xs text-slate-500">Usado no card de dupla confirmada e demais cards de inscrição.</p>
           </div>
           </div>
 

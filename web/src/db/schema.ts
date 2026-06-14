@@ -54,6 +54,7 @@ export const torneios = pgTable('torneios', {
   bannerUrl: text('banner_url'),
   logoUrl: text('logo_url'),
   templateUrl: text('template_url'),
+  templateInscricaoUrl: text('template_inscricao_url'),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });

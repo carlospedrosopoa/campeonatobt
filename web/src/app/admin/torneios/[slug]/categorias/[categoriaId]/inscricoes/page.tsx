@@ -52,7 +52,7 @@ export default function AdminCategoriaInscricoesPage() {
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [categoriasTorneio, setCategoriasTorneio] = useState<Categoria[]>([]);
   const [torneioNome, setTorneioNome] = useState("Torneio");
-  const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
+  const [torneioTemplateInscricaoUrl, setTorneioTemplateInscricaoUrl] = useState<string | null>(null);
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -104,7 +104,11 @@ export default function AdminCategoriaInscricoesPage() {
       if (resTorneio.ok) {
         const t = (await resTorneio.json().catch(() => null)) as any;
         if (t?.nome) setTorneioNome(String(t.nome));
-        setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
+        setTorneioTemplateInscricaoUrl(
+          (t?.templateInscricaoUrl as string | null | undefined) ??
+            (t?.templateUrl as string | null | undefined) ??
+            null
+        );
       }
 
       if (!resCat.ok) {
@@ -136,7 +140,7 @@ export default function AdminCategoriaInscricoesPage() {
       const result = await gerarCardInscricaoAdmin({
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
-        templateUrl: torneioTemplateUrl,
+        templateUrl: torneioTemplateInscricaoUrl,
         salvarNoGcs: true,
         uploadFolder: `campeonatos/cards/inscricoes/${slug}`,
         inscricao: {
