@@ -49,6 +49,7 @@ type Inscricao = {
 
 type ParceiroBusca = {
   id: string;
+  playnaquadraAtletaId?: string | null;
   nome: string;
   telefone?: string | null;
   fotoUrl?: string | null;
@@ -306,7 +307,7 @@ export default function AtletaTorneiosPage() {
         body: JSON.stringify({
           equipeNome: inscricaoEditar.equipeNome.trim() || null,
           parceiro: {
-            playnaquadraAtletaId: parceiroSelecionadoEditar.id,
+            playnaquadraAtletaId: parceiroSelecionadoEditar.playnaquadraAtletaId || parceiroSelecionadoEditar.id,
             nome: parceiroSelecionadoEditar.nome,
             email: parceiroSelecionadoEditar.email,
             telefone: parceiroSelecionadoEditar.telefone || null,
@@ -451,7 +452,8 @@ export default function AtletaTorneiosPage() {
         const atletas = (data?.atletas as any[]) ?? [];
         setParceiros(
           atletas.map((a) => ({
-            id: String(a.id),
+            id: String(a.playnaquadraAtletaId || a.id || ""),
+            playnaquadraAtletaId: a.playnaquadraAtletaId ?? a.id ?? null,
             nome: String(a.nome || ""),
             telefone: a.telefone ?? null,
             fotoUrl: a.fotoUrl ?? null,
@@ -489,7 +491,8 @@ export default function AtletaTorneiosPage() {
         const atletas = (data?.atletas as any[]) ?? [];
         setParceirosEditar(
           atletas.map((a) => ({
-            id: String(a.id),
+            id: String(a.playnaquadraAtletaId || a.id || ""),
+            playnaquadraAtletaId: a.playnaquadraAtletaId ?? a.id ?? null,
             nome: String(a.nome || ""),
             telefone: a.telefone ?? null,
             fotoUrl: a.fotoUrl ?? null,
@@ -1158,7 +1161,7 @@ export default function AtletaTorneiosPage() {
                           equipeNome: equipeNome.trim() || null,
                           camisetaOpcao: camisetaSelecionada.trim() || null,
                           parceiro: {
-                            playnaquadraAtletaId: parceiroSelecionado.id,
+                            playnaquadraAtletaId: parceiroSelecionado.playnaquadraAtletaId || parceiroSelecionado.id,
                             nome: parceiroSelecionado.nome,
                             email: parceiroSelecionado.email,
                             telefone: parceiroSelecionado.telefone || null,

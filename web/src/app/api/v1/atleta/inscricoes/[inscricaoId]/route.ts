@@ -120,7 +120,9 @@ export async function PUT(
   const parceiroNome = typeof parceiro?.nome === "string" ? parceiro.nome.trim() : "";
   const parceiroEmail = typeof parceiro?.email === "string" ? parceiro.email.trim().toLowerCase() : "";
   const parceiroTelefone = typeof parceiro?.telefone === "string" ? parceiro.telefone.trim() : "";
-  const parceiroPlayId = typeof parceiro?.playnaquadraAtletaId === "string" ? parceiro.playnaquadraAtletaId.trim() : "";
+  const parceiroPlayId =
+    (typeof parceiro?.playnaquadraAtletaId === "string" ? parceiro.playnaquadraAtletaId.trim() : "") ||
+    (typeof parceiro?.id === "string" ? parceiro.id.trim() : "");
 
   if (!parceiroNome || !parceiroEmail || !parceiroPlayId) {
     return NextResponse.json({ error: "Selecione um parceiro com perfil no Play na Quadra" }, { status: 400 });

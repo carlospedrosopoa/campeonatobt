@@ -151,7 +151,10 @@ export async function POST(request: NextRequest) {
   const parceiroNome = (parceiro?.nome as string | undefined)?.trim();
   const parceiroEmail = (parceiro?.email as string | undefined)?.trim().toLowerCase();
   const parceiroTelefone = (parceiro?.telefone as string | undefined)?.trim();
-  const parceiroPlayAtletaId = (parceiro?.playnaquadraAtletaId as string | undefined | null)?.trim() || null;
+  const parceiroPlayAtletaId =
+    (parceiro?.playnaquadraAtletaId as string | undefined | null)?.trim() ||
+    (parceiro?.id as string | undefined | null)?.trim() ||
+    null;
 
   if (!categoriaId) return NextResponse.json({ error: "categoriaId é obrigatório" }, { status: 400 });
   if (!parceiroNome || !parceiroEmail || !parceiroPlayAtletaId)

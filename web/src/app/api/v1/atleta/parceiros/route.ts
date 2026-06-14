@@ -5,6 +5,29 @@ import { usuarios } from "@/db/schema";
 import { playBuscarAtletas } from "@/services/playnaquadra-client";
 import { and, eq, or, sql } from "drizzle-orm";
 
+function normalizeEmail(value?: string | null) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function extractPlayCandidate(item: any) {
+  const playnaquadraAtletaId = String(item?.id || item?._id || item?.atletaId || item?.usuarioId || "").trim() || null;
+  const nome = String(item?.nome || item?.usuario?.nome || item?.atleta?.nome || "").trim();
+  const email = normalizeEmail(item?.email || item?.usuario?.email || item?.atleta?.email || "");
+  const telefone = String(item?.telefone || item?.usuario?.telefone || item?.atleta?.telefone || "").trim() || null;
+  const fotoUrl = String(item?.fotoUrl || item?.foto_url || item?.usuario?.fotoUrl || item?.atleta?.fotoUrl || "").trim() || null;
+
+  if (!playnaquadraAtletaId && !nome && !email) return null;
+
+  return {
+    id: playnaquadraAtletaId || "",
+    playnaquadraAtletaId,
+    nome: nome || email || "Atleta",
+    email,
+    telefone,
+    fotoUrl,
+  };
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
   if (auth instanceof NextResponse) return auth;
@@ -56,7 +79,16 @@ export async function GET(request: NextRequest) {
       return response;
     }
     if (!result.res.ok) return NextResponse.json({ error: "Falha ao buscar atletas no Play na Quadra" }, { status: 502 });
-    return NextResponse.json(result.data, { headers: { "Cache-Control": "no-store" } });
+
+    const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+    const atletas = rawCandidates
+      .map((item) => extractPlayCandidate(item))
+      .filter((item): item is NonNullable<ReturnType<typeof extractPlayCandidate>> => Boolean(item) && Boolean(item.playnaquadraAtletaId));
+
+    return NextResponse.json(
+      { atletas, total: atletas.length },
+      { headers: { "Cache-Control": "no-store", Vary: "Authorization" } }
+    );
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Erro ao buscar atletas" }, { status: 500 });
   }
