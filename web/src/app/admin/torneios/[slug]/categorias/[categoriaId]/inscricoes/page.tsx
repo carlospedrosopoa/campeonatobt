@@ -165,7 +165,10 @@ export default function AdminCategoriaInscricoesPage() {
         ),
       });
       const url = (result?.url || "").trim();
-      if (url) window.open(url, "_blank");
+      if (url) {
+        const separator = url.includes("?") ? "&" : "?";
+        window.open(`${url}${separator}v=${Date.now()}`, "_blank");
+      }
     } catch (e: any) {
       setErro(e?.message || "Não foi possível gerar o card da inscrição");
     }
