@@ -5,16 +5,31 @@ import { usuarios } from "@/db/schema";
 import { playBuscarAtletas } from "@/services/playnaquadra-client";
 import { and, eq, or, sql } from "drizzle-orm";
 
+type PlayCandidate = {
+  id: string;
+  playnaquadraAtletaId: string | null;
+  nome: string;
+  email: string;
+  telefone: string | null;
+  fotoUrl: string | null;
+};
+
 function normalizeEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
-function extractPlayCandidate(item: any) {
-  const playnaquadraAtletaId = String(item?.id || item?._id || item?.atletaId || item?.usuarioId || "").trim() || null;
-  const nome = String(item?.nome || item?.usuario?.nome || item?.atleta?.nome || "").trim();
-  const email = normalizeEmail(item?.email || item?.usuario?.email || item?.atleta?.email || "");
-  const telefone = String(item?.telefone || item?.usuario?.telefone || item?.atleta?.telefone || "").trim() || null;
-  const fotoUrl = String(item?.fotoUrl || item?.foto_url || item?.usuario?.fotoUrl || item?.atleta?.fotoUrl || "").trim() || null;
+function extractPlayCandidate(item: unknown): PlayCandidate | null {
+  const source = item && typeof item === "object" ? (item as Record<string, any>) : null;
+  if (!source) return null;
+
+  const playnaquadraAtletaId =
+    String(source.id || source._id || source.atletaId || source.usuarioId || "").trim() || null;
+  const usuario = source.usuario && typeof source.usuario === "object" ? (source.usuario as Record<string, any>) : null;
+  const atleta = source.atleta && typeof source.atleta === "object" ? (source.atleta as Record<string, any>) : null;
+  const nome = String(source.nome || usuario?.nome || atleta?.nome || "").trim();
+  const email = normalizeEmail(source.email || usuario?.email || atleta?.email || "");
+  const telefone = String(source.telefone || usuario?.telefone || atleta?.telefone || "").trim() || null;
+  const fotoUrl = String(source.fotoUrl || source.foto_url || usuario?.fotoUrl || atleta?.fotoUrl || "").trim() || null;
 
   if (!playnaquadraAtletaId && !nome && !email) return null;
 
@@ -26,6 +41,10 @@ function extractPlayCandidate(item: any) {
     telefone,
     fotoUrl,
   };
+}
+
+function hasResolvedPlayProfile(item: PlayCandidate | null): item is PlayCandidate {
+  return Boolean(item?.playnaquadraAtletaId);
 }
 
 export async function GET(request: NextRequest) {
@@ -80,10 +99,8 @@ export async function GET(request: NextRequest) {
     }
     if (!result.res.ok) return NextResponse.json({ error: "Falha ao buscar atletas no Play na Quadra" }, { status: 502 });
 
-    const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
-    const atletas = rawCandidates
-      .map((item) => extractPlayCandidate(item))
-      .filter((item): item is NonNullable<ReturnType<typeof extractPlayCandidate>> => Boolean(item) && Boolean(item.playnaquadraAtletaId));
+    const rawCandidates: unknown[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+    const atletas = rawCandidates.map(extractPlayCandidate).filter(hasResolvedPlayProfile);
 
     return NextResponse.json(
       { atletas, total: atletas.length },
