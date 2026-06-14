@@ -53,6 +53,7 @@ export default function AdminCategoriaInscricoesPage() {
   const [categoriasTorneio, setCategoriasTorneio] = useState<Categoria[]>([]);
   const [torneioNome, setTorneioNome] = useState("Torneio");
   const [torneioTemplateInscricaoUrl, setTorneioTemplateInscricaoUrl] = useState<string | null>(null);
+  const [torneioSuperCampeonato, setTorneioSuperCampeonato] = useState(false);
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -104,6 +105,7 @@ export default function AdminCategoriaInscricoesPage() {
       if (resTorneio.ok) {
         const t = (await resTorneio.json().catch(() => null)) as any;
         if (t?.nome) setTorneioNome(String(t.nome));
+        setTorneioSuperCampeonato(Boolean(t?.superCampeonato));
         setTorneioTemplateInscricaoUrl(
           (t?.templateInscricaoUrl as string | null | undefined) ??
             (t?.templateUrl as string | null | undefined) ??
@@ -143,6 +145,7 @@ export default function AdminCategoriaInscricoesPage() {
         templateUrl: torneioTemplateInscricaoUrl,
         salvarNoGcs: true,
         uploadFolder: `campeonatos/cards/inscricoes/${slug}`,
+        ocultarProgramacao: torneioSuperCampeonato,
         inscricao: {
           id: i.id,
           status: i.status,

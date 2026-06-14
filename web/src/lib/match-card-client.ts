@@ -47,6 +47,7 @@ type GerarCardInscricaoParams = {
   salvarNoGcs?: boolean;
   uploadFolder?: string | null;
   download?: boolean;
+  ocultarProgramacao?: boolean;
   categoriasProgramacao?: ProgramacaoCategoriaInfo[];
   inscricao: InscricaoCardInfo;
 };
@@ -624,16 +625,18 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
     })
   );
 
-  const categoriasProgramacaoOrdenadas = (params.categoriasProgramacao ?? [])
-    .slice()
-    .sort((a, b) => {
-      const ta = a.dataHorario ? new Date(a.dataHorario).getTime() : Number.POSITIVE_INFINITY;
-      const tb = b.dataHorario ? new Date(b.dataHorario).getTime() : Number.POSITIVE_INFINITY;
-      if (ta !== tb) return ta - tb;
-      return (a.nome || "").localeCompare(b.nome || "");
-    });
-
   const categoriaAtualNormalizada = normalizeCardText(params.categoriaNome);
+  const categoriasProgramacaoOrdenadas = params.ocultarProgramacao
+    ? []
+    : (params.categoriasProgramacao ?? [])
+        .slice()
+        .sort((a, b) => {
+          const ta = a.dataHorario ? new Date(a.dataHorario).getTime() : Number.POSITIVE_INFINITY;
+          const tb = b.dataHorario ? new Date(b.dataHorario).getTime() : Number.POSITIVE_INFINITY;
+          if (ta !== tb) return ta - tb;
+          return (a.nome || "").localeCompare(b.nome || "");
+        });
+
   const indiceCategoriaAtual = categoriasProgramacaoOrdenadas.findIndex(
     (categoriaItem) =>
       categoriaItem.id === params.inscricao.categoriaId || normalizeCardText(categoriaItem.nome) === categoriaAtualNormalizada
