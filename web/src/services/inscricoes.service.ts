@@ -20,6 +20,10 @@ export type AtualizarInscricaoDTO = {
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
 };
 
+function normalizeEmail(value?: string | null) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export class InscricoesService {
   async listarPorCategoria(categoriaId: string) {
     const rows = await db
@@ -312,52 +316,99 @@ export class InscricoesService {
   }
 
   private async upsertAtleta(dados: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null }) {
-    if (dados.playnaquadraAtletaId) {
+    const email = normalizeEmail(dados.email);
+    const nome = dados.nome.trim();
+    const telefone = dados.telefone?.trim() || null;
+    const playId = String(dados.playnaquadraAtletaId || "").trim() || null;
+
+    if (!email) throw new Error("Email do atleta é obrigatório");
+    if (!nome) throw new Error("Nome do atleta é obrigatório");
+
+    if (playId) {
       const existingByPlay = await db
-        .select({ id: usuarios.id })
+        .select({ id: usuarios.id, email: usuarios.email, perfil: usuarios.perfil })
         .from(usuarios)
-        .where(eq(usuarios.playnaquadraAtletaId, dados.playnaquadraAtletaId))
+        .where(eq(usuarios.playnaquadraAtletaId, playId))
         .limit(1);
       if (existingByPlay.length > 0) {
-        const id = existingByPlay[0].id;
+        const athlete = existingByPlay[0];
+        if (athlete.perfil !== "ATLETA") throw new Error("Parceiro selecionado está vinculado a um usuário não-atleta");
+
+        const conflictingEmail = await db
+          .select({ id: usuarios.id })
+          .from(usuarios)
+          .where(and(eq(usuarios.email, email), sql`${usuarios.id} <> ${athlete.id}`))
+          .limit(1);
+
         await db
           .update(usuarios)
           .set({
-            nome: dados.nome,
-            email: dados.email,
-            telefone: dados.telefone ?? null,
+            nome,
+            ...(conflictingEmail.length === 0 ? { email } : {}),
+            telefone,
             ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
             atualizadoEm: new Date(),
           })
-          .where(eq(usuarios.id, id));
-        return id;
+          .where(eq(usuarios.id, athlete.id));
+        return athlete.id;
       }
     }
 
-    const existing = await db.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.email, dados.email)).limit(1);
+    const existing = await db
+      .select({ id: usuarios.id, perfil: usuarios.perfil, playnaquadraAtletaId: usuarios.playnaquadraAtletaId })
+      .from(usuarios)
+      .where(eq(usuarios.email, email))
+      .limit(1);
     if (existing.length > 0) {
-      const id = existing[0].id;
+      const athlete = existing[0];
+      if (athlete.perfil !== "ATLETA") throw new Error("Email já está vinculado a um usuário não-atleta");
+
+      if (playId && athlete.playnaquadraAtletaId !== playId) {
+        const conflictingPlay = await db
+          .select({ id: usuarios.id, perfil: usuarios.perfil })
+          .from(usuarios)
+          .where(eq(usuarios.playnaquadraAtletaId, playId))
+          .limit(1);
+
+        if (conflictingPlay.length > 0 && conflictingPlay[0].id !== athlete.id) {
+          if (conflictingPlay[0].perfil !== "ATLETA") {
+            throw new Error("Parceiro selecionado está vinculado a um usuário não-atleta");
+          }
+
+          await db
+            .update(usuarios)
+            .set({
+              nome,
+              telefone,
+              ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
+              atualizadoEm: new Date(),
+            })
+            .where(eq(usuarios.id, conflictingPlay[0].id));
+          return conflictingPlay[0].id;
+        }
+      }
+
       await db
         .update(usuarios)
         .set({
-          nome: dados.nome,
-          telefone: dados.telefone ?? null,
-          playnaquadraAtletaId: dados.playnaquadraAtletaId ?? null,
+          nome,
+          telefone,
+          playnaquadraAtletaId: playId,
           ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
           atualizadoEm: new Date(),
         })
-        .where(eq(usuarios.id, id));
-      return id;
+        .where(eq(usuarios.id, athlete.id));
+      return athlete.id;
     }
 
     const [novo] = await db
       .insert(usuarios)
       .values({
-        nome: dados.nome,
-        email: dados.email,
-        telefone: dados.telefone ?? null,
+        nome,
+        email,
+        telefone,
         perfil: "ATLETA",
-        playnaquadraAtletaId: dados.playnaquadraAtletaId ?? null,
+        playnaquadraAtletaId: playId,
         fotoUrl: dados.fotoUrl ?? null,
       })
       .returning();
