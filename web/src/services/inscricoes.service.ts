@@ -335,16 +335,48 @@ export class InscricoesService {
         if (athlete.perfil !== "ATLETA") throw new Error("Parceiro selecionado está vinculado a um usuário não-atleta");
 
         const conflictingEmail = await db
-          .select({ id: usuarios.id })
+          .select({ id: usuarios.id, perfil: usuarios.perfil, playnaquadraAtletaId: usuarios.playnaquadraAtletaId })
           .from(usuarios)
           .where(and(eq(usuarios.email, email), sql`${usuarios.id} <> ${athlete.id}`))
           .limit(1);
+
+        if (conflictingEmail.length > 0) {
+          const emailAthlete = conflictingEmail[0];
+          if (emailAthlete.perfil !== "ATLETA") throw new Error("Email já está vinculado a um usuário não-atleta");
+          if (emailAthlete.playnaquadraAtletaId && emailAthlete.playnaquadraAtletaId !== playId) {
+            throw new Error("Email informado já está vinculado a outro perfil do Play na Quadra");
+          }
+
+          await db.transaction(async (tx) => {
+            await tx
+              .update(usuarios)
+              .set({
+                playnaquadraAtletaId: null,
+                atualizadoEm: new Date(),
+              })
+              .where(eq(usuarios.id, athlete.id));
+
+            await tx
+              .update(usuarios)
+              .set({
+                nome,
+                email,
+                telefone,
+                playnaquadraAtletaId: playId,
+                ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
+                atualizadoEm: new Date(),
+              })
+              .where(eq(usuarios.id, emailAthlete.id));
+          });
+
+          return emailAthlete.id;
+        }
 
         await db
           .update(usuarios)
           .set({
             nome,
-            ...(conflictingEmail.length === 0 ? { email } : {}),
+            email,
             telefone,
             ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
             atualizadoEm: new Date(),
@@ -375,16 +407,28 @@ export class InscricoesService {
             throw new Error("Parceiro selecionado está vinculado a um usuário não-atleta");
           }
 
-          await db
-            .update(usuarios)
-            .set({
-              nome,
-              telefone,
-              ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
-              atualizadoEm: new Date(),
-            })
-            .where(eq(usuarios.id, conflictingPlay[0].id));
-          return conflictingPlay[0].id;
+          await db.transaction(async (tx) => {
+            await tx
+              .update(usuarios)
+              .set({
+                playnaquadraAtletaId: null,
+                atualizadoEm: new Date(),
+              })
+              .where(eq(usuarios.id, conflictingPlay[0].id));
+
+            await tx
+              .update(usuarios)
+              .set({
+                nome,
+                telefone,
+                playnaquadraAtletaId: playId,
+                ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
+                atualizadoEm: new Date(),
+              })
+              .where(eq(usuarios.id, athlete.id));
+          });
+
+          return athlete.id;
         }
       }
 
