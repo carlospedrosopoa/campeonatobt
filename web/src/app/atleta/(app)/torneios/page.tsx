@@ -576,6 +576,39 @@ export default function AtletaTorneiosPage() {
     return Array.from(map.values()).sort((a, b) => b.ultimaDataInscricao - a.ultimaDataInscricao);
   }, [inscricoes]);
 
+  const categoriaSelecionadaModal = useMemo(() => {
+    if (!modalCategoria) return null;
+    return modalCategoria.torneio.categorias.find((c) => c.id === modalCategoria.categoriaId) ?? null;
+  }, [modalCategoria]);
+
+  const parceiroSelecionadoValido = Boolean(
+    parceiroSelecionado?.nome &&
+      parceiroSelecionado?.email &&
+      (parceiroSelecionado?.playnaquadraAtletaId || parceiroSelecionado?.id)
+  );
+
+  const camisetaObrigatoria = Boolean((modalCategoria?.torneio.camisetaOpcoes?.length || 0) > 0);
+  const camisetaSelecionadaValida = !camisetaObrigatoria || Boolean(camisetaSelecionada.trim());
+  const podeConfirmarNovaInscricao = Boolean(parceiroSelecionadoValido && camisetaSelecionadaValida && !salvando);
+  const valorCategoriaModal =
+    !modalCategoria || !categoriaSelecionadaModal
+      ? null
+      : !modalCategoria.torneio.superCampeonato &&
+          (modalCategoria.torneio.valorPrimeiraInscricao || modalCategoria.torneio.valorInscricaoAdicional)
+        ? [
+            modalCategoria.torneio.valorPrimeiraInscricao
+              ? `1ª inscrição: ${Number(modalCategoria.torneio.valorPrimeiraInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+              : null,
+            modalCategoria.torneio.valorInscricaoAdicional
+              ? `Adicional: ${Number(modalCategoria.torneio.valorInscricaoAdicional).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" • ")
+        : categoriaSelecionadaModal.valorInscricao
+          ? `${Number(categoriaSelecionadaModal.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} por atleta`
+          : "Sem taxa";
+
   if (carregandoTorneios && tab === "torneios") {
     return (
       <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
@@ -988,17 +1021,16 @@ export default function AtletaTorneiosPage() {
             <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-6">
               <div>
                 {(() => {
-                  const categoriaSel = modalCategoria.torneio.categorias.find((c) => c.id === modalCategoria.categoriaId) ?? null;
                   return (
                     <>
                 <div className="text-xs text-gray-500">Inscrição</div>
                 <div className="text-lg font-semibold text-gray-900">{modalCategoria.torneio.nome}</div>
                 <div className="mt-1 text-sm text-gray-600">
                   <div>
-                    Categoria: {categoriaSel?.nome ?? "-"}
-                    {categoriaSel?.dataHorario ? ` • ${formatDataHora(categoriaSel.dataHorario)}` : ""}
+                    Categoria: {categoriaSelecionadaModal?.nome ?? "-"}
+                    {categoriaSelecionadaModal?.dataHorario ? ` • ${formatDataHora(categoriaSelecionadaModal.dataHorario)}` : ""}
                   </div>
-                  <div>Informe os dados do parceiro para criar a dupla.</div>
+                  <div>Selecione um parceiro com perfil válido no Play na Quadra para criar a dupla.</div>
                 </div>
                     </>
                   );
@@ -1011,6 +1043,24 @@ export default function AtletaTorneiosPage() {
 
             <div className="space-y-5 p-6">
               {erroModal && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{erroModal}</div>}
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Resumo da inscrição</div>
+                <div className="mt-2 grid grid-cols-1 gap-3 text-sm text-slate-700 md:grid-cols-2">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Categoria</div>
+                    <div className="mt-1 font-semibold text-slate-900">{categoriaSelecionadaModal?.nome ?? "-"}</div>
+                    {categoriaSelecionadaModal?.dataHorario && (
+                      <div className="mt-1 text-xs text-slate-600">{formatDataHora(categoriaSelecionadaModal.dataHorario)}</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Valor</div>
+                    <div className="mt-1 font-semibold text-slate-900">{valorCategoriaModal || "-"}</div>
+                    <div className="mt-1 text-xs text-slate-600">O parceiro precisa ter perfil confirmado no Play para seguir.</div>
+                  </div>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -1058,11 +1108,14 @@ export default function AtletaTorneiosPage() {
                   placeholder="Digite nome ou telefone (mín. 2 caracteres)"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                 />
-                {carregandoParceiros && <div className="text-sm text-gray-600">Buscando...</div>}
+                {carregandoParceiros && <div className="text-sm text-gray-600">Buscando parceiros com perfil válido...</div>}
+                {!parceiroSelecionado && !carregandoParceiros && (
+                  <div className="text-xs text-gray-500">Selecione um atleta da lista para confirmar a dupla antes de enviar.</div>
+                )}
               </div>
 
               {parceiroSelecionado ? (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex items-start justify-between gap-3">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex items-start justify-between gap-3">
                   <div className="min-w-0 flex items-start gap-3">
                     {parceiroSelecionado.fotoUrl ? (
                       <img
@@ -1078,9 +1131,17 @@ export default function AtletaTorneiosPage() {
                       </div>
                     )}
                     <div className="min-w-0">
-                      <div className="font-semibold text-gray-900 truncate">{parceiroSelecionado.nome}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-semibold text-gray-900 truncate">{parceiroSelecionado.nome}</div>
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                          Perfil Play confirmado
+                        </span>
+                      </div>
                       <div className="text-sm text-gray-600 truncate">{parceiroSelecionado.email || "Sem email"}</div>
                       {parceiroSelecionado.telefone && <div className="text-sm text-gray-600 truncate">{parceiroSelecionado.telefone}</div>}
+                      <div className="mt-1 text-xs text-emerald-700">
+                        Esse parceiro será enviado junto com a categoria selecionada quando você confirmar a inscrição.
+                      </div>
                     </div>
                   </div>
                   <button
@@ -1116,7 +1177,12 @@ export default function AtletaTorneiosPage() {
                             </div>
                           )}
                           <div className="min-w-0">
-                            <div className="font-semibold text-gray-900">{p.nome}</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="font-semibold text-gray-900">{p.nome}</div>
+                              <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 ring-1 ring-blue-200">
+                                Pronto para inscrição
+                              </span>
+                            </div>
                             <div className="text-sm text-gray-600 truncate">{p.email || "Sem email"}</div>
                             {p.telefone && <div className="text-sm text-gray-600 truncate">{p.telefone}</div>}
                           </div>
@@ -1128,6 +1194,12 @@ export default function AtletaTorneiosPage() {
               ) : buscaParceiro.trim().length >= 2 && !carregandoParceiros ? (
                 <div className="text-sm text-gray-600">Nenhum atleta encontrado.</div>
               ) : null}
+
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                {parceiroSelecionadoValido
+                  ? `Tudo pronto: você vai inscrever a categoria ${categoriaSelecionadaModal?.nome ?? "selecionada"} com ${parceiroSelecionado?.nome}.`
+                  : "Falta selecionar um parceiro da lista para liberar a confirmação da inscrição."}
+              </div>
 
               <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
                 <button
@@ -1180,7 +1252,7 @@ export default function AtletaTorneiosPage() {
                       setSalvando(false);
                     }
                   }}
-                  disabled={salvando || !parceiroSelecionado?.id || !parceiroSelecionado.email}
+                  disabled={!podeConfirmarNovaInscricao}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {salvando ? "Enviando..." : "Confirmar inscrição"}
