@@ -8,6 +8,10 @@ export const faseTorneioEnum = pgEnum('fase_torneio', ['GRUPOS', 'OITAVAS', 'QUA
 export const statusInscricaoEnum = pgEnum('status_inscricao', ['PENDENTE', 'APROVADA', 'RECUSADA', 'FILA_ESPERA']);
 export const generoCategoriaEnum = pgEnum('genero_categoria', ['MASCULINO', 'FEMININO', 'MISTO']);
 export const statusPlacarSubmissaoEnum = pgEnum('status_placar_submissao', ['PENDENTE', 'CONFIRMADA', 'CANCELADA']);
+export const statusPanelinhaEnum = pgEnum('status_panelinha', ['ATIVA', 'INATIVA']);
+export const papelPanelinhaMembroEnum = pgEnum('papel_panelinha_membro', ['FUNDADOR', 'MEMBRO']);
+export const statusPanelinhaMembroEnum = pgEnum('status_panelinha_membro', ['ATIVO', 'INATIVO', 'REMOVIDO']);
+export const statusPanelinhaConviteEnum = pgEnum('status_panelinha_convite', ['PENDENTE', 'ACEITO', 'RECUSADO', 'CANCELADO', 'EXPIRADO']);
 
 // Tabelas
 
@@ -28,6 +32,41 @@ export const usuarios = pgTable('usuarios', {
   fotoUrl: text('foto_url'),
   telefone: text('telefone'),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});
+
+export const panelinhas = pgTable('panelinhas', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  nome: text('nome').notNull(),
+  status: statusPanelinhaEnum('status').default('ATIVA').notNull(),
+  fundadorId: uuid('fundador_id').references(() => usuarios.id).notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});
+
+export const panelinhaMembros = pgTable('panelinha_membros', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  panelinhaId: uuid('panelinha_id').references(() => panelinhas.id, { onDelete: "cascade" }).notNull(),
+  atletaId: uuid('atleta_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+  papel: papelPanelinhaMembroEnum('papel').default('MEMBRO').notNull(),
+  status: statusPanelinhaMembroEnum('status').default('ATIVO').notNull(),
+  convidadoPorId: uuid('convidado_por_id').references(() => usuarios.id),
+  entrouEm: timestamp('entrou_em').defaultNow().notNull(),
+  saiuEm: timestamp('saiu_em'),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique().on(t.panelinhaId, t.atletaId),
+}));
+
+export const panelinhaConvites = pgTable('panelinha_convites', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  panelinhaId: uuid('panelinha_id').references(() => panelinhas.id, { onDelete: "cascade" }).notNull(),
+  convidadoId: uuid('convidado_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+  convidadoPorId: uuid('convidado_por_id').references(() => usuarios.id).notNull(),
+  status: statusPanelinhaConviteEnum('status').default('PENDENTE').notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  respondidoEm: timestamp('respondido_em'),
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });
 
