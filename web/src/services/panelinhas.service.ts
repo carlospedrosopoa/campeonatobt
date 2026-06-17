@@ -9,7 +9,8 @@ import {
   usuarios,
 } from "@/db/schema";
 import { calcularResultadoSets, type SetScore } from "@/lib/regras-partida";
-import { and, asc, desc, eq, ilike, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { playBuscarAtletas } from "@/services/playnaquadra-client";
 
 export type CriarPanelinhaDTO = {
   nome: string;
@@ -19,6 +20,11 @@ export type ConvidarPanelinhaDTO = {
   panelinhaId: string;
   convidadoId: string;
   convidadoPorId: string;
+  convidadoPlaynaquadraAtletaId?: string | null;
+  convidadoNome?: string | null;
+  convidadoEmail?: string | null;
+  convidadoTelefone?: string | null;
+  convidadoFotoUrl?: string | null;
 };
 
 export type CriarPanelinhaPlayDTO = {
@@ -98,6 +104,24 @@ function isTemporaryEmail(email?: string | null) {
 
 function isEligibleRealAthlete(row: { perfil?: string | null; email?: string | null; playnaquadraAtletaId?: string | null }) {
   return row.perfil === "ATLETA" && Boolean(normalizeText(row.playnaquadraAtletaId)) && hasValidEmailFormat(row.email) && !isTemporaryEmail(row.email);
+}
+
+function extractPlayCandidate(item: unknown) {
+  const source = item && typeof item === "object" ? (item as Record<string, any>) : null;
+  if (!source) return null;
+
+  const playnaquadraAtletaId =
+    String(source.id || source._id || source.atletaId || source.usuarioId || "").trim() || null;
+  const usuario = source.usuario && typeof source.usuario === "object" ? (source.usuario as Record<string, any>) : null;
+  const atleta = source.atleta && typeof source.atleta === "object" ? (source.atleta as Record<string, any>) : null;
+  const nome = String(source.nome || usuario?.nome || atleta?.nome || "").trim();
+  const email = normalizeEmail(source.email || usuario?.email || atleta?.email || "") || null;
+  const telefone = String(source.telefone || usuario?.telefone || atleta?.telefone || "").trim() || null;
+  const fotoUrl = String(source.fotoUrl || source.foto_url || usuario?.fotoUrl || atleta?.fotoUrl || "").trim() || null;
+
+  if (!playnaquadraAtletaId || (!nome && !email)) return null;
+
+  return { playnaquadraAtletaId, nome: nome || email, email, telefone, fotoUrl };
 }
 
 function uniqIds(ids: string[]) {
@@ -291,7 +315,7 @@ export class PanelinhasService {
     };
   }
 
-  async buscarAtletasParaConvite(panelinhaId: string, atletaId: string, termo: string, limit = 20) {
+  async buscarAtletasParaConvite(panelinhaId: string, atletaId: string, termo: string, limit = 20, tokenPlay?: string | null) {
     const panelinhaKey = normalizeText(panelinhaId);
     const q = normalizeText(termo);
     if (!panelinhaKey) throw new Error("Panelinha inválida");
@@ -300,49 +324,55 @@ export class PanelinhasService {
     const member = await this.buscarMembro(panelinhaKey, atletaId);
     if (!member || member.status !== "ATIVO") throw new Error("Apenas membros ativos podem buscar atletas para convite");
 
-    const activeMembers = await db
-      .select({ atletaId: panelinhaMembros.atletaId })
-      .from(panelinhaMembros)
-      .where(and(eq(panelinhaMembros.panelinhaId, panelinhaKey), eq(panelinhaMembros.status, "ATIVO")));
-    const activeMemberIds = Array.from(new Set(activeMembers.map((item) => item.atletaId))).filter(Boolean) as string[];
+    const maxLimit = Math.min(Math.max(limit, 1), 30);
+    if (!tokenPlay) return { atletas: [] };
 
-    const pendingInviteRows = await db
-      .select({ convidadoId: panelinhaConvites.convidadoId })
-      .from(panelinhaConvites)
-      .where(and(eq(panelinhaConvites.panelinhaId, panelinhaKey), eq(panelinhaConvites.status, "PENDENTE")));
-    const pendingInviteIds = Array.from(new Set(pendingInviteRows.map((item) => item.convidadoId))).filter(Boolean) as string[];
+    const playResult = await playBuscarAtletas({ token: tokenPlay, q, limite: maxLimit });
+    if (!playResult.res.ok) return { atletas: [] };
 
-    const atletas = await db
-      .select({
-        id: usuarios.id,
-        nome: usuarios.nome,
-        email: usuarios.email,
-        telefone: usuarios.telefone,
-        fotoUrl: usuarios.fotoUrl,
-        perfil: usuarios.perfil,
-        playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
-      })
-      .from(usuarios)
-      .where(
-        and(
-          eq(usuarios.perfil, "ATLETA"),
-          sql`${usuarios.playnaquadraAtletaId} is not null`,
-          activeMemberIds.length > 0 ? notInArray(usuarios.id, activeMemberIds) : sql`true`,
-          or(ilike(usuarios.nome, `%${q}%`), ilike(usuarios.email, `%${q}%`), ilike(sql`coalesce(${usuarios.telefone}, '')`, `%${q}%`))
-        )
-      )
-      .orderBy(usuarios.nome)
-      .limit(Math.min(Math.max(limit, 1), 30));
+    const raw: unknown[] = Array.isArray((playResult.data as any)?.atletas)
+      ? (playResult.data as any).atletas
+      : Array.isArray(playResult.data)
+        ? (playResult.data as any)
+        : [];
 
-    const pendingSet = new Set(pendingInviteIds);
-    return {
-      atletas: atletas
-        .filter((item) => isEligibleRealAthlete(item))
-        .map(({ perfil: _perfil, playnaquadraAtletaId: _playnaquadraAtletaId, ...item }) => ({
-          ...item,
-          convitePendente: pendingSet.has(item.id),
-        })),
-    };
+    const ordered: Array<{
+      id: string;
+      usuarioId: string | null;
+      playnaquadraAtletaId: string;
+      nome: string;
+      email: string;
+      telefone: string | null;
+      fotoUrl: string | null;
+      convitePendente: boolean;
+      origem: "PLAY" | "LOCAL";
+    }> = [];
+    const seenPlayIds = new Set<string>();
+
+    for (const candidate of raw) {
+      const c = extractPlayCandidate(candidate);
+      if (!c) continue;
+
+      const playId = normalizeText(c.playnaquadraAtletaId);
+      if (!playId || seenPlayIds.has(playId)) continue;
+
+      seenPlayIds.add(playId);
+      ordered.push({
+        id: playId,
+        usuarioId: null,
+        playnaquadraAtletaId: playId,
+        nome: c.nome,
+        email: c.email || "",
+        telefone: c.telefone,
+        fotoUrl: c.fotoUrl,
+        convitePendente: false,
+        origem: "PLAY",
+      });
+
+      if (ordered.length >= maxLimit) break;
+    }
+
+    return { atletas: ordered };
   }
 
   async criar(dados: CriarPanelinhaDTO, fundadorId: string) {
@@ -378,12 +408,16 @@ export class PanelinhasService {
 
   async convidar(dados: ConvidarPanelinhaDTO) {
     const panelinhaId = normalizeText(dados.panelinhaId);
-    const convidadoId = normalizeText(dados.convidadoId);
+    let convidadoId = normalizeText(dados.convidadoId);
     const convidadoPorId = normalizeText(dados.convidadoPorId);
+    const convidadoPlaynaquadraAtletaId = normalizeText(dados.convidadoPlaynaquadraAtletaId);
+    const convidadoNome = normalizeText(dados.convidadoNome);
+    const convidadoEmail = normalizeEmail(dados.convidadoEmail);
+    const convidadoTelefone = normalizeText(dados.convidadoTelefone) || null;
+    const convidadoFotoUrl = normalizeText(dados.convidadoFotoUrl) || null;
 
     if (!panelinhaId) throw new Error("Panelinha inválida");
-    if (!convidadoId) throw new Error("Atleta convidado é obrigatório");
-    if (convidadoId === convidadoPorId) throw new Error("Você não pode convidar a si mesmo");
+    if (!convidadoId && !convidadoPlaynaquadraAtletaId) throw new Error("Atleta convidado é obrigatório");
 
     const [panelinha] = await db.select().from(panelinhas).where(eq(panelinhas.id, panelinhaId)).limit(1);
     if (!panelinha) throw new Error("Panelinha não encontrada");
@@ -394,8 +428,26 @@ export class PanelinhasService {
       throw new Error("Apenas membros ativos podem convidar novos atletas");
     }
 
-    const convidado = await this.buscarAtletaAtivo(convidadoId);
+    let convidado = convidadoPlaynaquadraAtletaId
+      ? await this.buscarAtletaAtivoPorPlaynaquadraId(convidadoPlaynaquadraAtletaId)
+      : null;
+
+    if (!convidado && convidadoPlaynaquadraAtletaId && convidadoEmail) {
+      const localId = await this.upsertAtletaFromPlayCandidate({
+        playnaquadraAtletaId: convidadoPlaynaquadraAtletaId,
+        nome: convidadoNome || convidadoEmail,
+        email: convidadoEmail,
+        telefone: convidadoTelefone,
+        fotoUrl: convidadoFotoUrl,
+      });
+      convidado = localId ? await this.buscarAtletaAtivo(localId) : null;
+    }
+
+    if (!convidado && convidadoId) convidado = await this.buscarAtletaAtivo(convidadoId);
+    convidadoId = normalizeText(convidado?.id || convidadoId);
+
     if (!convidado) throw new Error("Atleta convidado não encontrado");
+    if (convidado.id === convidadoPorId) throw new Error("Você não pode convidar a si mesmo");
     if (!isEligibleRealAthlete(convidado)) {
       throw new Error("Apenas atletas com perfil real, email valido e nao temporario podem ser convidados");
     }
@@ -408,10 +460,14 @@ export class PanelinhasService {
     const existingInvite = await db
       .select({ id: panelinhaConvites.id })
       .from(panelinhaConvites)
+      .innerJoin(usuarios, eq(usuarios.id, panelinhaConvites.convidadoId))
       .where(
         and(
           eq(panelinhaConvites.panelinhaId, panelinhaId),
-          eq(panelinhaConvites.convidadoId, convidadoId),
+          or(
+            eq(panelinhaConvites.convidadoId, convidadoId),
+            convidadoPlaynaquadraAtletaId ? eq(usuarios.playnaquadraAtletaId, convidadoPlaynaquadraAtletaId) : sql`false`
+          ),
           eq(panelinhaConvites.status, "PENDENTE")
         )
       )
@@ -972,6 +1028,8 @@ export class PanelinhasService {
         nome: usuarios.nome,
         perfil: usuarios.perfil,
         email: usuarios.email,
+        telefone: usuarios.telefone,
+        fotoUrl: usuarios.fotoUrl,
         playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
       })
       .from(usuarios)
@@ -984,6 +1042,102 @@ export class PanelinhasService {
     }
 
     return user;
+  }
+
+  private async buscarAtletaAtivoPorPlaynaquadraId(playnaquadraAtletaId: string) {
+    const playId = normalizeText(playnaquadraAtletaId);
+    if (!playId) return null;
+
+    const [user] = await db
+      .select({
+        id: usuarios.id,
+        nome: usuarios.nome,
+        perfil: usuarios.perfil,
+        email: usuarios.email,
+        telefone: usuarios.telefone,
+        fotoUrl: usuarios.fotoUrl,
+        playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
+      })
+      .from(usuarios)
+      .where(eq(usuarios.playnaquadraAtletaId, playId))
+      .limit(1);
+
+    if (!user || user.perfil !== "ATLETA") return null;
+
+    return user;
+  }
+
+  private async upsertAtletaFromPlayCandidate(params: {
+    playnaquadraAtletaId: string;
+    nome: string;
+    email: string;
+    telefone: string | null;
+    fotoUrl: string | null;
+  }) {
+    const playId = normalizeText(params.playnaquadraAtletaId);
+    const email = normalizeEmail(params.email);
+    const nome = normalizeText(params.nome);
+    const telefone = normalizeText(params.telefone) || null;
+    const fotoUrl = normalizeText(params.fotoUrl) || null;
+
+    if (!playId || !email) return null;
+
+    const existingByPlay = await db
+      .select({ id: usuarios.id })
+      .from(usuarios)
+      .where(eq(usuarios.playnaquadraAtletaId, playId))
+      .limit(1);
+
+    if (existingByPlay[0]) {
+      await db
+        .update(usuarios)
+        .set({
+          nome: nome || email,
+          email,
+          telefone,
+          fotoUrl,
+          perfil: "ATLETA",
+          atualizadoEm: new Date(),
+        })
+        .where(eq(usuarios.id, existingByPlay[0].id));
+      return existingByPlay[0].id;
+    }
+
+    const existingByEmail = await db
+      .select({ id: usuarios.id, playnaquadraAtletaId: usuarios.playnaquadraAtletaId })
+      .from(usuarios)
+      .where(eq(usuarios.email, email))
+      .limit(1);
+
+    if (existingByEmail[0]) {
+      await db
+        .update(usuarios)
+        .set({
+          nome: nome || email,
+          telefone,
+          fotoUrl,
+          perfil: "ATLETA",
+          playnaquadraAtletaId: existingByEmail[0].playnaquadraAtletaId ? existingByEmail[0].playnaquadraAtletaId : playId,
+          atualizadoEm: new Date(),
+        })
+        .where(eq(usuarios.id, existingByEmail[0].id));
+      return existingByEmail[0].id;
+    }
+
+    const [novo] = await db
+      .insert(usuarios)
+      .values({
+        nome: nome || email,
+        email,
+        telefone,
+        fotoUrl,
+        perfil: "ATLETA",
+        playnaquadraAtletaId: playId,
+        atualizadoEm: new Date(),
+      })
+      .returning();
+
+    return novo?.id ?? null;
   }
 
   private async buscarMembro(panelinhaId: string, atletaId: string) {

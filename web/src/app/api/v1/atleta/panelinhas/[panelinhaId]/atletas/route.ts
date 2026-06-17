@@ -15,8 +15,9 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const q = String(searchParams.get("q") || "").trim();
     const limit = Number(searchParams.get("limit") || 20);
+    const tokenPlay = request.cookies.get("play_token")?.value || null;
 
-    const result = await panelinhasService.buscarAtletasParaConvite(panelinhaId, auth.user.id, q, limit);
+    const result = await panelinhasService.buscarAtletasParaConvite(panelinhaId, auth.user.id, q, limit, tokenPlay);
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store", Vary: "Authorization" } });
   } catch (error: any) {
     const message = typeof error?.message === "string" ? error.message : "Não foi possível buscar atletas";
