@@ -170,6 +170,25 @@ function validateJogo(jogo: { duplaAAtleta1Id: string; duplaAAtleta2Id: string; 
   };
 }
 
+function normalizeCalendarDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function buildTeamKey(atleta1Id: string, atleta2Id: string) {
+  return [normalizeText(atleta1Id), normalizeText(atleta2Id)].filter(Boolean).sort().join(":");
+}
+
+function buildMatchupKey(jogo: {
+  duplaAAtleta1Id: string;
+  duplaAAtleta2Id: string;
+  duplaBAtleta1Id: string;
+  duplaBAtleta2Id: string;
+}) {
+  const duplaA = buildTeamKey(jogo.duplaAAtleta1Id, jogo.duplaAAtleta2Id);
+  const duplaB = buildTeamKey(jogo.duplaBAtleta1Id, jogo.duplaBAtleta2Id);
+  return [duplaA, duplaB].sort().join("::");
+}
+
 export class PanelinhasService {
   async listarMinhas(atletaId: string) {
     const memberships = await db
@@ -309,6 +328,7 @@ export class PanelinhasService {
       status: panelinha.status,
       criadaEm: panelinha.criadoEm,
       fundadorId: panelinha.fundadorId,
+      meuAtletaId: atletaId,
       meuPapel: member.papel,
       meuStatus: member.status,
       membros,
@@ -589,7 +609,7 @@ export class PanelinhasService {
             .select({
               playId: panelinhaPlayJogos.playId,
               total: sql<number>`count(*)::int`,
-              finalizados: sql<number>`sum(case when ${panelinhaPlayJogos.status} = 'FINALIZADO' then 1 else 0 end)::int`,
+              finalizados: sql<number>`sum(case when ${panelinhaPlayJogos.status} = 'CONFIRMADO' then 1 else 0 end)::int`,
             })
             .from(panelinhaPlayJogos)
             .where(inArray(panelinhaPlayJogos.playId, playIds))
@@ -647,7 +667,7 @@ export class PanelinhasService {
       ...play,
       participantes,
       jogos,
-      locked: jogos.some((j) => j.status === "FINALIZADO" || (j.detalhesPlacar as any)?.length > 0),
+      locked: jogos.some((j) => j.status === "REGISTRADO" || j.status === "CONFIRMADO" || (j.detalhesPlacar as any)?.length > 0),
       meuPapel: member.papel,
     };
   }
@@ -708,6 +728,12 @@ export class PanelinhasService {
         }
       }
     }
+
+    await this.validarConfrontosDuplicadosNoCalendario({
+      panelinhaId: panelinhaKey,
+      dataHorario,
+      jogos,
+    });
 
     const created = await db.transaction(async (tx) => {
       const [playRow] = await tx
@@ -790,7 +816,11 @@ export class PanelinhasService {
       .where(and(eq(panelinhaPlayJogos.id, jogoKey), eq(panelinhaPlayJogos.playId, playKey)))
       .limit(1);
     if (!jogo) throw new Error("Jogo não encontrado");
-    if (jogo.status === "FINALIZADO") throw new Error("Este jogo já possui resultado");
+    if (jogo.status !== "PENDENTE") throw new Error("Este jogo já possui resultado");
+
+    const placares = Array.isArray(dados?.detalhesPlacar) ? dados.detalhesPlacar : [];
+    if (placares.length !== 1) throw new Error("Cada jogo deve ter exatamente 1 set nesta versão");
+    if (Number(placares[0]?.set || 0) !== 1) throw new Error("O único set do jogo deve ser informado como set 1");
 
     const regras = {
       tipo: "SETS" as const,
@@ -803,13 +833,13 @@ export class PanelinhasService {
       regras,
       equipeAId: "A",
       equipeBId: "B",
-      detalhesPlacar: dados.detalhesPlacar,
+      detalhesPlacar: placares,
     });
 
     const [updated] = await db
       .update(panelinhaPlayJogos)
       .set({
-        status: "FINALIZADO",
+        status: "CONFIRMADO",
         detalhesPlacar: calculated.detalhesPlacar as any,
         registradoPorId: atletaId,
         registradoEm: new Date(),
@@ -845,7 +875,11 @@ export class PanelinhasService {
       .where(
         and(
           eq(panelinhaPlayJogos.playId, playKey),
-          or(eq(panelinhaPlayJogos.status, "FINALIZADO"), sql`${panelinhaPlayJogos.detalhesPlacar} is not null`)
+          or(
+            eq(panelinhaPlayJogos.status, "REGISTRADO"),
+            eq(panelinhaPlayJogos.status, "CONFIRMADO"),
+            sql`${panelinhaPlayJogos.detalhesPlacar} is not null`
+          )
         )
       )
       .limit(1);
@@ -961,6 +995,13 @@ export class PanelinhasService {
           }
         }
 
+        await this.validarConfrontosDuplicadosNoCalendario({
+          panelinhaId: panelinhaKey,
+          dataHorario: nextDataHorario ?? new Date(play.dataHorario),
+          jogos,
+          ignorePlayId: playKey,
+        });
+
         await tx.delete(panelinhaPlayJogos).where(eq(panelinhaPlayJogos.playId, playKey));
 
         const rows: (typeof panelinhaPlayJogos.$inferInsert)[] = jogos.map((j) => ({
@@ -978,6 +1019,23 @@ export class PanelinhasService {
         }));
 
         await tx.insert(panelinhaPlayJogos).values(rows);
+      } else if (nextDataHorario) {
+        const jogosExistentes = await tx
+          .select({
+            duplaAAtleta1Id: panelinhaPlayJogos.duplaAAtleta1Id,
+            duplaAAtleta2Id: panelinhaPlayJogos.duplaAAtleta2Id,
+            duplaBAtleta1Id: panelinhaPlayJogos.duplaBAtleta1Id,
+            duplaBAtleta2Id: panelinhaPlayJogos.duplaBAtleta2Id,
+          })
+          .from(panelinhaPlayJogos)
+          .where(eq(panelinhaPlayJogos.playId, playKey));
+
+        await this.validarConfrontosDuplicadosNoCalendario({
+          panelinhaId: panelinhaKey,
+          dataHorario: nextDataHorario,
+          jogos: jogosExistentes,
+          ignorePlayId: playKey,
+        });
       }
 
       const [fresh] = await tx.select().from(panelinhaPlays).where(eq(panelinhaPlays.id, playKey)).limit(1);
@@ -1148,6 +1206,58 @@ export class PanelinhasService {
       .limit(1);
 
     return rows[0] ?? null;
+  }
+
+  private async validarConfrontosDuplicadosNoCalendario(params: {
+    panelinhaId: string;
+    dataHorario: Date;
+    jogos: Array<{
+      duplaAAtleta1Id: string;
+      duplaAAtleta2Id: string;
+      duplaBAtleta1Id: string;
+      duplaBAtleta2Id: string;
+    }>;
+    ignorePlayId?: string;
+  }) {
+    const panelinhaId = normalizeText(params.panelinhaId);
+    const calendarDate = normalizeCalendarDate(params.dataHorario);
+    const ignorePlayId = normalizeText(params.ignorePlayId);
+
+    const confrontoKeys = new Set<string>();
+    for (const jogo of params.jogos) {
+      const key = buildMatchupKey(jogo);
+      if (confrontoKeys.has(key)) {
+        throw new Error("O mesmo par de duplas não pode se enfrentar mais de uma vez na mesma data nesta panelinha");
+      }
+      confrontoKeys.add(key);
+    }
+
+    if (confrontoKeys.size === 0) return;
+
+    const jogosExistentes = await db
+      .select({
+        duplaAAtleta1Id: panelinhaPlayJogos.duplaAAtleta1Id,
+        duplaAAtleta2Id: panelinhaPlayJogos.duplaAAtleta2Id,
+        duplaBAtleta1Id: panelinhaPlayJogos.duplaBAtleta1Id,
+        duplaBAtleta2Id: panelinhaPlayJogos.duplaBAtleta2Id,
+      })
+      .from(panelinhaPlayJogos)
+      .innerJoin(panelinhaPlays, eq(panelinhaPlays.id, panelinhaPlayJogos.playId))
+      .where(
+        and(
+          eq(panelinhaPlays.panelinhaId, panelinhaId),
+          sql`date(${panelinhaPlays.dataHorario}) = ${calendarDate}`,
+          sql`${panelinhaPlayJogos.status} <> 'CANCELADO'`,
+          ignorePlayId ? sql`${panelinhaPlays.id} <> ${ignorePlayId}` : sql`true`
+        )
+      );
+
+    const existentes = new Set(jogosExistentes.map((jogo) => buildMatchupKey(jogo)));
+    for (const key of confrontoKeys) {
+      if (existentes.has(key)) {
+        throw new Error("O mesmo par de duplas não pode se enfrentar mais de uma vez na mesma data nesta panelinha");
+      }
+    }
   }
 }
 

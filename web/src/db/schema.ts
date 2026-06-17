@@ -15,7 +15,7 @@ export const statusPanelinhaConviteEnum = pgEnum('status_panelinha_convite', ['P
 export const statusPanelinhaPlayEnum = pgEnum('status_panelinha_play', ['RASCUNHO', 'ABERTO', 'FINALIZADO', 'CANCELADO']);
 export const formatoPanelinhaPlayEnum = pgEnum('formato_panelinha_play', ['SUPER4', 'CONFRONTO_LIVRE']);
 export const statusPanelinhaPlayParticipanteEnum = pgEnum('status_panelinha_play_participante', ['ATIVO', 'REMOVIDO']);
-export const statusPanelinhaPlayJogoEnum = pgEnum('status_panelinha_play_jogo', ['PENDENTE', 'FINALIZADO', 'CANCELADO']);
+export const statusPanelinhaPlayJogoEnum = pgEnum('status_panelinha_play_jogo', ['PENDENTE', 'REGISTRADO', 'CONFIRMADO', 'CANCELADO']);
 
 // Tabelas
 
