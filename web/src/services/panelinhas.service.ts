@@ -361,7 +361,7 @@ export class PanelinhasService {
         id: playId,
         usuarioId: null,
         playnaquadraAtletaId: playId,
-        nome: c.nome,
+        nome: c.nome || c.email || "Atleta",
         email: c.email || "",
         telefone: c.telefone,
         fotoUrl: c.fotoUrl,
