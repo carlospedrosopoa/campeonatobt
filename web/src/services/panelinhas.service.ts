@@ -60,6 +60,28 @@ export type AtualizarPanelinhaPlayDTO = {
   }[];
 };
 
+export type HistoricoPanelinhaJogoDTO = {
+  id: string;
+  playId: string;
+  ordem: number;
+  status: "PENDENTE" | "REGISTRADO" | "CONFIRMADO" | "CANCELADO";
+  detalhesPlacar?: SetScore[] | null;
+  registradoEm?: Date | null;
+  playDataHorario: Date;
+  playFormato: "SUPER4" | "CONFRONTO_LIVRE";
+  playStatus: "RASCUNHO" | "ABERTO" | "FINALIZADO" | "CANCELADO";
+  quadra?: string | null;
+  arenaNome?: string | null;
+  duplaA: [
+    { id: string; nome: string; email: string; telefone?: string | null; fotoUrl?: string | null },
+    { id: string; nome: string; email: string; telefone?: string | null; fotoUrl?: string | null },
+  ];
+  duplaB: [
+    { id: string; nome: string; email: string; telefone?: string | null; fotoUrl?: string | null },
+    { id: string; nome: string; email: string; telefone?: string | null; fotoUrl?: string | null },
+  ];
+};
+
 function normalizeText(value?: string | null) {
   return String(value || "").trim();
 }
@@ -670,6 +692,101 @@ export class PanelinhasService {
       locked: jogos.some((j) => j.status === "REGISTRADO" || j.status === "CONFIRMADO" || (j.detalhesPlacar as any)?.length > 0),
       meuPapel: member.papel,
     };
+  }
+
+  async listarHistoricoJogos(panelinhaId: string, atletaId: string, filtroAtletaId?: string | null) {
+    const panelinhaKey = normalizeText(panelinhaId);
+    if (!panelinhaKey) throw new Error("Panelinha inválida");
+
+    const member = await this.buscarMembro(panelinhaKey, atletaId);
+    if (!member || member.status !== "ATIVO") throw new Error("Você não participa desta panelinha");
+
+    const filtroAtletaKey = normalizeText(filtroAtletaId);
+    const whereParts = [eq(panelinhaPlays.panelinhaId, panelinhaKey)];
+
+    if (filtroAtletaKey) {
+      whereParts.push(
+        or(
+          eq(panelinhaPlayJogos.duplaAAtleta1Id, filtroAtletaKey),
+          eq(panelinhaPlayJogos.duplaAAtleta2Id, filtroAtletaKey),
+          eq(panelinhaPlayJogos.duplaBAtleta1Id, filtroAtletaKey),
+          eq(panelinhaPlayJogos.duplaBAtleta2Id, filtroAtletaKey)
+        )!
+      );
+    }
+
+    const rows = await db
+      .select({
+        id: panelinhaPlayJogos.id,
+        playId: panelinhaPlayJogos.playId,
+        ordem: panelinhaPlayJogos.ordem,
+        status: panelinhaPlayJogos.status,
+        detalhesPlacar: panelinhaPlayJogos.detalhesPlacar,
+        registradoEm: panelinhaPlayJogos.registradoEm,
+        duplaAAtleta1Id: panelinhaPlayJogos.duplaAAtleta1Id,
+        duplaAAtleta2Id: panelinhaPlayJogos.duplaAAtleta2Id,
+        duplaBAtleta1Id: panelinhaPlayJogos.duplaBAtleta1Id,
+        duplaBAtleta2Id: panelinhaPlayJogos.duplaBAtleta2Id,
+        playDataHorario: panelinhaPlays.dataHorario,
+        playFormato: panelinhaPlays.formato,
+        playStatus: panelinhaPlays.status,
+        quadra: panelinhaPlays.quadra,
+        arenaNome: panelinhaPlays.arenaNome,
+      })
+      .from(panelinhaPlayJogos)
+      .innerJoin(panelinhaPlays, eq(panelinhaPlayJogos.playId, panelinhaPlays.id))
+      .where(and(...whereParts))
+      .orderBy(desc(panelinhaPlays.dataHorario), asc(panelinhaPlayJogos.ordem), desc(panelinhaPlayJogos.criadoEm));
+
+    if (rows.length === 0) return [];
+
+    const atletaIds = Array.from(
+      new Set(
+        rows.flatMap((row) => [row.duplaAAtleta1Id, row.duplaAAtleta2Id, row.duplaBAtleta1Id, row.duplaBAtleta2Id]).filter(Boolean)
+      )
+    );
+
+    const atletas =
+      atletaIds.length > 0
+        ? await db
+            .select({
+              id: usuarios.id,
+              nome: usuarios.nome,
+              email: usuarios.email,
+              telefone: usuarios.telefone,
+              fotoUrl: usuarios.fotoUrl,
+            })
+            .from(usuarios)
+            .where(inArray(usuarios.id, atletaIds))
+        : [];
+
+    const atletasMap = new Map(atletas.map((item) => [item.id, item]));
+    const getAtleta = (id: string) => {
+      const atleta = atletasMap.get(id);
+      return {
+        id,
+        nome: atleta?.nome || "Atleta",
+        email: atleta?.email || "",
+        telefone: atleta?.telefone || null,
+        fotoUrl: atleta?.fotoUrl || null,
+      };
+    };
+
+    return rows.map((row): HistoricoPanelinhaJogoDTO => ({
+      id: row.id,
+      playId: row.playId,
+      ordem: row.ordem,
+      status: row.status,
+      detalhesPlacar: (row.detalhesPlacar as SetScore[] | null) ?? null,
+      registradoEm: row.registradoEm ?? null,
+      playDataHorario: row.playDataHorario,
+      playFormato: row.playFormato,
+      playStatus: row.playStatus,
+      quadra: row.quadra,
+      arenaNome: row.arenaNome,
+      duplaA: [getAtleta(row.duplaAAtleta1Id), getAtleta(row.duplaAAtleta2Id)],
+      duplaB: [getAtleta(row.duplaBAtleta1Id), getAtleta(row.duplaBAtleta2Id)],
+    }));
   }
 
   async criarPlay(panelinhaId: string, organizadorId: string, dados: CriarPanelinhaPlayDTO) {
