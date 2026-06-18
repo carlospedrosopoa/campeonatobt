@@ -18,7 +18,7 @@ export type CategoriaConfigV1 = {
   formato: CategoriaFormato;
   grupos?: {
     modo: "AUTO" | "MANUAL";
-    tamanhoAlvo: 3 | 4;
+    tamanhoAlvo: number;
     quantidade?: number;
   };
   classificacao?: {
@@ -54,7 +54,10 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
   const versao = 1;
   const formato: CategoriaFormato = input?.formato === "MATA_MATA" || input?.formato === "LIGA" ? input.formato : "GRUPOS";
 
-  const tamanhoAlvo = input?.grupos?.tamanhoAlvo === 3 ? 3 : 4;
+  const tamanhoAlvo =
+    typeof input?.grupos?.tamanhoAlvo === "number" && Number.isFinite(input.grupos.tamanhoAlvo) && input.grupos.tamanhoAlvo > 1
+      ? Math.floor(input.grupos.tamanhoAlvo)
+      : 4;
   const modo = input?.grupos?.modo === "MANUAL" ? "MANUAL" : "AUTO";
   const quantidade = typeof input?.grupos?.quantidade === "number" && input.grupos.quantidade > 0 ? input.grupos.quantidade : undefined;
 

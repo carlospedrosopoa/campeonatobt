@@ -19,7 +19,7 @@ type Categoria = {
 type CategoriaConfig = {
   versao: 1;
   formato: "GRUPOS" | "MATA_MATA" | "LIGA";
-  grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: 3 | 4; quantidade?: number };
+  grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean };
   regrasPartida?: {

@@ -18,7 +18,7 @@ type Categoria = {
 type CategoriaConfig = {
   versao: 1;
   formato: "GRUPOS" | "MATA_MATA" | "LIGA";
-  grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: 3 | 4; quantidade?: number };
+  grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean };
   regrasPartida?: {
@@ -1014,6 +1014,10 @@ export default function AdminCategoriaJogosPage() {
               >
                 <option value={3}>3</option>
                 <option value={4}>4</option>
+                <option value={5}>5</option>
+                <option value={6}>6</option>
+                <option value={7}>7</option>
+                <option value={8}>8</option>
               </select>
             </div>
 
