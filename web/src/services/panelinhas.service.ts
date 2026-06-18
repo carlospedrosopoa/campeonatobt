@@ -5,12 +5,15 @@ import {
   panelinhaPlays,
   panelinhaPlayJogos,
   panelinhaPlayParticipantes,
+  panelinhaRankingTemporadas,
+  panelinhaTemporadas,
   panelinhas,
   usuarios,
 } from "@/db/schema";
 import { calcularResultadoSets, type SetScore } from "@/lib/regras-partida";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { playBuscarAtletas } from "@/services/playnaquadra-client";
+import { panelinhaRankingService } from "@/services/panelinha-ranking.service";
 
 export type CriarPanelinhaDTO = {
   nome: string;
@@ -60,6 +63,23 @@ export type AtualizarPanelinhaPlayDTO = {
   }[];
 };
 
+export type PanelinhaTemporadaDTO = {
+  id: string;
+  nome: string;
+  status: "ABERTA" | "ENCERRADA";
+  inicioEm: Date;
+  fimEm?: Date | null;
+  timezone: string;
+  campeaoAtletaId?: string | null;
+  encerradaEm?: Date | null;
+};
+
+export type CriarPanelinhaTemporadaDTO = {
+  nome?: string;
+  inicioEm?: string;
+  timezone?: string;
+};
+
 export type HistoricoPanelinhaJogoDTO = {
   id: string;
   playId: string;
@@ -67,7 +87,7 @@ export type HistoricoPanelinhaJogoDTO = {
   status: "PENDENTE" | "REGISTRADO" | "CONFIRMADO" | "CANCELADO";
   detalhesPlacar?: SetScore[] | null;
   registradoEm?: Date | null;
-  playDataHorario: Date;
+  playDataHorario: string;
   playFormato: "SUPER4" | "CONFRONTO_LIVRE";
   playStatus: "RASCUNHO" | "ABERTO" | "FINALIZADO" | "CANCELADO";
   quadra?: string | null;
@@ -163,6 +183,10 @@ function parseDateTime(value: string) {
   const d = new Date(String(value || "").trim());
   if (Number.isNaN(d.getTime())) throw new Error("Data/hora inválida");
   return d;
+}
+
+function utcIsoSql(column: any) {
+  return sql<string>`to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`;
 }
 
 function ensureDistinctPlayers(ids: string[]) {
@@ -348,6 +372,7 @@ export class PanelinhasService {
       id: panelinha.id,
       nome: panelinha.nome,
       status: panelinha.status,
+      timezone: panelinha.timezone,
       criadaEm: panelinha.criadoEm,
       fundadorId: panelinha.fundadorId,
       meuAtletaId: atletaId,
@@ -355,6 +380,130 @@ export class PanelinhasService {
       meuStatus: member.status,
       membros,
     };
+  }
+
+  async listarTemporadas(panelinhaId: string, atletaId: string) {
+    const panelinhaKey = normalizeText(panelinhaId);
+    if (!panelinhaKey) throw new Error("Panelinha inválida");
+
+    const member = await this.buscarMembro(panelinhaKey, atletaId);
+    if (!member || member.status !== "ATIVO") throw new Error("Você não participa desta panelinha");
+
+    const rows = await db
+      .select({
+        id: panelinhaTemporadas.id,
+        nome: panelinhaTemporadas.nome,
+        status: panelinhaTemporadas.status,
+        inicioEm: panelinhaTemporadas.inicioEm,
+        fimEm: panelinhaTemporadas.fimEm,
+        timezone: panelinhaTemporadas.timezone,
+        campeaoAtletaId: panelinhaTemporadas.campeaoAtletaId,
+        encerradaEm: panelinhaTemporadas.encerradaEm,
+      })
+      .from(panelinhaTemporadas)
+      .where(eq(panelinhaTemporadas.panelinhaId, panelinhaKey))
+      .orderBy(desc(panelinhaTemporadas.inicioEm));
+
+    return rows as PanelinhaTemporadaDTO[];
+  }
+
+  async criarTemporada(panelinhaId: string, atletaId: string, dados: CriarPanelinhaTemporadaDTO) {
+    const panelinhaKey = normalizeText(panelinhaId);
+    if (!panelinhaKey) throw new Error("Panelinha inválida");
+
+    const member = await this.buscarMembro(panelinhaKey, atletaId);
+    if (!member || member.status !== "ATIVO") throw new Error("Você não participa desta panelinha");
+    if (member.papel !== "FUNDADOR") throw new Error("Apenas o fundador pode criar uma temporada");
+
+    const [panelinha] = await db.select().from(panelinhas).where(eq(panelinhas.id, panelinhaKey)).limit(1);
+    if (!panelinha) throw new Error("Panelinha não encontrada");
+
+    const existingOpen = await db
+      .select({ id: panelinhaTemporadas.id })
+      .from(panelinhaTemporadas)
+      .where(and(eq(panelinhaTemporadas.panelinhaId, panelinhaKey), eq(panelinhaTemporadas.status, "ABERTA")))
+      .limit(1);
+    if (existingOpen[0]) throw new Error("Já existe uma temporada aberta");
+
+    const nome = normalizeText(dados?.nome) || String(new Date().getUTCFullYear());
+    const inicioEm = dados?.inicioEm ? parseDateTime(dados.inicioEm) : new Date();
+    const timezone = normalizeText(dados?.timezone) || panelinha.timezone;
+
+    const [created] = await db
+      .insert(panelinhaTemporadas)
+      .values({
+        panelinhaId: panelinhaKey,
+        nome,
+        inicioEm,
+        fimEm: null,
+        status: "ABERTA",
+        timezone,
+        campeaoAtletaId: null,
+        encerradaEm: null,
+        atualizadoEm: new Date(),
+      })
+      .returning({
+        id: panelinhaTemporadas.id,
+        nome: panelinhaTemporadas.nome,
+        status: panelinhaTemporadas.status,
+        inicioEm: panelinhaTemporadas.inicioEm,
+        fimEm: panelinhaTemporadas.fimEm,
+        timezone: panelinhaTemporadas.timezone,
+        campeaoAtletaId: panelinhaTemporadas.campeaoAtletaId,
+        encerradaEm: panelinhaTemporadas.encerradaEm,
+      });
+
+    return created as PanelinhaTemporadaDTO;
+  }
+
+  async encerrarTemporada(panelinhaId: string, temporadaId: string, atletaId: string) {
+    const panelinhaKey = normalizeText(panelinhaId);
+    const temporadaKey = normalizeText(temporadaId);
+    if (!panelinhaKey) throw new Error("Panelinha inválida");
+    if (!temporadaKey) throw new Error("Temporada inválida");
+
+    const member = await this.buscarMembro(panelinhaKey, atletaId);
+    if (!member || member.status !== "ATIVO") throw new Error("Você não participa desta panelinha");
+    if (member.papel !== "FUNDADOR") throw new Error("Apenas o fundador pode encerrar a temporada");
+
+    const [temporada] = await db
+      .select({ id: panelinhaTemporadas.id, status: panelinhaTemporadas.status })
+      .from(panelinhaTemporadas)
+      .where(and(eq(panelinhaTemporadas.id, temporadaKey), eq(panelinhaTemporadas.panelinhaId, panelinhaKey)))
+      .limit(1);
+    if (!temporada) throw new Error("Temporada não encontrada");
+    if (temporada.status !== "ABERTA") throw new Error("A temporada já está encerrada");
+
+    const [lider] = await db
+      .select({ atletaId: panelinhaRankingTemporadas.atletaId })
+      .from(panelinhaRankingTemporadas)
+      .where(eq(panelinhaRankingTemporadas.temporadaId, temporadaKey))
+      .orderBy(asc(panelinhaRankingTemporadas.posicao))
+      .limit(1);
+
+    const now = new Date();
+    const [updated] = await db
+      .update(panelinhaTemporadas)
+      .set({
+        status: "ENCERRADA",
+        fimEm: now,
+        campeaoAtletaId: lider?.atletaId ?? null,
+        encerradaEm: now,
+        atualizadoEm: now,
+      })
+      .where(eq(panelinhaTemporadas.id, temporadaKey))
+      .returning({
+        id: panelinhaTemporadas.id,
+        nome: panelinhaTemporadas.nome,
+        status: panelinhaTemporadas.status,
+        inicioEm: panelinhaTemporadas.inicioEm,
+        fimEm: panelinhaTemporadas.fimEm,
+        timezone: panelinhaTemporadas.timezone,
+        campeaoAtletaId: panelinhaTemporadas.campeaoAtletaId,
+        encerradaEm: panelinhaTemporadas.encerradaEm,
+      });
+
+    return updated as PanelinhaTemporadaDTO;
   }
 
   async buscarAtletasParaConvite(panelinhaId: string, atletaId: string, termo: string, limit = 20, tokenPlay?: string | null) {
@@ -599,7 +748,7 @@ export class PanelinhasService {
     const plays = await db
       .select({
         id: panelinhaPlays.id,
-        dataHorario: panelinhaPlays.dataHorario,
+        dataHorario: utcIsoSql(panelinhaPlays.dataHorario),
         quadra: panelinhaPlays.quadra,
         arenaNome: panelinhaPlays.arenaNome,
         status: panelinhaPlays.status,
@@ -659,7 +808,20 @@ export class PanelinhasService {
     if (!member || member.status !== "ATIVO") throw new Error("Você não participa desta panelinha");
 
     const [play] = await db
-      .select()
+      .select({
+        id: panelinhaPlays.id,
+        panelinhaId: panelinhaPlays.panelinhaId,
+        organizadorId: panelinhaPlays.organizadorId,
+        agendamentoId: panelinhaPlays.agendamentoId,
+        dataHorario: utcIsoSql(panelinhaPlays.dataHorario),
+        quadra: panelinhaPlays.quadra,
+        arenaNome: panelinhaPlays.arenaNome,
+        status: panelinhaPlays.status,
+        formato: panelinhaPlays.formato,
+        config: panelinhaPlays.config,
+        criadoEm: panelinhaPlays.criadoEm,
+        atualizadoEm: panelinhaPlays.atualizadoEm,
+      })
       .from(panelinhaPlays)
       .where(and(eq(panelinhaPlays.id, playKey), eq(panelinhaPlays.panelinhaId, panelinhaKey)))
       .limit(1);
@@ -727,7 +889,7 @@ export class PanelinhasService {
         duplaAAtleta2Id: panelinhaPlayJogos.duplaAAtleta2Id,
         duplaBAtleta1Id: panelinhaPlayJogos.duplaBAtleta1Id,
         duplaBAtleta2Id: panelinhaPlayJogos.duplaBAtleta2Id,
-        playDataHorario: panelinhaPlays.dataHorario,
+        playDataHorario: utcIsoSql(panelinhaPlays.dataHorario),
         playFormato: panelinhaPlays.formato,
         playStatus: panelinhaPlays.status,
         quadra: panelinhaPlays.quadra,
@@ -898,7 +1060,7 @@ export class PanelinhasService {
       return playRow;
     });
 
-    return created;
+    return { ...created, dataHorario: dataHorario.toISOString() };
   }
 
   async registrarResultadoPlayJogo(panelinhaId: string, playId: string, jogoId: string, atletaId: string, dados: RegistrarResultadoPanelinhaPlayJogoDTO) {
@@ -919,6 +1081,9 @@ export class PanelinhasService {
       .limit(1);
     if (!play) throw new Error("Play não encontrado");
     if (play.status !== "ABERTO") throw new Error("Play não está aberto para resultados");
+    if (!(await panelinhaRankingService.temporadaPermiteResultados(playKey))) {
+      throw new Error("A temporada deste play já está encerrada");
+    }
 
     const participante = await db
       .select({ id: panelinhaPlayParticipantes.id })
@@ -964,6 +1129,8 @@ export class PanelinhasService {
       })
       .where(eq(panelinhaPlayJogos.id, jogo.id))
       .returning();
+
+    await panelinhaRankingService.recalcularPorPlay(playKey);
 
     return updated;
   }
