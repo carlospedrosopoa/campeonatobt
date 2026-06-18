@@ -16,6 +16,7 @@ export const statusPanelinhaPlayEnum = pgEnum('status_panelinha_play', ['RASCUNH
 export const formatoPanelinhaPlayEnum = pgEnum('formato_panelinha_play', ['SUPER4', 'CONFRONTO_LIVRE']);
 export const statusPanelinhaPlayParticipanteEnum = pgEnum('status_panelinha_play_participante', ['ATIVO', 'REMOVIDO']);
 export const statusPanelinhaPlayJogoEnum = pgEnum('status_panelinha_play_jogo', ['PENDENTE', 'REGISTRADO', 'CONFIRMADO', 'CANCELADO']);
+export const statusPanelinhaTemporadaEnum = pgEnum('status_panelinha_temporada', ['ABERTA', 'ENCERRADA']);
 
 // Tabelas
 
@@ -43,10 +44,101 @@ export const panelinhas = pgTable('panelinhas', {
   id: uuid('id').defaultRandom().primaryKey(),
   nome: text('nome').notNull(),
   status: statusPanelinhaEnum('status').default('ATIVA').notNull(),
+  timezone: text('timezone').default('America/Sao_Paulo').notNull(),
   fundadorId: uuid('fundador_id').references(() => usuarios.id).notNull(),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });
+
+export const panelinhaTemporadas = pgTable('panelinha_temporadas', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  panelinhaId: uuid('panelinha_id').references(() => panelinhas.id, { onDelete: "cascade" }).notNull(),
+  nome: text('nome').notNull(),
+  inicioEm: timestamp('inicio_em').notNull(),
+  fimEm: timestamp('fim_em'),
+  status: statusPanelinhaTemporadaEnum('status').default('ABERTA').notNull(),
+  timezone: text('timezone').default('America/Sao_Paulo').notNull(),
+  campeaoAtletaId: uuid('campeao_atleta_id').references(() => usuarios.id),
+  encerradaEm: timestamp('encerrada_em'),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});
+
+export const panelinhaRankingJogos = pgTable('panelinha_ranking_jogos', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  panelinhaId: uuid('panelinha_id').references(() => panelinhas.id, { onDelete: "cascade" }).notNull(),
+  temporadaId: uuid('temporada_id').references(() => panelinhaTemporadas.id, { onDelete: "cascade" }).notNull(),
+  playId: uuid('play_id').references(() => panelinhaPlays.id, { onDelete: "cascade" }).notNull(),
+  jogoId: uuid('jogo_id').references(() => panelinhaPlayJogos.id, { onDelete: "cascade" }).notNull(),
+  atletaId: uuid('atleta_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+  semanaKey: text('semana_key').notNull(),
+  pontuacao: integer('pontuacao').default(0).notNull(),
+  vitoria: boolean('vitoria').default(false).notNull(),
+  vitoriaTieBreak: boolean('vitoria_tie_break').default(false).notNull(),
+  derrotaTieBreak: boolean('derrota_tie_break').default(false).notNull(),
+  gamesFeitos: integer('games_feitos').default(0).notNull(),
+  gamesSofridos: integer('games_sofridos').default(0).notNull(),
+  saldoGames: integer('saldo_games').default(0).notNull(),
+  ocorreuEm: timestamp('ocorreu_em').notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique().on(t.jogoId, t.atletaId),
+}));
+
+export const panelinhaRankingPlays = pgTable('panelinha_ranking_plays', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  panelinhaId: uuid('panelinha_id').references(() => panelinhas.id, { onDelete: "cascade" }).notNull(),
+  temporadaId: uuid('temporada_id').references(() => panelinhaTemporadas.id, { onDelete: "cascade" }).notNull(),
+  playId: uuid('play_id').references(() => panelinhaPlays.id, { onDelete: "cascade" }).notNull(),
+  atletaId: uuid('atleta_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+  semanaKey: text('semana_key').notNull(),
+  pontuacao: decimal('pontuacao', { precision: 10, scale: 2 }).default('0').notNull(),
+  jogos: integer('jogos').default(0).notNull(),
+  vitorias: integer('vitorias').default(0).notNull(),
+  saldoGames: integer('saldo_games').default(0).notNull(),
+  primeiroJogoEm: timestamp('primeiro_jogo_em').notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique().on(t.playId, t.atletaId),
+}));
+
+export const panelinhaRankingSemanas = pgTable('panelinha_ranking_semanas', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  panelinhaId: uuid('panelinha_id').references(() => panelinhas.id, { onDelete: "cascade" }).notNull(),
+  temporadaId: uuid('temporada_id').references(() => panelinhaTemporadas.id, { onDelete: "cascade" }).notNull(),
+  atletaId: uuid('atleta_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+  semanaKey: text('semana_key').notNull(),
+  pontuacaoSemana: decimal('pontuacao_semana', { precision: 10, scale: 2 }).default('0').notNull(),
+  bestPlayId: uuid('best_play_id').references(() => panelinhaPlays.id),
+  qtdPlaysSemana: integer('qtd_plays_semana').default(0).notNull(),
+  vitoriasSemana: integer('vitorias_semana').default(0).notNull(),
+  saldoGamesSemana: integer('saldo_games_semana').default(0).notNull(),
+  primeiroPlayEm: timestamp('primeiro_play_em').notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique().on(t.temporadaId, t.atletaId, t.semanaKey),
+}));
+
+export const panelinhaRankingTemporadas = pgTable('panelinha_ranking_temporadas', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  panelinhaId: uuid('panelinha_id').references(() => panelinhas.id, { onDelete: "cascade" }).notNull(),
+  temporadaId: uuid('temporada_id').references(() => panelinhaTemporadas.id, { onDelete: "cascade" }).notNull(),
+  atletaId: uuid('atleta_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+  pontuacaoTotal: decimal('pontuacao_total', { precision: 10, scale: 2 }).default('0').notNull(),
+  semanasPontuadas: integer('semanas_pontuadas').default(0).notNull(),
+  qtdPlaysTotal: integer('qtd_plays_total').default(0).notNull(),
+  vitoriasTotal: integer('vitorias_total').default(0).notNull(),
+  saldoGamesTotal: integer('saldo_games_total').default(0).notNull(),
+  primeiroPlayEm: timestamp('primeiro_play_em').notNull(),
+  posicao: integer('posicao'),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique().on(t.temporadaId, t.atletaId),
+}));
 
 export const panelinhaMembros = pgTable('panelinha_membros', {
   id: uuid('id').defaultRandom().primaryKey(),
