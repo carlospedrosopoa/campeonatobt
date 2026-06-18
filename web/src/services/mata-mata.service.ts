@@ -286,6 +286,68 @@ export class MataMataService {
     return { ok: true };
   }
 
+  async substituirEquipeNaFase(params: {
+    torneioId: string;
+    categoriaId: string;
+    partidaId: string;
+    equipeOrigemId: string;
+    equipeDestinoId: string;
+  }) {
+    if (params.equipeOrigemId === params.equipeDestinoId) {
+      throw new Error("Escolha uma dupla diferente para substituir");
+    }
+
+    const partidaRows = await db
+      .select({
+        id: partidas.id,
+        fase: partidas.fase,
+      })
+      .from(partidas)
+      .where(and(eq(partidas.id, params.partidaId), eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId)))
+      .limit(1);
+    const partida = partidaRows[0];
+    if (!partida) throw new Error("Partida não encontrada");
+    if (partida.fase === "GRUPOS") throw new Error("Substituição em lote é somente no mata-mata");
+
+    const faseAtual = partida.fase as Fase;
+    await this.garantirSemResultados({ torneioId: params.torneioId, categoriaId: params.categoriaId, fase: faseAtual });
+    await this.limparFasesPosteriores({ torneioId: params.torneioId, categoriaId: params.categoriaId, apos: faseAtual });
+
+    const faseRows = await db
+      .select({
+        id: partidas.id,
+        equipeAId: partidas.equipeAId,
+        equipeBId: partidas.equipeBId,
+      })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, faseAtual)));
+
+    const afetadas = faseRows.filter((row) => row.equipeAId === params.equipeOrigemId || row.equipeBId === params.equipeOrigemId);
+    if (afetadas.length === 0) {
+      throw new Error("A dupla escolhida não aparece nesta fase da chave");
+    }
+
+    await db.transaction(async (tx) => {
+      for (const row of afetadas) {
+        await tx
+          .update(partidas)
+          .set({
+            equipeAId: row.equipeAId === params.equipeOrigemId ? params.equipeDestinoId : row.equipeAId,
+            equipeBId: row.equipeBId === params.equipeOrigemId ? params.equipeDestinoId : row.equipeBId,
+            vencedorId: null,
+            placarA: 0,
+            placarB: 0,
+            detalhesPlacar: null as any,
+            status: "AGENDADA",
+            atualizadoEm: new Date(),
+          })
+          .where(eq(partidas.id, row.id));
+      }
+    });
+
+    return { fase: faseAtual, partidasAtualizadas: afetadas.length };
+  }
+
   async cancelarPlacarSePossivel(params: { torneioId: string; categoriaId: string; partidaId: string }) {
     const partidaRows = await db
       .select({
