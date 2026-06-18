@@ -95,7 +95,40 @@ export async function POST(
       .limit(2);
     if (aprovadas.length !== 2) return NextResponse.json({ error: "Uma das duplas não está aprovada na categoria" }, { status: 400 });
 
-    const ignorarConflito = partida.fase === "GRUPOS" && isSuperCampeonato && force;
+    let faseMataMataEmManutencao = false;
+    if (partida.fase !== "GRUPOS" && force) {
+      const faseRows = await db
+        .select({
+          id: partidas.id,
+          status: partidas.status,
+          vencedorId: partidas.vencedorId,
+          placarA: partidas.placarA,
+          placarB: partidas.placarB,
+          detalhesPlacar: partidas.detalhesPlacar,
+        })
+        .from(partidas)
+        .where(and(eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId), eq(partidas.fase, partida.fase)));
+
+      const faseJaIniciada = faseRows.some((row) => {
+        if (row.status !== "AGENDADA") return true;
+        if (row.vencedorId) return true;
+        if ((row.placarA ?? 0) !== 0 || (row.placarB ?? 0) !== 0) return true;
+        if (Array.isArray(row.detalhesPlacar) && row.detalhesPlacar.length > 0) return true;
+        return false;
+      });
+
+      if (faseJaIniciada) {
+        return NextResponse.json(
+          { error: "Modo manutenção da chave só pode ser usado antes de qualquer jogo da fase começar" },
+          { status: 400 }
+        );
+      }
+
+      faseMataMataEmManutencao = true;
+    }
+
+    const ignorarConflito =
+      (partida.fase === "GRUPOS" && isSuperCampeonato && force) || (partida.fase !== "GRUPOS" && faseMataMataEmManutencao);
     if (ignorarConflito) {
       const updated = await db.transaction(async (tx) => {
         if (started && preservarPlacar) {

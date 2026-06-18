@@ -1,7 +1,7 @@
 export type RegrasPartidaSets = {
   tipo: "SETS";
   melhorDe: 1 | 3;
-  gamesPorSet: 4 | 6;
+  gamesPorSet: 4 | 5 | 6;
   tiebreak: { habilitado: boolean; em: number; ate: number; diffMin: number };
   superTiebreakDecisivo?: { habilitado: boolean; ate: number; diffMin: number };
 };

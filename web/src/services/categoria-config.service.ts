@@ -7,7 +7,7 @@ export type CategoriaFormato = "GRUPOS" | "MATA_MATA" | "LIGA";
 export type RegrasPartidaSets = {
   tipo: "SETS";
   melhorDe: 1 | 3;
-  gamesPorSet: 4 | 6;
+  gamesPorSet: 4 | 5 | 6;
   tiebreak: { habilitado: boolean; em: number; ate: number; diffMin: number };
   superTiebreakDecisivo?: { habilitado: boolean; ate: number; diffMin: number };
   incluirSuperTieEmGames?: boolean;
@@ -73,7 +73,7 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
 
   const tipo = input?.regrasPartida?.tipo === "SETS" ? "SETS" : "SETS";
   const melhorDe: 1 | 3 = input?.regrasPartida?.melhorDe === 3 ? 3 : 1;
-  const gamesPorSet: 4 | 6 = input?.regrasPartida?.gamesPorSet === 4 ? 4 : 6;
+  const gamesPorSet: 4 | 5 | 6 = input?.regrasPartida?.gamesPorSet === 4 ? 4 : input?.regrasPartida?.gamesPorSet === 5 ? 5 : 6;
   const tbHabilitado = input?.regrasPartida?.tiebreak?.habilitado === false ? false : true;
   const tbEm = typeof input?.regrasPartida?.tiebreak?.em === "number" ? input.regrasPartida.tiebreak.em : gamesPorSet;
   const tbAte = typeof input?.regrasPartida?.tiebreak?.ate === "number" ? input.regrasPartida.tiebreak.ate : gamesPorSet + 1;
