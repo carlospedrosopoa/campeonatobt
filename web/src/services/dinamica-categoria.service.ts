@@ -139,6 +139,73 @@ function buildInitialOrderFromRound1Pairs(params: { teamIds: string[]; round1Pai
   return order;
 }
 
+function partidaIniciada(p: { status?: any; vencedorId?: any; placarA?: any; placarB?: any; detalhesPlacar?: any }) {
+  if (p.status && p.status !== "AGENDADA") return true;
+  if (p.vencedorId) return true;
+  if ((p.placarA ?? 0) !== 0 || (p.placarB ?? 0) !== 0) return true;
+  if (Array.isArray(p.detalhesPlacar) && p.detalhesPlacar.length > 0) return true;
+  return false;
+}
+
+async function recriarRodadasEPartidasDosGrupos(
+  tx: any,
+  params: { torneioId: string; categoriaId: string; gruposCriados: { id: string; nome: string; equipes: string[] }[] }
+) {
+  await tx.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "GRUPOS")));
+  await tx
+    .delete(rodadas)
+    .where(and(eq(rodadas.torneioId, params.torneioId), eq(rodadas.categoriaId, params.categoriaId), like(rodadas.nome, "Rodada %")));
+
+  const roundsByGrupo = new Map<string, { pairs: [string, string][] }[]>();
+  let maxRodadas = 0;
+  for (const g of params.gruposCriados) {
+    const r = gerarRodadasRoundRobin(g.equipes);
+    roundsByGrupo.set(g.id, r);
+    maxRodadas = Math.max(maxRodadas, r.length);
+  }
+
+  const rodadasCriadas: { id: string; numero: number }[] = [];
+  for (let numero = 1; numero <= maxRodadas; numero++) {
+    const [r] = await tx
+      .insert(rodadas)
+      .values({
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        nome: `Rodada ${numero}`,
+        numero,
+      })
+      .returning();
+    rodadasCriadas.push({ id: r.id, numero });
+  }
+
+  let partidasCriadas = 0;
+  for (const g of params.gruposCriados) {
+    const rounds = roundsByGrupo.get(g.id) ?? [];
+    for (let idx = 0; idx < rounds.length; idx++) {
+      const rodadaNumero = idx + 1;
+      const rodadaId = rodadasCriadas.find((r) => r.numero === rodadaNumero)?.id ?? null;
+      for (const [a, b] of rounds[idx].pairs) {
+        await tx.insert(partidas).values({
+          torneioId: params.torneioId,
+          categoriaId: params.categoriaId,
+          rodadaId,
+          grupoId: g.id,
+          equipeAId: a,
+          equipeBId: b,
+          fase: "GRUPOS",
+          status: "AGENDADA",
+          placarA: 0,
+          placarB: 0,
+          atualizadoEm: new Date(),
+        });
+        partidasCriadas += 1;
+      }
+    }
+  }
+
+  return partidasCriadas;
+}
+
 export class DinamicaCategoriaService {
   async gerarGruposEJogos(params: { torneioId: string; categoriaId: string }) {
     const config = await categoriaConfigService.obterOuDefault(params.categoriaId);
@@ -216,53 +283,11 @@ export class DinamicaCategoriaService {
           }))
         );
       }
-
-      const roundsByGrupo = new Map<string, { pairs: [string, string][] }[]>();
-      let maxRodadas = 0;
-      for (const g of gruposCriados) {
-        const r = gerarRodadasRoundRobin(g.equipes);
-        roundsByGrupo.set(g.id, r);
-        maxRodadas = Math.max(maxRodadas, r.length);
-      }
-
-      const rodadasCriadas: { id: string; numero: number }[] = [];
-      for (let numero = 1; numero <= maxRodadas; numero++) {
-        const [r] = await tx
-          .insert(rodadas)
-          .values({
-            torneioId: params.torneioId,
-            categoriaId: params.categoriaId,
-            nome: `Rodada ${numero}`,
-            numero,
-          })
-          .returning();
-        rodadasCriadas.push({ id: r.id, numero });
-      }
-
-      let partidasCriadas = 0;
-      for (const g of gruposCriados) {
-        const rounds = roundsByGrupo.get(g.id) ?? [];
-        for (let idx = 0; idx < rounds.length; idx++) {
-          const rodadaNumero = idx + 1;
-          const rodadaId = rodadasCriadas.find((r) => r.numero === rodadaNumero)?.id ?? null;
-          for (const [a, b] of rounds[idx].pairs) {
-            await tx.insert(partidas).values({
-              torneioId: params.torneioId,
-              categoriaId: params.categoriaId,
-              rodadaId,
-              grupoId: g.id,
-              equipeAId: a,
-              equipeBId: b,
-              fase: "GRUPOS",
-              status: "AGENDADA",
-              placarA: 0,
-              placarB: 0,
-              atualizadoEm: new Date(),
-            });
-            partidasCriadas += 1;
-          }
-        }
-      }
+      const partidasCriadas = await recriarRodadasEPartidasDosGrupos(tx, {
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        gruposCriados,
+      });
 
       return {
         grupos: gruposCriados.map((g) => ({ id: g.id, nome: g.nome, equipes: g.equipes.length })),
@@ -300,6 +325,100 @@ export class DinamicaCategoriaService {
         await tx.delete(grupos).where(eq(grupos.categoriaId, params.categoriaId));
       }
     });
+  }
+
+  async trocarEquipesEntreGrupos(params: { torneioId: string; categoriaId: string; equipeOrigemId: string; equipeDestinoId: string }) {
+    if (params.equipeOrigemId === params.equipeDestinoId) {
+      throw new Error("Escolha duas duplas diferentes para trocar");
+    }
+
+    const partidasGrupo = await db
+      .select({
+        id: partidas.id,
+        status: partidas.status,
+        vencedorId: partidas.vencedorId,
+        placarA: partidas.placarA,
+        placarB: partidas.placarB,
+        detalhesPlacar: partidas.detalhesPlacar,
+      })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "GRUPOS")));
+
+    if (partidasGrupo.some(partidaIniciada)) {
+      throw new Error("Não é possível trocar duplas entre grupos depois que a fase de grupos começou");
+    }
+
+    const gruposRows = await db
+      .select({
+        grupoId: grupos.id,
+        grupoNome: grupos.nome,
+        equipeId: grupoEquipes.equipeId,
+      })
+      .from(grupos)
+      .innerJoin(grupoEquipes, eq(grupoEquipes.grupoId, grupos.id))
+      .where(eq(grupos.categoriaId, params.categoriaId));
+
+    if (gruposRows.length === 0) {
+      throw new Error("Nenhum grupo encontrado para esta categoria");
+    }
+
+    const gruposMap = new Map<string, { id: string; nome: string; equipes: string[] }>();
+    for (const row of gruposRows) {
+      const atual = gruposMap.get(row.grupoId) ?? { id: row.grupoId, nome: row.grupoNome, equipes: [] };
+      atual.equipes.push(row.equipeId);
+      gruposMap.set(row.grupoId, atual);
+    }
+
+    const gruposCriados = Array.from(gruposMap.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+    let grupoOrigemId: string | null = null;
+    let grupoDestinoId: string | null = null;
+
+    for (const grupo of gruposCriados) {
+      if (grupo.equipes.includes(params.equipeOrigemId)) grupoOrigemId = grupo.id;
+      if (grupo.equipes.includes(params.equipeDestinoId)) grupoDestinoId = grupo.id;
+    }
+
+    if (!grupoOrigemId || !grupoDestinoId) {
+      throw new Error("Não foi possível encontrar as duas duplas nos grupos atuais");
+    }
+    if (grupoOrigemId === grupoDestinoId) {
+      throw new Error("As duas duplas já estão no mesmo grupo");
+    }
+
+    for (const grupo of gruposCriados) {
+      grupo.equipes = grupo.equipes.map((equipeId) => {
+        if (equipeId === params.equipeOrigemId) return params.equipeDestinoId;
+        if (equipeId === params.equipeDestinoId) return params.equipeOrigemId;
+        return equipeId;
+      });
+    }
+
+    const grupoIds = gruposCriados.map((g) => g.id);
+    const partidasCriadas = await db.transaction(async (tx) => {
+      await tx.delete(grupoEquipes).where(inArray(grupoEquipes.grupoId, grupoIds));
+
+      for (const grupo of gruposCriados) {
+        await tx.insert(grupoEquipes).values(
+          grupo.equipes.map((equipeId) => ({
+            grupoId: grupo.id,
+            equipeId,
+            pontos: 0,
+            jogosJogados: 0,
+            jogosVencidos: 0,
+            jogosPerdidos: 0,
+            saldoGames: 0,
+          }))
+        );
+      }
+
+      return recriarRodadasEPartidasDosGrupos(tx, {
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        gruposCriados,
+      });
+    });
+
+    return { gruposAtualizados: gruposCriados.length, partidasCriadas };
   }
 
   async gerarRodadasRestantesSuperCampeonato(params: { torneioId: string; categoriaId: string; aPartirDaRodada?: number }) {

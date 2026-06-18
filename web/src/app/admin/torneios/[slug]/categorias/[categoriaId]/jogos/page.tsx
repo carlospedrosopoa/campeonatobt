@@ -139,6 +139,10 @@ export default function AdminCategoriaJogosPage() {
   const [confrontoEquipeAId, setConfrontoEquipeAId] = useState("");
   const [confrontoEquipeBId, setConfrontoEquipeBId] = useState("");
   const [modoManutencaoConfronto, setModoManutencaoConfronto] = useState(false);
+  const [trocaGruposOpen, setTrocaGruposOpen] = useState(false);
+  const [trocaGrupoEquipeAId, setTrocaGrupoEquipeAId] = useState("");
+  const [trocaGrupoEquipeBId, setTrocaGrupoEquipeBId] = useState("");
+  const [salvandoTrocaGrupos, setSalvandoTrocaGrupos] = useState(false);
   const [formPlacar, setFormPlacar] = useState({
     s1a: "",
     s1b: "",
@@ -156,6 +160,7 @@ export default function AdminCategoriaJogosPage() {
   const [torneioNome, setTorneioNome] = useState("Torneio");
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
+  const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
   const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
 
   function getRegraJogoValue(regras?: CategoriaConfig["regrasPartida"]) {
@@ -224,6 +229,7 @@ export default function AdminCategoriaJogosPage() {
           if (t?.nome) setTorneioNome(String(t.nome));
           setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
           setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
+          setTorneioCardApenasComFotos(Boolean(t?.cardApenasComFotos));
           if (t?.superCampeonato) {
             setRedirecting(true);
             const qs = typeof window !== "undefined" ? window.location.search : "";
@@ -308,7 +314,32 @@ export default function AdminCategoriaJogosPage() {
     };
   }, [editConfrontoId]);
 
+  useEffect(() => {
+    if (!trocaGruposOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTrocaGruposOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [trocaGruposOpen]);
+
   const titulo = useMemo(() => (categoria ? `Jogos — ${categoria.nome}` : "Jogos"), [categoria]);
+
+  const equipesDosGrupos = useMemo(() => {
+    return classificacao.flatMap((g) =>
+      g.equipes.map((e) => ({
+        grupoId: g.grupoId,
+        grupoNome: g.grupoNome,
+        equipeId: e.equipeId,
+        equipeNome: e.equipeNome || e.equipeId.slice(0, 8),
+      }))
+    );
+  }, [classificacao]);
 
   function formatPlacar(detalhes: Partida["detalhesPlacar"]) {
     if (!detalhes || detalhes.length === 0) return "X";
@@ -604,6 +635,7 @@ export default function AdminCategoriaJogosPage() {
       const result = await gerarCardPartidaAdmin({
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
+        cardApenasComFotos: torneioCardApenasComFotos,
         templateUrl: torneioTemplateUrl,
         syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         salvarNoGcs: true,
@@ -787,6 +819,14 @@ export default function AdminCategoriaJogosPage() {
     } finally {
       setResetando(false);
     }
+  }
+
+  function abrirTrocaEntreGrupos() {
+    const primeira = equipesDosGrupos[0];
+    const segunda = equipesDosGrupos.find((e) => e.grupoId !== primeira?.grupoId) ?? equipesDosGrupos[1];
+    setTrocaGrupoEquipeAId(primeira?.equipeId ?? "");
+    setTrocaGrupoEquipeBId(segunda?.equipeId ?? "");
+    setTrocaGruposOpen(true);
   }
 
   if (redirecting) return <div className="text-sm text-slate-600">Redirecionando…</div>;
@@ -1122,6 +1162,16 @@ export default function AdminCategoriaJogosPage() {
               className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {gerandoGrupos ? "Gerando…" : "Gerar grupos/jogos"}
+            </button>
+
+            <button
+              type="button"
+              disabled={classificacao.length < 2 || salvandoTrocaGrupos}
+              onClick={abrirTrocaEntreGrupos}
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Trocar duas duplas entre grupos e regerar os jogos"
+            >
+              Trocar duplas grupos
             </button>
 
             <button
@@ -1655,6 +1705,112 @@ export default function AdminCategoriaJogosPage() {
             </div>
           );
         })()}
+
+      {trocaGruposOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setTrocaGruposOpen(false)}>
+          <div
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs text-slate-500 uppercase tracking-wider">Manutenção dos grupos</div>
+                  <div className="text-lg font-bold text-slate-900">Trocar duplas entre grupos</div>
+                  <div className="text-sm text-slate-600 mt-1">
+                    O sistema vai trocar as duplas selecionadas entre os grupos e regerar os jogos da fase de grupos.
+                  </div>
+                </div>
+                <button type="button" onClick={() => setTrocaGruposOpen(false)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
+                  <X className="h-4 w-4" />
+                  Fechar
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Use esse recurso antes de qualquer resultado nos grupos. Ao confirmar, os jogos e rodadas da fase de grupos são recriados.
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Dupla 1</label>
+                  <select
+                    value={trocaGrupoEquipeAId}
+                    onChange={(e) => setTrocaGrupoEquipeAId(e.target.value)}
+                    disabled={salvandoTrocaGrupos}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white disabled:opacity-50"
+                  >
+                    {equipesDosGrupos.map((e) => (
+                      <option key={e.equipeId} value={e.equipeId}>
+                        {e.grupoNome} - {e.equipeNome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Dupla 2</label>
+                  <select
+                    value={trocaGrupoEquipeBId}
+                    onChange={(e) => setTrocaGrupoEquipeBId(e.target.value)}
+                    disabled={salvandoTrocaGrupos}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white disabled:opacity-50"
+                  >
+                    {equipesDosGrupos.map((e) => (
+                      <option key={e.equipeId} value={e.equipeId}>
+                        {e.grupoNome} - {e.equipeNome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTrocaGruposOpen(false)}
+                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      setSalvandoTrocaGrupos(true);
+                      setErro(null);
+                      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/grupos/trocar-equipes`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          equipeOrigemId: trocaGrupoEquipeAId,
+                          equipeDestinoId: trocaGrupoEquipeBId,
+                        }),
+                      });
+                      const payload = (await res.json().catch(() => null)) as any;
+                      if (!res.ok) throw new Error(payload?.error || "Falha ao trocar duplas entre grupos");
+                      const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+                      if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+                      setFasePartidas("GRUPOS");
+                      await carregarPartidas("GRUPOS");
+                      setTrocaGruposOpen(false);
+                    } catch (e: any) {
+                      setErro(e?.message || "Erro inesperado");
+                    } finally {
+                      setSalvandoTrocaGrupos(false);
+                    }
+                  }}
+                  disabled={!trocaGrupoEquipeAId || !trocaGrupoEquipeBId || trocaGrupoEquipeAId === trocaGrupoEquipeBId || salvandoTrocaGrupos}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  {salvandoTrocaGrupos ? "Salvando..." : "Trocar e regerar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

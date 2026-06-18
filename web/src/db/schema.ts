@@ -232,6 +232,7 @@ export const torneios = pgTable('torneios', {
   oculto: boolean('oculto').default(false).notNull(),
   inscricaoComIa: boolean('inscricao_com_ia').default(false).notNull(),
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
+  cardApenasComFotos: boolean('card_apenas_com_fotos').default(false).notNull(),
   valorPrimeiraInscricao: decimal('valor_primeira_inscricao', { precision: 10, scale: 2 }),
   valorInscricaoAdicional: decimal('valor_inscricao_adicional', { precision: 10, scale: 2 }),
   pixChave: text('pix_chave'),

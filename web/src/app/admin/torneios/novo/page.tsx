@@ -21,6 +21,7 @@ type CriarTorneioPayload = {
   local: string;
   esporteId: string;
   superCampeonato?: boolean;
+  cardApenasComFotos?: boolean;
   oculto?: boolean;
   inscricaoComIa?: boolean;
   valorPrimeiraInscricao?: string | null;
@@ -62,6 +63,7 @@ export default function AdminNovoTorneioPage() {
     local: "",
     esporteId: "",
     superCampeonato: false,
+    cardApenasComFotos: false,
     oculto: false,
     inscricaoComIa: false,
     valorPrimeiraInscricao: "",
@@ -130,6 +132,7 @@ export default function AdminNovoTorneioPage() {
         local: form.local,
         esporteId: form.esporteId,
         superCampeonato: form.superCampeonato,
+        cardApenasComFotos: form.cardApenasComFotos,
         oculto: form.oculto,
         inscricaoComIa: form.inscricaoComIa,
         valorPrimeiraInscricao: form.valorPrimeiraInscricao?.trim() ? form.valorPrimeiraInscricao : null,
@@ -345,6 +348,19 @@ export default function AdminNovoTorneioPage() {
               Habilitar atendimento virtual com IA neste torneio
             </label>
             <div className="text-xs text-slate-500">Quando marcado, o torneio pode aparecer no fluxo do agente e exibe o chat público de inscrição no site.</div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Card dos jogos</label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={Boolean(form.cardApenasComFotos)}
+                onChange={(e) => setForm((prev) => ({ ...prev, cardApenasComFotos: e.target.checked }))}
+              />
+              Card apenas com fotos
+            </label>
+            <div className="text-xs text-slate-500">Quando marcado, o card do jogo não mostra categoria, data nem arena.</div>
           </div>
 
           <div className="space-y-2">

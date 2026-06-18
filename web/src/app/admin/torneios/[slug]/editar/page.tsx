@@ -22,6 +22,7 @@ type Torneio = {
   local: string;
   status: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
   superCampeonato: boolean;
+  cardApenasComFotos: boolean;
   oculto: boolean;
   inscricaoComIa: boolean;
   valorPrimeiraInscricao: string | null;
@@ -75,6 +76,7 @@ export default function AdminEditarDadosTorneioPage() {
     templateInscricaoUrl: "",
     status: "RASCUNHO" as Torneio["status"],
     superCampeonato: false,
+    cardApenasComFotos: false,
     oculto: false,
     inscricaoComIa: false,
     valorPrimeiraInscricao: "",
@@ -125,6 +127,7 @@ export default function AdminEditarDadosTorneioPage() {
           templateInscricaoUrl: t.templateInscricaoUrl ?? "",
           status: t.status,
           superCampeonato: Boolean(t.superCampeonato),
+          cardApenasComFotos: Boolean(t.cardApenasComFotos),
           oculto: Boolean(t.oculto),
           inscricaoComIa: Boolean(t.inscricaoComIa),
           valorPrimeiraInscricao: t.valorPrimeiraInscricao ?? "",
@@ -188,6 +191,7 @@ export default function AdminEditarDadosTorneioPage() {
         templateInscricaoUrl: form.templateInscricaoUrl?.trim() ? form.templateInscricaoUrl : null,
         status: form.status,
         superCampeonato: form.superCampeonato,
+        cardApenasComFotos: form.cardApenasComFotos,
         oculto: form.oculto,
         inscricaoComIa: form.inscricaoComIa,
         valorPrimeiraInscricao: form.valorPrimeiraInscricao?.trim() ? form.valorPrimeiraInscricao : null,
@@ -433,6 +437,19 @@ export default function AdminEditarDadosTorneioPage() {
                 Habilitar atendimento virtual com IA neste torneio
               </label>
               <div className="text-xs text-slate-500">Controla a exibição do chat público e se o agente pode atender inscrições deste torneio.</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Card dos jogos</label>
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.cardApenasComFotos)}
+                  onChange={(e) => setForm((prev) => ({ ...prev, cardApenasComFotos: e.target.checked }))}
+                />
+                Card apenas com fotos
+              </label>
+              <div className="text-xs text-slate-500">Quando marcado, o card do jogo não mostra categoria, data nem arena.</div>
             </div>
 
             <div className="space-y-2">

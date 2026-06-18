@@ -29,6 +29,7 @@ export type CriarTorneioDTO = {
   local: string;
   esporteId: string;
   superCampeonato?: boolean;
+  cardApenasComFotos?: boolean;
   oculto?: boolean;
   inscricaoComIa?: boolean;
   valorPrimeiraInscricao?: string | number | null;
@@ -96,6 +97,7 @@ export class TorneiosService {
         templateUrl: torneios.templateUrl,
         templateInscricaoUrl: torneios.templateInscricaoUrl,
         superCampeonato: torneios.superCampeonato,
+        cardApenasComFotos: torneios.cardApenasComFotos,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
@@ -134,6 +136,7 @@ export class TorneiosService {
         templateUrl: torneios.templateUrl,
         templateInscricaoUrl: torneios.templateInscricaoUrl,
         superCampeonato: torneios.superCampeonato,
+        cardApenasComFotos: torneios.cardApenasComFotos,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
@@ -173,6 +176,7 @@ export class TorneiosService {
       templateUrl: torneios.templateUrl,
       templateInscricaoUrl: torneios.templateInscricaoUrl,
       superCampeonato: torneios.superCampeonato,
+      cardApenasComFotos: torneios.cardApenasComFotos,
       valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
       valorInscricaoAdicional: torneios.valorInscricaoAdicional,
       pixChave: torneios.pixChave,
@@ -218,6 +222,7 @@ export class TorneiosService {
       camisetaOpcoes: normalizeStringArray(dados.camisetaOpcoes),
       oculto: dados.oculto ?? false,
       inscricaoComIa: dados.inscricaoComIa ?? false,
+      cardApenasComFotos: dados.cardApenasComFotos ?? false,
       organizadorId,
       superCampeonato: dados.superCampeonato ?? false,
       status: 'RASCUNHO'
@@ -230,6 +235,7 @@ export class TorneiosService {
     dados: Partial<Omit<CriarTorneioDTO, "organizadorId">> & {
       status?: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
       superCampeonato?: boolean;
+      cardApenasComFotos?: boolean;
       oculto?: boolean;
       inscricaoComIa?: boolean;
     }

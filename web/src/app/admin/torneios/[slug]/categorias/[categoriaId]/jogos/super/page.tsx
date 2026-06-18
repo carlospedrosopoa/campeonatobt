@@ -162,6 +162,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [torneioNome, setTorneioNome] = useState("Torneio");
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
+  const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
   const [gerandoRelatorioClassificacao, setGerandoRelatorioClassificacao] = useState(false);
   const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
   const [formPlacar, setFormPlacar] = useState({
@@ -194,6 +195,7 @@ export default function AdminCategoriaJogosSuperPage() {
     if (t?.nome) setTorneioNome(String(t.nome));
     setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
     setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
+    setTorneioCardApenasComFotos(Boolean(t?.cardApenasComFotos));
   }
 
   async function salvarCategoriaDataHorario() {
@@ -904,6 +906,7 @@ export default function AdminCategoriaJogosSuperPage() {
       const result = await gerarCardPartidaAdmin({
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
+        cardApenasComFotos: torneioCardApenasComFotos,
         templateUrl: torneioTemplateUrl,
         syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         salvarNoGcs: true,

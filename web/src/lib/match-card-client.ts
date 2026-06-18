@@ -20,6 +20,7 @@ type PartidaCardInfo = {
 type GerarCardParams = {
   torneioNome: string;
   categoriaNome: string;
+  cardApenasComFotos?: boolean;
   templateUrl?: string | null;
   syncFotosUrl?: string | null;
   salvarNoGcs?: boolean;
@@ -333,24 +334,26 @@ export async function gerarCardPartidaAdmin(params: GerarCardParams) {
   ctx.textBaseline = "top";
   ctx.fillStyle = "#ffffff";
 
-  const local = params.partida.arenaNome
-    ? `${params.partida.arenaNome}${params.partida.quadra ? ` • ${params.partida.quadra}` : ""}`
-    : "Arena a definir";
-  const linhaX = 76;
-  const valorX = 320;
-  const yCategoria = 378;
-  const yData = 448;
-  const yArena = 518;
-  ctx.fillStyle = "#e2e8f0";
-  ctx.font = "700 42px Inter, Arial, sans-serif";
-  ctx.fillText("Categoria:", linhaX, yCategoria);
-  ctx.fillText("Data:", linhaX, yData);
-  ctx.fillText("Arena:", linhaX, yArena);
-  ctx.font = "700 34px Inter, Arial, sans-serif";
-  ctx.fillStyle = "#ffffff";
-  drawTextLeft(ctx, params.categoriaNome || "A definir", valorX, yCategoria + 10, 650, 40);
-  drawTextLeft(ctx, formatarDataHora(params.partida.dataHorario), valorX, yData + 10, 650, 40);
-  drawTextLeft(ctx, local, valorX, yArena + 10, 650, 40);
+  if (!params.cardApenasComFotos) {
+    const local = params.partida.arenaNome
+      ? `${params.partida.arenaNome}${params.partida.quadra ? ` • ${params.partida.quadra}` : ""}`
+      : "Arena a definir";
+    const linhaX = 76;
+    const valorX = 320;
+    const yCategoria = 378;
+    const yData = 448;
+    const yArena = 518;
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = "700 42px Inter, Arial, sans-serif";
+    ctx.fillText("Categoria:", linhaX, yCategoria);
+    ctx.fillText("Data:", linhaX, yData);
+    ctx.fillText("Arena:", linhaX, yArena);
+    ctx.font = "700 34px Inter, Arial, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    drawTextLeft(ctx, params.categoriaNome || "A definir", valorX, yCategoria + 10, 650, 40);
+    drawTextLeft(ctx, formatarDataHora(params.partida.dataHorario), valorX, yData + 10, 650, 40);
+    drawTextLeft(ctx, local, valorX, yArena + 10, 650, 40);
+  }
 
   const placarTexto = formatarPlacarPartida(params.partida);
   if (placarTexto) {

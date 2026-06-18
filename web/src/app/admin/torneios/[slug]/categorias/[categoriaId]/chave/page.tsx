@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, Gamepad2, Network, RefreshCcw } from "lucide-react";
+import { ArrowLeft, Banknote, Gamepad2, Network, Pencil, RefreshCcw, Save } from "lucide-react";
 
 type Categoria = {
   id: string;
@@ -31,6 +31,11 @@ type GrupoClassificacao = {
   }[];
 };
 
+type Inscricao = {
+  status: string;
+  equipe: { id: string; nome: string | null };
+};
+
 type Partida = {
   id: string;
   fase: Fase;
@@ -44,6 +49,14 @@ type Partida = {
   placarB: number;
   detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
 };
+
+function partidaIniciada(p: Partida) {
+  if (p.status !== "AGENDADA") return true;
+  if (p.vencedorId) return true;
+  if ((p.placarA ?? 0) !== 0 || (p.placarB ?? 0) !== 0) return true;
+  if (Array.isArray(p.detalhesPlacar) && p.detalhesPlacar.length > 0) return true;
+  return false;
+}
 
 function formatPlacar(detalhes: Partida["detalhesPlacar"]) {
   if (!detalhes || detalhes.length === 0) return "-";
@@ -93,6 +106,16 @@ export default function AdminCategoriaChavePage() {
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
+  const [equipes, setEquipes] = useState<{ id: string; nome: string }[]>([]);
+  const [carregandoEquipes, setCarregandoEquipes] = useState(false);
+  const [editConfrontoId, setEditConfrontoId] = useState<string | null>(null);
+  const [confrontoEquipeAId, setConfrontoEquipeAId] = useState("");
+  const [confrontoEquipeBId, setConfrontoEquipeBId] = useState("");
+  const [salvandoConfronto, setSalvandoConfronto] = useState(false);
+  const [substituicaoEquipeOrigemId, setSubstituicaoEquipeOrigemId] = useState("");
+  const [substituicaoEquipeDestinoId, setSubstituicaoEquipeDestinoId] = useState("");
+  const [substituindoEquipe, setSubstituindoEquipe] = useState(false);
+  const [modoManutencaoConfronto, setModoManutencaoConfronto] = useState(false);
 
   const [jogosPorFase, setJogosPorFase] = useState<Record<Fase, Partida[]>>({
     OITAVAS: [],
@@ -258,6 +281,51 @@ export default function AdminCategoriaChavePage() {
     return out;
   }, [jogosPorFase, superCampeonato, superTop2]);
 
+  const partidaEditando = useMemo(() => {
+    if (!editConfrontoId) return null;
+    return (Object.values(jogosPorFase).flat() as Partida[]).find((p) => p.id === editConfrontoId) ?? null;
+  }, [editConfrontoId, jogosPorFase]);
+
+  const equipesDaFaseEditando = useMemo(() => {
+    if (!partidaEditando) return [];
+    const jogos = jogosPorFase[partidaEditando.fase] ?? [];
+    const mapa = new Map<string, string>();
+    for (const jogo of jogos) {
+      if (jogo.equipeAId && !jogo.equipeAId.startsWith("aguardando")) {
+        mapa.set(jogo.equipeAId, jogo.equipeANome || jogo.equipeAId.slice(0, 8));
+      }
+      if (jogo.equipeBId && !jogo.equipeBId.startsWith("aguardando")) {
+        mapa.set(jogo.equipeBId, jogo.equipeBNome || jogo.equipeBId.slice(0, 8));
+      }
+    }
+    return Array.from(mapa.entries())
+      .map(([id, nome]) => ({ id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [partidaEditando, jogosPorFase]);
+
+  async function abrirAlterarConfronto(p: Partida) {
+    setEditConfrontoId(p.id);
+    setConfrontoEquipeAId(p.equipeAId);
+    setConfrontoEquipeBId(p.equipeBId);
+    setSubstituicaoEquipeOrigemId(p.equipeAId);
+    setSubstituicaoEquipeDestinoId("");
+    setModoManutencaoConfronto(false);
+    if (equipes.length > 0) return;
+    try {
+      setCarregandoEquipes(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes`, { cache: "no-store" });
+      if (!res.ok) return;
+      const rows = (await res.json()) as Inscricao[];
+      const aprovadas = rows
+        .filter((i) => i.status === "APROVADA")
+        .map((i) => ({ id: i.equipe.id, nome: (i.equipe.nome || i.equipe.id.slice(0, 8)).trim() }))
+        .sort((a, b) => a.nome.localeCompare(b.nome));
+      setEquipes(aprovadas);
+    } finally {
+      setCarregandoEquipes(false);
+    }
+  }
+
   if (carregando) return <div className="text-sm text-slate-600">Carregando…</div>;
 
   return (
@@ -351,6 +419,18 @@ export default function AdminCategoriaChavePage() {
                             <div className="text-sm font-semibold text-slate-900">{p.status === "AGUARDANDO" ? "-" : formatPlacar(p.detalhesPlacar)}</div>
                           </div>
                         </div>
+                        {!p.id.startsWith("placeholder:") ? (
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => void abrirAlterarConfronto(p)}
+                              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Alterar confronto
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -360,6 +440,203 @@ export default function AdminCategoriaChavePage() {
           })}
         </div>
       </div>
+
+      {partidaEditando ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditConfrontoId(null)}>
+          <div
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-200 px-6 py-4">
+              <div className="text-lg font-semibold text-slate-900">Manutenção da chave</div>
+              <div className="mt-1 text-sm text-slate-600">
+                Ajuste o confronto de {nomeFase(partidaEditando.fase)} antes do início dos jogos.
+              </div>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Dupla A</label>
+                  <select
+                    value={confrontoEquipeAId}
+                    onChange={(e) => setConfrontoEquipeAId(e.target.value)}
+                    disabled={carregandoEquipes}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10 disabled:opacity-50"
+                  >
+                    {equipes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Dupla B</label>
+                  <select
+                    value={confrontoEquipeBId}
+                    onChange={(e) => setConfrontoEquipeBId(e.target.value)}
+                    disabled={carregandoEquipes}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10 disabled:opacity-50"
+                  >
+                    {equipes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={modoManutencaoConfronto}
+                    onChange={(e) => setModoManutencaoConfronto(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Ativar modo manutenção da fase
+                </label>
+                <div className="mt-2 text-xs text-slate-600">
+                  Use quando a chave já veio pronta e você precisa reorganizar vários confrontos antes de qualquer jogo da fase começar.
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
+                <div className="text-sm font-semibold text-slate-900">Substituir dupla na fase</div>
+                <div className="mt-1 text-xs text-slate-600">
+                  Troca uma dupla em toda a fase atual e remove as fases seguintes para os jogos serem gerados novamente depois.
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Dupla atual na fase</label>
+                    <select
+                      value={substituicaoEquipeOrigemId}
+                      onChange={(e) => setSubstituicaoEquipeOrigemId(e.target.value)}
+                      disabled={substituindoEquipe}
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10 disabled:opacity-50"
+                    >
+                      {equipesDaFaseEditando.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Nova dupla</label>
+                    <select
+                      value={substituicaoEquipeDestinoId}
+                      onChange={(e) => setSubstituicaoEquipeDestinoId(e.target.value)}
+                      disabled={carregandoEquipes || substituindoEquipe}
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10 disabled:opacity-50"
+                    >
+                      <option value="">Selecione...</option>
+                      {equipes.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setEditConfrontoId(null)}
+                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setSubstituindoEquipe(true);
+                    setErro(null);
+                    const res = await fetch(
+                      `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partidaEditando.id}/substituir-equipe`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          equipeOrigemId: substituicaoEquipeOrigemId,
+                          equipeDestinoId: substituicaoEquipeDestinoId,
+                        }),
+                      }
+                    );
+                    const payload = (await res.json().catch(() => null)) as any;
+                    if (!res.ok) throw new Error(payload?.error || "Falha ao substituir dupla na fase");
+                    await carregarChave();
+                    setEditConfrontoId(null);
+                    setModoManutencaoConfronto(false);
+                  } catch (e: any) {
+                    setErro(e?.message || "Erro inesperado");
+                  } finally {
+                    setSubstituindoEquipe(false);
+                  }
+                }}
+                disabled={
+                  substituindoEquipe ||
+                  carregandoEquipes ||
+                  !substituicaoEquipeOrigemId ||
+                  !substituicaoEquipeDestinoId ||
+                  substituicaoEquipeOrigemId === substituicaoEquipeDestinoId
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {substituindoEquipe ? "Substituindo..." : "Substituir na fase"}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setSalvandoConfronto(true);
+                    setErro(null);
+                    if (partidaIniciada(partidaEditando)) {
+                      throw new Error("Não é possível alterar confronto depois que a partida foi iniciada");
+                    }
+                    const res = await fetch(
+                      `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partidaEditando.id}/alterar-confronto`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          equipeAId: confrontoEquipeAId,
+                          equipeBId: confrontoEquipeBId,
+                          force: modoManutencaoConfronto,
+                        }),
+                      }
+                    );
+                    const payload = (await res.json().catch(() => null)) as any;
+                    if (!res.ok) throw new Error(payload?.error || "Falha ao alterar confronto");
+                    await carregarChave();
+                    setEditConfrontoId(null);
+                    setModoManutencaoConfronto(false);
+                  } catch (e: any) {
+                    setErro(e?.message || "Erro inesperado");
+                  } finally {
+                    setSalvandoConfronto(false);
+                  }
+                }}
+                disabled={salvandoConfronto || carregandoEquipes || !confrontoEquipeAId || !confrontoEquipeBId || confrontoEquipeAId === confrontoEquipeBId}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {salvandoConfronto ? "Salvando..." : "Salvar confronto"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
