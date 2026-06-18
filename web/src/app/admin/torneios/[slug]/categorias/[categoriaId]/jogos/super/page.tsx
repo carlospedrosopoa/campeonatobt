@@ -1359,11 +1359,16 @@ export default function AdminCategoriaJogosSuperPage() {
 
             <button
               type="button"
-              disabled={gerandoGrupos || temResultadoNaCategoria}
+              disabled={gerandoGrupos || temResultadoNaCategoria || !config}
               onClick={async () => {
+                if (!config) return;
                 try {
                   setGerandoGrupos(true);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-grupos`, { method: "POST" });
+                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-grupos`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(config),
+                  });
                   if (!res.ok) {
                     const msg = await res.json().catch(() => null);
                     throw new Error(msg?.error || "Falha ao gerar rodadas/jogos");

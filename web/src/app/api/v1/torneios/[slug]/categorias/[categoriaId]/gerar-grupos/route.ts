@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { dinamicaCategoriaService } from "@/services/dinamica-categoria.service";
+import { categoriaConfigService } from "@/services/categoria-config.service";
 import { db } from "@/db";
 import { partidas } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -54,6 +55,11 @@ export async function POST(
         { error: "Não é permitido gerar jogos: já existem partidas com resultado ou em andamento nesta categoria." },
         { status: 400 }
       );
+    }
+
+    const body = await request.json().catch(() => null);
+    if (body) {
+      await categoriaConfigService.salvar(categoriaId, body);
     }
 
     const resultado = await dinamicaCategoriaService.gerarGruposEJogos({ torneioId: torneio.id, categoriaId });
