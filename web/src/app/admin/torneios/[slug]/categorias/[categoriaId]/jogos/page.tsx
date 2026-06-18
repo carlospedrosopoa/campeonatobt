@@ -75,7 +75,14 @@ type Partida = {
   detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
 };
 
-type Inscricao = { status: string; equipe: { id: string; nome: string | null } };
+type Inscricao = {
+  status: string;
+  equipe: {
+    id: string;
+    nome: string | null;
+    atletas?: { id: string; nome: string }[];
+  };
+};
 
 type ResultadoFinal = { campeao: string; vice: string } | null;
 
@@ -100,6 +107,26 @@ const getStatusBadge = (status: string, dataHorario?: string | null) => {
     </span>
   );
 };
+
+function nomeGrupoPorIndice(index: number) {
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  if (index < letters.length) return `Grupo ${letters[index]}`;
+  const first = Math.floor(index / letters.length) - 1;
+  const second = index % letters.length;
+  return `Grupo ${letters[first] ?? "A"}${letters[second]}`;
+}
+
+function calcularQuantidadeGruposEsperada(totalEquipes: number, config: CategoriaConfig | null) {
+  const tamanhoAlvo = config?.grupos?.tamanhoAlvo ?? 4;
+  const qtdManual = config?.grupos?.modo === "MANUAL" ? config.grupos?.quantidade : undefined;
+  return qtdManual && qtdManual > 0 ? qtdManual : Math.max(1, Math.ceil(totalEquipes / tamanhoAlvo));
+}
+
+function calcularTamanhosEsperados(totalEquipes: number, qtdGrupos: number) {
+  const base = Math.floor(totalEquipes / qtdGrupos);
+  const extras = totalEquipes % qtdGrupos;
+  return Array.from({ length: qtdGrupos }, (_, index) => base + (index < extras ? 1 : 0));
+}
 
 export default function AdminCategoriaJogosPage() {
   const params = useParams<{ slug: string; categoriaId: string }>();
@@ -143,6 +170,12 @@ export default function AdminCategoriaJogosPage() {
   const [trocaGrupoEquipeAId, setTrocaGrupoEquipeAId] = useState("");
   const [trocaGrupoEquipeBId, setTrocaGrupoEquipeBId] = useState("");
   const [salvandoTrocaGrupos, setSalvandoTrocaGrupos] = useState(false);
+  const [montagemGruposOpen, setMontagemGruposOpen] = useState(false);
+  const [montagemGruposLinhas, setMontagemGruposLinhas] = useState<
+    { equipeId: string; equipeNome: string; atletas: string[]; grupoNome: string }[]
+  >([]);
+  const [carregandoMontagemGrupos, setCarregandoMontagemGrupos] = useState(false);
+  const [salvandoMontagemGrupos, setSalvandoMontagemGrupos] = useState(false);
   const [formPlacar, setFormPlacar] = useState({
     s1a: "",
     s1b: "",
@@ -328,6 +361,20 @@ export default function AdminCategoriaJogosPage() {
     };
   }, [trocaGruposOpen]);
 
+  useEffect(() => {
+    if (!montagemGruposOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMontagemGruposOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [montagemGruposOpen]);
+
   const titulo = useMemo(() => (categoria ? `Jogos — ${categoria.nome}` : "Jogos"), [categoria]);
 
   const equipesDosGrupos = useMemo(() => {
@@ -340,6 +387,17 @@ export default function AdminCategoriaJogosPage() {
       }))
     );
   }, [classificacao]);
+
+  const gruposEsperadosMontagem = useMemo(() => {
+    if (!config || montagemGruposLinhas.length === 0) return [] as { nome: string; esperado: number; atual: number }[];
+    const qtdGrupos = calcularQuantidadeGruposEsperada(montagemGruposLinhas.length, config);
+    const tamanhosEsperados = calcularTamanhosEsperados(montagemGruposLinhas.length, qtdGrupos);
+    return Array.from({ length: qtdGrupos }, (_, index) => {
+      const nome = nomeGrupoPorIndice(index);
+      const atual = montagemGruposLinhas.filter((linha) => linha.grupoNome === nome).length;
+      return { nome, esperado: tamanhosEsperados[index] ?? 0, atual };
+    });
+  }, [config, montagemGruposLinhas]);
 
   function formatPlacar(detalhes: Partida["detalhesPlacar"]) {
     if (!detalhes || detalhes.length === 0) return "X";
@@ -829,6 +887,104 @@ export default function AdminCategoriaJogosPage() {
     setTrocaGruposOpen(true);
   }
 
+  async function abrirMontagemManualGrupos() {
+    if (!config) return;
+    try {
+      setErro(null);
+      setCarregandoMontagemGrupos(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes`, { cache: "no-store" });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao carregar inscrições");
+
+      const rows = (payload ?? []) as Inscricao[];
+      const aprovadas = rows
+        .filter((item) => item.status === "APROVADA")
+        .map((item) => ({
+          equipeId: item.equipe.id,
+          equipeNome: (item.equipe.nome || item.equipe.id.slice(0, 8)).trim(),
+          atletas: (item.equipe.atletas ?? []).map((atleta) => atleta.nome).filter(Boolean),
+        }))
+        .sort((a, b) => a.equipeNome.localeCompare(b.equipeNome));
+
+      if (aprovadas.length < 2) throw new Error("Necessário pelo menos 2 duplas aprovadas para montar grupos");
+
+      const qtdGrupos = calcularQuantidadeGruposEsperada(aprovadas.length, config);
+      const tamanhosEsperados = calcularTamanhosEsperados(aprovadas.length, qtdGrupos);
+      if (tamanhosEsperados.some((tamanho) => tamanho < 2)) {
+        throw new Error("A configuração atual gera grupo com menos de 2 duplas. Ajuste a dinâmica antes de montar manualmente.");
+      }
+
+      const nomesGrupos = Array.from({ length: qtdGrupos }, (_, index) => nomeGrupoPorIndice(index));
+      const gruposAtuaisMap = new Map(equipesDosGrupos.map((item) => [item.equipeId, item.grupoNome]));
+      const temTodosNosGruposAtuais =
+        equipesDosGrupos.length === aprovadas.length && aprovadas.every((item) => gruposAtuaisMap.has(item.equipeId));
+
+      let linhas = aprovadas.map((item) => ({ ...item, grupoNome: "" }));
+      if (temTodosNosGruposAtuais) {
+        linhas = aprovadas.map((item) => ({
+          ...item,
+          grupoNome: gruposAtuaisMap.get(item.equipeId) || nomesGrupos[0] || "",
+        }));
+      } else {
+        const atribuicoesPadrao = nomesGrupos.flatMap((nome, index) => Array.from({ length: tamanhosEsperados[index] ?? 0 }, () => nome));
+        linhas = aprovadas.map((item, index) => ({
+          ...item,
+          grupoNome: atribuicoesPadrao[index] || nomesGrupos[0] || "",
+        }));
+      }
+
+      setMontagemGruposLinhas(linhas);
+      setMontagemGruposOpen(true);
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setCarregandoMontagemGrupos(false);
+    }
+  }
+
+  async function confirmarMontagemManualGrupos() {
+    if (!config) return;
+    try {
+      setErro(null);
+      setSalvandoMontagemGrupos(true);
+
+      if (montagemGruposLinhas.length < 2) {
+        throw new Error("Necessário pelo menos 2 duplas para montar grupos");
+      }
+      if (montagemGruposLinhas.some((linha) => !linha.grupoNome)) {
+        throw new Error("Informe o grupo de todas as duplas antes de confirmar");
+      }
+
+      const gruposPayload = gruposEsperadosMontagem.map((grupo) => ({
+        nome: grupo.nome,
+        equipes: montagemGruposLinhas.filter((linha) => linha.grupoNome === grupo.nome).map((linha) => linha.equipeId),
+      }));
+
+      const grupoComQuantidadeInvalida = gruposEsperadosMontagem.find((grupo) => grupo.atual !== grupo.esperado);
+      if (grupoComQuantidadeInvalida) {
+        throw new Error(`Quantidade inválida no ${grupoComQuantidadeInvalida.nome}. Esperado: ${grupoComQuantidadeInvalida.esperado}.`);
+      }
+
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/montar-grupos-manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config, grupos: gruposPayload }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao montar grupos manualmente");
+
+      const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+      if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+      setFasePartidas("GRUPOS");
+      await carregarPartidas("GRUPOS");
+      setMontagemGruposOpen(false);
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoMontagemGrupos(false);
+    }
+  }
+
   if (redirecting) return <div className="text-sm text-slate-600">Redirecionando…</div>;
 
   return (
@@ -1162,6 +1318,16 @@ export default function AdminCategoriaJogosPage() {
               className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {gerandoGrupos ? "Gerando…" : "Gerar grupos/jogos"}
+            </button>
+
+            <button
+              type="button"
+              disabled={!config || carregandoMontagemGrupos}
+              onClick={abrirMontagemManualGrupos}
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Definir manualmente em qual grupo cada dupla ficará"
+            >
+              {carregandoMontagemGrupos ? "Carregando…" : "Montar grupos manual"}
             </button>
 
             <button
@@ -1805,6 +1971,104 @@ export default function AdminCategoriaJogosPage() {
                 >
                   <Save className="h-4 w-4" />
                   {salvandoTrocaGrupos ? "Salvando..." : "Trocar e regerar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {montagemGruposOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setMontagemGruposOpen(false)}>
+          <div
+            className="w-full max-w-5xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 space-y-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs text-slate-500 uppercase tracking-wider">Montagem manual</div>
+                  <div className="text-lg font-bold text-slate-900">Definir grupo de cada dupla</div>
+                  <div className="text-sm text-slate-600 mt-1">
+                    Preencha o grupo ao lado de cada dupla e confirme para recriar grupos e jogos sem sorteio.
+                  </div>
+                </div>
+                <button type="button" onClick={() => setMontagemGruposOpen(false)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
+                  <X className="h-4 w-4" />
+                  Fechar
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm font-medium text-slate-900">Validação de quantidades</div>
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {gruposEsperadosMontagem.map((grupo) => {
+                    const valido = grupo.atual === grupo.esperado;
+                    return (
+                      <div key={grupo.nome} className={`rounded-md border px-3 py-2 ${valido ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+                        <div className="text-sm font-semibold text-slate-900">{grupo.nome}</div>
+                        <div className="text-xs text-slate-600">Esperado: {grupo.esperado}</div>
+                        <div className={`text-xs font-semibold ${valido ? "text-emerald-700" : "text-amber-700"}`}>Atual: {grupo.atual}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr className="text-left">
+                      <th className="px-4 py-3 font-semibold text-slate-700">Dupla</th>
+                      <th className="px-4 py-3 font-semibold text-slate-700">Atletas</th>
+                      <th className="px-4 py-3 font-semibold text-slate-700">Grupo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {montagemGruposLinhas.map((linha) => (
+                      <tr key={linha.equipeId} className="border-b border-slate-100 last:border-b-0">
+                        <td className="px-4 py-3 font-medium text-slate-900">{linha.equipeNome}</td>
+                        <td className="px-4 py-3 text-slate-600">{linha.atletas.length > 0 ? linha.atletas.join(" / ") : "-"}</td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={linha.grupoNome}
+                            onChange={(e) =>
+                              setMontagemGruposLinhas((prev) =>
+                                prev.map((item) => (item.equipeId === linha.equipeId ? { ...item, grupoNome: e.target.value } : item))
+                              )
+                            }
+                            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                          >
+                            <option value="">Selecione</option>
+                            {gruposEsperadosMontagem.map((grupo) => (
+                              <option key={grupo.nome} value={grupo.nome}>
+                                {grupo.nome}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMontagemGruposOpen(false)}
+                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarMontagemManualGrupos}
+                  disabled={salvandoMontagemGrupos || gruposEsperadosMontagem.length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  {salvandoMontagemGrupos ? "Confirmando…" : "Confirmar grupos"}
                 </button>
               </div>
             </div>

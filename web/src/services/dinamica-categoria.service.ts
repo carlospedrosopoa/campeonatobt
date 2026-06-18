@@ -147,6 +147,68 @@ function partidaIniciada(p: { status?: any; vencedorId?: any; placarA?: any; pla
   return false;
 }
 
+function calcularQuantidadeGrupos(params: {
+  totalEquipes: number;
+  tamanhoAlvo: number;
+  modo?: "AUTO" | "MANUAL";
+  quantidade?: number;
+  isSuperCampeonato: boolean;
+}) {
+  if (params.isSuperCampeonato) return 1;
+  if (params.modo === "MANUAL" && params.quantidade) return params.quantidade;
+  return Math.max(1, Math.ceil(params.totalEquipes / params.tamanhoAlvo));
+}
+
+function calcularTamanhosEsperados(totalEquipes: number, qtdGrupos: number) {
+  if (qtdGrupos < 1) throw new Error("Quantidade de grupos inválida");
+  const base = Math.floor(totalEquipes / qtdGrupos);
+  const extras = totalEquipes % qtdGrupos;
+  return Array.from({ length: qtdGrupos }, (_, index) => base + (index < extras ? 1 : 0));
+}
+
+async function resetarEstruturaDosGrupos(tx: any, params: { torneioId: string; categoriaId: string }) {
+  await tx.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "GRUPOS")));
+  await tx
+    .delete(rodadas)
+    .where(and(eq(rodadas.torneioId, params.torneioId), eq(rodadas.categoriaId, params.categoriaId), like(rodadas.nome, "Rodada %")));
+
+  const gruposExistentes = await tx.select({ id: grupos.id }).from(grupos).where(eq(grupos.categoriaId, params.categoriaId));
+  const grupoIds = gruposExistentes.map((g) => g.id);
+  if (grupoIds.length > 0) {
+    await tx.delete(grupoEquipes).where(inArray(grupoEquipes.grupoId, grupoIds));
+    await tx.delete(grupos).where(eq(grupos.categoriaId, params.categoriaId));
+  }
+}
+
+async function criarGruposComEquipes(
+  tx: any,
+  params: { categoriaId: string; gruposPlanejados: { nome: string; equipes: string[] }[] }
+) {
+  const gruposCriados: { id: string; nome: string; equipes: string[] }[] = [];
+
+  for (const grupo of params.gruposPlanejados) {
+    const [g] = await tx.insert(grupos).values({ categoriaId: params.categoriaId, nome: grupo.nome }).returning();
+    gruposCriados.push({ id: g.id, nome: grupo.nome, equipes: grupo.equipes });
+  }
+
+  for (const grupo of gruposCriados) {
+    if (grupo.equipes.length < 2) continue;
+    await tx.insert(grupoEquipes).values(
+      grupo.equipes.map((equipeId) => ({
+        grupoId: grupo.id,
+        equipeId,
+        pontos: 0,
+        jogosJogados: 0,
+        jogosVencidos: 0,
+        jogosPerdidos: 0,
+        saldoGames: 0,
+      }))
+    );
+  }
+
+  return gruposCriados;
+}
+
 async function recriarRodadasEPartidasDosGrupos(
   tx: any,
   params: { torneioId: string; categoriaId: string; gruposCriados: { id: string; nome: string; equipes: string[] }[] }
@@ -226,7 +288,6 @@ export class DinamicaCategoriaService {
     const modo = config.grupos?.modo ?? "AUTO";
     const tamanhoAlvo = config.grupos?.tamanhoAlvo ?? 4;
     const qtdManual = config.grupos?.quantidade;
-    const qtdGrupos = modo === "MANUAL" && qtdManual ? qtdManual : Math.max(1, Math.ceil(equipesIds.length / tamanhoAlvo));
 
     const categoriaRow = await db.select({ id: categorias.id, torneioId: categorias.torneioId }).from(categorias).where(eq(categorias.id, params.categoriaId)).limit(1);
     if (!categoriaRow[0]) throw new Error("Categoria não encontrada");
@@ -235,17 +296,7 @@ export class DinamicaCategoriaService {
     const isSuperCampeonato = torneioRow[0]?.superCampeonato ?? false;
 
     const resultado = await db.transaction(async (tx) => {
-      await tx.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "GRUPOS")));
-      await tx
-        .delete(rodadas)
-        .where(and(eq(rodadas.torneioId, params.torneioId), eq(rodadas.categoriaId, params.categoriaId), like(rodadas.nome, "Rodada %")));
-
-      const gruposExistentes = await tx.select({ id: grupos.id }).from(grupos).where(eq(grupos.categoriaId, params.categoriaId));
-      const grupoIds = gruposExistentes.map((g) => g.id);
-      if (grupoIds.length > 0) {
-        await tx.delete(grupoEquipes).where(inArray(grupoEquipes.grupoId, grupoIds));
-        await tx.delete(grupos).where(eq(grupos.categoriaId, params.categoriaId));
-      }
+      await resetarEstruturaDosGrupos(tx, { torneioId: params.torneioId, categoriaId: params.categoriaId });
 
       const shuffled = [...equipesIds];
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -253,36 +304,29 @@ export class DinamicaCategoriaService {
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
 
-      const qtdGruposCalculada = isSuperCampeonato 
-        ? 1 
-        : (modo === "MANUAL" && qtdManual ? qtdManual : Math.max(1, Math.ceil(equipesIds.length / tamanhoAlvo)));
+      const qtdGruposCalculada = calcularQuantidadeGrupos({
+        totalEquipes: equipesIds.length,
+        tamanhoAlvo,
+        modo,
+        quantidade: qtdManual,
+        isSuperCampeonato,
+      });
 
-      const gruposCriados: { id: string; nome: string; equipes: string[] }[] = [];
-      for (let i = 0; i < qtdGruposCalculada; i++) {
-        const nome = isSuperCampeonato ? "Grupo Único" : groupName(i);
-        const [g] = await tx.insert(grupos).values({ categoriaId: params.categoriaId, nome }).returning();
-        gruposCriados.push({ id: g.id, nome, equipes: [] });
-      }
+      const gruposPlanejados = Array.from({ length: qtdGruposCalculada }, (_, index) => ({
+        nome: isSuperCampeonato ? "Grupo Único" : groupName(index),
+        equipes: [] as string[],
+      }));
 
       for (let index = 0; index < shuffled.length; index++) {
         const gIndex = index % qtdGruposCalculada;
-        gruposCriados[gIndex].equipes.push(shuffled[index]);
+        gruposPlanejados[gIndex].equipes.push(shuffled[index]);
       }
 
-      for (const g of gruposCriados) {
-        if (g.equipes.length < 2) continue;
-        await tx.insert(grupoEquipes).values(
-          g.equipes.map((equipeId) => ({
-            grupoId: g.id,
-            equipeId,
-            pontos: 0,
-            jogosJogados: 0,
-            jogosVencidos: 0,
-            jogosPerdidos: 0,
-            saldoGames: 0,
-          }))
-        );
-      }
+      const gruposCriados = await criarGruposComEquipes(tx, {
+        categoriaId: params.categoriaId,
+        gruposPlanejados,
+      });
+
       const partidasCriadas = await recriarRodadasEPartidasDosGrupos(tx, {
         torneioId: params.torneioId,
         categoriaId: params.categoriaId,
@@ -293,6 +337,108 @@ export class DinamicaCategoriaService {
         grupos: gruposCriados.map((g) => ({ id: g.id, nome: g.nome, equipes: g.equipes.length })),
         partidasCriadas,
         equipesTotal: shuffled.length,
+      };
+    });
+
+    return resultado;
+  }
+
+  async montarGruposManualmente(params: {
+    torneioId: string;
+    categoriaId: string;
+    grupos: { nome: string; equipes: string[] }[];
+  }) {
+    const config = await categoriaConfigService.obterOuDefault(params.categoriaId);
+    if (config.formato !== "GRUPOS") {
+      throw new Error("Formato da categoria não é GRUPOS");
+    }
+
+    const inscritos = await db
+      .select({ equipeId: inscricoes.equipeId })
+      .from(inscricoes)
+      .where(and(eq(inscricoes.torneioId, params.torneioId), eq(inscricoes.categoriaId, params.categoriaId), eq(inscricoes.status, "APROVADA")));
+
+    const equipesIds = unique(inscritos.map((i) => i.equipeId));
+    if (equipesIds.length < 2) {
+      throw new Error("Necessário pelo menos 2 equipes aprovadas para montar grupos");
+    }
+
+    const categoriaRow = await db.select({ id: categorias.id, torneioId: categorias.torneioId }).from(categorias).where(eq(categorias.id, params.categoriaId)).limit(1);
+    if (!categoriaRow[0]) throw new Error("Categoria não encontrada");
+
+    const torneioRow = await db.select({ superCampeonato: torneios.superCampeonato }).from(torneios).where(eq(torneios.id, categoriaRow[0].torneioId)).limit(1);
+    const isSuperCampeonato = torneioRow[0]?.superCampeonato ?? false;
+
+    const modo = config.grupos?.modo ?? "AUTO";
+    const tamanhoAlvo = config.grupos?.tamanhoAlvo ?? 4;
+    const qtdManual = config.grupos?.quantidade;
+    const qtdGruposEsperada = calcularQuantidadeGrupos({
+      totalEquipes: equipesIds.length,
+      tamanhoAlvo,
+      modo,
+      quantidade: qtdManual,
+      isSuperCampeonato,
+    });
+    const tamanhosEsperados = calcularTamanhosEsperados(equipesIds.length, qtdGruposEsperada);
+    if (tamanhosEsperados.some((t) => t < 2)) {
+      throw new Error("A configuração atual gera grupo com menos de 2 duplas. Ajuste a quantidade ou o tamanho alvo antes de montar manualmente.");
+    }
+
+    const equipesAprovadasSet = new Set(equipesIds);
+    const equipesAlocadas = new Set<string>();
+    const gruposNormalizados = params.grupos.map((grupo, index) => {
+      const nome = (grupo.nome || "").trim() || (isSuperCampeonato ? "Grupo Único" : groupName(index));
+      const equipesGrupo = unique((grupo.equipes ?? []).map((id) => String(id || "").trim()).filter(Boolean));
+      if (equipesGrupo.length === 0) {
+        throw new Error(`O ${nome} está vazio`);
+      }
+      for (const equipeId of equipesGrupo) {
+        if (!equipesAprovadasSet.has(equipeId)) {
+          throw new Error("Há duplas inválidas na montagem manual dos grupos");
+        }
+        if (equipesAlocadas.has(equipeId)) {
+          throw new Error("Uma mesma dupla foi informada mais de uma vez na montagem manual");
+        }
+        equipesAlocadas.add(equipeId);
+      }
+      return { nome, equipes: equipesGrupo };
+    });
+
+    if (gruposNormalizados.length !== qtdGruposEsperada) {
+      throw new Error(`Quantidade de grupos inválida. Esperado: ${qtdGruposEsperada}.`);
+    }
+
+    if (equipesAlocadas.size !== equipesIds.length) {
+      throw new Error("Informe um grupo para todas as duplas aprovadas antes de confirmar");
+    }
+
+    const nomesUnicos = new Set(gruposNormalizados.map((grupo) => grupo.nome));
+    if (nomesUnicos.size !== gruposNormalizados.length) {
+      throw new Error("Os nomes dos grupos precisam ser únicos");
+    }
+
+    const tamanhosRecebidos = gruposNormalizados.map((grupo) => grupo.equipes.length).sort((a, b) => b - a);
+    const tamanhosEsperadosOrdenados = [...tamanhosEsperados].sort((a, b) => b - a);
+    if (JSON.stringify(tamanhosRecebidos) !== JSON.stringify(tamanhosEsperadosOrdenados)) {
+      throw new Error(`Distribuição inválida. Esperado: ${tamanhosEsperadosOrdenados.join(", ")} duplas por grupo.`);
+    }
+
+    const resultado = await db.transaction(async (tx) => {
+      await resetarEstruturaDosGrupos(tx, { torneioId: params.torneioId, categoriaId: params.categoriaId });
+      const gruposCriados = await criarGruposComEquipes(tx, {
+        categoriaId: params.categoriaId,
+        gruposPlanejados: gruposNormalizados,
+      });
+      const partidasCriadas = await recriarRodadasEPartidasDosGrupos(tx, {
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        gruposCriados,
+      });
+
+      return {
+        grupos: gruposCriados.map((g) => ({ id: g.id, nome: g.nome, equipes: g.equipes.length })),
+        partidasCriadas,
+        equipesTotal: equipesIds.length,
       };
     });
 
