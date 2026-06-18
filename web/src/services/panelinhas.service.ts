@@ -847,11 +847,14 @@ export class PanelinhasService {
       .where(eq(panelinhaPlayJogos.playId, playKey))
       .orderBy(asc(panelinhaPlayJogos.ordem));
 
+    const locked = this.playPossuiResultadoRegistrado(jogos);
+
     return {
       ...play,
       participantes,
       jogos,
-      locked: jogos.some((j) => j.status === "REGISTRADO" || j.status === "CONFIRMADO" || (j.detalhesPlacar as any)?.length > 0),
+      locked,
+      podeExcluir: play.status !== "CANCELADO" && !locked && (member.papel === "FUNDADOR" || play.organizadorId === atletaId),
       meuPapel: member.papel,
     };
   }
@@ -1098,7 +1101,7 @@ export class PanelinhasService {
       .where(and(eq(panelinhaPlayJogos.id, jogoKey), eq(panelinhaPlayJogos.playId, playKey)))
       .limit(1);
     if (!jogo) throw new Error("Jogo não encontrado");
-    if (jogo.status !== "PENDENTE") throw new Error("Este jogo já possui resultado");
+    if (jogo.status === "CANCELADO") throw new Error("Este jogo foi cancelado");
 
     const placares = Array.isArray(dados?.detalhesPlacar) ? dados.detalhesPlacar : [];
     if (placares.length !== 1) throw new Error("Cada jogo deve ter exatamente 1 set nesta versão");
@@ -1135,6 +1138,63 @@ export class PanelinhasService {
     return updated;
   }
 
+  async limparResultadoPlayJogo(panelinhaId: string, playId: string, jogoId: string, atletaId: string) {
+    const panelinhaKey = normalizeText(panelinhaId);
+    const playKey = normalizeText(playId);
+    const jogoKey = normalizeText(jogoId);
+    if (!panelinhaKey) throw new Error("Panelinha inválida");
+    if (!playKey) throw new Error("Play inválido");
+    if (!jogoKey) throw new Error("Jogo inválido");
+
+    const member = await this.buscarMembro(panelinhaKey, atletaId);
+    if (!member || member.status !== "ATIVO") throw new Error("Você não participa desta panelinha");
+
+    const [play] = await db
+      .select()
+      .from(panelinhaPlays)
+      .where(and(eq(panelinhaPlays.id, playKey), eq(panelinhaPlays.panelinhaId, panelinhaKey)))
+      .limit(1);
+    if (!play) throw new Error("Play não encontrado");
+    if (play.status !== "ABERTO") throw new Error("Play não está aberto para resultados");
+    if (!(await panelinhaRankingService.temporadaPermiteResultados(playKey))) {
+      throw new Error("A temporada deste play já está encerrada");
+    }
+
+    const participante = await db
+      .select({ id: panelinhaPlayParticipantes.id })
+      .from(panelinhaPlayParticipantes)
+      .where(and(eq(panelinhaPlayParticipantes.playId, playKey), eq(panelinhaPlayParticipantes.atletaId, atletaId), eq(panelinhaPlayParticipantes.status, "ATIVO")))
+      .limit(1);
+    if (!participante[0]) throw new Error("Apenas participantes do play podem registrar resultado");
+
+    const [jogo] = await db
+      .select()
+      .from(panelinhaPlayJogos)
+      .where(and(eq(panelinhaPlayJogos.id, jogoKey), eq(panelinhaPlayJogos.playId, playKey)))
+      .limit(1);
+    if (!jogo) throw new Error("Jogo não encontrado");
+    if (jogo.status === "CANCELADO") throw new Error("Este jogo foi cancelado");
+    if (!Array.isArray(jogo.detalhesPlacar) || jogo.detalhesPlacar.length === 0) {
+      throw new Error("Este jogo já está sem resultado");
+    }
+
+    const [updated] = await db
+      .update(panelinhaPlayJogos)
+      .set({
+        status: "PENDENTE",
+        detalhesPlacar: null,
+        registradoPorId: null,
+        registradoEm: null,
+        atualizadoEm: new Date(),
+      })
+      .where(eq(panelinhaPlayJogos.id, jogo.id))
+      .returning();
+
+    await panelinhaRankingService.recalcularPorPlay(playKey);
+
+    return updated;
+  }
+
   async atualizarPlay(panelinhaId: string, playId: string, solicitanteId: string, dados: AtualizarPanelinhaPlayDTO) {
     const panelinhaKey = normalizeText(panelinhaId);
     const playKey = normalizeText(playId);
@@ -1152,22 +1212,9 @@ export class PanelinhasService {
     if (!play) throw new Error("Play não encontrado");
     if (play.organizadorId !== solicitanteId) throw new Error("Apenas o organizador pode ajustar o play");
     if (play.status !== "ABERTO") throw new Error("Play não está aberto para ajustes");
-
-    const lockedRow = await db
-      .select({ id: panelinhaPlayJogos.id })
-      .from(panelinhaPlayJogos)
-      .where(
-        and(
-          eq(panelinhaPlayJogos.playId, playKey),
-          or(
-            eq(panelinhaPlayJogos.status, "REGISTRADO"),
-            eq(panelinhaPlayJogos.status, "CONFIRMADO"),
-            sql`${panelinhaPlayJogos.detalhesPlacar} is not null`
-          )
-        )
-      )
-      .limit(1);
-    if (lockedRow[0]) throw new Error("Play não pode ser ajustado: já existe resultado registrado");
+    if (await this.playPossuiResultadoRegistradoNoBanco(playKey)) {
+      throw new Error("Play não pode ser ajustado: já existe resultado registrado");
+    }
 
     const nextFormato = dados.formato ?? (play.formato as any);
     if (nextFormato !== "SUPER4" && nextFormato !== "CONFRONTO_LIVRE") throw new Error("Formato inválido");
@@ -1327,6 +1374,34 @@ export class PanelinhasService {
     });
 
     return updated;
+  }
+
+  async excluirPlay(panelinhaId: string, playId: string, solicitanteId: string) {
+    const panelinhaKey = normalizeText(panelinhaId);
+    const playKey = normalizeText(playId);
+    if (!panelinhaKey) throw new Error("Panelinha inválida");
+    if (!playKey) throw new Error("Play inválido");
+
+    const member = await this.buscarMembro(panelinhaKey, solicitanteId);
+    if (!member || member.status !== "ATIVO") throw new Error("Você não participa desta panelinha");
+
+    const [play] = await db
+      .select()
+      .from(panelinhaPlays)
+      .where(and(eq(panelinhaPlays.id, playKey), eq(panelinhaPlays.panelinhaId, panelinhaKey)))
+      .limit(1);
+    if (!play) throw new Error("Play não encontrado");
+
+    if (!(member.papel === "FUNDADOR" || play.organizadorId === solicitanteId)) {
+      throw new Error("Apenas o fundador ou o organizador pode excluir o play");
+    }
+    if (play.status === "CANCELADO") throw new Error("Este play já foi cancelado");
+    if (await this.playPossuiResultadoRegistradoNoBanco(playKey)) {
+      throw new Error("Play não pode ser excluído: já existe resultado registrado");
+    }
+
+    await db.delete(panelinhaPlays).where(eq(panelinhaPlays.id, playKey));
+    return { id: play.id };
   }
 
   async removerMembro(panelinhaId: string, solicitanteId: string, atletaId: string) {
@@ -1490,6 +1565,34 @@ export class PanelinhasService {
       .limit(1);
 
     return rows[0] ?? null;
+  }
+
+  private playPossuiResultadoRegistrado(jogos: Array<{ status: string; detalhesPlacar?: unknown }>) {
+    return jogos.some(
+      (jogo) =>
+        jogo.status === "REGISTRADO" ||
+        jogo.status === "CONFIRMADO" ||
+        (Array.isArray(jogo.detalhesPlacar) && jogo.detalhesPlacar.length > 0)
+    );
+  }
+
+  private async playPossuiResultadoRegistradoNoBanco(playId: string) {
+    const lockedRow = await db
+      .select({ id: panelinhaPlayJogos.id })
+      .from(panelinhaPlayJogos)
+      .where(
+        and(
+          eq(panelinhaPlayJogos.playId, playId),
+          or(
+            eq(panelinhaPlayJogos.status, "REGISTRADO"),
+            eq(panelinhaPlayJogos.status, "CONFIRMADO"),
+            sql`${panelinhaPlayJogos.detalhesPlacar} is not null`
+          )
+        )
+      )
+      .limit(1);
+
+    return Boolean(lockedRow[0]);
   }
 
   private async validarConfrontosDuplicadosNoCalendario(params: {
