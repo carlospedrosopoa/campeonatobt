@@ -591,6 +591,9 @@ export default function AdminCategoriaJogosPage() {
         categoriaNome: categoria.nome,
         torneioBannerUrl,
         partidas: partidasGrupos,
+        config,
+        classificacao,
+        superCampeonato: false,
       });
     } catch (e: any) {
       setErro(e?.message || "Erro ao gerar PDF da tabela de jogos");
