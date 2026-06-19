@@ -211,18 +211,34 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
     observacoes.push(`Ha ${melhoresTerceiros} vaga(s) para melhores terceiros, definidos pela campanha na fase de grupos.`);
   }
 
-  const roundsHtml = rounds
-    .map(
-      (round) => `
-        <div class="eliminatoria-bloco">
-          <div class="eliminatoria-titulo">${escapeHtml(round.titulo)}</div>
-          <div class="eliminatoria-lista">
-            ${round.jogos.map((jogo) => `<div class="eliminatoria-item">${escapeHtml(jogo)}</div>`).join("")}
-          </div>
+  const roundsHtml =
+    rounds.length > 0
+      ? `
+        <div class="eliminatoria-chave">
+          ${rounds
+            .map(
+              (round) => `
+                <div class="eliminatoria-etapa">
+                  <div class="eliminatoria-etapa-titulo">${escapeHtml(round.titulo)}</div>
+                  <div class="eliminatoria-etapa-jogos">
+                    ${round.jogos
+                      .map(
+                        (jogo) => `
+                          <div class="eliminatoria-jogo-card">
+                            <div class="eliminatoria-jogo-label">Cruzamento</div>
+                            <div class="eliminatoria-jogo-texto">${escapeHtml(jogo)}</div>
+                          </div>
+                        `
+                      )
+                      .join("")}
+                  </div>
+                </div>
+              `
+            )
+            .join("")}
         </div>
       `
-    )
-    .join("");
+      : "";
 
   const observacoesHtml =
     observacoes.length > 0
@@ -510,34 +526,65 @@ export function abrirTabelaJogosPdfPorChaves(params: AbrirTabelaJogosPdfPorChave
             font-size: 13px;
             line-height: 1.6;
           }
-          .eliminatoria-bloco {
+          .eliminatoria-chave {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 16px;
             margin-top: 18px;
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            overflow: hidden;
+            align-items: start;
           }
-          .eliminatoria-titulo {
-            background: #f8fafc;
-            padding: 12px 14px;
-            font-size: 12px;
+          .eliminatoria-etapa {
+            position: relative;
+          }
+          .eliminatoria-etapa:not(:last-child)::after {
+            content: ">";
+            position: absolute;
+            top: 50%;
+            right: -12px;
+            transform: translateY(-50%);
+            color: #cbd5e1;
+            font-size: 24px;
             font-weight: 700;
+            line-height: 1;
+          }
+          .eliminatoria-etapa-titulo {
+            margin-bottom: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #eef2ff;
+            color: #3730a3;
+            font-size: 11px;
+            font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            color: #475569;
-            border-bottom: 1px solid #e2e8f0;
+            text-align: center;
           }
-          .eliminatoria-lista {
-            padding: 12px 14px;
+          .eliminatoria-etapa-jogos {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
           }
-          .eliminatoria-item {
-            font-size: 13px;
+          .eliminatoria-jogo-card {
+            min-height: 78px;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+          }
+          .eliminatoria-jogo-label {
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+          }
+          .eliminatoria-jogo-texto {
+            margin-top: 8px;
             color: #0f172a;
+            font-size: 13px;
+            line-height: 1.45;
             font-weight: 700;
-            padding: 7px 0;
-            border-bottom: 1px solid #f1f5f9;
-          }
-          .eliminatoria-item:last-child {
-            border-bottom: 0;
           }
           .eliminatoria-observacoes {
             margin-top: 14px;
@@ -581,6 +628,9 @@ export function abrirTabelaJogosPdfPorChaves(params: AbrirTabelaJogosPdfPorChave
             }
             .content {
               padding: 0;
+            }
+            .eliminatoria-etapa:not(:last-child)::after {
+              right: -10px;
             }
           }
         </style>
