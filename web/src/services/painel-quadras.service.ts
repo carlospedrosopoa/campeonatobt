@@ -345,7 +345,7 @@ export class PainelQuadrasService {
         and(
           eq(partidas.torneioId, torneioId),
           eq(partidas.quadra, quadra),
-          inArray(partidas.status, ACTIVE_MATCH_STATUSES as unknown as string[])
+          inArray(partidas.status, ACTIVE_MATCH_STATUSES)
         )
       );
 
