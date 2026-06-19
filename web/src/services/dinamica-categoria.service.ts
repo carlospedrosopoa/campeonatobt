@@ -172,8 +172,8 @@ async function resetarEstruturaDosGrupos(tx: any, params: { torneioId: string; c
     .delete(rodadas)
     .where(and(eq(rodadas.torneioId, params.torneioId), eq(rodadas.categoriaId, params.categoriaId), like(rodadas.nome, "Rodada %")));
 
-  const gruposExistentes = await tx.select({ id: grupos.id }).from(grupos).where(eq(grupos.categoriaId, params.categoriaId));
-  const grupoIds = gruposExistentes.map((g) => g.id);
+  const gruposExistentes: { id: string }[] = await tx.select({ id: grupos.id }).from(grupos).where(eq(grupos.categoriaId, params.categoriaId));
+  const grupoIds = gruposExistentes.map((g: { id: string }) => g.id);
   if (grupoIds.length > 0) {
     await tx.delete(grupoEquipes).where(inArray(grupoEquipes.grupoId, grupoIds));
     await tx.delete(grupos).where(eq(grupos.categoriaId, params.categoriaId));
@@ -464,8 +464,8 @@ export class DinamicaCategoriaService {
       await tx.delete(rodadas).where(and(eq(rodadas.torneioId, params.torneioId), eq(rodadas.categoriaId, params.categoriaId)));
 
       // 3. Excluir Grupos e GrupoEquipes
-      const gruposExistentes = await tx.select({ id: grupos.id }).from(grupos).where(eq(grupos.categoriaId, params.categoriaId));
-      const grupoIds = gruposExistentes.map((g) => g.id);
+      const gruposExistentes: { id: string }[] = await tx.select({ id: grupos.id }).from(grupos).where(eq(grupos.categoriaId, params.categoriaId));
+      const grupoIds = gruposExistentes.map((g: { id: string }) => g.id);
       if (grupoIds.length > 0) {
         await tx.delete(grupoEquipes).where(inArray(grupoEquipes.grupoId, grupoIds));
         await tx.delete(grupos).where(eq(grupos.categoriaId, params.categoriaId));
