@@ -47,7 +47,7 @@ export const defaultCategoriaConfigV1: CategoriaConfigV1 = {
     superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
     incluirSuperTieEmGames: false,
   },
-  desempate: ["PONTOS", "CONFRONTO_DIRETO", "SALDO_GAMES", "GAMES_PRO", "VITORIAS", "SORTEIO"],
+  desempate: ["VITORIAS", "SALDO_GAMES", "CONFRONTO_DIRETO", "GAMES_PRO", "SORTEIO"],
 };
 
 function normalizeConfig(input: any): CategoriaConfigV1 {

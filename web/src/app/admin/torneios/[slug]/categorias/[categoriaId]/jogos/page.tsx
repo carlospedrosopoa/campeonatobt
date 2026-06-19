@@ -1186,7 +1186,7 @@ export default function AdminCategoriaJogosPage() {
         )}
 
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="text-xs text-slate-500">Desempate padrão: PONTOS → CONFRONTO_DIRETO → SALDO_GAMES → GAMES_PRO → VITORIAS</div>
+          <div className="text-xs text-slate-500">Desempate padrão: VITORIAS → SALDO_GAMES → CONFRONTO_DIRETO (ENTRE 2) → GAMES_PRO → SORTEIO</div>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1352,7 +1352,6 @@ export default function AdminCategoriaJogosPage() {
                     <thead>
                       <tr className="text-left text-slate-500 border-b border-slate-100">
                         <th className="py-2 pr-3 font-medium">Equipe</th>
-                        <th className="py-2 pr-3 font-medium">P</th>
                         <th className="py-2 pr-3 font-medium">J</th>
                         <th className="py-2 pr-3 font-medium">V</th>
                         <th className="py-2 pr-3 font-medium">SG</th>
@@ -1362,7 +1361,6 @@ export default function AdminCategoriaJogosPage() {
                       {g.equipes.map((e) => (
                         <tr key={e.equipeId} className="border-b border-slate-50">
                           <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
-                          <td className="py-2 pr-3 text-slate-700">{e.pontos}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>

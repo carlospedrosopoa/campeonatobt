@@ -27,6 +27,21 @@ type TeamStats = {
   saldoGames: number;
 };
 
+type CriterioDesempate = "PONTOS" | "CONFRONTO_DIRETO" | "SALDO_GAMES" | "GAMES_PRO" | "VITORIAS" | "SETS_PRO" | "SORTEIO";
+
+type TeamClassificacao = {
+  equipeId: string;
+  equipeNome: string;
+  pontos: number;
+  jogosJogados: number;
+  jogosVencidos: number;
+  jogosPerdidos: number;
+  saldoGames: number;
+  gamesPro: number;
+  gamesContra: number;
+  setsPro: number;
+};
+
 function computeGames(det: MatchRow["detalhesPlacar"], opts?: { ignoreSuperTieMin?: number | null }) {
   if (!det || det.length === 0) return null;
   let a = 0;
@@ -50,6 +65,61 @@ function resolveWinner(m: MatchRow) {
   const b = m.placarB ?? 0;
   if (a === b) return null;
   return a > b ? m.equipeAId : m.equipeBId;
+}
+
+function ordenarEquipesPorCriterios(params: {
+  equipes: TeamClassificacao[];
+  criterios: CriterioDesempate[];
+  grupoId: string;
+  headToHeadWinner: (grupoId: string, a: string, b: string) => string | null;
+}) {
+  const { equipes, criterios, grupoId, headToHeadWinner } = params;
+
+  const ordenarRecursivo = (lista: TeamClassificacao[], criteriosRestantes: CriterioDesempate[]): TeamClassificacao[] => {
+    if (lista.length <= 1) return lista.slice();
+    if (criteriosRestantes.length === 0) {
+      return lista.slice().sort((a, b) => a.equipeId.localeCompare(b.equipeId));
+    }
+
+    const [criterioAtual, ...proximos] = criteriosRestantes;
+
+    if (criterioAtual === "CONFRONTO_DIRETO") {
+      if (lista.length === 2) {
+        const [a, b] = lista;
+        const vencedor = headToHeadWinner(grupoId, a.equipeId, b.equipeId);
+        if (vencedor === a.equipeId) return [a, b];
+        if (vencedor === b.equipeId) return [b, a];
+      }
+      return ordenarRecursivo(lista, proximos);
+    }
+
+    if (criterioAtual === "SORTEIO") {
+      return lista.slice().sort((a, b) => a.equipeId.localeCompare(b.equipeId));
+    }
+
+    const valorDoCriterio = (equipe: TeamClassificacao) => {
+      if (criterioAtual === "PONTOS") return equipe.pontos ?? 0;
+      if (criterioAtual === "VITORIAS") return equipe.jogosVencidos ?? 0;
+      if (criterioAtual === "SALDO_GAMES") return equipe.saldoGames ?? 0;
+      if (criterioAtual === "SETS_PRO") return equipe.setsPro ?? 0;
+      if (criterioAtual === "GAMES_PRO") return equipe.gamesPro ?? 0;
+      return 0;
+    };
+
+    const gruposPorValor = new Map<number, TeamClassificacao[]>();
+    for (const equipe of lista) {
+      const valor = valorDoCriterio(equipe);
+      const atuais = gruposPorValor.get(valor) ?? [];
+      atuais.push(equipe);
+      gruposPorValor.set(valor, atuais);
+    }
+
+    return Array.from(gruposPorValor.entries())
+      .sort((a, b) => b[0] - a[0])
+      .flatMap(([, empatados]) => ordenarRecursivo(empatados, proximos));
+  };
+
+  return ordenarRecursivo(equipes, criterios);
 }
 
 export class ClassificacaoCategoriaService {
@@ -197,9 +267,9 @@ export class ClassificacaoCategoriaService {
       .limit(1);
     const superCampeonato = torneioRow[0]?.superCampeonato ?? false;
 
-    const desempate = superCampeonato
-      ? (["PONTOS", "VITORIAS", "SETS_PRO", "SALDO_GAMES", "SORTEIO"] as any)
-      : (config.desempate ?? ["PONTOS", "CONFRONTO_DIRETO", "SALDO_GAMES", "GAMES_PRO", "VITORIAS", "SORTEIO"]);
+    const desempate: CriterioDesempate[] = superCampeonato
+      ? ["PONTOS", "VITORIAS", "SETS_PRO", "SALDO_GAMES", "SORTEIO"]
+      : ["VITORIAS", "SALDO_GAMES", "CONFRONTO_DIRETO", "GAMES_PRO", "SORTEIO"];
 
     const ignoreSuperTieMin = superCampeonato
       ? (config.regrasPartida?.superTiebreakDecisivo?.ate ?? 10)
@@ -294,31 +364,11 @@ export class ClassificacaoCategoriaService {
     }
 
     for (const g of byGrupo.values()) {
-      g.equipes.sort((x, y) => {
-        for (const crit of desempate) {
-          if (crit === "PONTOS") {
-            if (y.pontos !== x.pontos) return y.pontos - x.pontos;
-          } else if (crit === "VITORIAS") {
-            if (y.jogosVencidos !== x.jogosVencidos) return y.jogosVencidos - x.jogosVencidos;
-          } else if (crit === "SALDO_GAMES") {
-            if (y.saldoGames !== x.saldoGames) return y.saldoGames - x.saldoGames;
-          } else if (crit === "SETS_PRO") {
-            const spX = x.setsPro ?? 0;
-            const spY = y.setsPro ?? 0;
-            if (spY !== spX) return spY - spX;
-          } else if (crit === "GAMES_PRO") {
-            const gamesProX = x.gamesPro ?? 0;
-            const gamesProY = y.gamesPro ?? 0;
-            if (gamesProY !== gamesProX) return gamesProY - gamesProX;
-          } else if (crit === "CONFRONTO_DIRETO") {
-            const w = headToHeadWinner(g.grupoId, x.equipeId, y.equipeId);
-            if (w === x.equipeId) return -1;
-            if (w === y.equipeId) return 1;
-          } else if (crit === "SORTEIO") {
-            if (x.equipeId !== y.equipeId) return x.equipeId.localeCompare(y.equipeId);
-          }
-        }
-        return 0;
+      g.equipes = ordenarEquipesPorCriterios({
+        equipes: g.equipes as TeamClassificacao[],
+        criterios: desempate,
+        grupoId: g.grupoId,
+        headToHeadWinner,
       });
     }
 
