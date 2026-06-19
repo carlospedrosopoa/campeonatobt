@@ -91,6 +91,7 @@ export async function PUT(
         placarB: resultado.placarB,
         vencedorId: resultado.vencedorId,
         status: "FINALIZADA",
+        finalizadoEm: new Date(),
         atualizadoEm: new Date(),
       })
       .where(eq(partidas.id, partidaId))

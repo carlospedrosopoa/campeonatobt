@@ -30,6 +30,7 @@ export type CriarTorneioDTO = {
   esporteId: string;
   superCampeonato?: boolean;
   cardApenasComFotos?: boolean;
+  quadrasAtivas?: number;
   oculto?: boolean;
   inscricaoComIa?: boolean;
   valorPrimeiraInscricao?: string | number | null;
@@ -98,6 +99,7 @@ export class TorneiosService {
         templateInscricaoUrl: torneios.templateInscricaoUrl,
         superCampeonato: torneios.superCampeonato,
         cardApenasComFotos: torneios.cardApenasComFotos,
+        quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
@@ -137,6 +139,7 @@ export class TorneiosService {
         templateInscricaoUrl: torneios.templateInscricaoUrl,
         superCampeonato: torneios.superCampeonato,
         cardApenasComFotos: torneios.cardApenasComFotos,
+        quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
@@ -177,6 +180,7 @@ export class TorneiosService {
       templateInscricaoUrl: torneios.templateInscricaoUrl,
       superCampeonato: torneios.superCampeonato,
       cardApenasComFotos: torneios.cardApenasComFotos,
+      quadrasAtivas: torneios.quadrasAtivas,
       valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
       valorInscricaoAdicional: torneios.valorInscricaoAdicional,
       pixChave: torneios.pixChave,
@@ -223,6 +227,7 @@ export class TorneiosService {
       oculto: dados.oculto ?? false,
       inscricaoComIa: dados.inscricaoComIa ?? false,
       cardApenasComFotos: dados.cardApenasComFotos ?? false,
+      quadrasAtivas: Math.max(0, Math.min(20, Number(dados.quadrasAtivas ?? 0) || 0)),
       organizadorId,
       superCampeonato: dados.superCampeonato ?? false,
       status: 'RASCUNHO'
@@ -236,6 +241,7 @@ export class TorneiosService {
       status?: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
       superCampeonato?: boolean;
       cardApenasComFotos?: boolean;
+      quadrasAtivas?: number;
       oculto?: boolean;
       inscricaoComIa?: boolean;
     }
@@ -244,6 +250,8 @@ export class TorneiosService {
       .update(torneios)
       .set({
         ...dados,
+        quadrasAtivas:
+          dados.quadrasAtivas === undefined ? undefined : Math.max(0, Math.min(20, Number(dados.quadrasAtivas) || 0)),
         valorPrimeiraInscricao: normalizeDecimal(dados.valorPrimeiraInscricao),
         valorInscricaoAdicional: normalizeDecimal(dados.valorInscricaoAdicional),
         pixChave: normalizeText(dados.pixChave),

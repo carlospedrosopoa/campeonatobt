@@ -64,6 +64,7 @@ export async function POST(
           placarB: 0,
           detalhesPlacar: null as any,
           status: "AGENDADA",
+          finalizadoEm: null,
           atualizadoEm: new Date(),
         })
         .where(eq(partidas.id, partidaId))

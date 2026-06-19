@@ -432,6 +432,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 placarB: resultado.placarB,
                 vencedorId: resultado.vencedorId,
                 status: "FINALIZADA",
+                finalizadoEm: new Date(),
               };
               counters.placaresAplicados += 1;
             } catch (e: any) {

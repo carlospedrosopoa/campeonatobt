@@ -339,6 +339,7 @@ export class MataMataService {
             placarB: 0,
             detalhesPlacar: null as any,
             status: "AGENDADA",
+            finalizadoEm: null,
             atualizadoEm: new Date(),
           })
           .where(eq(partidas.id, row.id));
@@ -425,6 +426,7 @@ export class MataMataService {
           placarB: 0,
           detalhesPlacar: null as any,
           status: "AGENDADA",
+          finalizadoEm: null,
           atualizadoEm: new Date(),
         })
         .where(eq(partidas.id, params.partidaId))
@@ -620,6 +622,7 @@ export class MataMataService {
           vencedorId: null,
           detalhesPlacar: null as any,
           status: "AGENDADA",
+          finalizadoEm: null,
           atualizadoEm: new Date(),
         })
         .where(eq(partidas.id, sorted[i].id));

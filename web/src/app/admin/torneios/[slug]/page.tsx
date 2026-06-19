@@ -479,6 +479,13 @@ export default function AdminTorneioDashboardPage() {
                 <Calendar className="h-4 w-4" />
                 Jogos do dia
               </Link>
+          <Link
+            href={`/admin/torneios/${slugAtual}/painel-quadras`}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Gamepad2 className="h-4 w-4" />
+            Painel de quadras
+          </Link>
               <Link
                 href={`/admin/torneios/${slugAtual}/importar-supercampeonato`}
                 className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
