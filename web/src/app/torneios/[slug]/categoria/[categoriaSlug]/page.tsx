@@ -70,6 +70,7 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
             bannerUrl: torneio.bannerUrl,
             templateUrl: torneio.templateUrl ?? null,
             esporteNome: torneio.esporteNome,
+            superCampeonato: torneio.superCampeonato ?? false,
           }} 
           categoria={{
             id: categoria.id,

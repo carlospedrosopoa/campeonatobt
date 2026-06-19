@@ -21,6 +21,7 @@ type Torneio = {
   bannerUrl: string | null;
   templateUrl?: string | null;
   esporteNome: string | null;
+  superCampeonato?: boolean;
 };
 
 type Inscrito = {
@@ -91,6 +92,7 @@ function formatarDataSemFuso(data: string | null | undefined) {
 
 export default function CategoriaDetalhesContent({ torneio, categoria }: Props) {
   const ordemFases = ["GRUPOS", "OITAVAS", "QUARTAS", "SEMI", "FINAL"] as const;
+  const mostrarColunasPorPontos = Boolean(torneio.superCampeonato);
   const [tab, setTab] = useState<"inscritos" | "classificacao" | "jogos">("inscritos");
   const [fase, setFase] = useState("GRUPOS");
   
@@ -316,12 +318,12 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                         <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
                           <tr>
                             <th className="px-4 py-3 text-left font-medium w-full">Equipe</th>
-                            <th className="px-2 py-3 text-center font-medium" title="Pontos">P</th>
+                            {mostrarColunasPorPontos ? <th className="px-2 py-3 text-center font-medium" title="Pontos">P</th> : null}
                             <th className="px-2 py-3 text-center font-medium" title="Jogos">J</th>
                             <th className="px-2 py-3 text-center font-medium" title="Vitórias">V</th>
                             <th className="px-2 py-3 text-center font-medium" title="Sets Pró">SP</th>
                             <th className="px-2 py-3 text-center font-medium" title="Saldo de Games">SG</th>
-                            <th className="px-2 py-3 text-center font-medium" title="Aproveitamento">AP%</th>
+                            {mostrarColunasPorPontos ? <th className="px-2 py-3 text-center font-medium" title="Aproveitamento">AP%</th> : null}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -335,14 +337,16 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                                   <span className="font-medium text-slate-900">{e.equipeNome}</span>
                                 </div>
                               </td>
-                              <td className="px-2 py-3 text-center font-bold text-slate-900">{e.pontos}</td>
+                              {mostrarColunasPorPontos ? <td className="px-2 py-3 text-center font-bold text-slate-900">{e.pontos}</td> : null}
                               <td className="px-2 py-3 text-center text-slate-600">{e.jogosJogados}</td>
                               <td className="px-2 py-3 text-center text-slate-600">{e.jogosVencidos}</td>
                               <td className="px-2 py-3 text-center text-slate-600">{e.setsPro}</td>
                               <td className="px-2 py-3 text-center text-slate-600">{e.saldoGames}</td>
-                              <td className="px-2 py-3 text-center text-slate-600">
-                                {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
-                              </td>
+                              {mostrarColunasPorPontos ? (
+                                <td className="px-2 py-3 text-center text-slate-600">
+                                  {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
+                                </td>
+                              ) : null}
                             </tr>
                           ))}
                         </tbody>

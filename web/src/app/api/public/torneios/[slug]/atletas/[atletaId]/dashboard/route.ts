@@ -28,7 +28,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 
     const equipeIds = equipesRows.map((r) => r.equipeId).filter(Boolean) as string[];
     if (equipeIds.length === 0) {
-      return NextResponse.json({ torneio: { id: torneio.id, nome: torneio.nome, slug: torneio.slug }, atleta, partidas: [] }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json(
+        { torneio: { id: torneio.id, nome: torneio.nome, slug: torneio.slug, superCampeonato: torneio.superCampeonato ?? false }, atleta, partidas: [] },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     const rows = await db
@@ -104,7 +107,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     });
 
     return NextResponse.json(
-      { torneio: { id: torneio.id, nome: torneio.nome, slug: torneio.slug }, atleta, partidas: result },
+      { torneio: { id: torneio.id, nome: torneio.nome, slug: torneio.slug, superCampeonato: torneio.superCampeonato ?? false }, atleta, partidas: result },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {

@@ -41,7 +41,7 @@ type Partida = {
 };
 
 type Dashboard = {
-  torneio: { id: string; nome: string; slug: string };
+  torneio: { id: string; nome: string; slug: string; superCampeonato?: boolean };
   atleta: { id: string; nome: string; fotoUrl: string | null };
   partidas: Partida[];
 };
@@ -128,6 +128,7 @@ export default function TorneioAtletasDashboardPage() {
   const [carregandoClassificacao, setCarregandoClassificacao] = useState(false);
   const [classificacaoPorCategoria, setClassificacaoPorCategoria] = useState<Record<string, ClassificacaoGrupo[]>>({});
   const [erro, setErro] = useState<string | null>(null);
+  const mostrarColunasPorPontos = Boolean(dashboard?.torneio?.superCampeonato);
 
   useEffect(() => {
     let ativo = true;
@@ -457,9 +458,11 @@ export default function TorneioAtletasDashboardPage() {
                                     <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
                                       <tr>
                                         <th className="px-4 py-3 text-left font-medium w-full">Equipe</th>
-                                        <th className="px-2 py-3 text-center font-medium" title="Pontos">
-                                          P
-                                        </th>
+                                        {mostrarColunasPorPontos ? (
+                                          <th className="px-2 py-3 text-center font-medium" title="Pontos">
+                                            P
+                                          </th>
+                                        ) : null}
                                         <th className="px-2 py-3 text-center font-medium" title="Jogos">
                                           J
                                         </th>
@@ -472,9 +475,11 @@ export default function TorneioAtletasDashboardPage() {
                                         <th className="px-2 py-3 text-center font-medium" title="Saldo de Games">
                                           SG
                                         </th>
-                                        <th className="px-2 py-3 text-center font-medium" title="Aproveitamento">
-                                          AP%
-                                        </th>
+                                        {mostrarColunasPorPontos ? (
+                                          <th className="px-2 py-3 text-center font-medium" title="Aproveitamento">
+                                            AP%
+                                          </th>
+                                        ) : null}
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -499,14 +504,18 @@ export default function TorneioAtletasDashboardPage() {
                                                 ) : null}
                                               </div>
                                             </td>
-                                            <td className={`px-2 py-3 text-center font-bold ${isMine ? "text-amber-950" : "text-slate-900"}`}>{e.pontos}</td>
+                                            {mostrarColunasPorPontos ? (
+                                              <td className={`px-2 py-3 text-center font-bold ${isMine ? "text-amber-950" : "text-slate-900"}`}>{e.pontos}</td>
+                                            ) : null}
                                             <td className="px-2 py-3 text-center text-slate-600">{e.jogosJogados}</td>
                                             <td className="px-2 py-3 text-center text-slate-600">{e.jogosVencidos}</td>
                                             <td className="px-2 py-3 text-center text-slate-600">{e.setsPro ?? 0}</td>
                                             <td className="px-2 py-3 text-center text-slate-600">{e.saldoGames}</td>
-                                            <td className="px-2 py-3 text-center text-slate-600">
-                                              {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
-                                            </td>
+                                            {mostrarColunasPorPontos ? (
+                                              <td className="px-2 py-3 text-center text-slate-600">
+                                                {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
+                                              </td>
+                                            ) : null}
                                           </tr>
                                         );
                                       })}
