@@ -1735,7 +1735,7 @@ export default function AdminCategoriaJogosPage() {
                     <button type="button" onClick={() => setEditPartidaId(null)} className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                       Cancelar
                     </button>
-                    {fasePartidas !== "GRUPOS" && (partida.status === "FINALIZADA" || partida.status === "WO") && (
+                    {(partida.status === "FINALIZADA" || partida.status === "WO") && (
                       <button
                         type="button"
                         onClick={async () => {
@@ -1748,6 +1748,11 @@ export default function AdminCategoriaJogosPage() {
                             );
                             const payload = (await res.json().catch(() => null)) as any;
                             if (!res.ok) throw new Error(payload?.error || "Falha ao cancelar placar");
+                            if (fasePartidas === "GRUPOS") {
+                              await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" }).catch(() => null);
+                              const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+                              if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+                            }
                             await carregarPartidas();
                             await carregarResultadoFinal();
                             setEditPartidaId(null);

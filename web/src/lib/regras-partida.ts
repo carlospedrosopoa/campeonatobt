@@ -96,11 +96,12 @@ export function calcularResultadoSets(params: {
         if (s.a === s.b) throw new Error("Set não pode terminar empatado");
         if (winner < games) throw new Error("Set precisa atingir a pontuação mínima");
 
-        const isNormalWin = winner === games && winner - loser >= 2;
-        const isExtendedWin = winner === games + 1 && loser === games - 1 && winner - loser === 2;
+        const isNoTieBreakCapWin = !tb.habilitado && winner === games;
+        const isNormalWin = tb.habilitado && winner === games && winner - loser >= 2;
+        const isExtendedWin = tb.habilitado && winner === games + 1 && loser === games - 1 && winner - loser === 2;
         const isTieBreakWin = tb.habilitado && winner === tb.ate && loser === tb.ate - 1;
 
-        if (!isNormalWin && !isExtendedWin && !isTieBreakWin) {
+        if (!isNoTieBreakCapWin && !isNormalWin && !isExtendedWin && !isTieBreakWin) {
           throw new Error("Placar do set inválido para a regra configurada");
         }
 
