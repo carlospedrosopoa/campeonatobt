@@ -456,6 +456,116 @@ export default function AdminCategoriaJogosPage() {
     });
   }, [partidas, filtroAtletaId]);
 
+  const partidasAgrupadasPorGrupo = useMemo(() => {
+    if (fasePartidas !== "GRUPOS") return [] as { grupoNome: string; partidas: Partida[] }[];
+
+    const gruposMap = new Map<string, Partida[]>();
+    for (const partida of partidasFiltradas) {
+      const grupoNome = (partida.grupoNome || "Sem grupo").trim();
+      const atual = gruposMap.get(grupoNome) ?? [];
+      atual.push(partida);
+      gruposMap.set(grupoNome, atual);
+    }
+
+    return Array.from(gruposMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0], "pt-BR", { numeric: true, sensitivity: "base" }))
+      .map(([grupoNome, partidasDoGrupo]) => ({
+        grupoNome,
+        partidas: partidasDoGrupo,
+      }));
+  }, [fasePartidas, partidasFiltradas]);
+
+  function renderPartidaCard(p: Partida) {
+    return (
+      <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+              <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
+                {p.grupoNome ?? "Grupo"}
+              </span>
+              {p.arenaNome ? (
+                <span className="flex items-center gap-1">
+                  {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome} className="h-4 w-4 rounded-full object-cover" /> : null}
+                  <MapPin className="h-3 w-3 text-slate-400" />
+                  {p.arenaNome}
+                  {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-slate-400">
+                  <MapPin className="h-3 w-3" />
+                  Local a definir
+                </span>
+              )}
+            </div>
+            {getStatusBadge(p.status, p.dataHorario)}
+          </div>
+
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex-1 text-right">
+              <div className="font-bold text-slate-900 leading-tight">{p.equipeANome || p.equipeAId.slice(0, 8)}</div>
+            </div>
+
+            <div className="flex flex-col items-center justify-center min-w-[3rem]">
+              <span className="text-lg font-bold text-slate-900 font-mono tracking-tight bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                {formatPlacar(p.detalhesPlacar)}
+              </span>
+            </div>
+
+            <div className="flex-1 text-left">
+              <div className="font-bold text-slate-900 leading-tight">{p.equipeBNome || p.equipeBId.slice(0, 8)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
+          <div className="text-xs">
+            {p.dataHorario ? (
+              <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                {formatDataHora(p.dataHorario)}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-amber-600 font-medium">
+                <Calendar className="h-3.5 w-3.5" />
+                {p.dataLimite ? `Limite: ${formatDataHora(p.dataLimite)}` : "Sem agendamento"}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => gerarCardPartida(p)}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+              title="Gerar card da partida"
+            >
+              <ImageIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => startEditPartida(p)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
+            >
+              Lançar placar
+            </button>
+
+            {fasePartidas !== "GRUPOS" && p.status === "AGENDADA" && (
+              <button
+                type="button"
+                onClick={() => abrirAlterarConfronto(p)}
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                title="Alterar confronto"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   async function gerarRelatorioJogos() {
     if (!categoria) return;
     try {
@@ -1481,106 +1591,27 @@ export default function AdminCategoriaJogosPage() {
           </div>
         </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {partidasFiltradas.length === 0 ? (
-              <div className="col-span-full py-10 text-center text-slate-500">
-                Nenhuma partida encontrada.
-              </div>
-            ) : (
-              partidasFiltradas.map((p) => (
-                <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
-                          {p.grupoNome ?? "Grupo"}
-                        </span>
-                        {p.arenaNome ? (
-                          <span className="flex items-center gap-1">
-                            {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome} className="h-4 w-4 rounded-full object-cover" /> : null}
-                            <MapPin className="h-3 w-3 text-slate-400" />
-                            {p.arenaNome}
-                            {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-slate-400">
-                            <MapPin className="h-3 w-3" />
-                            Local a definir
-                          </span>
-                        )}
-                      </div>
-                      {getStatusBadge(p.status, p.dataHorario)}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-4 mb-4">
-                      <div className="flex-1 text-right">
-                        <div className="font-bold text-slate-900 leading-tight">
-                          {p.equipeANome || p.equipeAId.slice(0, 8)}
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-col items-center justify-center min-w-[3rem]">
-                        <span className="text-lg font-bold text-slate-900 font-mono tracking-tight bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                          {formatPlacar(p.detalhesPlacar)}
-                        </span>
-                      </div>
-
-                      <div className="flex-1 text-left">
-                        <div className="font-bold text-slate-900 leading-tight">
-                          {p.equipeBNome || p.equipeBId.slice(0, 8)}
-                        </div>
-                      </div>
-                    </div>
+          {partidasFiltradas.length === 0 ? (
+            <div className="py-10 text-center text-slate-500">Nenhuma partida encontrada.</div>
+          ) : fasePartidas === "GRUPOS" ? (
+            <div className="mt-4 space-y-6">
+              {partidasAgrupadasPorGrupo.map((grupo) => (
+                <section key={grupo.grupoNome} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{grupo.grupoNome}</h3>
+                    <span className="text-xs font-medium text-slate-500">{grupo.partidas.length} jogo(s)</span>
                   </div>
-
-                  <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
-                    <div className="text-xs">
-                      {p.dataHorario ? (
-                        <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                          <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                          {formatDataHora(p.dataHorario)}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-amber-600 font-medium">
-                          <Calendar className="h-3.5 w-3.5" />
-                          {p.dataLimite ? `Limite: ${formatDataHora(p.dataLimite)}` : "Sem agendamento"}
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => gerarCardPartida(p)}
-                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                        title="Gerar card da partida"
-                      >
-                        <ImageIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => startEditPartida(p)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
-                      >
-                        Lançar placar
-                      </button>
-                      
-                      {fasePartidas !== "GRUPOS" && p.status === "AGENDADA" && (
-                        <button
-                          type="button"
-                          onClick={() => abrirAlterarConfronto(p)}
-                          className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                          title="Alterar confronto"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {grupo.partidas.map((p) => renderPartidaCard(p))}
                   </div>
-                </div>
-              ))
-            )}
-          </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {partidasFiltradas.map((p) => renderPartidaCard(p))}
+            </div>
+          )}
       </div>
 
       {editPartidaId &&
