@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { apoiadoresService } from "@/services/apoiadores.service";
-import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket, Smartphone } from "lucide-react";
+import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket, Smartphone, Tv } from "lucide-react";
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import TournamentRegistrationChat from "@/components/public/TournamentRegistrationChat";
@@ -224,6 +224,14 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                 >
                   <Calendar className="h-5 w-5" />
                   Jogos do dia
+                </Link>
+
+                <Link
+                  href={`/torneios/${torneio.slug}/painel-quadras`}
+                  className="w-full mt-3 bg-white text-slate-900 font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-slate-200 hover:bg-slate-50"
+                >
+                  <Tv className="h-5 w-5" />
+                  Painel de quadras ao vivo
                 </Link>
               </div>
             </div>

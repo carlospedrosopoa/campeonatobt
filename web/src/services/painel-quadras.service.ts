@@ -61,6 +61,9 @@ type QuadraCard = {
   proximaPartidaReserva: PainelQuadrasPartida | null;
 };
 
+export type PainelQuadrasQuadraCard = QuadraCard;
+export type PainelQuadrasChaveDisponivel = ChaveDisponivelPainel;
+
 function nomeQuadra(numero: number) {
   return `Quadra ${numero}`;
 }
