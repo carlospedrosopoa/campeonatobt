@@ -234,6 +234,9 @@ export const torneios = pgTable('torneios', {
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
   cardApenasComFotos: boolean('card_apenas_com_fotos').default(false).notNull(),
   quadrasAtivas: integer('quadras_ativas').default(0).notNull(),
+  painelQuadrasReservas: json('painel_quadras_reservas').$type<
+    { quadraNumero: number; categoriaId: string; fase: string; grupoId?: string | null }[]
+  >(),
   valorPrimeiraInscricao: decimal('valor_primeira_inscricao', { precision: 10, scale: 2 }),
   valorInscricaoAdicional: decimal('valor_inscricao_adicional', { precision: 10, scale: 2 }),
   pixChave: text('pix_chave'),

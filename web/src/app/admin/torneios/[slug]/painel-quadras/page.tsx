@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, CheckCircle2, Gamepad2, MapPin, Play, RefreshCw, Save, Timer, Undo2, X } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle2, Gamepad2, Lock, MapPin, Play, RefreshCw, Save, Timer, Undo2, Unlock, X } from "lucide-react";
 
 type Arena = {
   id: string;
@@ -37,6 +37,21 @@ type QuadraCard = {
   numero: number;
   nome: string;
   partidaAtual: PartidaPainel | null;
+  reservaChave: ChavePainel | null;
+  proximaPartidaReserva: PartidaPainel | null;
+};
+
+type ChavePainel = {
+  categoriaId: string;
+  categoriaNome: string;
+  fase: string;
+  grupoId: string | null;
+  grupoNome: string | null;
+  descricao: string;
+  partidasPendentes: number;
+  partidasEmAndamento: number;
+  totalEmAberto: number;
+  quadraNumero?: number;
 };
 
 type PainelPayload = {
@@ -49,6 +64,7 @@ type PainelPayload = {
   arenas: Arena[];
   quadras: QuadraCard[];
   fila: PartidaPainel[];
+  chavesDisponiveis: ChavePainel[];
   historicoRecente: PartidaPainel[];
   stats: {
     quadrasAtivas: number;
@@ -116,6 +132,14 @@ function resumoFase(partida: PartidaPainel) {
   return partida.fase;
 }
 
+function isMesmaChave(
+  partida: Pick<PartidaPainel, "categoriaId" | "fase" | "grupoId">,
+  chave: Pick<ChavePainel, "categoriaId" | "fase" | "grupoId"> | null | undefined
+) {
+  if (!chave) return true;
+  return partida.categoriaId === chave.categoriaId && partida.fase === chave.fase && (partida.grupoId ?? null) === (chave.grupoId ?? null);
+}
+
 export default function AdminPainelQuadrasPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
@@ -132,6 +156,9 @@ export default function AdminPainelQuadrasPage() {
   const [partidaSelecionadaId, setPartidaSelecionadaId] = useState("");
   const [arenaSelecionadaId, setArenaSelecionadaId] = useState("");
   const [salvandoAlocacao, setSalvandoAlocacao] = useState(false);
+  const [quadraReservaSelecionada, setQuadraReservaSelecionada] = useState<QuadraCard | null>(null);
+  const [chaveReservaSelecionada, setChaveReservaSelecionada] = useState("");
+  const [salvandoReserva, setSalvandoReserva] = useState(false);
 
   const [editPartida, setEditPartida] = useState<PartidaPainel | null>(null);
   const [salvandoPlacar, setSalvandoPlacar] = useState(false);
@@ -175,13 +202,13 @@ export default function AdminPainelQuadrasPage() {
   }, []);
 
   useEffect(() => {
-    if (!quadraSelecionada && !editPartida) return;
+    if (!quadraSelecionada && !editPartida && !quadraReservaSelecionada) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [quadraSelecionada, editPartida]);
+  }, [quadraSelecionada, editPartida, quadraReservaSelecionada]);
 
   const fila = painel?.fila ?? [];
   const quadras = painel?.quadras ?? [];
@@ -192,9 +219,15 @@ export default function AdminPainelQuadrasPage() {
     [fila, partidaSelecionadaId]
   );
 
+  const filaDaQuadraSelecionada = useMemo(() => {
+    if (!quadraSelecionada?.reservaChave) return fila;
+    return fila.filter((partida) => isMesmaChave(partida, quadraSelecionada.reservaChave));
+  }, [fila, quadraSelecionada]);
+
   function abrirAlocacao(quadra: QuadraCard) {
     setQuadraSelecionada(quadra);
-    setPartidaSelecionadaId(fila[0]?.id ?? "");
+    const filaFiltrada = quadra.reservaChave ? fila.filter((partida) => isMesmaChave(partida, quadra.reservaChave)) : fila;
+    setPartidaSelecionadaId(filaFiltrada[0]?.id ?? "");
     setArenaSelecionadaId("");
   }
 
@@ -202,6 +235,20 @@ export default function AdminPainelQuadrasPage() {
     setQuadraSelecionada(null);
     setPartidaSelecionadaId("");
     setArenaSelecionadaId("");
+  }
+
+  function chaveKey(chave: Pick<ChavePainel, "categoriaId" | "fase" | "grupoId">) {
+    return `${chave.categoriaId}::${chave.fase}::${chave.grupoId ?? ""}`;
+  }
+
+  function abrirReservaChave(quadra: QuadraCard) {
+    setQuadraReservaSelecionada(quadra);
+    setChaveReservaSelecionada(quadra.reservaChave ? chaveKey(quadra.reservaChave) : painel?.chavesDisponiveis?.[0] ? chaveKey(painel.chavesDisponiveis[0]) : "");
+  }
+
+  function fecharReservaChave() {
+    setQuadraReservaSelecionada(null);
+    setChaveReservaSelecionada("");
   }
 
   async function salvarConfig() {
@@ -269,6 +316,55 @@ export default function AdminPainelQuadrasPage() {
       setErro(e?.message || "Erro inesperado");
     } finally {
       setSalvandoAlocacao(false);
+    }
+  }
+
+  async function salvarReservaChave() {
+    if (!quadraReservaSelecionada || !chaveReservaSelecionada) return;
+    const chave = (painel?.chavesDisponiveis ?? []).find((item) => chaveKey(item) === chaveReservaSelecionada);
+    if (!chave) return;
+
+    try {
+      setSalvandoReserva(true);
+      setErro(null);
+      const res = await fetch(`/api/v1/torneios/${slug}/painel-quadras/quadras/${quadraReservaSelecionada.numero}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          acao: "reservar-chave",
+          categoriaId: chave.categoriaId,
+          fase: chave.fase,
+          grupoId: chave.grupoId || null,
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao reservar chave na quadra");
+      fecharReservaChave();
+      await carregarPainel();
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoReserva(false);
+    }
+  }
+
+  async function liberarReservaChave(quadra: QuadraCard) {
+    try {
+      setSalvandoReserva(true);
+      setErro(null);
+      const res = await fetch(`/api/v1/torneios/${slug}/painel-quadras/quadras/${quadra.numero}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "liberar-chave" }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao liberar reserva da quadra");
+      if (quadraReservaSelecionada?.numero === quadra.numero) fecharReservaChave();
+      await carregarPainel();
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoReserva(false);
     }
   }
 
@@ -467,6 +563,12 @@ export default function AdminPainelQuadrasPage() {
                   <div>
                     <div className="text-xs uppercase tracking-wider text-slate-500">Quadra</div>
                     <div className="text-xl font-bold text-slate-900">{quadra.nome}</div>
+                    {quadra.reservaChave && (
+                      <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+                        <Lock className="h-3.5 w-3.5" />
+                        {quadra.reservaChave.descricao}
+                      </div>
+                    )}
                   </div>
                   {partida ? (
                     <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${statusClass[partida.status] || "bg-slate-50 text-slate-600 border-slate-100"}`}>
@@ -482,16 +584,52 @@ export default function AdminPainelQuadrasPage() {
                 {!partida ? (
                   <div className="mt-6 flex h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-center">
                     <p className="font-medium text-slate-700">Sem jogo alocado</p>
-                    <p className="mt-1 text-sm text-slate-500">Escolha uma partida da fila para colocar nesta quadra.</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {quadra.reservaChave
+                        ? "Esta quadra fica dedicada a essa chave ate encerrar os jogos em aberto."
+                        : "Escolha uma partida da fila para colocar nesta quadra."}
+                    </p>
+                    {quadra.reservaChave && (
+                      <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50 px-4 py-3 text-left text-sm text-violet-800">
+                        <div className="font-semibold">{quadra.reservaChave.descricao}</div>
+                        <div className="mt-1">
+                          Pendentes: {quadra.reservaChave.partidasPendentes} • Em andamento: {quadra.reservaChave.partidasEmAndamento}
+                        </div>
+                        <div className="mt-1">
+                          Proximo jogo: {quadra.proximaPartidaReserva ? `${quadra.proximaPartidaReserva.equipeANome || "Equipe A"} x ${quadra.proximaPartidaReserva.equipeBNome || "Equipe B"}` : "nenhum pendente"}
+                        </div>
+                      </div>
+                    )}
                     <button
                       type="button"
-                      disabled={!fila.length}
+                      disabled={!(quadra.reservaChave ? fila.some((partida) => isMesmaChave(partida, quadra.reservaChave)) : fila.length)}
                       onClick={() => abrirAlocacao(quadra)}
                       className="mt-4 inline-flex items-center gap-2 rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
                     >
                       <Play className="h-4 w-4" />
-                      Colocar jogo
+                      {quadra.reservaChave ? "Colocar jogo da chave" : "Colocar jogo"}
                     </button>
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => abrirReservaChave(quadra)}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Lock className="h-4 w-4" />
+                        {quadra.reservaChave ? "Trocar chave" : "Reservar chave"}
+                      </button>
+                      {quadra.reservaChave && (
+                        <button
+                          type="button"
+                          disabled={salvandoReserva}
+                          onClick={() => liberarReservaChave(quadra)}
+                          className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <Unlock className="h-4 w-4" />
+                          Liberar chave
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="mt-5 space-y-4">
@@ -527,6 +665,25 @@ export default function AdminPainelQuadrasPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => abrirReservaChave(quadra)}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Lock className="h-4 w-4" />
+                        {quadra.reservaChave ? "Trocar chave da quadra" : "Reservar chave"}
+                      </button>
+                      {quadra.reservaChave && (
+                        <button
+                          type="button"
+                          disabled={salvandoReserva}
+                          onClick={() => liberarReservaChave(quadra)}
+                          className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <Unlock className="h-4 w-4" />
+                          Liberar chave
+                        </button>
+                      )}
                       {partida.status === "AGENDADA" && (
                         <>
                           <button
@@ -681,12 +838,17 @@ export default function AdminPainelQuadrasPage() {
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
                 >
                   <option value="">Selecione uma partida</option>
-                  {fila.map((partida) => (
+                  {filaDaQuadraSelecionada.map((partida) => (
                     <option key={partida.id} value={partida.id}>
                       {partida.categoriaNome} • {resumoFase(partida)} • {partida.equipeANome || "Equipe A"} x {partida.equipeBNome || "Equipe B"}
                     </option>
                   ))}
                 </select>
+                {quadraSelecionada.reservaChave && (
+                  <p className="text-xs text-violet-700">
+                    Esta quadra esta reservada para {quadraSelecionada.reservaChave.descricao}. Somente jogos dessa chave aparecem aqui.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -715,6 +877,11 @@ export default function AdminPainelQuadrasPage() {
                   </div>
                 </div>
               )}
+              {quadraSelecionada.reservaChave && filaDaQuadraSelecionada.length === 0 && (
+                <div className="rounded-lg border border-dashed border-violet-200 bg-violet-50 px-4 py-4 text-sm text-violet-800">
+                  Nao ha jogos pendentes dessa chave para colocar agora nesta quadra.
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-2">
@@ -734,6 +901,83 @@ export default function AdminPainelQuadrasPage() {
                 <Save className="h-4 w-4" />
                 {salvandoAlocacao ? "Alocando..." : "Confirmar"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {quadraReservaSelecionada && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-slate-500">Reservar chave na quadra</div>
+                <h3 className="text-lg font-bold text-slate-900">{quadraReservaSelecionada.nome}</h3>
+              </div>
+              <button type="button" onClick={fecharReservaChave} className="text-sm text-slate-500 hover:text-slate-800">
+                Fechar
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Chave dedicada</label>
+                <select
+                  value={chaveReservaSelecionada}
+                  onChange={(e) => setChaveReservaSelecionada(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+                >
+                  <option value="">Selecione uma chave</option>
+                  {(painel?.chavesDisponiveis ?? []).map((chave) => (
+                    <option key={chaveKey(chave)} value={chaveKey(chave)}>
+                      {chave.descricao} • Pendentes {chave.partidasPendentes} • Em andamento {chave.partidasEmAndamento}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500">
+                  Enquanto a reserva estiver ativa, essa quadra so aceita jogos dessa chave e a reserva sai automaticamente quando a chave encerrar.
+                </p>
+              </div>
+
+              {quadraReservaSelecionada.reservaChave && (
+                <div className="rounded-lg border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+                  Reserva atual: <span className="font-semibold">{quadraReservaSelecionada.reservaChave.descricao}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between gap-2">
+              <div>
+                {quadraReservaSelecionada.reservaChave && (
+                  <button
+                    type="button"
+                    disabled={salvandoReserva}
+                    onClick={() => liberarReservaChave(quadraReservaSelecionada)}
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <Unlock className="h-4 w-4" />
+                    Liberar reserva
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={fecharReservaChave}
+                  className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!chaveReservaSelecionada || salvandoReserva}
+                  onClick={salvarReservaChave}
+                  className="inline-flex items-center gap-2 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  {salvandoReserva ? "Salvando..." : "Salvar reserva"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

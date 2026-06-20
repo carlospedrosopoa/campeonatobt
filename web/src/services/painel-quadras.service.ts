@@ -1,11 +1,18 @@
 import { db } from "@/db";
 import { arenas, categorias, grupos, partidas, torneios } from "@/db/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 
 const ACTIVE_MATCH_STATUSES = ["AGENDADA", "EM_ANDAMENTO"] as const;
 
 type ActiveStatus = (typeof ACTIVE_MATCH_STATUSES)[number];
+
+type PainelQuadraReservaConfig = {
+  quadraNumero: number;
+  categoriaId: string;
+  fase: string;
+  grupoId: string | null;
+};
 
 export type PainelQuadrasPartida = {
   id: string;
@@ -30,14 +37,41 @@ export type PainelQuadrasPartida = {
   detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
 };
 
+type ChaveDisponivelPainel = {
+  categoriaId: string;
+  categoriaNome: string;
+  fase: string;
+  grupoId: string | null;
+  grupoNome: string | null;
+  descricao: string;
+  partidasPendentes: number;
+  partidasEmAndamento: number;
+  totalEmAberto: number;
+};
+
+type QuadraReservaPainel = ChaveDisponivelPainel & {
+  quadraNumero: number;
+};
+
 type QuadraCard = {
   numero: number;
   nome: string;
   partidaAtual: PainelQuadrasPartida | null;
+  reservaChave: QuadraReservaPainel | null;
+  proximaPartidaReserva: PainelQuadrasPartida | null;
 };
 
 function nomeQuadra(numero: number) {
   return `Quadra ${numero}`;
+}
+
+function chaveEscopoKey(params: { categoriaId: string; fase: string; grupoId?: string | null }) {
+  return `${params.categoriaId}::${params.fase}::${params.grupoId ?? ""}`;
+}
+
+function resumoChave(params: { categoriaNome: string; fase: string; grupoNome?: string | null }) {
+  if (params.fase === "GRUPOS" && params.grupoNome) return `${params.categoriaNome} • ${params.grupoNome}`;
+  return `${params.categoriaNome} • ${params.fase}`;
 }
 
 function isActiveStatus(status: string): status is ActiveStatus {
@@ -58,6 +92,7 @@ export class PainelQuadrasService {
         nome: torneios.nome,
         slug: torneios.slug,
         quadrasAtivas: torneios.quadrasAtivas,
+        painelQuadrasReservas: torneios.painelQuadrasReservas,
       })
       .from(torneios)
       .where(eq(torneios.id, torneioId))
@@ -129,7 +164,62 @@ export class PainelQuadrasService {
       detalhesPlacar: (row.detalhesPlacar as PainelQuadrasPartida["detalhesPlacar"]) ?? null,
     }));
 
+    const chavesAbertasMap = new Map<string, ChaveDisponivelPainel>();
+    const proximasPartidasPorChave = new Map<string, PainelQuadrasPartida>();
+
+    for (const partida of partidasComNomes) {
+      if (!isActiveStatus(partida.status)) continue;
+      const key = chaveEscopoKey(partida);
+      const existente = chavesAbertasMap.get(key);
+      if (existente) {
+        if (partida.status === "AGENDADA") existente.partidasPendentes += 1;
+        if (partida.status === "EM_ANDAMENTO") existente.partidasEmAndamento += 1;
+        existente.totalEmAberto += 1;
+      } else {
+        chavesAbertasMap.set(key, {
+          categoriaId: partida.categoriaId,
+          categoriaNome: partida.categoriaNome,
+          fase: partida.fase,
+          grupoId: partida.grupoId,
+          grupoNome: partida.grupoNome,
+          descricao: resumoChave(partida),
+          partidasPendentes: partida.status === "AGENDADA" ? 1 : 0,
+          partidasEmAndamento: partida.status === "EM_ANDAMENTO" ? 1 : 0,
+          totalEmAberto: 1,
+        });
+      }
+
+      if (partida.status === "AGENDADA" && !proximasPartidasPorChave.has(key)) {
+        proximasPartidasPorChave.set(key, partida);
+      }
+    }
+
     const quadrasAtivas = Math.max(0, torneio.quadrasAtivas ?? 0);
+    const reservasNormalizadas = this.normalizarReservasQuadras(torneio.painelQuadrasReservas);
+    const reservasAtivas = reservasNormalizadas
+      .filter((reserva) => reserva.quadraNumero >= 1 && reserva.quadraNumero <= quadrasAtivas)
+      .filter((reserva) => chavesAbertasMap.has(chaveEscopoKey(reserva)));
+
+    if (JSON.stringify(reservasAtivas) !== JSON.stringify(reservasNormalizadas)) {
+      await db
+        .update(torneios)
+        .set({
+          painelQuadrasReservas: reservasAtivas.length ? (reservasAtivas as any) : null,
+          atualizadoEm: new Date(),
+        })
+        .where(eq(torneios.id, torneioId));
+    }
+
+    const reservaPorQuadra = new Map<number, QuadraReservaPainel>();
+    for (const reserva of reservasAtivas) {
+      const chave = chavesAbertasMap.get(chaveEscopoKey(reserva));
+      if (!chave) continue;
+      reservaPorQuadra.set(reserva.quadraNumero, {
+        quadraNumero: reserva.quadraNumero,
+        ...chave,
+      });
+    }
+
     const quadrasMap = new Map<string, QuadraCard>();
     const courtNames = new Set<string>();
     for (let i = 1; i <= quadrasAtivas; i += 1) {
@@ -139,6 +229,8 @@ export class PainelQuadrasService {
         numero: i,
         nome,
         partidaAtual: null,
+        reservaChave: reservaPorQuadra.get(i) ?? null,
+        proximaPartidaReserva: null,
       });
     }
 
@@ -160,6 +252,12 @@ export class PainelQuadrasService {
       const quadra = (partida.quadra || "").trim();
       return !quadra || !courtNames.has(quadra);
     });
+
+    for (const quadra of quadrasMap.values()) {
+      if (!quadra.reservaChave) continue;
+      const key = chaveEscopoKey(quadra.reservaChave);
+      quadra.proximaPartidaReserva = proximasPartidasPorChave.get(key) ?? null;
+    }
 
     const historicoRecente = partidasComNomes
       .filter((partida) => partida.status === "FINALIZADA" || partida.status === "WO")
@@ -195,6 +293,7 @@ export class PainelQuadrasService {
       arenas: arenaRows,
       quadras,
       fila,
+      chavesDisponiveis: Array.from(chavesAbertasMap.values()).sort((a, b) => a.descricao.localeCompare(b.descricao, "pt-BR")),
       historicoRecente,
       stats: {
         quadrasAtivas,
@@ -211,10 +310,25 @@ export class PainelQuadrasService {
   async salvarConfigQuadras(params: { torneioId: string; quadrasAtivas: number }) {
     const quadrasAtivas = Math.max(0, Math.min(20, Math.trunc(Number(params.quadrasAtivas) || 0)));
 
+    const torneioRows = await db
+      .select({
+        id: torneios.id,
+        painelQuadrasReservas: torneios.painelQuadrasReservas,
+      })
+      .from(torneios)
+      .where(eq(torneios.id, params.torneioId))
+      .limit(1);
+
+    const torneio = torneioRows[0];
+    const reservas = this
+      .normalizarReservasQuadras(torneio?.painelQuadrasReservas)
+      .filter((item) => item.quadraNumero >= 1 && item.quadraNumero <= quadrasAtivas);
+
     const [updated] = await db
       .update(torneios)
       .set({
         quadrasAtivas,
+        painelQuadrasReservas: reservas.length ? (reservas as any) : null,
         atualizadoEm: new Date(),
       })
       .where(eq(torneios.id, params.torneioId))
@@ -246,6 +360,7 @@ export class PainelQuadrasService {
       if (!arenaRow[0]) throw new Error("Arena inválida para o torneio");
     }
 
+    await this.validarReservaQuadra(params.torneioId, quadraNumero, partida);
     await this.validarQuadraDisponivel(params.torneioId, quadra, params.partidaId);
 
     const [updated] = await db
@@ -320,10 +435,104 @@ export class PainelQuadrasService {
     return updated;
   }
 
+  async reservarQuadraParaChave(params: {
+    torneioId: string;
+    quadraNumero: number;
+    categoriaId: string;
+    fase: string;
+    grupoId?: string | null;
+  }) {
+    const quadraNumero = Math.max(1, Math.min(99, Math.trunc(Number(params.quadraNumero) || 0)));
+    if (!quadraNumero) throw new Error("Quadra inválida");
+
+    const torneioRows = await db
+      .select({
+        id: torneios.id,
+        quadrasAtivas: torneios.quadrasAtivas,
+        painelQuadrasReservas: torneios.painelQuadrasReservas,
+      })
+      .from(torneios)
+      .where(eq(torneios.id, params.torneioId))
+      .limit(1);
+
+    const torneio = torneioRows[0];
+    if (!torneio) throw new Error("Torneio não encontrado");
+    if (quadraNumero > Math.max(0, torneio.quadrasAtivas ?? 0)) throw new Error("Quadra fora da quantidade ativa do painel");
+
+    const grupoId = params.grupoId?.trim() ? params.grupoId : null;
+    const partidaCompativel = await db
+      .select({ id: partidas.id })
+      .from(partidas)
+      .where(
+        and(
+          eq(partidas.torneioId, params.torneioId),
+          eq(partidas.categoriaId, params.categoriaId),
+          eq(partidas.fase, params.fase as any),
+          grupoId ? eq(partidas.grupoId, grupoId) : isNull(partidas.grupoId),
+          inArray(partidas.status, ACTIVE_MATCH_STATUSES)
+        )
+      )
+      .limit(1);
+
+    if (!partidaCompativel[0]) {
+      throw new Error("Essa chave não possui jogos em aberto para reservar a quadra");
+    }
+
+    const reservas = this.normalizarReservasQuadras(torneio.painelQuadrasReservas).filter((item) => item.quadraNumero !== quadraNumero);
+    reservas.push({
+      quadraNumero,
+      categoriaId: params.categoriaId,
+      fase: params.fase,
+      grupoId,
+    });
+
+    await db
+      .update(torneios)
+      .set({
+        painelQuadrasReservas: reservas as any,
+        atualizadoEm: new Date(),
+      })
+      .where(eq(torneios.id, params.torneioId));
+
+    return { ok: true };
+  }
+
+  async liberarReservaQuadra(params: { torneioId: string; quadraNumero: number }) {
+    const quadraNumero = Math.max(1, Math.min(99, Math.trunc(Number(params.quadraNumero) || 0)));
+    if (!quadraNumero) throw new Error("Quadra inválida");
+
+    const torneioRows = await db
+      .select({
+        id: torneios.id,
+        painelQuadrasReservas: torneios.painelQuadrasReservas,
+      })
+      .from(torneios)
+      .where(eq(torneios.id, params.torneioId))
+      .limit(1);
+
+    const torneio = torneioRows[0];
+    if (!torneio) throw new Error("Torneio não encontrado");
+
+    const reservas = this.normalizarReservasQuadras(torneio.painelQuadrasReservas).filter((item) => item.quadraNumero !== quadraNumero);
+
+    await db
+      .update(torneios)
+      .set({
+        painelQuadrasReservas: reservas.length ? (reservas as any) : null,
+        atualizadoEm: new Date(),
+      })
+      .where(eq(torneios.id, params.torneioId));
+
+    return { ok: true };
+  }
+
   private async buscarPartidaOperacional(torneioId: string, partidaId: string) {
     const rows = await db
       .select({
         id: partidas.id,
+        categoriaId: partidas.categoriaId,
+        fase: partidas.fase,
+        grupoId: partidas.grupoId,
         quadra: partidas.quadra,
         status: partidas.status,
       })
@@ -332,6 +541,39 @@ export class PainelQuadrasService {
       .limit(1);
 
     return rows[0] ?? null;
+  }
+
+  private async validarReservaQuadra(
+    torneioId: string,
+    quadraNumero: number,
+    partida: {
+      categoriaId: string;
+      fase: string;
+      grupoId: string | null;
+    }
+  ) {
+    const torneioRows = await db
+      .select({
+        painelQuadrasReservas: torneios.painelQuadrasReservas,
+      })
+      .from(torneios)
+      .where(eq(torneios.id, torneioId))
+      .limit(1);
+
+    const reserva = this
+      .normalizarReservasQuadras(torneioRows[0]?.painelQuadrasReservas)
+      .find((item) => item.quadraNumero === quadraNumero);
+
+    if (!reserva) return;
+
+    const mesmaChave =
+      reserva.categoriaId === partida.categoriaId &&
+      reserva.fase === partida.fase &&
+      (reserva.grupoId ?? null) === (partida.grupoId ?? null);
+
+    if (!mesmaChave) {
+      throw new Error(`A ${nomeQuadra(quadraNumero)} está reservada para outra chave`);
+    }
   }
 
   private async validarQuadraDisponivel(torneioId: string, quadra: string, partidaIdIgnorado: string, permitirMesmaEmAndamento = false) {
@@ -358,6 +600,28 @@ export class PainelQuadrasService {
     if (conflitante) {
       throw new Error(`A ${quadra} já possui uma partida em operação`);
     }
+  }
+
+  private normalizarReservasQuadras(value: unknown): PainelQuadraReservaConfig[] {
+    if (!Array.isArray(value)) return [];
+    const normalizadas = value
+      .map((item) => {
+        const raw = item as Record<string, unknown>;
+        const quadraNumero = Math.trunc(Number(raw?.quadraNumero) || 0);
+        const categoriaId = typeof raw?.categoriaId === "string" ? raw.categoriaId.trim() : "";
+        const fase = typeof raw?.fase === "string" ? raw.fase.trim() : "";
+        const grupoId = typeof raw?.grupoId === "string" && raw.grupoId.trim() ? raw.grupoId.trim() : null;
+        if (!quadraNumero || !categoriaId || !fase) return null;
+        return { quadraNumero, categoriaId, fase, grupoId };
+      })
+      .filter((item): item is PainelQuadraReservaConfig => Boolean(item))
+      .sort((a, b) => a.quadraNumero - b.quadraNumero);
+
+    const porQuadra = new Map<number, PainelQuadraReservaConfig>();
+    for (const item of normalizadas) {
+      porQuadra.set(item.quadraNumero, item);
+    }
+    return Array.from(porQuadra.values()).sort((a, b) => a.quadraNumero - b.quadraNumero);
   }
 }
 
