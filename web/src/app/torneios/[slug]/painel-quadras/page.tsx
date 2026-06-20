@@ -8,11 +8,14 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ modo?: string }>;
 }
 
-export default async function TorneioPainelQuadrasPublicPage({ params }: PageProps) {
+export default async function TorneioPainelQuadrasPublicPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const query = (await searchParams) ?? {};
   const torneio = await torneiosService.buscarPorSlug(slug);
+  const modoInicial = query.modo === "destaque" ? "destaque" : "grade";
 
   if (!torneio || torneio.oculto) notFound();
 
@@ -27,7 +30,7 @@ export default async function TorneioPainelQuadrasPublicPage({ params }: PagePro
           Voltar ao torneio
         </Link>
       </div>
-      <PainelQuadrasPublicContent slug={torneio.slug} nomeTorneio={torneio.nome} />
+      <PainelQuadrasPublicContent slug={torneio.slug} nomeTorneio={torneio.nome} modoInicial={modoInicial} />
     </>
   );
 }

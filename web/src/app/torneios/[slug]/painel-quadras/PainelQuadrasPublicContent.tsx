@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, Clock3, Gamepad2, MapPin, RefreshCw } from "lucide-react";
+import { Calendar, Clock3, Gamepad2, MapPin, RefreshCw, Tv } from "lucide-react";
 
 type PartidaPublica = {
   id: string;
@@ -60,6 +60,7 @@ type PainelPublicoPayload = {
 };
 
 const REFRESH_MS = 180000;
+const HIGHLIGHT_ROTATION_MS = 12000;
 
 function formatDataHora(value?: string | null) {
   if (!value) return "-";
@@ -107,18 +108,35 @@ function placarResumo(partida?: PartidaPublica | null) {
   return `${partida.placarA} x ${partida.placarB}`;
 }
 
+function prioridadeDestaque(quadra: QuadraPublica) {
+  if (quadra.partidaAtual?.status === "EM_ANDAMENTO") return 0;
+  if (quadra.partidaAtual?.status === "AGENDADA") return 1;
+  if (quadra.proximaPartidaPrevista) return 2;
+  return 3;
+}
+
+function resumoStatusQuadra(quadra: QuadraPublica) {
+  if (quadra.partidaAtual?.status === "EM_ANDAMENTO") return "Em andamento";
+  if (quadra.partidaAtual?.status === "AGENDADA") return "Aguardando inicio";
+  if (quadra.proximaPartidaPrevista) return "Proximo jogo previsto";
+  return "Livre";
+}
+
 export default function PainelQuadrasPublicContent({
   slug,
   nomeTorneio,
+  modoInicial,
 }: {
   slug: string;
   nomeTorneio: string;
+  modoInicial?: "grade" | "destaque";
 }) {
   const [painel, setPainel] = useState<PainelPublicoPayload | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null);
   const [agora, setAgora] = useState(() => Date.now());
+  const [highlightIndex, setHighlightIndex] = useState(0);
 
   async function carregarPainel() {
     try {
@@ -152,6 +170,33 @@ export default function PainelQuadrasPublicContent({
   }, []);
 
   const quadras = useMemo(() => painel?.quadras ?? [], [painel]);
+  const isModoDestaque = modoInicial === "destaque";
+  const quadrasOrdenadasDestaque = useMemo(
+    () =>
+      [...quadras].sort((a, b) => {
+        const prioridade = prioridadeDestaque(a) - prioridadeDestaque(b);
+        if (prioridade !== 0) return prioridade;
+        return a.numero - b.numero;
+      }),
+    [quadras]
+  );
+  const destaqueAtual = isModoDestaque && quadrasOrdenadasDestaque.length > 0 ? quadrasOrdenadasDestaque[highlightIndex % quadrasOrdenadasDestaque.length] : null;
+  const quadrasSecundarias = useMemo(
+    () => (destaqueAtual ? quadrasOrdenadasDestaque.filter((quadra) => quadra.nome !== destaqueAtual.nome) : quadras),
+    [destaqueAtual, quadras, quadrasOrdenadasDestaque]
+  );
+
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [quadrasOrdenadasDestaque.length]);
+
+  useEffect(() => {
+    if (!isModoDestaque || quadrasOrdenadasDestaque.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setHighlightIndex((current) => (current + 1) % quadrasOrdenadasDestaque.length);
+    }, HIGHLIGHT_ROTATION_MS);
+    return () => window.clearInterval(timer);
+  }, [isModoDestaque, quadrasOrdenadasDestaque.length]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -187,9 +232,31 @@ export default function PainelQuadrasPublicContent({
             <RefreshCw className="h-4 w-4" />
             Atualizacao automatica a cada 3 minutos
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
-            <Clock3 className="h-4 w-4" />
-            Ultima consulta: {formatDataHora(atualizadoEm)}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
+              <Tv className="h-4 w-4" />
+              {isModoDestaque ? "Modo destaque" : "Modo grade"}
+            </div>
+            <a
+              href={`/torneios/${slug}/painel-quadras`}
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 ${
+                !isModoDestaque ? "border-orange-300/40 bg-orange-500/20 text-orange-100" : "border-white/10 bg-white/5 text-slate-200"
+              }`}
+            >
+              Grade
+            </a>
+            <a
+              href={`/torneios/${slug}/painel-quadras?modo=destaque`}
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 ${
+                isModoDestaque ? "border-orange-300/40 bg-orange-500/20 text-orange-100" : "border-white/10 bg-white/5 text-slate-200"
+              }`}
+            >
+              Destaque
+            </a>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
+              <Clock3 className="h-4 w-4" />
+              Ultima consulta: {formatDataHora(atualizadoEm)}
+            </div>
           </div>
         </div>
 
@@ -208,12 +275,160 @@ export default function PainelQuadrasPublicContent({
           </div>
         ) : null}
 
-        <div className="mt-8 grid grid-cols-1 gap-6 2xl:grid-cols-2">
-          {quadras.map((quadra) => {
+        {isModoDestaque && destaqueAtual ? (
+          <div className="mt-8 space-y-6">
+            <section className="rounded-[2rem] border border-orange-300/20 bg-gradient-to-br from-orange-500/15 via-slate-900/70 to-slate-900 p-8 shadow-2xl shadow-black/30">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm font-semibold uppercase tracking-[0.25em] text-orange-200">Quadra em destaque</div>
+                  <h2 className="mt-2 text-4xl font-black md:text-6xl">{destaqueAtual.nome}</h2>
+                  <div className="mt-4 inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 text-base font-bold text-slate-100">
+                    {resumoStatusQuadra(destaqueAtual)}
+                  </div>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-right">
+                  <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Troca automatica</div>
+                  <div className="mt-2 text-3xl font-black">{quadrasOrdenadasDestaque.length > 1 ? "12s" : "-"}</div>
+                  <div className="mt-1 text-sm text-slate-300">
+                    {quadrasOrdenadasDestaque.length > 1 ? "prioridade para quadras em andamento" : "somente uma quadra relevante"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
+                <div className="rounded-3xl border border-amber-300/20 bg-amber-500/10 p-6">
+                  <div className="text-sm font-bold uppercase tracking-wider text-amber-200">Jogo atual</div>
+                  {destaqueAtual.partidaAtual ? (
+                    <div className="mt-5 space-y-5">
+                      <div className="text-lg text-amber-50/85">
+                        {destaqueAtual.partidaAtual.categoriaNome} • {destaqueAtual.partidaAtual.faseResumo}
+                      </div>
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-2xl font-black md:text-4xl">
+                        <div className="text-right">{destaqueAtual.partidaAtual.equipeANome || "Equipe A"}</div>
+                        <div className="text-amber-200">x</div>
+                        <div>{destaqueAtual.partidaAtual.equipeBNome || "Equipe B"}</div>
+                      </div>
+                      {placarResumo(destaqueAtual.partidaAtual) ? (
+                        <div className="text-center text-2xl font-black text-amber-100">Placar {placarResumo(destaqueAtual.partidaAtual)}</div>
+                      ) : null}
+                      <div className="grid gap-3 text-base text-amber-50/90 md:grid-cols-2">
+                        <div className="inline-flex items-center gap-2">
+                          <MapPin className="h-5 w-5" />
+                          {destaqueAtual.partidaAtual.arenaNome || destaqueAtual.nome}
+                        </div>
+                        <div className="inline-flex items-center gap-2">
+                          <Calendar className="h-5 w-5" />
+                          {formatDataHora(destaqueAtual.partidaAtual.dataHorario)}
+                        </div>
+                        <div className="inline-flex items-center gap-2">
+                          <Clock3 className="h-5 w-5" />
+                          Inicio: {formatHora(destaqueAtual.partidaAtual.iniciadoEm)}
+                        </div>
+                        <div className="inline-flex items-center gap-2">
+                          <Clock3 className="h-5 w-5" />
+                          Decorrido: {tempoDecorrido(destaqueAtual.partidaAtual.iniciadoEm, agora)}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-5 rounded-3xl border border-dashed border-white/10 bg-black/20 px-6 py-16 text-center text-2xl font-semibold text-slate-300">
+                      Nenhum jogo acontecendo nesta quadra agora
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-5">
+                  <div className="rounded-3xl border border-violet-300/20 bg-violet-500/10 p-6">
+                    <div className="text-sm font-bold uppercase tracking-wider text-violet-100">Ordem da chave</div>
+                    {destaqueAtual.reservaChave ? (
+                      <>
+                        <div className="mt-3 text-2xl font-black">{destaqueAtual.reservaChave.descricao}</div>
+                        <div className="mt-3 text-base text-violet-50/90">
+                          Pendentes {destaqueAtual.reservaChave.partidasPendentes} • Em andamento {destaqueAtual.reservaChave.partidasEmAndamento}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-3 text-lg text-slate-200">Sem chave fixa nesta quadra</div>
+                    )}
+                  </div>
+
+                  <div className="rounded-3xl border border-cyan-300/20 bg-cyan-500/10 p-6">
+                    <div className="text-sm font-bold uppercase tracking-wider text-cyan-100">Proximo jogo previsto</div>
+                    {destaqueAtual.proximaPartidaPrevista ? (
+                      <div className="mt-4 space-y-4">
+                        <div className="text-base text-cyan-50/80">
+                          {destaqueAtual.proximaPartidaPrevista.categoriaNome} • {destaqueAtual.proximaPartidaPrevista.faseResumo}
+                        </div>
+                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-xl font-black md:text-2xl">
+                          <div className="text-right">{destaqueAtual.proximaPartidaPrevista.equipeANome || "Equipe A"}</div>
+                          <div className="text-cyan-200">x</div>
+                          <div>{destaqueAtual.proximaPartidaPrevista.equipeBNome || "Equipe B"}</div>
+                        </div>
+                        <div className="grid gap-2 text-sm text-cyan-50/90">
+                          <div className="inline-flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            {destaqueAtual.proximaPartidaPrevista.arenaNome || destaqueAtual.nome}
+                          </div>
+                          <div className="inline-flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            Horario previsto: {formatDataHora(destaqueAtual.proximaPartidaPrevista.dataHorario)}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 px-5 py-10 text-center text-lg font-semibold text-slate-300">
+                        {destaqueAtual.reservaChave
+                          ? "Sem novo jogo previsto nesta chave no momento"
+                          : "Sem previsao automatica para esta quadra"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {quadrasSecundarias.length > 0 ? (
+              <section>
+                <div className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Demais quadras</div>
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                  {quadrasSecundarias.map((quadra) => (
+                    <div key={quadra.nome} className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Quadra</div>
+                          <div className="mt-1 text-2xl font-black">{quadra.nome}</div>
+                        </div>
+                        <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-bold text-slate-200">
+                          {resumoStatusQuadra(quadra)}
+                        </div>
+                      </div>
+                      <div className="mt-4 text-sm text-slate-200">
+                        {quadra.partidaAtual ? (
+                          <>
+                            <div className="font-semibold">{quadra.partidaAtual.equipeANome || "Equipe A"} x {quadra.partidaAtual.equipeBNome || "Equipe B"}</div>
+                            <div className="mt-1 text-slate-400">{quadra.partidaAtual.categoriaNome} • {quadra.partidaAtual.faseResumo}</div>
+                          </>
+                        ) : quadra.proximaPartidaPrevista ? (
+                          <>
+                            <div className="font-semibold">{quadra.proximaPartidaPrevista.equipeANome || "Equipe A"} x {quadra.proximaPartidaPrevista.equipeBNome || "Equipe B"}</div>
+                            <div className="mt-1 text-slate-400">Previsto • {quadra.proximaPartidaPrevista.categoriaNome} • {quadra.proximaPartidaPrevista.faseResumo}</div>
+                          </>
+                        ) : (
+                          <div className="text-slate-400">Sem jogo no momento</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-8 grid grid-cols-1 gap-6 2xl:grid-cols-2">
+            {quadras.map((quadra) => {
             const partidaAtual = quadra.partidaAtual;
             const proxima = quadra.proximaPartidaPrevista;
-            const statusAtual =
-              partidaAtual?.status === "EM_ANDAMENTO" ? "Em andamento" : partidaAtual?.status === "AGENDADA" ? "Aguardando inicio" : "Livre";
+            const statusAtual = resumoStatusQuadra(quadra);
             return (
               <section key={quadra.nome} className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -315,8 +530,9 @@ export default function PainelQuadrasPublicContent({
                 </div>
               </section>
             );
-          })}
-        </div>
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
