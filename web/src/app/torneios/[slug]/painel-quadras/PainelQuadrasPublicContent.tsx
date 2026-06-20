@@ -30,12 +30,32 @@ type ReservaChavePublica = {
   totalEmAberto: number;
 };
 
+type ClassificacaoGrupoPublica = {
+  modelo: "SUPER" | "NORMAL";
+  grupoNome: string;
+  criterioResumo: string;
+  equipes: {
+    posicao: number;
+    equipeId: string;
+    equipeNome: string;
+    pontos: number;
+    jogosJogados: number;
+    jogosVencidos: number;
+    jogosPerdidos: number;
+    saldoGames: number;
+    gamesPro: number;
+    setsPro: number;
+  }[];
+};
+
 type QuadraPublica = {
   numero: number;
   nome: string;
   reservaChave: ReservaChavePublica | null;
   partidaAtual: PartidaPublica | null;
   proximaPartidaPrevista: PartidaPublica | null;
+  filaPartidas: PartidaPublica[];
+  classificacaoGrupo: ClassificacaoGrupoPublica | null;
 };
 
 type PainelPublicoPayload = {
@@ -122,6 +142,12 @@ function resumoStatusQuadra(quadra: QuadraPublica) {
   return "Livre";
 }
 
+function resumoFilaItem(partida: PartidaPublica, index: number) {
+  if (partida.status === "EM_ANDAMENTO") return index === 0 ? "Agora" : "Em andamento";
+  if (partida.status === "AGENDADA") return index === 0 ? "Proxima" : `${index + 1} na fila`;
+  return partida.status;
+}
+
 export default function PainelQuadrasPublicContent({
   slug,
   nomeTorneio,
@@ -197,6 +223,11 @@ export default function PainelQuadrasPublicContent({
     }, HIGHLIGHT_ROTATION_MS);
     return () => window.clearInterval(timer);
   }, [isModoDestaque, quadrasOrdenadasDestaque.length]);
+
+  function avancarQuadraDestaque() {
+    if (!isModoDestaque || quadrasOrdenadasDestaque.length <= 1) return;
+    setHighlightIndex((current) => (current + 1) % quadrasOrdenadasDestaque.length);
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -292,6 +323,15 @@ export default function PainelQuadrasPublicContent({
                   <div className="mt-1 text-sm text-slate-300">
                     {quadrasOrdenadasDestaque.length > 1 ? "prioridade para quadras em andamento" : "somente uma quadra relevante"}
                   </div>
+                  {quadrasOrdenadasDestaque.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={avancarQuadraDestaque}
+                      className="mt-4 inline-flex items-center justify-center rounded-full border border-orange-300/40 bg-orange-500/20 px-4 py-2 text-sm font-bold text-orange-50 hover:bg-orange-500/30"
+                    >
+                      Proxima quadra
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -383,6 +423,116 @@ export default function PainelQuadrasPublicContent({
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_1.15fr]">
+                <div className="rounded-3xl border border-emerald-300/20 bg-emerald-500/10 p-6">
+                  <div className="text-sm font-bold uppercase tracking-wider text-emerald-100">Classificacao</div>
+                  {destaqueAtual.classificacaoGrupo ? (
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <div className="text-2xl font-black text-white">{destaqueAtual.classificacaoGrupo.grupoNome}</div>
+                        <div className="mt-1 text-sm text-emerald-50/80">{destaqueAtual.classificacaoGrupo.criterioResumo}</div>
+                      </div>
+                      <div className="overflow-hidden rounded-2xl border border-white/10">
+                        <table className="w-full text-sm">
+                          <thead className="bg-black/20 text-emerald-100/80">
+                            <tr>
+                              <th className="px-3 py-3 text-left font-semibold">#</th>
+                              <th className="px-3 py-3 text-left font-semibold">Equipe</th>
+                              <th className="px-3 py-3 text-center font-semibold">J</th>
+                              {destaqueAtual.classificacaoGrupo.modelo === "SUPER" ? (
+                                <>
+                                  <th className="px-3 py-3 text-center font-semibold">P</th>
+                                  <th className="px-3 py-3 text-center font-semibold">V</th>
+                                  <th className="px-3 py-3 text-center font-semibold">SP</th>
+                                  <th className="px-3 py-3 text-center font-semibold">SG</th>
+                                </>
+                              ) : (
+                                <>
+                                  <th className="px-3 py-3 text-center font-semibold">V</th>
+                                  <th className="px-3 py-3 text-center font-semibold">GP</th>
+                                  <th className="px-3 py-3 text-center font-semibold">SG</th>
+                                </>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {destaqueAtual.classificacaoGrupo.equipes.map((equipe) => (
+                              <tr key={equipe.equipeId} className="border-t border-white/10">
+                                <td className="px-3 py-3 font-black text-emerald-100">{equipe.posicao}</td>
+                                <td className="px-3 py-3 font-semibold text-white">{equipe.equipeNome}</td>
+                                <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.jogosJogados}</td>
+                                {destaqueAtual.classificacaoGrupo.modelo === "SUPER" ? (
+                                  <>
+                                    <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.pontos}</td>
+                                    <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.jogosVencidos}</td>
+                                    <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.setsPro}</td>
+                                    <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.saldoGames}</td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.jogosVencidos}</td>
+                                    <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.gamesPro}</td>
+                                    <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.saldoGames}</td>
+                                  </>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 px-5 py-10 text-center text-lg font-semibold text-slate-300">
+                      Classificacao indisponivel para a quadra em destaque neste momento
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-3xl border border-fuchsia-300/20 bg-fuchsia-500/10 p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-bold uppercase tracking-wider text-fuchsia-100">Fila de jogos</div>
+                    <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-bold text-fuchsia-50">
+                      {destaqueAtual.filaPartidas.length} jogo(s)
+                    </div>
+                  </div>
+                  {destaqueAtual.filaPartidas.length > 0 ? (
+                    <div className="mt-4 space-y-3">
+                      {destaqueAtual.filaPartidas.slice(0, 6).map((partida, index) => (
+                        <div key={partida.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="text-base font-black text-white">
+                                {partida.equipeANome || "Equipe A"} x {partida.equipeBNome || "Equipe B"}
+                              </div>
+                              <div className="mt-1 text-sm text-fuchsia-50/80">
+                                {partida.categoriaNome} • {partida.faseResumo}
+                              </div>
+                            </div>
+                            <div className="rounded-full border border-white/10 bg-fuchsia-500/20 px-3 py-1 text-xs font-bold text-fuchsia-50">
+                              {resumoFilaItem(partida, index)}
+                            </div>
+                          </div>
+                          <div className="mt-3 grid gap-2 text-sm text-fuchsia-50/85 md:grid-cols-2">
+                            <div className="inline-flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              {partida.arenaNome || destaqueAtual.nome}
+                            </div>
+                            <div className="inline-flex items-center gap-2">
+                              <Calendar className="h-4 w-4" />
+                              {formatDataHora(partida.dataHorario)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 px-5 py-10 text-center text-lg font-semibold text-slate-300">
+                      Nenhum jogo em fila para esta quadra agora
+                    </div>
+                  )}
                 </div>
               </div>
             </section>

@@ -59,6 +59,7 @@ type QuadraCard = {
   partidaAtual: PainelQuadrasPartida | null;
   reservaChave: QuadraReservaPainel | null;
   proximaPartidaReserva: PainelQuadrasPartida | null;
+  filaPartidas: PainelQuadrasPartida[];
 };
 
 export type PainelQuadrasQuadraCard = QuadraCard;
@@ -85,6 +86,20 @@ function ordemStatus(status: string) {
   if (status === "EM_ANDAMENTO") return 0;
   if (status === "AGENDADA") return 1;
   return 2;
+}
+
+function ordenarPartidasPainel(a: PainelQuadrasPartida, b: PainelQuadrasPartida) {
+  const prioridade = ordemStatus(a.status) - ordemStatus(b.status);
+  if (prioridade !== 0) return prioridade;
+
+  const dataA = a.dataHorario ? new Date(a.dataHorario).getTime() : Number.MAX_SAFE_INTEGER;
+  const dataB = b.dataHorario ? new Date(b.dataHorario).getTime() : Number.MAX_SAFE_INTEGER;
+  if (dataA !== dataB) return dataA - dataB;
+
+  const categoria = a.categoriaNome.localeCompare(b.categoriaNome, "pt-BR", { sensitivity: "base" });
+  if (categoria !== 0) return categoria;
+
+  return a.id.localeCompare(b.id);
 }
 
 export class PainelQuadrasService {
@@ -167,10 +182,13 @@ export class PainelQuadrasService {
       detalhesPlacar: (row.detalhesPlacar as PainelQuadrasPartida["detalhesPlacar"]) ?? null,
     }));
 
+    const partidasAbertas = partidasComNomes.filter((partida) => isActiveStatus(partida.status)).slice().sort(ordenarPartidasPainel);
     const chavesAbertasMap = new Map<string, ChaveDisponivelPainel>();
     const proximasPartidasPorChave = new Map<string, PainelQuadrasPartida>();
+    const partidasAbertasPorChave = new Map<string, PainelQuadrasPartida[]>();
+    const partidasAbertasPorQuadra = new Map<string, PainelQuadrasPartida[]>();
 
-    for (const partida of partidasComNomes) {
+    for (const partida of partidasAbertas) {
       if (!isActiveStatus(partida.status)) continue;
       const key = chaveEscopoKey(partida);
       const existente = chavesAbertasMap.get(key);
@@ -194,6 +212,17 @@ export class PainelQuadrasService {
 
       if (partida.status === "AGENDADA" && !proximasPartidasPorChave.has(key)) {
         proximasPartidasPorChave.set(key, partida);
+      }
+
+      const partidasDaChave = partidasAbertasPorChave.get(key) ?? [];
+      partidasDaChave.push(partida);
+      partidasAbertasPorChave.set(key, partidasDaChave);
+
+      const nomeQuadraPartida = (partida.quadra || "").trim();
+      if (nomeQuadraPartida) {
+        const partidasDaQuadra = partidasAbertasPorQuadra.get(nomeQuadraPartida) ?? [];
+        partidasDaQuadra.push(partida);
+        partidasAbertasPorQuadra.set(nomeQuadraPartida, partidasDaQuadra);
       }
     }
 
@@ -234,13 +263,14 @@ export class PainelQuadrasService {
         partidaAtual: null,
         reservaChave: reservaPorQuadra.get(i) ?? null,
         proximaPartidaReserva: null,
+        filaPartidas: [],
       });
     }
 
-    const activeAssignedMatches = partidasComNomes
+    const activeAssignedMatches = partidasAbertas
       .filter((partida) => Boolean(partida.quadra) && isActiveStatus(partida.status))
       .slice()
-      .sort((a, b) => ordemStatus(a.status) - ordemStatus(b.status));
+      .sort(ordenarPartidasPainel);
 
     for (const partida of activeAssignedMatches) {
       const quadra = (partida.quadra || "").trim();
@@ -257,9 +287,14 @@ export class PainelQuadrasService {
     });
 
     for (const quadra of quadrasMap.values()) {
-      if (!quadra.reservaChave) continue;
-      const key = chaveEscopoKey(quadra.reservaChave);
-      quadra.proximaPartidaReserva = proximasPartidasPorChave.get(key) ?? null;
+      if (quadra.reservaChave) {
+        const key = chaveEscopoKey(quadra.reservaChave);
+        quadra.proximaPartidaReserva = proximasPartidasPorChave.get(key) ?? null;
+        quadra.filaPartidas = (partidasAbertasPorChave.get(key) ?? []).slice();
+        continue;
+      }
+
+      quadra.filaPartidas = (partidasAbertasPorQuadra.get(quadra.nome) ?? []).slice();
     }
 
     const historicoRecente = partidasComNomes
