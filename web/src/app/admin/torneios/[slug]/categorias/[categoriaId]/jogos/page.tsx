@@ -44,6 +44,7 @@ type GrupoClassificacao = {
     jogosVencidos: number;
     jogosPerdidos: number;
     saldoGames: number;
+    gamesPro?: number;
   }[];
 };
 
@@ -1354,6 +1355,7 @@ export default function AdminCategoriaJogosPage() {
                         <th className="py-2 pr-3 font-medium">Equipe</th>
                         <th className="py-2 pr-3 font-medium">J</th>
                         <th className="py-2 pr-3 font-medium">V</th>
+                        <th className="py-2 pr-3 font-medium">GP</th>
                         <th className="py-2 pr-3 font-medium">SG</th>
                       </tr>
                     </thead>
@@ -1363,6 +1365,7 @@ export default function AdminCategoriaJogosPage() {
                           <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
+                          <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
                         </tr>
                       ))}

@@ -44,6 +44,7 @@ type GrupoClassificacao = {
     jogosVencidos: number;
     jogosPerdidos: number;
     saldoGames: number;
+    gamesPro?: number;
     setsPro?: number;
   }[];
 };
@@ -1341,6 +1342,7 @@ export default function AdminCategoriaJogosSuperPage() {
                         <th className="py-2 pr-3 font-medium">J</th>
                         <th className="py-2 pr-3 font-medium">V</th>
                         <th className="py-2 pr-3 font-medium">SP</th>
+                        <th className="py-2 pr-3 font-medium">GP</th>
                         <th className="py-2 pr-3 font-medium">SG</th>
                         <th className="py-2 pr-3 font-medium">AP%</th>
                       </tr>
@@ -1353,6 +1355,7 @@ export default function AdminCategoriaJogosSuperPage() {
                           <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
+                          <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
                           <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
                           <td className="py-2 pr-3 text-slate-700">
                             {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}

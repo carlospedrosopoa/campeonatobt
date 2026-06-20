@@ -57,6 +57,7 @@ type ClassificacaoGrupo = {
     jogosVencidos: number;
     jogosPerdidos: number;
     setsPro?: number;
+    gamesPro?: number;
     saldoGames: number;
   }[];
 };
@@ -472,6 +473,9 @@ export default function TorneioAtletasDashboardPage() {
                                         <th className="px-2 py-3 text-center font-medium" title="Sets Pró">
                                           SP
                                         </th>
+                                        <th className="px-2 py-3 text-center font-medium" title="Games Pró">
+                                          GP
+                                        </th>
                                         <th className="px-2 py-3 text-center font-medium" title="Saldo de Games">
                                           SG
                                         </th>
@@ -510,6 +514,7 @@ export default function TorneioAtletasDashboardPage() {
                                             <td className="px-2 py-3 text-center text-slate-600">{e.jogosJogados}</td>
                                             <td className="px-2 py-3 text-center text-slate-600">{e.jogosVencidos}</td>
                                             <td className="px-2 py-3 text-center text-slate-600">{e.setsPro ?? 0}</td>
+                                            <td className="px-2 py-3 text-center text-slate-600">{e.gamesPro ?? 0}</td>
                                             <td className="px-2 py-3 text-center text-slate-600">{e.saldoGames}</td>
                                             {mostrarColunasPorPontos ? (
                                               <td className="px-2 py-3 text-center text-slate-600">
