@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
 import { gerarCardPartidaAdmin, gerarCardProgramacaoAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
+import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
 
 type Categoria = {
   id: string;
@@ -167,6 +168,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
   const [gerandoRelatorioClassificacao, setGerandoRelatorioClassificacao] = useState(false);
   const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
+  const [gerandoPlanilhaContingencia, setGerandoPlanilhaContingencia] = useState(false);
   const [formPlacar, setFormPlacar] = useState({
     s1a: "",
     s1b: "",
@@ -437,6 +439,42 @@ export default function AdminCategoriaJogosSuperPage() {
       setErro(e?.message || "Erro ao gerar PDF da tabela de jogos");
     } finally {
       setGerandoRelatorioJogos(false);
+    }
+  }
+
+  async function gerarPlanilhaContingencia() {
+    if (!categoria) return;
+    try {
+      setGerandoPlanilhaContingencia(true);
+      setErro(null);
+
+      const [resPartidas, resClassificacao] = await Promise.all([
+        fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=GRUPOS`, { cache: "no-store" }),
+        fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" }),
+      ]);
+
+      const partidasGrupos = (resPartidas.ok ? ((await resPartidas.json()) as Partida[]) : []) ?? [];
+      const classificacaoAtual = (resClassificacao.ok ? ((await resClassificacao.json()) as GrupoClassificacao[]) : classificacao) ?? [];
+
+      if (partidasGrupos.length === 0) {
+        alert("Nenhum jogo de grupos encontrado para gerar a planilha.");
+        return;
+      }
+
+      await exportarPlanilhaContingenciaCategoria({
+        torneioNome,
+        torneioSlug: slug,
+        categoriaNome: categoria.nome,
+        categoriaSlug: categoria.id,
+        config,
+        partidas: partidasGrupos,
+        classificacao: classificacaoAtual,
+        superCampeonato: true,
+      });
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao gerar Excel de contingência");
+    } finally {
+      setGerandoPlanilhaContingencia(false);
     }
   }
 
@@ -1174,6 +1212,17 @@ export default function AdminCategoriaJogosSuperPage() {
             >
               <FileText className="h-4 w-4" />
               {gerandoRelatorioJogos ? "Gerando…" : "PDF tabela jogos"}
+            </button>
+
+            <button
+              type="button"
+              disabled={gerandoPlanilhaContingencia}
+              onClick={gerarPlanilhaContingencia}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Gerar Excel offline para contingência com lancamento e classificacao por chave"
+            >
+              <FileText className="h-4 w-4" />
+              {gerandoPlanilhaContingencia ? "Gerando…" : "Excel contingência"}
             </button>
 
             <button
