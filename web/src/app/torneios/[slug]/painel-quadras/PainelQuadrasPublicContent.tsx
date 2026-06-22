@@ -430,10 +430,13 @@ export default function PainelQuadrasPublicContent({
                 <div className="rounded-3xl border border-emerald-300/20 bg-emerald-500/10 p-6">
                   <div className="text-sm font-bold uppercase tracking-wider text-emerald-100">Classificacao</div>
                   {destaqueAtual.classificacaoGrupo ? (
+                    (() => {
+                      const classificacaoGrupo = destaqueAtual.classificacaoGrupo;
+                      return (
                     <div className="mt-4 space-y-4">
                       <div>
-                        <div className="text-2xl font-black text-white">{destaqueAtual.classificacaoGrupo.grupoNome}</div>
-                        <div className="mt-1 text-sm text-emerald-50/80">{destaqueAtual.classificacaoGrupo.criterioResumo}</div>
+                        <div className="text-2xl font-black text-white">{classificacaoGrupo.grupoNome}</div>
+                        <div className="mt-1 text-sm text-emerald-50/80">{classificacaoGrupo.criterioResumo}</div>
                       </div>
                       <div className="overflow-hidden rounded-2xl border border-white/10">
                         <table className="w-full text-sm">
@@ -442,7 +445,7 @@ export default function PainelQuadrasPublicContent({
                               <th className="px-3 py-3 text-left font-semibold">#</th>
                               <th className="px-3 py-3 text-left font-semibold">Equipe</th>
                               <th className="px-3 py-3 text-center font-semibold">J</th>
-                              {destaqueAtual.classificacaoGrupo.modelo === "SUPER" ? (
+                              {classificacaoGrupo.modelo === "SUPER" ? (
                                 <>
                                   <th className="px-3 py-3 text-center font-semibold">P</th>
                                   <th className="px-3 py-3 text-center font-semibold">V</th>
@@ -459,12 +462,12 @@ export default function PainelQuadrasPublicContent({
                             </tr>
                           </thead>
                           <tbody>
-                            {destaqueAtual.classificacaoGrupo.equipes.map((equipe) => (
+                            {classificacaoGrupo.equipes.map((equipe) => (
                               <tr key={equipe.equipeId} className="border-t border-white/10">
                                 <td className="px-3 py-3 font-black text-emerald-100">{equipe.posicao}</td>
                                 <td className="px-3 py-3 font-semibold text-white">{equipe.equipeNome}</td>
                                 <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.jogosJogados}</td>
-                                {destaqueAtual.classificacaoGrupo.modelo === "SUPER" ? (
+                                {classificacaoGrupo.modelo === "SUPER" ? (
                                   <>
                                     <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.pontos}</td>
                                     <td className="px-3 py-3 text-center text-emerald-50/90">{equipe.jogosVencidos}</td>
@@ -484,6 +487,8 @@ export default function PainelQuadrasPublicContent({
                         </table>
                       </div>
                     </div>
+                      );
+                    })()
                   ) : (
                     <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 px-5 py-10 text-center text-lg font-semibold text-slate-300">
                       Classificacao indisponivel para a quadra em destaque neste momento
