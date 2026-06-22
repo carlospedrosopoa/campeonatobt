@@ -928,9 +928,11 @@ export default function AdminCategoriaJogosSuperPage() {
       }
 
       const proximaFaseCriada = payload?.proximaFaseCriada as string | null;
-      if (proximaFaseCriada) {
-        setFase(proximaFaseCriada as any);
-        await carregarPartidas(proximaFaseCriada as any);
+      const proximaFaseAtualizada = payload?.proximaFaseAtualizada as string | null;
+      const proximaFaseDestino = proximaFaseCriada || proximaFaseAtualizada;
+      if (proximaFaseDestino) {
+        setFase(proximaFaseDestino as any);
+        await carregarPartidas(proximaFaseDestino as any);
       } else {
         await carregarPartidas();
       }

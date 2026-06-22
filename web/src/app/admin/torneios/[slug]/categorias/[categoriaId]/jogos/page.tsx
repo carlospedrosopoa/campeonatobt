@@ -812,15 +812,17 @@ export default function AdminCategoriaJogosPage() {
       if (!res.ok) throw new Error(payload?.error || "Falha ao salvar placar");
 
       const proximaFaseCriada = payload?.proximaFaseCriada as string | null;
+      const proximaFaseAtualizada = payload?.proximaFaseAtualizada as string | null;
+      const proximaFaseDestino = proximaFaseCriada || proximaFaseAtualizada;
       if (fasePartidas === "GRUPOS") {
         await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" }).catch(() => null);
         const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
         if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
       }
 
-      if (proximaFaseCriada) {
-        setFasePartidas(proximaFaseCriada as any);
-        await carregarPartidas(proximaFaseCriada as any);
+      if (proximaFaseDestino) {
+        setFasePartidas(proximaFaseDestino as any);
+        await carregarPartidas(proximaFaseDestino as any);
       } else {
         await carregarPartidas();
       }

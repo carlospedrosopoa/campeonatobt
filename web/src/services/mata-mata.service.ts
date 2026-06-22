@@ -605,7 +605,33 @@ export class MataMataService {
     await this.limparFasesPosteriores({ torneioId: params.torneioId, categoriaId: params.categoriaId, apos: faseProxima });
 
     if (existentes.length !== calc.pairings.length) {
-      throw new Error("Não foi possível ajustar a chave: quantidade de jogos da fase seguinte não confere.");
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(partidas)
+          .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, faseProxima)));
+
+        for (const p of calc.pairings) {
+          await tx.insert(partidas).values({
+            torneioId: params.torneioId,
+            categoriaId: params.categoriaId,
+            grupoId: null,
+            equipeAId: p.a,
+            equipeBId: p.b,
+            fase: faseProxima,
+            status: "AGENDADA",
+            placarA: 0,
+            placarB: 0,
+            atualizadoEm: new Date(),
+          });
+        }
+      });
+
+      return {
+        faseCriada: null as any,
+        faseAtualizada: faseProxima,
+        partidasCriadas: 0,
+        partidasAtualizadas: calc.pairings.length,
+      };
     }
 
     const sorted = existentes.slice().sort((a, b) => a.id.localeCompare(b.id));
