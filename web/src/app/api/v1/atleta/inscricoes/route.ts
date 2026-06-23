@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, partidas, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { inscricoesService } from "@/services/inscricoes.service";
+import { torneioResultadosService } from "@/services/torneio-resultados.service";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
       categoria: { id: string; nome: string; slug: string; valorInscricao: string | null };
       torneioPix: { chave: string | null; nome: string | null; cidade: string | null };
       meuPagamento: { pago: boolean; status: string; valorDevido: string | null };
+      medalha: "OURO" | "PRATA" | null;
       equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null }[] };
     }
   >();
@@ -100,6 +102,7 @@ export async function GET(request: NextRequest) {
           status: r.meuPagamentoStatus ?? (Boolean(r.meuPago) ? "PAGO" : "PENDENTE"),
           valorDevido: r.meuValorDevido ?? null,
         },
+        medalha: null,
         equipe: {
           id: r.equipeId,
           nome: r.equipeNome,
@@ -113,6 +116,7 @@ export async function GET(request: NextRequest) {
 
   const result = Array.from(map.values());
   const torneioIds = Array.from(new Set(result.map((i) => i.torneio.id).filter(Boolean)));
+  const podiosPorTorneio = await torneioResultadosService.listarPodiosPorTorneioIds(torneioIds);
   if (torneioIds.length > 0) {
     const torneiosComJogos = await db
       .select({ torneioId: partidas.torneioId })
@@ -125,6 +129,15 @@ export async function GET(request: NextRequest) {
     }
   }
   for (const item of result) {
+    const podios = podiosPorTorneio.get(item.torneio.id) ?? [];
+    const podioCategoria = podios.find((p) => p.categoriaId === item.categoria.id);
+    item.medalha = !podioCategoria
+      ? null
+      : item.equipe.id === podioCategoria.campeaoEquipeId
+        ? "OURO"
+        : item.equipe.id === podioCategoria.viceEquipeId
+          ? "PRATA"
+          : null;
     const nomeAtual = (item.equipe.nome || "").trim();
     if (!nomeAtual) {
       const nomes = item.equipe.atletas

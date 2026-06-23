@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { apoiadoresService } from "@/services/apoiadores.service";
+import { torneioResultadosService } from "@/services/torneio-resultados.service";
 import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket, Smartphone, Tv } from "lucide-react";
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
@@ -22,6 +23,7 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
   }
 
   const categorias = await categoriasService.listarPorTorneio(torneio.id);
+  const podiosCategorias = await torneioResultadosService.listarPodioPorTorneio(torneio.id);
   const apoiadores = await apoiadoresService.listarPorTorneio(torneio.id);
   const session = await getSession();
   const isAtleta = session?.user?.perfil === "ATLETA";
@@ -145,6 +147,40 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                 </div>
               )}
             </section>
+
+            {torneio.status === "FINALIZADO" && podiosCategorias.length > 0 ? (
+              <section className="bg-white rounded-xl p-6 shadow-sm border border-amber-100">
+                <div className="flex items-center gap-2 mb-6 border-b border-amber-100 pb-2">
+                  <Trophy className="h-5 w-5 text-amber-500" />
+                  <h2 className="text-xl font-bold text-slate-800">Campeoes do Torneio</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {podiosCategorias.map((podio) => (
+                    <div key={podio.categoriaId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-bold text-slate-900">{podio.categoriaNome}</div>
+                        <Link
+                          href={`/torneios/${torneio.slug}/categoria/${podio.categoriaSlug}`}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                        >
+                          Ver categoria
+                        </Link>
+                      </div>
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <div className="text-xs font-bold uppercase tracking-wide text-amber-700">Ouro</div>
+                          <div className="mt-1 font-semibold text-slate-900">{podio.campeaoNome}</div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-3">
+                          <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Prata</div>
+                          <div className="mt-1 font-semibold text-slate-900">{podio.viceNome}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {apoiadores.length > 0 ? (
               <section className="bg-white rounded-xl p-6 shadow-sm border border-slate-100">

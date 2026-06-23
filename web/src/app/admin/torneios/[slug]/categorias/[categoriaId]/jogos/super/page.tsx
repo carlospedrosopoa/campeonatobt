@@ -129,6 +129,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [gerandoRodadasRestantes, setGerandoRodadasRestantes] = useState(false);
   const [recalculando, setRecalculando] = useState(false);
   const [gerandoMataMata, setGerandoMataMata] = useState(false);
+  const [gerandoProximaFase, setGerandoProximaFase] = useState(false);
   const [resetando, setResetando] = useState(false);
 
   const [classificacao, setClassificacao] = useState<GrupoClassificacao[]>([]);
@@ -1342,6 +1343,38 @@ export default function AdminCategoriaJogosSuperPage() {
               className="inline-flex items-center justify-center rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
             >
               {gerandoMataMata ? "Gerando…" : "Gerar mata-mata"}
+            </button>
+
+            <button
+              type="button"
+              disabled={gerandoProximaFase || fase === "GRUPOS" || fase === "FINAL"}
+              onClick={async () => {
+                try {
+                  setGerandoProximaFase(true);
+                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-proxima-fase`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ faseAtual: fase }),
+                  });
+                  const payload = (await res.json().catch(() => null)) as any;
+                  if (!res.ok) throw new Error(payload?.error || "Falha ao gerar próxima fase");
+                  const proximaFaseDestino = (payload?.faseCriada || payload?.faseAtualizada) as string | null;
+                  if (!proximaFaseDestino) {
+                    throw new Error("A próxima fase ainda não está pronta. Verifique se todos os jogos da fase atual estão finalizados.");
+                  }
+                  setFase(proximaFaseDestino as any);
+                  await carregarPartidas(proximaFaseDestino as any);
+                  await carregarResultadoFinal();
+                } catch (e: any) {
+                  setErro(e?.message || "Erro inesperado");
+                } finally {
+                  setGerandoProximaFase(false);
+                }
+              }}
+              className="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+              title="Força a geração ou sincronização da fase seguinte"
+            >
+              {gerandoProximaFase ? "Gerando…" : "Gerar próxima fase"}
             </button>
 
             <button

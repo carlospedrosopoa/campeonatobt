@@ -202,29 +202,34 @@ export class MataMataService {
       const { seeds } = await this.calcularSeeds({ categoriaId: params.categoriaId });
       if (seeds.length === 6) {
         // Se for Super Campeonato, o re-seeding já foi tratado no bloco acima (faseProxima === "SEMI").
-        // Este bloco lida com torneios normais de 6 classificados onde a semi é fixa:
-        // S1 x Vencedor(S4xS5) e S2 x Vencedor(S3xS6)
+        // Para o modelo normal, respeita as quartas já persistidas no banco.
+        // Isso evita travar categorias antigas em que as quartas foram montadas em outra ordem,
+        // mantendo apenas a regra esportiva: S2 enfrenta o vencedor do lado mais forte restante
+        // e S1 enfrenta o vencedor do outro lado.
         const s1 = seeds[0];
         const s2 = seeds[1];
-        const s3 = seeds[2];
-        const s4 = seeds[3];
-        const s5 = seeds[4];
-        const s6 = seeds[5];
+        const rank = new Map<string, number>();
+        for (let i = 0; i < seeds.length; i++) {
+          rank.set(seeds[i], i + 1);
+        }
 
         const jogosFull = await db
-          .select({ equipeAId: partidas.equipeAId, equipeBId: partidas.equipeBId, vencedorId: partidas.vencedorId })
+          .select({ id: partidas.id, equipeAId: partidas.equipeAId, equipeBId: partidas.equipeBId, vencedorId: partidas.vencedorId })
           .from(partidas)
           .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "QUARTAS")));
+        const quartasValidas = jogosFull
+          .filter((m) => m.vencedorId && m.equipeAId && m.equipeBId)
+          .map((m) => ({
+            ...m,
+            melhorSeed: Math.min(rank.get(m.equipeAId!) ?? 999, rank.get(m.equipeBId!) ?? 999),
+          }))
+          .sort((a, b) => a.melhorSeed - b.melhorSeed || a.id.localeCompare(b.id));
+        if (quartasValidas.length !== 2) return { faseProxima, pairings: [] as { a: string; b: string }[] };
 
-        const isMatch = (m: any, a: string, b: string) =>
-          (m.equipeAId === a && m.equipeBId === b) || (m.equipeAId === b && m.equipeBId === a);
-
-        const match36 = jogosFull.find((m) => isMatch(m, s3, s6));
-        const match45 = jogosFull.find((m) => isMatch(m, s4, s5));
-        if (!match36?.vencedorId || !match45?.vencedorId) return { faseProxima, pairings: [] as { a: string; b: string }[] };
-
-        pairings.push({ a: s1, b: match45.vencedorId });
-        pairings.push({ a: s2, b: match36.vencedorId });
+        const ladoMaisForte = quartasValidas[0];
+        const outroLado = quartasValidas[1];
+        pairings.push({ a: s1, b: outroLado.vencedorId! });
+        pairings.push({ a: s2, b: ladoMaisForte.vencedorId! });
       } else {
         if (winners.length % 2 !== 0) throw new Error("Não foi possível gerar a próxima fase: quantidade de vencedores inválida.");
         pairings.push({ a: winners[0], b: winners[1] });

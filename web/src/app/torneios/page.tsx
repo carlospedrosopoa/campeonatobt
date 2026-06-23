@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { torneiosService } from "@/services/torneios.service";
+import { torneioResultadosService } from "@/services/torneio-resultados.service";
 import { Calendar, MapPin, Search, Trophy } from "lucide-react";
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,8 @@ export default async function TorneiosPage({
 }) {
   const { q } = await searchParams;
   // TODO: Implementar busca no service. Por enquanto lista todos recentes.
-  const torneios = await torneiosService.listarRecentesPublicos(); 
+  const torneios = await torneiosService.listarRecentesPublicos();
+  const podiosPorTorneio = await torneioResultadosService.listarPodiosPorTorneioIds(torneios.map((t) => t.id));
 
   const filtrados = q 
     ? torneios.filter(t => t.nome.toLowerCase().includes(q.toLowerCase()) || (t.local && t.local.toLowerCase().includes(q.toLowerCase())))
@@ -37,7 +39,9 @@ export default async function TorneiosPage({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtrados.map((torneio) => (
+        {filtrados.map((torneio) => {
+          const podios = podiosPorTorneio.get(torneio.id) ?? [];
+          return (
           <div key={torneio.id} className="group relative overflow-hidden rounded-lg border bg-white shadow-md transition-all hover:shadow-xl">
              <div className="aspect-video w-full overflow-hidden bg-gray-200 relative">
                   {torneio.bannerUrl ? (
@@ -70,6 +74,23 @@ export default async function TorneiosPage({
                     </div>
                   </div>
 
+                  {torneio.status === "FINALIZADO" && podios.length > 0 ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <div className="text-xs font-bold uppercase tracking-wide text-amber-700">Campeoes</div>
+                      <div className="mt-2 space-y-2">
+                        {podios.slice(0, 2).map((podio) => (
+                          <div key={podio.categoriaId} className="flex items-start justify-between gap-3 text-sm">
+                            <span className="min-w-0 truncate font-semibold text-slate-700">{podio.categoriaNome}</span>
+                            <span className="min-w-0 truncate text-right font-bold text-amber-700">{podio.campeaoNome}</span>
+                          </div>
+                        ))}
+                        {podios.length > 2 ? (
+                          <div className="text-xs text-slate-500">+{podios.length - 2} categorias com campeoes definidos</div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="pt-2">
                     <Link 
                       href={`/torneios/${torneio.slug}`}
@@ -80,7 +101,7 @@ export default async function TorneiosPage({
                   </div>
                 </div>
           </div>
-        ))}
+        )})}
 
         {filtrados.length === 0 && (
           <div className="col-span-full text-center py-20 text-gray-500">

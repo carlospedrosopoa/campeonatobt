@@ -42,6 +42,7 @@ type Inscricao = {
   categoria: { id: string; nome: string; slug: string; valorInscricao: string | null };
   torneioPix: { chave: string | null; nome: string | null; cidade: string | null };
   meuPagamento: { pago: boolean; status?: string | null; valorDevido: string | null };
+  medalha?: "OURO" | "PRATA" | null;
   torneioCamisetaOpcoes?: string[] | null;
   minhaCamisetaOpcao?: string | null;
   equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null }[] };
@@ -86,6 +87,16 @@ function getInitials(nome: string) {
   const first = parts[0]?.[0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
   return (first + last).toUpperCase();
+}
+
+function medalhaBadge(tipo?: "OURO" | "PRATA" | null) {
+  if (tipo === "OURO") {
+    return <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">Ouro</span>;
+  }
+  if (tipo === "PRATA") {
+    return <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-1 text-xs font-bold text-slate-700">Prata</span>;
+  }
+  return null;
 }
 
 export default function AtletaTorneiosPage() {
@@ -542,6 +553,7 @@ export default function AtletaTorneiosPage() {
           categoria: Inscricao["categoria"];
           torneioPix: Inscricao["torneioPix"];
           meuPagamento: Inscricao["meuPagamento"];
+          medalha?: "OURO" | "PRATA" | null;
           equipe: Inscricao["equipe"];
         }>;
         ultimaDataInscricao: number;
@@ -567,6 +579,7 @@ export default function AtletaTorneiosPage() {
         categoria: i.categoria,
         torneioPix: i.torneioPix,
         meuPagamento: i.meuPagamento,
+        medalha: i.medalha ?? null,
         equipe: i.equipe,
       });
       current.ultimaDataInscricao = Math.max(current.ultimaDataInscricao, data || 0);
@@ -574,6 +587,17 @@ export default function AtletaTorneiosPage() {
     }
 
     return Array.from(map.values()).sort((a, b) => b.ultimaDataInscricao - a.ultimaDataInscricao);
+  }, [inscricoes]);
+
+  const medalhasResumo = useMemo(() => {
+    return inscricoes.reduce(
+      (acc, item) => {
+        if (item.medalha === "OURO") acc.ouro += 1;
+        if (item.medalha === "PRATA") acc.prata += 1;
+        return acc;
+      },
+      { ouro: 0, prata: 0 }
+    );
   }, [inscricoes]);
 
   const categoriaSelecionadaModal = useMemo(() => {
@@ -652,6 +676,19 @@ export default function AtletaTorneiosPage() {
         {tab === "torneios" && erroTorneios && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{erroTorneios}</div>}
         {tab === "inscricoes" && erroInscricoes && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{erroInscricoes}</div>}
         {tab === "inscricoes" && pixErro && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{pixErro}</div>}
+
+        {tab === "inscricoes" && (medalhasResumo.ouro > 0 || medalhasResumo.prata > 0) ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div className="text-xs font-bold uppercase tracking-wide text-amber-700">Medalhas de ouro</div>
+              <div className="mt-1 text-2xl font-black text-slate-900">{medalhasResumo.ouro}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Medalhas de prata</div>
+              <div className="mt-1 text-2xl font-black text-slate-900">{medalhasResumo.prata}</div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
           <button
@@ -869,6 +906,12 @@ export default function AtletaTorneiosPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
+                            {(t.categorias.some((c) => c.medalha === "OURO") || t.categorias.some((c) => c.medalha === "PRATA")) && (
+                              <div className="flex items-center gap-2">
+                                {t.categorias.some((c) => c.medalha === "OURO") ? medalhaBadge("OURO") : null}
+                                {t.categorias.some((c) => c.medalha === "PRATA") ? medalhaBadge("PRATA") : null}
+                              </div>
+                            )}
                             {podePagarTotal && (
                               <button
                                 type="button"
@@ -899,7 +942,10 @@ export default function AtletaTorneiosPage() {
                           <div key={c.inscricaoId} className="rounded-lg border border-gray-200 p-4 space-y-2">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="font-semibold text-gray-900">{c.categoria.nome}</div>
+                                <div className="flex items-center gap-2">
+                                  <div className="font-semibold text-gray-900">{c.categoria.nome}</div>
+                                  {medalhaBadge(c.medalha)}
+                                </div>
                                 <div className="text-xs text-gray-600 mt-1">{c.equipe.nome || "Dupla"}</div>
                               </div>
                               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 whitespace-nowrap">
