@@ -973,12 +973,11 @@ export class PanelinhasService {
     if (!organizador || organizador.status !== "ATIVO") throw new Error("Apenas membros ativos podem criar um play");
 
     const participantes = uniqIds(dados.participantes || []);
-    const participantesComOrganizador = uniqIds([organizadorId, ...participantes]);
 
     if (formato === "SUPER4") {
-      if (participantesComOrganizador.length !== 4) throw new Error("Super 4 precisa de 4 participantes");
+      if (participantes.length !== 4) throw new Error("Super 4 precisa de 4 participantes");
     } else {
-      if (participantesComOrganizador.length < 4) throw new Error("Confronto livre precisa de pelo menos 4 participantes");
+      if (participantes.length < 4) throw new Error("Confronto livre precisa de pelo menos 4 participantes");
     }
 
     const membrosAtivos = await db
@@ -986,13 +985,13 @@ export class PanelinhasService {
       .from(panelinhaMembros)
       .where(and(eq(panelinhaMembros.panelinhaId, panelinhaKey), eq(panelinhaMembros.status, "ATIVO")));
     const membrosSet = new Set(membrosAtivos.map((m) => m.atletaId));
-    for (const pid of participantesComOrganizador) {
+    for (const pid of participantes) {
       if (!membrosSet.has(pid)) throw new Error("Todos os participantes devem ser membros da mesma panelinha");
     }
 
     const jogos =
       formato === "SUPER4"
-        ? buildSuper4Jogos(participantesComOrganizador as [string, string, string, string])
+        ? buildSuper4Jogos(participantes as [string, string, string, string])
         : (dados.jogos || []).map((j, idx) => ({ ordem: idx + 1, ...validateJogo(j) }));
 
     if (formato === "CONFRONTO_LIVRE" && jogos.length === 0) {
@@ -1005,7 +1004,7 @@ export class PanelinhasService {
         if (!membrosSet.has(pid)) throw new Error("Todos os participantes do jogo devem ser membros da panelinha");
       }
       for (const pid of ids) {
-        if (!participantesComOrganizador.includes(pid)) {
+        if (!participantes.includes(pid)) {
           throw new Error("Todos os atletas do jogo devem estar na lista de participantes do play");
         }
       }
@@ -1034,7 +1033,7 @@ export class PanelinhasService {
         })
         .returning();
 
-      const participanteRows: (typeof panelinhaPlayParticipantes.$inferInsert)[] = participantesComOrganizador.map((atletaId) => ({
+      const participanteRows: (typeof panelinhaPlayParticipantes.$inferInsert)[] = participantes.map((atletaId) => ({
         playId: playRow.id,
         atletaId,
         status: "ATIVO",
@@ -1093,7 +1092,9 @@ export class PanelinhasService {
       .from(panelinhaPlayParticipantes)
       .where(and(eq(panelinhaPlayParticipantes.playId, playKey), eq(panelinhaPlayParticipantes.atletaId, atletaId), eq(panelinhaPlayParticipantes.status, "ATIVO")))
       .limit(1);
-    if (!participante[0]) throw new Error("Apenas participantes do play podem registrar resultado");
+    if (!participante[0] && play.organizadorId !== atletaId) {
+      throw new Error("Apenas participantes do play ou o organizador podem registrar resultado");
+    }
 
     const [jogo] = await db
       .select()
@@ -1165,7 +1166,9 @@ export class PanelinhasService {
       .from(panelinhaPlayParticipantes)
       .where(and(eq(panelinhaPlayParticipantes.playId, playKey), eq(panelinhaPlayParticipantes.atletaId, atletaId), eq(panelinhaPlayParticipantes.status, "ATIVO")))
       .limit(1);
-    if (!participante[0]) throw new Error("Apenas participantes do play podem registrar resultado");
+    if (!participante[0] && play.organizadorId !== atletaId) {
+      throw new Error("Apenas participantes do play ou o organizador podem registrar resultado");
+    }
 
     const [jogo] = await db
       .select()
@@ -1224,8 +1227,7 @@ export class PanelinhasService {
     const nextArenaNome = dados.arenaNome !== undefined ? (dados.arenaNome ? normalizeText(dados.arenaNome) : null) : undefined;
 
     const updateParticipantes = Array.isArray(dados.participantes);
-    const nextParticipantesRaw = updateParticipantes ? uniqIds(dados.participantes || []) : null;
-    const nextParticipantes = updateParticipantes ? uniqIds([solicitanteId, ...(nextParticipantesRaw || [])]) : null;
+    const nextParticipantes = updateParticipantes ? uniqIds(dados.participantes || []) : null;
 
     if (updateParticipantes) {
       if (nextFormato === "SUPER4") {
