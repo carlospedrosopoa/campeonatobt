@@ -80,6 +80,19 @@ type GerarCardProgramacaoTorneioParams = {
   categorias: ProgramacaoCategoriaInfo[];
 };
 
+function nomePrimeiroEUltimo(nome?: string | null) {
+  const partes = String(nome || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (partes.length <= 2) {
+    return partes.join(" ") || "Atleta";
+  }
+
+  return `${partes[0]} ${partes[partes.length - 1]}`;
+}
+
 function slugify(value: string) {
   return value
     .normalize("NFD")
@@ -746,7 +759,7 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 24px Inter, Arial, sans-serif";
   for (const p of posicoes) {
-    const nome = p.atleta?.nome || "Atleta";
+    const nome = nomePrimeiroEUltimo(p.atleta?.nome);
     drawTextCenter(ctx, nome, p.x + tamanhoAvatar / 2, p.y - 50, larguraNome, 28);
   }
 
