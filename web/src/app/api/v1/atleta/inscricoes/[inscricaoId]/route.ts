@@ -20,12 +20,49 @@ async function upsertAtleta(dados: {
 
   if (playId) {
     const existingByPlay = await db
-      .select({ id: usuarios.id })
+      .select({ id: usuarios.id, perfil: usuarios.perfil })
       .from(usuarios)
       .where(eq(usuarios.playnaquadraAtletaId, playId))
       .limit(1);
     if (existingByPlay.length > 0) {
-      const id = existingByPlay[0].id;
+      const athlete = existingByPlay[0];
+      if (athlete.perfil !== "ATLETA") throw new Error("Parceiro selecionado está vinculado a um usuário não-atleta");
+
+      const conflictingEmail = await db
+        .select({ id: usuarios.id, perfil: usuarios.perfil })
+        .from(usuarios)
+        .where(and(eq(usuarios.email, email), sql`${usuarios.id} <> ${athlete.id}`))
+        .limit(1);
+
+      if (conflictingEmail.length > 0) {
+        const emailAthlete = conflictingEmail[0];
+        if (emailAthlete.perfil !== "ATLETA") throw new Error("Email já está vinculado a um usuário não-atleta");
+
+        await db.transaction(async (tx) => {
+          await tx
+            .update(usuarios)
+            .set({
+              playnaquadraAtletaId: null,
+              atualizadoEm: new Date(),
+            })
+            .where(eq(usuarios.id, athlete.id));
+
+          await tx
+            .update(usuarios)
+            .set({
+              nome,
+              email,
+              telefone: dados.telefone?.trim() || null,
+              playnaquadraAtletaId: playId,
+              ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
+              atualizadoEm: new Date(),
+            })
+            .where(eq(usuarios.id, emailAthlete.id));
+        });
+
+        return emailAthlete.id;
+      }
+
       await db
         .update(usuarios)
         .set({
@@ -35,8 +72,8 @@ async function upsertAtleta(dados: {
           ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
           atualizadoEm: new Date(),
         })
-        .where(eq(usuarios.id, id));
-      return id;
+        .where(eq(usuarios.id, athlete.id));
+      return athlete.id;
     }
   }
 

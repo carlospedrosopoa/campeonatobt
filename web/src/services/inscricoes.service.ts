@@ -343,9 +343,6 @@ export class InscricoesService {
         if (conflictingEmail.length > 0) {
           const emailAthlete = conflictingEmail[0];
           if (emailAthlete.perfil !== "ATLETA") throw new Error("Email já está vinculado a um usuário não-atleta");
-          if (emailAthlete.playnaquadraAtletaId && emailAthlete.playnaquadraAtletaId !== playId) {
-            throw new Error("Email informado já está vinculado a outro perfil do Play na Quadra");
-          }
 
           await db.transaction(async (tx) => {
             await tx
