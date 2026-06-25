@@ -574,6 +574,9 @@ export async function POST(
     const acesso = await requireTournamentAdminBySlug(slug);
     if ("response" in acesso) return acesso.response;
     const { torneio } = acesso;
+    const body = await request.json().catch(() => null);
+    const usuarioId = typeof body?.usuarioId === "string" ? body.usuarioId.trim() : "";
+    const debug = body?.debug === true;
 
     if (usuarioId) {
       const user = await db
