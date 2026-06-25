@@ -1,23 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+﻿import { NextRequest, NextResponse } from "next/server";
+import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { arenasService } from "@/services/arenas.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playListarPoints } from "@/services/playnaquadra-client";
 
-function isAdmin(perfil?: string) {
-  return perfil === "ADMIN" || perfil === "ORGANIZADOR";
-}
-
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     try {
       const token = await getPlayAdminToken();
@@ -48,17 +41,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     const body = await request.json().catch(() => null);
     const nome = (body?.nome as string | undefined)?.trim();
-    if (!nome) return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
+    if (!nome) return NextResponse.json({ error: "Nome Ã© obrigatÃ³rio" }, { status: 400 });
 
     const created = await arenasService.criar({ torneioId: torneio.id, nome });
     return NextResponse.json(created, { status: 201 });
@@ -67,3 +57,4 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
+

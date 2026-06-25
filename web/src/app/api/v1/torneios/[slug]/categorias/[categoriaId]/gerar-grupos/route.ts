@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+﻿import { NextRequest, NextResponse } from "next/server";
+import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { dinamicaCategoriaService } from "@/services/dinamica-categoria.service";
@@ -7,10 +7,6 @@ import { categoriaConfigService } from "@/services/categoria-config.service";
 import { db } from "@/db";
 import { partidas } from "@/db/schema";
 import { eq } from "drizzle-orm";
-
-function isAdmin(perfil?: string) {
-  return perfil === "ADMIN" || perfil === "ORGANIZADOR";
-}
 
 function partidaIniciada(p: { status?: any; vencedorId?: any; placarA?: any; placarB?: any; detalhesPlacar?: any }) {
   if (p.status && p.status !== "AGENDADA") return true;
@@ -25,17 +21,14 @@ export async function POST(
   { params }: { params: Promise<{ slug: string; categoriaId: string }> }
 ) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug, categoriaId } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     const categoria = await categoriasService.buscarPorId(categoriaId);
     if (!categoria || categoria.torneioId !== torneio.id) {
-      return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "Categoria nÃ£o encontrada" }, { status: 404 });
     }
 
     const partidasExistentes = await db
@@ -52,7 +45,7 @@ export async function POST(
 
     if (partidasExistentes.some(partidaIniciada)) {
       return NextResponse.json(
-        { error: "Não é permitido gerar jogos: já existem partidas com resultado ou em andamento nesta categoria." },
+        { error: "NÃ£o Ã© permitido gerar jogos: jÃ¡ existem partidas com resultado ou em andamento nesta categoria." },
         { status: 400 }
       );
     }
@@ -69,3 +62,4 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+

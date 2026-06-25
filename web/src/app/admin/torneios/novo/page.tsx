@@ -34,9 +34,26 @@ type CriarTorneioPayload = {
   logoUrl?: string;
   templateUrl?: string;
   templateInscricaoUrl?: string;
+  organizadorId?: string;
+  administradorIds?: string[];
 };
 
 type TorneioForm = Omit<CriarTorneioPayload, "camisetaOpcoes"> & { camisetaOpcoesTexto: string };
+
+type SessionUser = {
+  id: string;
+  nome: string;
+  email: string;
+  perfil: "ADMIN" | "ORGANIZADOR" | "ATLETA";
+};
+
+type UsuarioGestao = {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string | null;
+  perfil: "ADMIN" | "ORGANIZADOR" | "ATLETA";
+};
 
 function slugify(value: string) {
   return value
@@ -50,10 +67,19 @@ function slugify(value: string) {
 export default function AdminNovoTorneioPage() {
   const router = useRouter();
   const [esportes, setEsportes] = useState<Esporte[]>([]);
+  const [usuarioAtual, setUsuarioAtual] = useState<SessionUser | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [slugManual, setSlugManual] = useState(false);
+  const [organizadorBusca, setOrganizadorBusca] = useState("");
+  const [organizadorSelecionado, setOrganizadorSelecionado] = useState<UsuarioGestao | null>(null);
+  const [resultadosOrganizador, setResultadosOrganizador] = useState<UsuarioGestao[]>([]);
+  const [adminBusca, setAdminBusca] = useState("");
+  const [administradoresSelecionados, setAdministradoresSelecionados] = useState<UsuarioGestao[]>([]);
+  const [resultadosAdmin, setResultadosAdmin] = useState<UsuarioGestao[]>([]);
+  const [buscandoOrganizador, setBuscandoOrganizador] = useState(false);
+  const [buscandoAdmin, setBuscandoAdmin] = useState(false);
   const [form, setForm] = useState<TorneioForm>({
     nome: "",
     slug: "",
@@ -83,11 +109,17 @@ export default function AdminNovoTorneioPage() {
     async function carregar() {
       try {
         setCarregando(true);
-        const res = await fetch("/api/v1/esportes", { cache: "no-store" });
-        if (!res.ok) throw new Error("Falha ao carregar esportes");
-        const dados = (await res.json()) as Esporte[];
+        const [resEsportes, resMe] = await Promise.all([
+          fetch("/api/v1/esportes", { cache: "no-store" }),
+          fetch("/api/v1/auth/me", { cache: "no-store" }),
+        ]);
+        if (!resEsportes.ok) throw new Error("Falha ao carregar esportes");
+        if (!resMe.ok) throw new Error("Falha ao carregar sessão");
+        const dados = (await resEsportes.json()) as Esporte[];
+        const sessao = (await resMe.json()) as { user: SessionUser };
         if (!ativo) return;
         setEsportes(dados);
+        setUsuarioAtual(sessao.user);
         setForm((prev) => ({
           ...prev,
           esporteId: prev.esporteId || dados.find((e) => e.slug === "beach-tennis")?.id || dados[0]?.id || "",
@@ -103,6 +135,90 @@ export default function AdminNovoTorneioPage() {
       ativo = false;
     };
   }, []);
+
+  const podeEditarPermissoes = usuarioAtual?.perfil === "ADMIN";
+
+  useEffect(() => {
+    if (!podeEditarPermissoes) {
+      setOrganizadorSelecionado(null);
+      setOrganizadorBusca("");
+      setResultadosOrganizador([]);
+      setBuscandoOrganizador(false);
+      return;
+    }
+
+    const q = organizadorBusca.trim();
+    if (q.length < 2) {
+      setResultadosOrganizador([]);
+      setBuscandoOrganizador(false);
+      return;
+    }
+
+    let ativo = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        setBuscandoOrganizador(true);
+        const res = await fetch(`/api/v1/usuarios?q=${encodeURIComponent(q)}&perfis=ADMIN,ORGANIZADOR&limit=8`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("Falha ao buscar organizadores");
+        const lista = (await res.json()) as UsuarioGestao[];
+        if (ativo) {
+          setResultadosOrganizador(lista);
+        }
+      } catch (e: any) {
+        if (ativo) setErro(e?.message || "Erro ao buscar organizadores");
+      } finally {
+        if (ativo) setBuscandoOrganizador(false);
+      }
+    }, 250);
+
+    return () => {
+      ativo = false;
+      window.clearTimeout(timer);
+    };
+  }, [organizadorBusca, podeEditarPermissoes]);
+
+  useEffect(() => {
+    if (!podeEditarPermissoes) {
+      setAdministradoresSelecionados([]);
+      setAdminBusca("");
+      setResultadosAdmin([]);
+      setBuscandoAdmin(false);
+      return;
+    }
+
+    const q = adminBusca.trim();
+    if (q.length < 2) {
+      setResultadosAdmin([]);
+      setBuscandoAdmin(false);
+      return;
+    }
+
+    let ativo = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        setBuscandoAdmin(true);
+        const res = await fetch(`/api/v1/usuarios?q=${encodeURIComponent(q)}&perfis=ADMIN,ORGANIZADOR&limit=8`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("Falha ao buscar administradores");
+        const lista = (await res.json()) as UsuarioGestao[];
+        if (ativo) {
+          setResultadosAdmin(lista);
+        }
+      } catch (e: any) {
+        if (ativo) setErro(e?.message || "Erro ao buscar administradores");
+      } finally {
+        if (ativo) setBuscandoAdmin(false);
+      }
+    }, 250);
+
+    return () => {
+      ativo = false;
+      window.clearTimeout(timer);
+    };
+  }, [adminBusca, podeEditarPermissoes]);
 
   const podeSalvar = useMemo(() => {
     return Boolean(form.nome && form.slug && form.dataInicio && form.dataFim && form.local && form.esporteId);
@@ -145,6 +261,8 @@ export default function AdminNovoTorneioPage() {
         logoUrl: form.logoUrl?.trim() ? form.logoUrl : undefined,
         templateUrl: form.templateUrl?.trim() ? form.templateUrl : undefined,
         templateInscricaoUrl: form.templateInscricaoUrl?.trim() ? form.templateInscricaoUrl : undefined,
+        organizadorId: podeEditarPermissoes ? organizadorSelecionado?.id : undefined,
+        administradorIds: podeEditarPermissoes ? administradoresSelecionados.map((usuario) => usuario.id) : undefined,
       };
 
       const res = await fetch("/api/v1/torneios", {
@@ -432,6 +550,136 @@ export default function AdminNovoTorneioPage() {
             />
             <p className="text-xs text-slate-500">Usado nos cards de dupla confirmada. Mesmo formato recomendado do template dos jogos.</p>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Organizador principal</h2>
+            <p className="text-xs text-slate-500">
+              {podeEditarPermissoes
+                ? "Esse usuario passa a administrar este torneio. Se nao selecionar ninguem, o torneio fica com o usuario que criou."
+                : "Como organizador, este torneio sera criado em seu nome. Administradores adicionais podem ser definidos depois por um admin global."}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <input
+              value={organizadorBusca}
+              disabled={!podeEditarPermissoes}
+              onChange={(e) => setOrganizadorBusca(e.target.value)}
+              placeholder="Buscar por nome, email ou telefone"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 disabled:bg-slate-100"
+            />
+            {buscandoOrganizador ? <div className="text-xs text-slate-500">Buscando...</div> : null}
+            {organizadorSelecionado ? (
+              <div className="flex flex-col gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">{organizadorSelecionado.nome}</div>
+                  <div className="text-xs text-slate-600">
+                    {organizadorSelecionado.email} · {organizadorSelecionado.perfil}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrganizadorSelecionado(null);
+                    setOrganizadorBusca("");
+                    setResultadosOrganizador([]);
+                  }}
+                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Limpar
+                </button>
+              </div>
+            ) : null}
+            {resultadosOrganizador.length > 0 ? (
+              <div className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                {resultadosOrganizador.map((usuario) => (
+                  <button
+                    key={usuario.id}
+                    type="button"
+                    onClick={() => {
+                      setOrganizadorSelecionado(usuario);
+                      setAdministradoresSelecionados((prev) => prev.filter((item) => item.id !== usuario.id));
+                      setOrganizadorBusca(usuario.nome);
+                      setResultadosOrganizador([]);
+                    }}
+                    className="block w-full rounded-md px-3 py-2 text-left hover:bg-slate-50"
+                  >
+                    <div className="text-sm font-semibold text-slate-900">{usuario.nome}</div>
+                    <div className="text-xs text-slate-500">
+                      {usuario.email} · {usuario.perfil}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {podeEditarPermissoes ? (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Administradores adicionais</label>
+              <input
+                value={adminBusca}
+                onChange={(e) => setAdminBusca(e.target.value)}
+                placeholder="Buscar administradores adicionais"
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+              {buscandoAdmin ? <div className="text-xs text-slate-500">Buscando...</div> : null}
+              {administradoresSelecionados.length > 0 ? (
+                <div className="space-y-2">
+                  {administradoresSelecionados.map((usuario) => (
+                    <div key={usuario.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-3 py-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">{usuario.nome}</div>
+                        <div className="text-xs text-slate-500">
+                          {usuario.email} · {usuario.perfil}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAdministradoresSelecionados((prev) => prev.filter((item) => item.id !== usuario.id))
+                        }
+                        className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500">Nenhum administrador adicional selecionado.</div>
+              )}
+              {resultadosAdmin.length > 0 ? (
+                <div className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                  {resultadosAdmin.map((usuario) => {
+                    const jaSelecionado =
+                      organizadorSelecionado?.id === usuario.id || administradoresSelecionados.some((item) => item.id === usuario.id);
+                    if (jaSelecionado) return null;
+
+                    return (
+                      <button
+                        key={usuario.id}
+                        type="button"
+                        onClick={() => {
+                          setAdministradoresSelecionados((prev) => [...prev, usuario].sort((a, b) => a.nome.localeCompare(b.nome)));
+                          setAdminBusca("");
+                          setResultadosAdmin([]);
+                        }}
+                        className="block w-full rounded-md px-3 py-2 text-left hover:bg-slate-50"
+                      >
+                        <div className="text-sm font-semibold text-slate-900">{usuario.nome}</div>
+                        <div className="text-xs text-slate-500">
+                          {usuario.email} · {usuario.perfil}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-2">

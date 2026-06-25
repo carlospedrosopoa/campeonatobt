@@ -15,10 +15,12 @@ import {
   patrocinadores,
   placarSubmissoes,
   rodadas,
+  torneioAdministradores,
   torneios,
   usuarios,
 } from "@/db/schema";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { torneioAdministradoresService } from "@/services/torneio-administradores.service";
 
 export type CriarTorneioDTO = {
   nome: string;
@@ -40,6 +42,7 @@ export type CriarTorneioDTO = {
   pixCidade?: string | null;
   camisetaOpcoes?: string[] | null;
   organizadorId?: string;
+  administradorIds?: string[];
   bannerUrl?: string;
   logoUrl?: string;
   templateUrl?: string;
@@ -112,6 +115,55 @@ export class TorneiosService {
       })
       .from(torneios)
       .leftJoin(esportes, eq(torneios.esporteId, esportes.id))
+      .orderBy(desc(torneios.criadoEm))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async listarParaUsuario(user: { id: string; perfil: "ADMIN" | "ORGANIZADOR" | "ATLETA" }, params?: { limit?: number; offset?: number }) {
+    if (user.perfil === "ADMIN") {
+      return await this.listar(params);
+    }
+
+    if (user.perfil !== "ORGANIZADOR") {
+      return [];
+    }
+
+    const ids = await torneioAdministradoresService.listarTorneioIdsGerenciaveis(user.id);
+    if (ids.length === 0) return [];
+
+    const limit = Math.min(Math.max(params?.limit ?? 50, 1), 200);
+    const offset = Math.max(params?.offset ?? 0, 0);
+
+    return await db
+      .select({
+        id: torneios.id,
+        nome: torneios.nome,
+        slug: torneios.slug,
+        dataInicio: torneios.dataInicio,
+        dataFim: torneios.dataFim,
+        local: torneios.local,
+        status: torneios.status,
+        bannerUrl: torneios.bannerUrl,
+        logoUrl: torneios.logoUrl,
+        templateUrl: torneios.templateUrl,
+        templateInscricaoUrl: torneios.templateInscricaoUrl,
+        superCampeonato: torneios.superCampeonato,
+        cardApenasComFotos: torneios.cardApenasComFotos,
+        quadrasAtivas: torneios.quadrasAtivas,
+        oculto: torneios.oculto,
+        inscricaoComIa: torneios.inscricaoComIa,
+        valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
+        valorInscricaoAdicional: torneios.valorInscricaoAdicional,
+        pixChave: torneios.pixChave,
+        pixNome: torneios.pixNome,
+        pixCidade: torneios.pixCidade,
+        camisetaOpcoes: torneios.camisetaOpcoes,
+        esporteNome: esportes.nome,
+      })
+      .from(torneios)
+      .leftJoin(esportes, eq(torneios.esporteId, esportes.id))
+      .where(inArray(torneios.id, ids))
       .orderBy(desc(torneios.criadoEm))
       .limit(limit)
       .offset(offset);
@@ -216,22 +268,42 @@ export class TorneiosService {
       throw new Error("Nenhum organizador padrão encontrado");
     }
 
-    const [novoTorneio] = await db.insert(torneios).values({
-      ...dados,
-      valorPrimeiraInscricao: normalizeDecimal(dados.valorPrimeiraInscricao),
-      valorInscricaoAdicional: normalizeDecimal(dados.valorInscricaoAdicional),
-      pixChave: normalizeText(dados.pixChave),
-      pixNome: normalizeText(dados.pixNome),
-      pixCidade: normalizeText(dados.pixCidade),
-      camisetaOpcoes: normalizeStringArray(dados.camisetaOpcoes),
-      oculto: dados.oculto ?? false,
-      inscricaoComIa: dados.inscricaoComIa ?? false,
-      cardApenasComFotos: dados.cardApenasComFotos ?? false,
-      quadrasAtivas: Math.max(0, Math.min(20, Number(dados.quadrasAtivas ?? 0) || 0)),
-      organizadorId,
-      superCampeonato: dados.superCampeonato ?? false,
-      status: 'RASCUNHO'
-    }).returning();
+    const administradorIds = Array.isArray(dados.administradorIds) ? dados.administradorIds : [];
+    const extras = await torneioAdministradoresService.validarUsuariosGestao(organizadorId, administradorIds);
+
+    const novoTorneio = await db.transaction(async (tx) => {
+      const [criado] = await tx
+        .insert(torneios)
+        .values({
+          ...dados,
+          valorPrimeiraInscricao: normalizeDecimal(dados.valorPrimeiraInscricao),
+          valorInscricaoAdicional: normalizeDecimal(dados.valorInscricaoAdicional),
+          pixChave: normalizeText(dados.pixChave),
+          pixNome: normalizeText(dados.pixNome),
+          pixCidade: normalizeText(dados.pixCidade),
+          camisetaOpcoes: normalizeStringArray(dados.camisetaOpcoes),
+          oculto: dados.oculto ?? false,
+          inscricaoComIa: dados.inscricaoComIa ?? false,
+          cardApenasComFotos: dados.cardApenasComFotos ?? false,
+          quadrasAtivas: Math.max(0, Math.min(20, Number(dados.quadrasAtivas ?? 0) || 0)),
+          organizadorId,
+          superCampeonato: dados.superCampeonato ?? false,
+          status: "RASCUNHO",
+        })
+        .returning();
+
+      if (extras.length > 0) {
+        await tx.insert(torneioAdministradores).values(
+          extras.map((usuarioId) => ({
+            torneioId: criado.id,
+            usuarioId,
+          }))
+        );
+      }
+
+      return criado;
+    });
+
     return novoTorneio;
   }
 

@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
-import { getSession } from "@/lib/auth";
-
-function isAdmin(perfil?: string) {
-  return perfil === "ADMIN" || perfil === "ORGANIZADOR";
-}
+import { requireGlobalAdmin, requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 
 export async function GET(
   request: NextRequest,
@@ -30,11 +26,9 @@ export async function PUT(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug } = await params;
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
     const body = await request.json();
 
     const atualizado = await torneiosService.atualizarPorSlug(slug, body);
@@ -54,9 +48,8 @@ export async function DELETE(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const acesso = await requireGlobalAdmin();
+    if ("response" in acesso) return acesso.response;
 
     const { slug } = await params;
     const excluido = await torneiosService.excluirPorSlug(slug);

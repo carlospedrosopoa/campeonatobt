@@ -253,6 +253,16 @@ export const torneios = pgTable('torneios', {
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });
 
+export const torneioAdministradores = pgTable('torneio_administradores', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  torneioId: uuid('torneio_id').references(() => torneios.id, { onDelete: 'cascade' }).notNull(),
+  usuarioId: uuid('usuario_id').references(() => usuarios.id, { onDelete: 'cascade' }).notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique().on(t.torneioId, t.usuarioId),
+}));
+
 export const categorias = pgTable('categorias', {
   id: uuid('id').defaultRandom().primaryKey(),
   torneioId: uuid('torneio_id').references(() => torneios.id).notNull(),

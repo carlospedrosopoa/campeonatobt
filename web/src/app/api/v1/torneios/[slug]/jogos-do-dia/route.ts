@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+﻿import { NextRequest, NextResponse } from "next/server";
+import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { db } from "@/db";
 import { arenas, categorias, equipeIntegrantes, partidas, usuarios, torneios } from "@/db/schema";
@@ -7,10 +7,6 @@ import { and, asc, eq, inArray, gte, lte, sql } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
-
-function isAdmin(perfil?: string) {
-  return perfil === "ADMIN" || perfil === "ORGANIZADOR";
-}
 
 type SyncResult = {
   totalAtletas: number;
@@ -325,7 +321,7 @@ function coletarCamposFoto(payload: any) {
         length: v.length,
         sample:
           v.length > 120
-            ? `${v.slice(0, 60)}…${v.slice(-40)}`
+            ? `${v.slice(0, 60)}â€¦${v.slice(-40)}`
             : v,
       });
       return;
@@ -486,13 +482,10 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     const { searchParams } = new URL(request.url);
     const dataStr = searchParams.get("data"); // YYYY-MM-DD
@@ -577,19 +570,10 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
-    const { searchParams: sp } = new URL(request.url);
-    const debug = sp.get("debug") === "1";
-
-    const body = (await request.json().catch(() => null)) as any;
-    const usuarioId = typeof body?.usuarioId === "string" ? body.usuarioId.trim() : "";
-
     const { slug } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     if (usuarioId) {
       const user = await db
@@ -605,7 +589,7 @@ export async function POST(
         .limit(1);
 
       if (user.length === 0) {
-        return NextResponse.json({ ok: false, usuarioId, error: "Atleta não encontrado" } satisfies SyncOneResult, { status: 404 });
+        return NextResponse.json({ ok: false, usuarioId, error: "Atleta nÃ£o encontrado" } satisfies SyncOneResult, { status: 404 });
       }
 
       const token = await getPlayAdminToken();
@@ -807,3 +791,4 @@ export async function POST(
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
+

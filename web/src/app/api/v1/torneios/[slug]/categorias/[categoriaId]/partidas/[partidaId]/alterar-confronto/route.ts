@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+﻿import { NextRequest, NextResponse } from "next/server";
+import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { db } from "@/db";
@@ -7,26 +7,19 @@ import { inscricoes, partidas } from "@/db/schema";
 import { and, eq, inArray, not, or } from "drizzle-orm";
 import { MataMataService } from "@/services/mata-mata.service";
 
-function isAdmin(perfil?: string) {
-  return perfil === "ADMIN" || perfil === "ORGANIZADOR";
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string; categoriaId: string; partidaId: string }> }
 ) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug, categoriaId, partidaId } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     const categoria = await categoriasService.buscarPorId(categoriaId);
     if (!categoria || categoria.torneioId !== torneio.id) {
-      return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "Categoria nÃ£o encontrada" }, { status: 404 });
     }
 
     const body = await request.json().catch(() => null);
@@ -53,7 +46,7 @@ export async function POST(
       .where(and(eq(partidas.id, partidaId), eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId)))
       .limit(1);
     const partida = partidaRows[0];
-    if (!partida) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
+    if (!partida) return NextResponse.json({ error: "Partida nÃ£o encontrada" }, { status: 404 });
 
     const started =
       partida.status !== "AGENDADA" ||
@@ -66,19 +59,19 @@ export async function POST(
 
     if (partida.fase === "GRUPOS") {
       if (!isSuperCampeonato) {
-        return NextResponse.json({ error: "Alteração de confronto em GRUPOS é permitida apenas no Super Campeonato" }, { status: 400 });
+        return NextResponse.json({ error: "AlteraÃ§Ã£o de confronto em GRUPOS Ã© permitida apenas no Super Campeonato" }, { status: 400 });
       }
       if (!partida.rodadaId || !partida.grupoId) {
-        return NextResponse.json({ error: "Partida inválida (sem rodada/grupo)" }, { status: 400 });
+        return NextResponse.json({ error: "Partida invÃ¡lida (sem rodada/grupo)" }, { status: 400 });
       }
       if (started && !force) {
         return NextResponse.json(
-          { error: "Partida já possui placar/andamento. Para alterar o confronto, confirme a ação." },
+          { error: "Partida jÃ¡ possui placar/andamento. Para alterar o confronto, confirme a aÃ§Ã£o." },
           { status: 400 }
         );
       }
     } else {
-      if (started) return NextResponse.json({ error: "Não é possível alterar confronto após iniciar/lançar placar" }, { status: 400 });
+      if (started) return NextResponse.json({ error: "NÃ£o Ã© possÃ­vel alterar confronto apÃ³s iniciar/lanÃ§ar placar" }, { status: 400 });
     }
 
     const aprovadas = await db
@@ -93,7 +86,7 @@ export async function POST(
         )
       )
       .limit(2);
-    if (aprovadas.length !== 2) return NextResponse.json({ error: "Uma das duplas não está aprovada na categoria" }, { status: 400 });
+    if (aprovadas.length !== 2) return NextResponse.json({ error: "Uma das duplas nÃ£o estÃ¡ aprovada na categoria" }, { status: 400 });
 
     let faseMataMataEmManutencao = false;
     if (partida.fase !== "GRUPOS" && force) {
@@ -119,7 +112,7 @@ export async function POST(
 
       if (faseJaIniciada) {
         return NextResponse.json(
-          { error: "Modo manutenção da chave só pode ser usado antes de qualquer jogo da fase começar" },
+          { error: "Modo manutenÃ§Ã£o da chave sÃ³ pode ser usado antes de qualquer jogo da fase comeÃ§ar" },
           { status: 400 }
         );
       }
@@ -181,7 +174,7 @@ export async function POST(
     }
 
     const conflito = await db.select({ id: partidas.id }).from(partidas).where(and(...conflitoWhere)).limit(1);
-    if (conflito.length > 0) return NextResponse.json({ error: "Uma das duplas já está em outro jogo desta fase" }, { status: 400 });
+    if (conflito.length > 0) return NextResponse.json({ error: "Uma das duplas jÃ¡ estÃ¡ em outro jogo desta fase" }, { status: 400 });
 
     const updated = await db.transaction(async (tx) => {
       if (partida.fase === "GRUPOS" && started && preservarPlacar) {
@@ -233,3 +226,4 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
+

@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+﻿import { NextRequest, NextResponse } from "next/server";
+import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { db } from "@/db";
@@ -7,26 +7,19 @@ import { arenas, equipeIntegrantes, grupos, partidas, rodadas, usuarios } from "
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 
-function isAdmin(perfil?: string) {
-  return perfil === "ADMIN" || perfil === "ORGANIZADOR";
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string; categoriaId: string }> }
 ) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug, categoriaId } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     const categoria = await categoriasService.buscarPorId(categoriaId);
     if (!categoria || categoria.torneioId !== torneio.id) {
-      return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "Categoria nÃ£o encontrada" }, { status: 404 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -101,3 +94,4 @@ export async function GET(
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
+

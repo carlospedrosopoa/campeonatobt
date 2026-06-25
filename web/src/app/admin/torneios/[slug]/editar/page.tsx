@@ -40,6 +40,20 @@ type Torneio = {
   esporteNome: string | null;
 };
 
+type UsuarioGestao = {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string | null;
+  perfil: "ADMIN" | "ORGANIZADOR" | "ATLETA";
+};
+
+type GestaoAdministradores = {
+  podeEditarPermissoes: boolean;
+  organizadorPrincipal: UsuarioGestao | null;
+  administradores: UsuarioGestao[];
+};
+
 function slugify(value: string) {
   return value
     .normalize("NFD")
@@ -61,6 +75,14 @@ export default function AdminEditarDadosTorneioPage() {
   const [excluindo, setExcluindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [slugManual, setSlugManual] = useState(false);
+  const [gestao, setGestao] = useState<GestaoAdministradores | null>(null);
+  const [salvandoGestao, setSalvandoGestao] = useState(false);
+  const [erroGestao, setErroGestao] = useState<string | null>(null);
+  const [organizadorBusca, setOrganizadorBusca] = useState("");
+  const [resultadosOrganizador, setResultadosOrganizador] = useState<UsuarioGestao[]>([]);
+  const [adminBusca, setAdminBusca] = useState("");
+  const [resultadosAdmin, setResultadosAdmin] = useState<UsuarioGestao[]>([]);
+  const [buscandoUsuarios, setBuscandoUsuarios] = useState<"organizador" | "admin" | null>(null);
 
   const [form, setForm] = useState({
     nome: "",
@@ -95,9 +117,10 @@ export default function AdminEditarDadosTorneioPage() {
         setCarregando(true);
         setErro(null);
 
-        const [resT, resE] = await Promise.all([
+        const [resT, resE, resA] = await Promise.all([
           fetch(`/api/v1/torneios/${slugAtual}`, { cache: "no-store" }),
           fetch("/api/v1/esportes", { cache: "no-store" }),
+          fetch(`/api/v1/torneios/${slugAtual}/administradores`, { cache: "no-store" }),
         ]);
 
         if (!resT.ok) {
@@ -105,14 +128,21 @@ export default function AdminEditarDadosTorneioPage() {
           throw new Error(msg?.error || "Falha ao carregar torneio");
         }
         if (!resE.ok) throw new Error("Falha ao carregar esportes");
+        if (!resA.ok) {
+          const msg = await resA.json().catch(() => null);
+          throw new Error(msg?.error || "Falha ao carregar administradores");
+        }
 
         const t = (await resT.json()) as Torneio;
         const e = (await resE.json()) as Esporte[];
+        const a = (await resA.json()) as GestaoAdministradores;
 
         if (!ativo) return;
 
         setTorneio(t);
         setEsportes(e);
+        setGestao(a);
+        setOrganizadorBusca(a.organizadorPrincipal?.nome ?? "");
         setForm({
           nome: t.nome,
           slug: t.slug,
@@ -149,6 +179,68 @@ export default function AdminEditarDadosTorneioPage() {
       ativo = false;
     };
   }, [slugAtual]);
+
+  useEffect(() => {
+    const q = organizadorBusca.trim();
+    if (!gestao?.podeEditarPermissoes || q.length < 2) {
+      setResultadosOrganizador([]);
+      if (buscandoUsuarios === "organizador") setBuscandoUsuarios(null);
+      return;
+    }
+
+    let ativo = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        setBuscandoUsuarios("organizador");
+        const res = await fetch(`/api/v1/usuarios?q=${encodeURIComponent(q)}&perfis=ADMIN,ORGANIZADOR&limit=8`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("Falha ao buscar organizadores");
+        const lista = (await res.json()) as UsuarioGestao[];
+        if (ativo) setResultadosOrganizador(lista);
+      } catch (e: any) {
+        if (ativo) setErroGestao(e?.message || "Erro ao buscar organizadores");
+      } finally {
+        if (ativo && buscandoUsuarios === "organizador") setBuscandoUsuarios(null);
+      }
+    }, 250);
+
+    return () => {
+      ativo = false;
+      window.clearTimeout(timer);
+    };
+  }, [organizadorBusca, gestao?.podeEditarPermissoes]);
+
+  useEffect(() => {
+    const q = adminBusca.trim();
+    if (!gestao?.podeEditarPermissoes || q.length < 2) {
+      setResultadosAdmin([]);
+      if (buscandoUsuarios === "admin") setBuscandoUsuarios(null);
+      return;
+    }
+
+    let ativo = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        setBuscandoUsuarios("admin");
+        const res = await fetch(`/api/v1/usuarios?q=${encodeURIComponent(q)}&perfis=ADMIN,ORGANIZADOR&limit=8`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("Falha ao buscar administradores");
+        const lista = (await res.json()) as UsuarioGestao[];
+        if (ativo) setResultadosAdmin(lista);
+      } catch (e: any) {
+        if (ativo) setErroGestao(e?.message || "Erro ao buscar administradores");
+      } finally {
+        if (ativo && buscandoUsuarios === "admin") setBuscandoUsuarios(null);
+      }
+    }, 250);
+
+    return () => {
+      ativo = false;
+      window.clearTimeout(timer);
+    };
+  }, [adminBusca, gestao?.podeEditarPermissoes]);
 
   const podeSalvar = useMemo(() => {
     return Boolean(form.nome && form.slug && form.dataInicio && form.dataFim && form.local && form.esporteId);
@@ -246,6 +338,39 @@ export default function AdminEditarDadosTorneioPage() {
       setErro(e?.message || "Erro inesperado");
     } finally {
       setExcluindo(false);
+    }
+  }
+
+  async function salvarGestaoAdministradores() {
+    if (!gestao?.podeEditarPermissoes || !gestao.organizadorPrincipal) return;
+
+    try {
+      setSalvandoGestao(true);
+      setErroGestao(null);
+      const res = await fetch(`/api/v1/torneios/${slugAtual}/administradores`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizadorId: gestao.organizadorPrincipal.id,
+          administradorIds: gestao.administradores.map((item) => item.id),
+        }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.json().catch(() => null);
+        throw new Error(msg?.error || "Falha ao salvar administradores");
+      }
+
+      const atualizado = (await res.json()) as GestaoAdministradores;
+      setGestao(atualizado);
+      setOrganizadorBusca(atualizado.organizadorPrincipal?.nome ?? "");
+      setAdminBusca("");
+      setResultadosAdmin([]);
+      setResultadosOrganizador([]);
+    } catch (e: any) {
+      setErroGestao(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoGestao(false);
     }
   }
 
@@ -529,6 +654,166 @@ export default function AdminEditarDadosTorneioPage() {
             />
             <p className="text-xs text-slate-500">Usado no card de dupla confirmada e demais cards de inscrição.</p>
           </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Administracao do torneio</h2>
+                <p className="text-xs text-slate-500">
+                  O organizador principal e os administradores adicionais so acessam este torneio.
+                </p>
+              </div>
+              {gestao && !gestao.podeEditarPermissoes ? (
+                <div className="text-xs font-medium text-slate-500">Somente admin global altera permissoes</div>
+              ) : null}
+            </div>
+
+            {erroGestao ? (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erroGestao}</div>
+            ) : null}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Organizador principal</label>
+              <input
+                value={organizadorBusca}
+                disabled={!gestao?.podeEditarPermissoes}
+                onChange={(e) => setOrganizadorBusca(e.target.value)}
+                placeholder="Buscar por nome, email ou telefone"
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 disabled:bg-slate-100"
+              />
+              {buscandoUsuarios === "organizador" ? <div className="text-xs text-slate-500">Buscando...</div> : null}
+              {gestao?.organizadorPrincipal ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3">
+                  <div className="text-sm font-semibold text-slate-900">{gestao.organizadorPrincipal.nome}</div>
+                  <div className="text-xs text-slate-600">
+                    {gestao.organizadorPrincipal.email} · {gestao.organizadorPrincipal.perfil}
+                  </div>
+                </div>
+              ) : null}
+              {gestao?.podeEditarPermissoes && resultadosOrganizador.length > 0 ? (
+                <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                  {resultadosOrganizador.map((usuario) => (
+                    <button
+                      key={usuario.id}
+                      type="button"
+                      onClick={() => {
+                        setGestao((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                organizadorPrincipal: usuario,
+                                administradores: prev.administradores.filter((item) => item.id !== usuario.id),
+                              }
+                            : prev
+                        );
+                        setOrganizadorBusca(usuario.nome);
+                        setResultadosOrganizador([]);
+                      }}
+                      className="block w-full rounded-md px-3 py-2 text-left hover:bg-slate-50"
+                    >
+                      <div className="text-sm font-semibold text-slate-900">{usuario.nome}</div>
+                      <div className="text-xs text-slate-500">
+                        {usuario.email} · {usuario.perfil}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Administradores adicionais</label>
+              <input
+                value={adminBusca}
+                disabled={!gestao?.podeEditarPermissoes}
+                onChange={(e) => setAdminBusca(e.target.value)}
+                placeholder="Buscar administradores adicionais"
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 disabled:bg-slate-100"
+              />
+              {buscandoUsuarios === "admin" ? <div className="text-xs text-slate-500">Buscando...</div> : null}
+              {gestao?.administradores.length ? (
+                <div className="space-y-2">
+                  {gestao.administradores.map((usuario) => (
+                    <div key={usuario.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-3 py-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">{usuario.nome}</div>
+                        <div className="text-xs text-slate-500">
+                          {usuario.email} · {usuario.perfil}
+                        </div>
+                      </div>
+                      {gestao.podeEditarPermissoes ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setGestao((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    administradores: prev.administradores.filter((item) => item.id !== usuario.id),
+                                  }
+                                : prev
+                            )
+                          }
+                          className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50"
+                        >
+                          Remover
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500">Nenhum administrador adicional vinculado.</div>
+              )}
+              {gestao?.podeEditarPermissoes && resultadosAdmin.length > 0 ? (
+                <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                  {resultadosAdmin.map((usuario) => {
+                    const jaSelecionado =
+                      gestao.organizadorPrincipal?.id === usuario.id || gestao.administradores.some((item) => item.id === usuario.id);
+                    if (jaSelecionado) return null;
+                    return (
+                      <button
+                        key={usuario.id}
+                        type="button"
+                        onClick={() => {
+                          setGestao((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  administradores: [...prev.administradores, usuario].sort((a, b) => a.nome.localeCompare(b.nome)),
+                                }
+                              : prev
+                          );
+                          setAdminBusca("");
+                          setResultadosAdmin([]);
+                        }}
+                        className="block w-full rounded-md px-3 py-2 text-left hover:bg-slate-50"
+                      >
+                        <div className="text-sm font-semibold text-slate-900">{usuario.nome}</div>
+                        <div className="text-xs text-slate-500">
+                          {usuario.email} · {usuario.perfil}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+
+            {gestao?.podeEditarPermissoes ? (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => void salvarGestaoAdministradores()}
+                  disabled={!gestao.organizadorPrincipal || salvandoGestao}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  {salvandoGestao ? "Salvando permissoes..." : "Salvar administradores"}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-2">

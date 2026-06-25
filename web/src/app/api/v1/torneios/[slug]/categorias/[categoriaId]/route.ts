@@ -1,25 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
-import { getSession } from "@/lib/auth";
+import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string; categoriaId: string }> }
 ) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    const permitido = perfil === "ADMIN" || perfil === "ORGANIZADOR";
-    if (!permitido) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug, categoriaId } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     const existe = await categoriasService.buscarPorId(categoriaId);
     if (!existe || existe.torneioId !== torneio.id) {
-      return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "Categoria nÃ£o encontrada" }, { status: 404 });
     }
 
     const body = await request.json().catch(() => null);
@@ -30,7 +26,7 @@ export async function PUT(
     const dataHorarioRaw = body?.dataHorario as string | null | undefined;
     const dataHorario = dataHorarioRaw ? new Date(dataHorarioRaw) : dataHorarioRaw === null ? null : undefined;
     if (dataHorario instanceof Date && Number.isNaN(dataHorario.getTime())) {
-      return NextResponse.json({ error: "Data/hora inválida" }, { status: 400 });
+      return NextResponse.json({ error: "Data/hora invÃ¡lida" }, { status: 400 });
     }
 
     const atualizado = await categoriasService.atualizar(categoriaId, {
@@ -53,18 +49,14 @@ export async function DELETE(
   { params }: { params: Promise<{ slug: string; categoriaId: string }> }
 ) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    const permitido = perfil === "ADMIN" || perfil === "ORGANIZADOR";
-    if (!permitido) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug, categoriaId } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     const existe = await categoriasService.buscarPorId(categoriaId);
     if (!existe || existe.torneioId !== torneio.id) {
-      return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "Categoria nÃ£o encontrada" }, { status: 404 });
     }
 
     await categoriasService.excluir(categoriaId);
@@ -74,3 +66,4 @@ export async function DELETE(
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
+

@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { arenas, categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, rodadas, usuarios } from "@/db/schema";
-import { getSession } from "@/lib/auth";
+import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { slugify } from "@/lib/utils";
 import { calcularResultadoSets } from "@/lib/regras-partida";
 import { categoriaConfigService } from "@/services/categoria-config.service";
@@ -12,10 +12,6 @@ import { torneiosService } from "@/services/torneios.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playGetAtletaById } from "@/services/playnaquadra-client";
 import { parseSuperCampeonatoResultadosXlsx, type SuperImportPreview } from "@/services/supercampeonato-import.service";
-
-function isAdmin(perfil?: string) {
-  return perfil === "ADMIN" || perfil === "ORGANIZADOR";
-}
 
 function normalizarTexto(value: string) {
   return (value || "")
@@ -159,17 +155,14 @@ async function criarEquipeComIntegrantes(tx: any, torneioId: string, atletaAId: 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    const session = await getSession();
-    const perfil = session?.user?.perfil as string | undefined;
-    if (!isAdmin(perfil)) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
     const { slug } = await params;
-    const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
+    const { torneio } = acesso;
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
-    if (!file) return NextResponse.json({ error: "Arquivo não fornecido" }, { status: 400 });
+    if (!file) return NextResponse.json({ error: "Arquivo nÃ£o fornecido" }, { status: 400 });
 
     const payloadRaw = (formData.get("payload") as string | null) ?? "";
     const payload = (payloadRaw ? JSON.parse(payloadRaw) : null) as any;
@@ -193,7 +186,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     let categoria = null as (typeof categorias.$inferSelect) | null;
     if (categoriaId) {
       const row = await categoriasService.buscarPorId(categoriaId);
-      if (!row || row.torneioId !== torneio.id) return NextResponse.json({ error: "Categoria inválida para o torneio" }, { status: 400 });
+      if (!row || row.torneioId !== torneio.id) return NextResponse.json({ error: "Categoria invÃ¡lida para o torneio" }, { status: 400 });
       categoria = row as any;
     } else {
       if (!categoriaNome || !categoriaGenero) return NextResponse.json({ error: "Informe categoriaNome e categoriaGenero" }, { status: 400 });
@@ -282,7 +275,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (cached) return cached;
         const playId = (mapeamento?.[nomeNormalizado]?.playAtletaId || "").trim();
         const det = playDetailsById.get(playId);
-        if (!det) throw new Error(`Mapeamento inválido para atleta: ${nomeNormalizado}`);
+        if (!det) throw new Error(`Mapeamento invÃ¡lido para atleta: ${nomeNormalizado}`);
         const { id, created } = await upsertAtletaLocal(tx, { ...det, playnaquadraAtletaId: playId });
         if (created) counters.atletasCriados += 1;
         else counters.atletasAtualizados += 1;
@@ -385,7 +378,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         for (const jogo of rodadaPrev.jogos) {
           if (jogo.duplaA.atletas.length !== 2 || jogo.duplaB.atletas.length !== 2) {
-            warnings.push(`[${rodadaPrev.nome}] Dupla fora do padrão: "${jogo.duplaA.texto}" vs "${jogo.duplaB.texto}"`);
+            warnings.push(`[${rodadaPrev.nome}] Dupla fora do padrÃ£o: "${jogo.duplaA.texto}" vs "${jogo.duplaB.texto}"`);
             continue;
           }
 
@@ -437,7 +430,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               counters.placaresAplicados += 1;
             } catch (e: any) {
               counters.placaresIgnorados += 1;
-              warnings.push(`[${rodadaPrev.nome}] Placar inválido para "${jogo.duplaA.texto}" vs "${jogo.duplaB.texto}": ${e?.message || "erro"}`);
+              warnings.push(`[${rodadaPrev.nome}] Placar invÃ¡lido para "${jogo.duplaA.texto}" vs "${jogo.duplaB.texto}": ${e?.message || "erro"}`);
             }
           }
 
@@ -523,3 +516,4 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
+

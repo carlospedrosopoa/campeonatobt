@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { usuarios } from "@/db/schema";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 
 function isAdmin(perfil?: string) {
@@ -16,7 +16,12 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const qRaw = (searchParams.get("q") || "").trim();
-    const perfil = (searchParams.get("perfil") || "ATLETA").trim();
+    const perfil = (searchParams.get("perfil") || "").trim();
+    const perfis = (searchParams.get("perfis") || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const perfisFiltro = perfis.length > 0 ? perfis : perfil ? [perfil] : ["ATLETA"];
     const limitParam = Number(searchParams.get("limit") || "10");
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 25) : 10;
 
@@ -36,7 +41,7 @@ export async function GET(request: NextRequest) {
       .from(usuarios)
       .where(
         and(
-          eq(usuarios.perfil, perfil as any),
+          inArray(usuarios.perfil, perfisFiltro as any),
           or(
             sql`lower(${usuarios.nome}) like ${pattern}`,
             sql`lower(${usuarios.email}) like ${pattern}`,
@@ -52,4 +57,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
-
