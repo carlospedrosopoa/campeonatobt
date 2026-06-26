@@ -21,6 +21,7 @@ type CriarTorneioPayload = {
   local: string;
   esporteId: string;
   superCampeonato?: boolean;
+  superCampeonatoFormato?: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos?: boolean;
   oculto?: boolean;
   inscricaoComIa?: boolean;
@@ -89,6 +90,7 @@ export default function AdminNovoTorneioPage() {
     local: "",
     esporteId: "",
     superCampeonato: false,
+    superCampeonatoFormato: "2_SET_SUPER_TIE",
     cardApenasComFotos: false,
     oculto: false,
     inscricaoComIa: false,
@@ -248,6 +250,7 @@ export default function AdminNovoTorneioPage() {
         local: form.local,
         esporteId: form.esporteId,
         superCampeonato: form.superCampeonato,
+        superCampeonatoFormato: form.superCampeonatoFormato,
         cardApenasComFotos: form.cardApenasComFotos,
         oculto: form.oculto,
         inscricaoComIa: form.inscricaoComIa,
@@ -374,6 +377,25 @@ export default function AdminNovoTorneioPage() {
             </select>
             <div className="text-xs text-slate-500">A classificação usa pontuação especial no Super Campeonato.</div>
           </div>
+
+          {form.superCampeonato && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Formato do Super Campeonato</label>
+              <select
+                value={form.superCampeonatoFormato}
+                onChange={(e) => setForm((prev) => ({ ...prev, superCampeonatoFormato: e.target.value as "2_SET_SUPER_TIE" | "1_SET" }))}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="2_SET_SUPER_TIE">2 Sets + Super Tie</option>
+                <option value="1_SET">1 Set</option>
+              </select>
+              <div className="text-xs text-slate-500">
+                {form.superCampeonatoFormato === "2_SET_SUPER_TIE"
+                  ? "3 pontos para vitória por 2-0, 2 pontos para vitória por 2-1, 1 ponto para derrota por 1-2."
+                  : "3 pontos para vitória sem tie-break, 2 pontos para vitória com tie-break, 1 ponto para derrota com tie-break."}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Valor 1ª inscrição (por atleta)</label>

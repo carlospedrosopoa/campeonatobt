@@ -220,6 +220,8 @@ export const panelinhaPlayJogos = pgTable(
   })
 );
 
+export const superCampeonatoFormatoEnum = pgEnum('super_campeonato_formato', ['2_SET_SUPER_TIE', '1_SET']);
+
 export const torneios = pgTable('torneios', {
   id: uuid('id').defaultRandom().primaryKey(),
   nome: text('nome').notNull(),
@@ -232,6 +234,7 @@ export const torneios = pgTable('torneios', {
   oculto: boolean('oculto').default(false).notNull(),
   inscricaoComIa: boolean('inscricao_com_ia').default(false).notNull(),
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
+  superCampeonatoFormato: superCampeonatoFormatoEnum('super_campeonato_formato').default('2_SET_SUPER_TIE'),
   cardApenasComFotos: boolean('card_apenas_com_fotos').default(false).notNull(),
   quadrasAtivas: integer('quadras_ativas').default(0).notNull(),
   painelQuadrasReservas: json('painel_quadras_reservas').$type<

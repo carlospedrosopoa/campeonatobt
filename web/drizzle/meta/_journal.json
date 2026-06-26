@@ -57,6 +57,13 @@
       "when": 1777546812951,
       "tag": "0007_boring_maria_hill",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782502246492,
+      "tag": "0008_mushy_praxagora",
+      "breakpoints": true
     }
   ]
 }

@@ -126,12 +126,13 @@ export class ClassificacaoCategoriaService {
   async recalcularPorCategoria(categoriaId: string) {
     const config = await categoriaConfigService.obterOuDefault(categoriaId);
     const torneioRow = await db
-      .select({ superCampeonato: torneios.superCampeonato })
+      .select({ superCampeonato: torneios.superCampeonato, superCampeonatoFormato: torneios.superCampeonatoFormato })
       .from(categorias)
       .innerJoin(torneios, eq(categorias.torneioId, torneios.id))
       .where(eq(categorias.id, categoriaId))
       .limit(1);
     const superCampeonato = torneioRow[0]?.superCampeonato ?? false;
+    const superCampeonatoFormato = torneioRow[0]?.superCampeonatoFormato ?? "2_SET_SUPER_TIE";
     const ignoreSuperTieMin = superCampeonato
       ? (config.regrasPartida?.superTiebreakDecisivo?.ate ?? 10)
       : config.regrasPartida?.superTiebreakDecisivo?.habilitado && config.regrasPartida?.incluirSuperTieEmGames !== true
@@ -205,24 +206,32 @@ export class ClassificacaoCategoriaService {
       const winner = resolveWinner(m);
       const setsA = m.placarA ?? 0;
       const setsB = m.placarB ?? 0;
-      const setsMax = Math.max(setsA, setsB);
-      const setsMin = Math.min(setsA, setsB);
 
-      const pontosVencedor =
-        superCampeonato
-          ? setsMax === 2 && setsMin === 1
-            ? 2
-            : 3
-          : 1;
-
-      const pontosPerdedor =
-        superCampeonato
-          ? setsMax === 2 && setsMin === 1
-            ? 1
-            : 0
-          : 0;
-
+      let pontosVencedor = 1;
+      let pontosPerdedor = 0;
       const pontosVencedorWO = superCampeonato ? 3 : 1;
+
+      if (superCampeonato) {
+        if (superCampeonatoFormato === "1_SET") {
+          // Verifica se o set único foi decidido em tiebreak
+          const detalhes = m.detalhesPlacar;
+          const teveTiebreak = detalhes && detalhes.length > 0 && !!detalhes[0].tiebreak;
+          if (teveTiebreak) {
+            pontosVencedor = 2;
+            pontosPerdedor = 1;
+          } else {
+            pontosVencedor = 3;
+            pontosPerdedor = 0;
+          }
+        } else {
+          // Formato 2_SET_SUPER_TIE (padrão)
+          const setsMax = Math.max(setsA, setsB);
+          const setsMin = Math.min(setsA, setsB);
+          pontosVencedor = setsMax === 2 && setsMin === 1 ? 2 : 3;
+          pontosPerdedor = setsMax === 2 && setsMin === 1 ? 1 : 0;
+        }
+      }
+
       if (winner === m.equipeAId) {
         a.jogosVencidos += 1;
         b.jogosPerdidos += 1;

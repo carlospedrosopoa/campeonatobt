@@ -31,6 +31,7 @@ export type CriarTorneioDTO = {
   local: string;
   esporteId: string;
   superCampeonato?: boolean;
+  superCampeonatoFormato?: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos?: boolean;
   quadrasAtivas?: number;
   oculto?: boolean;
@@ -101,6 +102,7 @@ export class TorneiosService {
         templateUrl: torneios.templateUrl,
         templateInscricaoUrl: torneios.templateInscricaoUrl,
         superCampeonato: torneios.superCampeonato,
+        superCampeonatoFormato: torneios.superCampeonatoFormato,
         cardApenasComFotos: torneios.cardApenasComFotos,
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
@@ -190,6 +192,7 @@ export class TorneiosService {
         templateUrl: torneios.templateUrl,
         templateInscricaoUrl: torneios.templateInscricaoUrl,
         superCampeonato: torneios.superCampeonato,
+        superCampeonatoFormato: torneios.superCampeonatoFormato,
         cardApenasComFotos: torneios.cardApenasComFotos,
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
@@ -231,6 +234,7 @@ export class TorneiosService {
       templateUrl: torneios.templateUrl,
       templateInscricaoUrl: torneios.templateInscricaoUrl,
       superCampeonato: torneios.superCampeonato,
+      superCampeonatoFormato: torneios.superCampeonatoFormato,
       cardApenasComFotos: torneios.cardApenasComFotos,
       quadrasAtivas: torneios.quadrasAtivas,
       valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
@@ -288,6 +292,7 @@ export class TorneiosService {
           quadrasAtivas: Math.max(0, Math.min(20, Number(dados.quadrasAtivas ?? 0) || 0)),
           organizadorId,
           superCampeonato: dados.superCampeonato ?? false,
+          superCampeonatoFormato: dados.superCampeonatoFormato ?? "2_SET_SUPER_TIE",
           status: "RASCUNHO",
         })
         .returning();
