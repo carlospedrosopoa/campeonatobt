@@ -202,41 +202,39 @@ export class MataMataService {
           }
         }
       } else {
-        // Estrutura PADRAO: calcula byes para todas as fases
-        // Primeiro, precisamos saber: qual é o tamanho da chave na fase atual?
-        // Vamos retroceder até a primeira fase para calcular o tamanho original da chave
+        // Estrutura PADRAO: re-seeding em TODAS as fases + byes automáticos
+        // 1. Calcula o tamanho original da chave (próxima potência de 2)
         const total = seeds.length;
         const tamanhoChaveOriginal = getNextPowerOfTwo(total);
         
-        // Calcula quantas equipes deveriam estar na fase atual (sem byes)
+        // 2. Calcula quantas equipes deveriam estar na fase atual (tamanho da chave / 2^fase)
         let tamanhoFaseAtual = tamanhoChaveOriginal;
         const idxFaseAtual = ordemFases.indexOf(params.faseAtual);
         for (let i = 0; i < idxFaseAtual; i++) {
           tamanhoFaseAtual /= 2;
         }
         
-        // Agora, calcula quantos byes havia na fase anterior (equipes que passaram direto)
+        // 3. Calcula quantos byes havia na fase anterior (equipes que passaram direto)
         const idxFaseAnterior = idxFaseAtual - 1;
-        let byesFaseAnterior = 0;
         let tamanhoFaseAnterior = tamanhoChaveOriginal;
         for (let i = 0; i < idxFaseAnterior; i++) {
           tamanhoFaseAnterior /= 2;
         }
-        byesFaseAnterior = tamanhoFaseAnterior - jogos.length;
+        const byesFaseAnterior = tamanhoFaseAnterior - jogos.length;
 
-        // Identifica as equipes que passaram por bye na fase anterior
+        // 4. Identifica as equipes que passaram por bye na fase anterior (top seeds)
         const byesEquipes: string[] = [];
         for (let i = 0; i < byesFaseAnterior; i++) {
           byesEquipes.push(seeds[i]);
         }
 
-        // Juntamos os byes com os winners para formar a lista completa da fase atual
+        // 5. Junta byes + vencedores, formando a lista completa da fase atual
         const equipesFaseAtual = [...byesEquipes, ...winners].filter(Boolean);
         
-        // Agora ordenamos essas equipes pelo seu rank original
+        // 6. RE-SEEDING: ordena todas as equipes pelo seu rank ORIGINAL da fase de grupos
         equipesFaseAtual.sort((a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999));
 
-        // Montamos os cruzamentos para a fase seguinte
+        // 7. Monta cruzamentos: melhor vs pior, segundo melhor vs segundo pior, etc.
         for (let i = 0; i < equipesFaseAtual.length / 2; i++) {
           pairings.push({ a: equipesFaseAtual[i], b: equipesFaseAtual[equipesFaseAtual.length - 1 - i] });
         }
