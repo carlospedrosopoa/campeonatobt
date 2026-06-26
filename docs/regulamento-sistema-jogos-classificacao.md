@@ -50,12 +50,23 @@ Em caso de empate em pontos, a classificação é definida na seguinte ordem:
 ### 4.1 Classificação para o Mata-Mata
 As **10 melhores duplas da fase de grupos** se classificam para o mata-mata.
 
-### 4.2 Estrutura do Chaveamento
+### 4.2 Estrutura do Chaveamento e Re-Seeding
 A chave tem o tamanho da **próxima potência de 2** acima do número de classificados, que no caso de 10 duplas é **16**.
 
-Isso significa que as **6 top seeds (1º a 6º classificados)** recebem **bye** (passam direto para a segunda fase, que é a Oitavas de Final), enquanto as duplas de 7º a 10º disputam a Primeira Fase.
+Isso significa que as **6 top seeds (1º a 6º classificados)** recebem **bye** (passam direto para a próxima fase), enquanto as duplas de 7º a 10º disputam a Primeira Fase.
 
-#### 4.2.1 Primeira Fase
+#### 4.2.1 Re-Seeding em Todas as Fases
+Antes de cada nova fase do mata-mata, as duplas classificadas são **re-seedadas** de acordo com sua classificação original na fase de grupos:
+1. Coleta todas as duplas que avançaram para a fase (byes + vencedores da fase anterior)
+2. Ordena-as de acordo com sua posição original na fase de grupos (melhor classificado primeiro)
+3. Cruzadas da seguinte forma:
+   - O 1º melhor classificado restante joga contra o pior classificado restante
+   - O 2º melhor classificado restante joga contra o segundo pior classificado restante
+   - E assim por diante
+
+Isso garante que as duplas com melhor campanha na fase de grupos tenham cruzamentos mais favoráveis em todas as etapas do mata-mata.
+
+#### 4.2.2 Primeira Fase (7º-10º)
 | Partida | Equipe 1 | Equipe 2 |
 |---------|----------|----------|
 | 1 | 7º classificado | 10º classificado |
@@ -63,29 +74,30 @@ Isso significa que as **6 top seeds (1º a 6º classificados)** recebem **bye** 
 
 Os vencedores destas partidas avançam para as Oitavas de Final.
 
-#### 4.2.2 Oitavas de Final
-| Partida | Equipe 1 | Equipe 2 |
-|---------|----------|----------|
-| 3 | 1º classificado (bye) | Vencedor Partida 2 |
-| 4 | 4º classificado (bye) | 5º classificado (bye) |
-| 5 | 2º classificado (bye) | Vencedor Partida 1 |
-| 6 | 3º classificado (bye) | 6º classificado (bye) |
+#### 4.2.3 Oitavas de Final (Após Re-Seeding)
+Após a Primeira Fase, temos 8 duplas classificadas:
+- 6 com bye (1º-6º)
+- 2 vencedores da Primeira Fase
 
-Os vencedores destas partidas avançam para as Quartas de Final.
-
-#### 4.2.3 Re-Seeding em Todas as Fases
-Antes de cada nova fase do mata-mata (oitavas, quartas e semifinais), as duplas classificadas são **re-seedadas** de acordo com sua classificação original na fase de grupos:
-- O 1º melhor classificado restante joga contra o pior classificado restante
-- O 2º melhor classificado restante joga contra o segundo pior classificado restante
+Essas 8 duplas são re-seedadas (ordenadas por sua classificação original na fase de grupos) e cruzadas da seguinte forma:
+- Melhor classificado restante vs pior classificado restante
+- Segundo melhor classificado restante vs segundo pior classificado restante
 - E assim por diante
 
-Isso garante que as duplas com melhor campanha na fase de grupos tenham cruzamentos mais favoráveis em todas as etapas do mata-mata.
+**Exemplo**: Se o 10º classificado vencer o 7º, e o 9º vencer o 8º, as 8 duplas re-seedadas serão:
+1. 1º
+2. 2º
+3. 3º
+4. 4º
+5. 5º
+6. 6º
+7. 9º (vencedor)
+8. 10º (vencedor)
 
-#### 4.2.4 Oitavas de Final (Após Re-Seeding)
-As 8 duplas classificadas são ordenadas por sua posição original na fase de grupos e cruzadas da seguinte forma:
-- 1º vs 8º
+Cruzamentos das Oitavas de Final:
+- 1º vs 10º
 - 4º vs 5º
-- 2º vs 7º
+- 2º vs 9º
 - 3º vs 6º
 
 Os vencedores destas partidas avançam para as Quartas de Final.
@@ -136,9 +148,15 @@ As partidas do mata-mata seguem as mesmas regras da fase de grupos: **1 set até
 | 1 | 7º (G) | 10º (J) |
 | 2 | 8º (H) | 9º (I) |
 
+**Cenário 1: Favoritos ganham**  
 Vencedores: G e H
 
-#### Passo 2: Oitavas de Final (Re-Seeding)
+**Cenário 2: Underdogs ganham**  
+Vencedores: J e I
+
+---
+
+#### Passo 2: Oitavas de Final (Re-Seeding - Cenário 1: Favoritos ganham)
 Classificadas para as oitavas (ordenadas por posição original):
 1. A (1º)
 2. B (2º)
@@ -159,6 +177,29 @@ Cruzamentos após re-seeding:
 
 Vencedores: A, D, B, C (exemplo)
 
+---
+
+#### Passo 2 (Alternativo): Oitavas de Final (Re-Seeding - Cenário 2: Underdogs ganham)
+Classificadas para as oitavas (ordenadas por posição original):
+1. A (1º)
+2. B (2º)
+3. C (3º)
+4. D (4º)
+5. E (5º)
+6. F (6º)
+7. I (9º, vencedor)
+8. J (10º, vencedor)
+
+Cruzamentos após re-seeding:
+| Partida | Equipe 1 | Equipe 2 |
+|---------|----------|----------|
+| 3 | 1º (A) | 10º (J) |
+| 4 | 4º (D) | 5º (E) |
+| 5 | 2º (B) | 9º (I) |
+| 6 | 3º (C) | 6º (F) |
+
+Vencedores: A, D, B, C (exemplo)
+
 #### Passo 3: Quartas de Final (Re-Seeding)
 Vencedoras das oitavas, re-seedadas por posição original:
 1. A (1º)
@@ -174,34 +215,8 @@ Cruzamentos após re-seeding:
 
 Vencedores: A e B (exemplo)
 
-#### Passo 4: Semifinais e Final
-As duas vencedoras disputam a Final diretamente (com apenas 2 equipes, não há necessidade de cruzamentos adicionais).
-```
-                    PRIMEIRA FASE                  OITAVAS DE FINAL (RE-SEEDED)              QUARTAS DE FINAL (RE-SEEDED)              FINAL
-
-7º (G) vs 10º (J) --[Vencedor G]------       ---------                                          ---------
-                                    |          |         |                                    |         |
-8º (H) vs 9º (I) --[Vencedor H]------          |         |                                    |         |
-                                               |         |                                    |         |
-                                               | 1º (A) vs 8º (H) --[Vencedor A]---       ---------         ------
-                                               |         |                                    |         |
-                                               |         |                                    |         |
-6º (F) -------------[Bye]-------------------       |         |                                    |         |
-                                               | 4º (D) vs 5º (E) --[Vencedor D]---       ---------         |
-                                               |         |                                    |         |
-                                               |         |                                    |         |
-5º (E) -------------[Bye]-------------------       |         |                                    |         |
-                                               |         |                                    |         |
-                                               |         |                                    |         |
-4º (D) -------------[Bye]-------------------       |         |                                    |         |
-                                               | 2º (B) vs 7º (G) --[Vencedor B]---       ---------         ------
-                                               |         |                                    |
-3º (C) -------------[Bye]-------------------       |         |                                    |
-                                               |         |                                    |
-2º (B) -------------[Bye]-------------------       | 3º (C) vs 6º (F) --[Vencedor C]---       ---------
-                                               |
-1º (A) -------------[Bye]-------------------       ---------
-```
+#### Passo 4: Final
+As duas vencedoras disputam a Final diretamente.
 
 ---
 
