@@ -24,6 +24,10 @@ type CategoriaConfig = {
   grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean };
+  mataMata?: {
+    estrutura: "PADRAO" | "SUPER_CAMPEONATO_6";
+    quantidadeClassificados?: number;
+  };
   regrasPartida?: {
     tipo: "SETS";
     melhorDe: 1 | 3;
@@ -1163,6 +1167,50 @@ export default function AdminCategoriaJogosSuperPage() {
             <p className="text-sm text-slate-600">Gere rodadas e acompanhe por rodada.</p>
           </div>
         </div>
+
+        {config && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Estrutura do mata-mata</label>
+              <select
+                value={config.mataMata?.estrutura ?? "SUPER_CAMPEONATO_6"}
+                onChange={(e) => {
+                  setConfig((prev) => prev ? {
+                    ...prev,
+                    mataMata: {
+                      ...prev.mataMata,
+                      estrutura: e.target.value as "PADRAO" | "SUPER_CAMPEONATO_6"
+                    }
+                  } : prev);
+                }}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="SUPER_CAMPEONATO_6">Super Campeonato 6 (1º e 2º passam direto)</option>
+                <option value="PADRAO">Padrão com byes (qualquer tamanho)</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Quantidade de classificados para o mata-mata</label>
+              <input
+                type="number"
+                min="2"
+                value={config.mataMata?.quantidadeClassificados ?? 6}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setConfig((prev) => prev ? {
+                    ...prev,
+                    mataMata: {
+                      ...prev.mataMata,
+                      quantidadeClassificados: isNaN(val) ? undefined : val
+                    }
+                  } : prev);
+                }}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="text-xs text-slate-500">Pontuação: 2-0 = 3 • 2-1 = 2/1 • 1 set: 3 (sem TB) • 2/1 (com TB)</div>

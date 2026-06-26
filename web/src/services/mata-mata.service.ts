@@ -10,6 +10,15 @@ function isPowerOfTwo(n: number) {
   return n > 0 && (n & (n - 1)) === 0;
 }
 
+function getNextPowerOfTwo(n: number): number {
+  if (isPowerOfTwo(n)) return n;
+  let power = 1;
+  while (power < n) {
+    power *= 2;
+  }
+  return power;
+}
+
 function faseParaQuantidade(n: number): Fase {
   if (n === 2) return "FINAL";
   if (n === 6) return "QUARTAS";
@@ -51,16 +60,14 @@ export class MataMataService {
     if (config.fase2?.habilitada === false) throw new Error("Fase 2 desabilitada");
     const superCampeonato = await this.isSuperCampeonato({ categoriaId: params.categoriaId });
 
-    const porGrupo = config.classificacao?.porGrupo ?? 2;
-    const melhoresTerceiros = config.classificacao?.melhoresTerceiros ?? 0;
-
     const grupos = await classificacaoCategoriaService.obterClassificacao(params.categoriaId);
     if (grupos.length === 0) throw new Error("Nenhum grupo encontrado");
 
     if (superCampeonato) {
       const g0 = grupos[0];
-      const top6 = (g0?.equipes ?? []).slice(0, 6);
-      const qualificados = top6.map((e, idx) => ({
+      const qtdClassificados = config.mataMata?.quantidadeClassificados ?? 6;
+      const topN = (g0?.equipes ?? []).slice(0, qtdClassificados);
+      const qualificados = topN.map((e, idx) => ({
         equipeId: e.equipeId,
         grupoId: g0.grupoId,
         rankGrupo: idx + 1,
@@ -161,8 +168,6 @@ export class MataMataService {
       .from(partidas)
       .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, params.faseAtual)));
 
-    if (jogos.length === 0) return { faseProxima, pairings: [] as { a: string; b: string }[] };
-
     const finalizados = jogos.filter((j) => (j.status === "FINALIZADA" || j.status === "WO") && j.vencedorId);
     if (finalizados.length !== jogos.length) return { faseProxima, pairings: [] as { a: string; b: string }[] };
 
@@ -173,39 +178,75 @@ export class MataMataService {
       .filter(Boolean);
 
     const pairings: { a: string; b: string }[] = [];
+    const { seeds, superCampeonato, config } = await this.calcularSeeds({ categoriaId: params.categoriaId });
+    const estrutura = config.mataMata?.estrutura ?? "SUPER_CAMPEONATO_6";
 
-    if (faseProxima === "SEMI") {
-      const { seeds, superCampeonato } = await this.calcularSeeds({ categoriaId: params.categoriaId });
-      if (superCampeonato) {
-        const rank = new Map<string, number>();
-        for (let i = 0; i < seeds.length; i++) rank.set(seeds[i], i + 1);
+    if (superCampeonato) {
+      const rank = new Map<string, number>();
+      for (let i = 0; i < seeds.length; i++) rank.set(seeds[i], i + 1);
 
-        const semifinalistas =
-          params.faseAtual === "QUARTAS" && winners.length === 2 && seeds.length === 6
-            ? [seeds[0], seeds[1], winners[0], winners[1]].filter(Boolean)
-            : [...winners];
+      if (estrutura === "SUPER_CAMPEONATO_6") {
+        if (faseProxima === "SEMI") {
+          // Caso antigo: 1º e 2º passam direto
+          if (params.faseAtual === "QUARTAS" && winners.length === 2 && seeds.length === 6) {
+            const semifinalistas = [seeds[0], seeds[1], winners[0], winners[1]].filter(Boolean);
+            if (semifinalistas.length !== 4) {
+              throw new Error("Não foi possível montar a semifinal do Super Campeonato.");
+            }
+            // Ordena os 4 semifinalistas de acordo com seu rank da 1ª fase
+            semifinalistas.sort((a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999));
+            // 1º vs 4º, 2º vs 3º
+            pairings.push({ a: semifinalistas[0], b: semifinalistas[3] });
+            pairings.push({ a: semifinalistas[1], b: semifinalistas[2] });
+            return { faseProxima, pairings };
+          }
+        }
+      } else {
+        // Estrutura PADRAO: calcula byes para todas as fases
+        // Primeiro, precisamos saber: qual é o tamanho da chave na fase atual?
+        // Vamos retroceder até a primeira fase para calcular o tamanho original da chave
+        const total = seeds.length;
+        const tamanhoChaveOriginal = getNextPowerOfTwo(total);
+        
+        // Calcula quantas equipes deveriam estar na fase atual (sem byes)
+        let tamanhoFaseAtual = tamanhoChaveOriginal;
+        const idxFaseAtual = ordemFases.indexOf(params.faseAtual);
+        for (let i = 0; i < idxFaseAtual; i++) {
+          tamanhoFaseAtual /= 2;
+        }
+        
+        // Agora, calcula quantos byes havia na fase anterior (equipes que passaram direto)
+        const idxFaseAnterior = idxFaseAtual - 1;
+        let byesFaseAnterior = 0;
+        let tamanhoFaseAnterior = tamanhoChaveOriginal;
+        for (let i = 0; i < idxFaseAnterior; i++) {
+          tamanhoFaseAnterior /= 2;
+        }
+        byesFaseAnterior = tamanhoFaseAnterior - jogos.length;
 
-        if (semifinalistas.length !== 4) {
-          throw new Error("Não foi possível montar a semifinal do Super Campeonato.");
+        // Identifica as equipes que passaram por bye na fase anterior
+        const byesEquipes: string[] = [];
+        for (let i = 0; i < byesFaseAnterior; i++) {
+          byesEquipes.push(seeds[i]);
         }
 
-        // Ordena os 4 semifinalistas de acordo com seu rank da 1ª fase (1, 2, V1, V2)
-        semifinalistas.sort((a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999));
-        // O 1º melhor classificado pega o 4º (pior classificado). O 2º pega o 3º.
-        pairings.push({ a: semifinalistas[0], b: semifinalistas[3] });
-        pairings.push({ a: semifinalistas[1], b: semifinalistas[2] });
+        // Juntamos os byes com os winners para formar a lista completa da fase atual
+        const equipesFaseAtual = [...byesEquipes, ...winners].filter(Boolean);
+        
+        // Agora ordenamos essas equipes pelo seu rank original
+        equipesFaseAtual.sort((a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999));
+
+        // Montamos os cruzamentos para a fase seguinte
+        for (let i = 0; i < equipesFaseAtual.length / 2; i++) {
+          pairings.push({ a: equipesFaseAtual[i], b: equipesFaseAtual[equipesFaseAtual.length - 1 - i] });
+        }
         return { faseProxima, pairings };
       }
     }
 
+    // Caso não seja Super Campeonato, mantemos a logica original
     if (params.faseAtual === "QUARTAS" && winners.length === 2) {
-      const { seeds } = await this.calcularSeeds({ categoriaId: params.categoriaId });
       if (seeds.length === 6) {
-        // Se for Super Campeonato, o re-seeding já foi tratado no bloco acima (faseProxima === "SEMI").
-        // Para o modelo normal, respeita as quartas já persistidas no banco.
-        // Isso evita travar categorias antigas em que as quartas foram montadas em outra ordem,
-        // mantendo apenas a regra esportiva: S2 enfrenta o vencedor do lado mais forte restante
-        // e S1 enfrenta o vencedor do outro lado.
         const s1 = seeds[0];
         const s2 = seeds[1];
         const rank = new Map<string, number>();
@@ -450,39 +491,86 @@ export class MataMataService {
     if (superCampeonato) {
       await db.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), not(eq(partidas.fase, "GRUPOS"))));
 
-      if (total !== 6) {
-        throw new Error("Super Campeonato precisa de pelo menos 6 equipes no Grupo Único para gerar o mata-mata (Quartas: 3ºx6º e 4ºx5º; 1º e 2º bye).");
+      const estrutura = config.mataMata?.estrutura ?? "SUPER_CAMPEONATO_6";
+
+      if (estrutura === "SUPER_CAMPEONATO_6") {
+        if (total !== 6) {
+          throw new Error("Super Campeonato precisa de pelo menos 6 equipes no Grupo Único para gerar o mata-mata (Quartas: 3ºx6º e 4ºx5º; 1º e 2º bye).");
+        }
+
+        const s1 = seedIds[0];
+        const s2 = seedIds[1];
+        const s3 = seedIds[2];
+        const s4 = seedIds[3];
+        const s5 = seedIds[4];
+        const s6 = seedIds[5];
+
+        const pairings = [
+          { a: s3, b: s6 }, // Jogo 1 Quartas
+          { a: s4, b: s5 }, // Jogo 2 Quartas
+        ];
+
+        let partidasCriadas = 0;
+        for (const p of pairings) {
+          await db.insert(partidas).values({
+            torneioId: params.torneioId,
+            categoriaId: params.categoriaId,
+            grupoId: null,
+            equipeAId: p.a,
+            equipeBId: p.b,
+            fase: "QUARTAS",
+            status: "AGENDADA",
+            placarA: 0,
+            placarB: 0,
+            atualizadoEm: new Date(),
+          });
+          partidasCriadas += 1;
+        }
+        return { fase: "QUARTAS", partidasCriadas, qualificados: total };
+      } else {
+        // Estrutura PADRAO (chave com byes)
+        const tamanhoChave = getNextPowerOfTwo(total);
+        const byes = tamanhoChave - total;
+
+        // Calcula a primeira fase da chave
+        let primeiraFase: Fase;
+        if (tamanhoChave === 2) primeiraFase = "FINAL";
+        else if (tamanhoChave === 4) primeiraFase = "SEMI";
+        else if (tamanhoChave === 8) primeiraFase = "QUARTAS";
+        else primeiraFase = "OITAVAS";
+
+        const pairings: { a: string; b: string }[] = [];
+        
+        // Monta os cruzamentos (standard bracket: 1 vs last, 2 vs second last, etc.)
+        for (let i = 0; i < tamanhoChave / 2; i++) {
+          const idx1 = i;
+          const idx2 = tamanhoChave - 1 - i;
+          
+          // Verifica se ambas as posições têm equipes (não são byes)
+          if (idx1 < total && idx2 < total) {
+            pairings.push({ a: seedIds[idx1], b: seedIds[idx2] });
+          }
+          // Se uma das posições for um bye (>= total), não cria jogo - a equipe passa direto
+        }
+
+        let partidasCriadas = 0;
+        for (const p of pairings) {
+          await db.insert(partidas).values({
+            torneioId: params.torneioId,
+            categoriaId: params.categoriaId,
+            grupoId: null,
+            equipeAId: p.a,
+            equipeBId: p.b,
+            fase: primeiraFase,
+            status: "AGENDADA",
+            placarA: 0,
+            placarB: 0,
+            atualizadoEm: new Date(),
+          });
+          partidasCriadas += 1;
+        }
+        return { fase: primeiraFase, partidasCriadas, qualificados: total };
       }
-
-      const s1 = seedIds[0];
-      const s2 = seedIds[1];
-      const s3 = seedIds[2];
-      const s4 = seedIds[3];
-      const s5 = seedIds[4];
-      const s6 = seedIds[5];
-
-      const pairings = [
-        { a: s3, b: s6 }, // Jogo 1 Quartas
-        { a: s4, b: s5 }, // Jogo 2 Quartas
-      ];
-
-      let partidasCriadas = 0;
-      for (const p of pairings) {
-        await db.insert(partidas).values({
-          torneioId: params.torneioId,
-          categoriaId: params.categoriaId,
-          grupoId: null,
-          equipeAId: p.a,
-          equipeBId: p.b,
-          fase: "QUARTAS",
-          status: "AGENDADA",
-          placarA: 0,
-          placarB: 0,
-          atualizadoEm: new Date(),
-        });
-        partidasCriadas += 1;
-      }
-      return { fase: "QUARTAS", partidasCriadas, qualificados: total };
     }
 
     if (grupos.length === 1 && (config.fase2?.temFinal ?? true) === false) {

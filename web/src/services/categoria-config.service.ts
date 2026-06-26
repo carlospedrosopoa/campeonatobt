@@ -13,6 +13,8 @@ export type RegrasPartidaSets = {
   incluirSuperTieEmGames?: boolean;
 };
 
+export type MataMataEstrutura = "PADRAO" | "SUPER_CAMPEONATO_6";
+
 export type CategoriaConfigV1 = {
   versao: 1;
   formato: CategoriaFormato;
@@ -29,6 +31,10 @@ export type CategoriaConfigV1 = {
     habilitada: boolean;
     temFinal: boolean;
   };
+  mataMata?: {
+    estrutura: MataMataEstrutura;
+    quantidadeClassificados?: number;
+  };
   regrasPartida?: RegrasPartidaSets;
   desempate?: ("PONTOS" | "CONFRONTO_DIRETO" | "SALDO_GAMES" | "GAMES_PRO" | "VITORIAS" | "SORTEIO")[];
 };
@@ -39,6 +45,7 @@ export const defaultCategoriaConfigV1: CategoriaConfigV1 = {
   grupos: { modo: "AUTO", tamanhoAlvo: 4 },
   classificacao: { porGrupo: 2 },
   fase2: { habilitada: true, temFinal: true },
+  mataMata: { estrutura: "SUPER_CAMPEONATO_6" },
   regrasPartida: {
     tipo: "SETS",
     melhorDe: 1,
@@ -74,6 +81,13 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
   const fase2Habilitada = input?.fase2?.habilitada === false ? false : true;
   const temFinal = input?.fase2?.temFinal === false ? false : true;
 
+  // Normaliza configurações de mata-mata
+  const estrutura: MataMataEstrutura = input?.mataMata?.estrutura === "PADRAO" ? "PADRAO" : "SUPER_CAMPEONATO_6";
+  const quantidadeClassificados =
+    typeof input?.mataMata?.quantidadeClassificados === "number" && input.mataMata.quantidadeClassificados > 0
+      ? Math.floor(input.mataMata.quantidadeClassificados)
+      : undefined;
+
   const tipo = input?.regrasPartida?.tipo === "SETS" ? "SETS" : "SETS";
   const melhorDe: 1 | 3 = input?.regrasPartida?.melhorDe === 3 ? 3 : 1;
   const gamesPorSet: 4 | 5 | 6 = input?.regrasPartida?.gamesPorSet === 4 ? 4 : input?.regrasPartida?.gamesPorSet === 5 ? 5 : 6;
@@ -104,6 +118,7 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
     grupos: formato === "MATA_MATA" ? undefined : { modo, tamanhoAlvo, quantidade: modo === "MANUAL" ? quantidade : undefined },
     classificacao: formato === "GRUPOS" ? { porGrupo, melhoresTerceiros } : undefined,
     fase2: formato === "GRUPOS" ? { habilitada: fase2Habilitada, temFinal } : undefined,
+    mataMata: { estrutura, quantidadeClassificados },
     regrasPartida,
     desempate,
   };
