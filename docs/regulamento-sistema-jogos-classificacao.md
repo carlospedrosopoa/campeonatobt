@@ -50,10 +50,10 @@ Em caso de empate em pontos, a classificação é definida na seguinte ordem:
 ### 4.1 Classificação para o Mata-Mata
 As **10 melhores duplas da fase de grupos** se classificam para o mata-mata.
 
-### 4.2 Estrutura do Chaveamento e Re-Seeding
+### 4.2 Estrutura do Chaveamento
 A chave tem o tamanho da **próxima potência de 2** acima do número de classificados, que no caso de 10 duplas é **16**.
 
-Isso significa que as **6 top seeds (1º a 6º classificados)** recebem **bye** (passam direto para a Oitavas de Final), enquanto as duplas de 7º a 10º disputam a Primeira Fase.
+Isso significa que as **6 top seeds (1º a 6º classificados)** recebem **bye** (passam direto para as Oitavas de Final), enquanto as duplas de 7º a 10º disputam a Primeira Fase para definir as outras 2 vagas das Oitavas de Final.
 
 #### 4.2.1 Re-Seeding em Todas as Fases
 Antes de cada nova fase do mata-mata, as duplas classificadas são **re-seedadas** de acordo com sua classificação original na fase de grupos:
@@ -74,34 +74,40 @@ Isso garante que as duplas com melhor campanha na fase de grupos tenham cruzamen
 
 Os vencedores destas partidas avançam para as Oitavas de Final.
 
-#### 4.2.3 Oitavas de Final (Após Re-Seeding)
+#### 4.2.3 Oitavas de Final (8 equipes)
 Após a Primeira Fase, temos 8 duplas classificadas:
 - 6 com bye (1º-6º)
 - 2 vencedores da Primeira Fase
 
 Essas 8 duplas são re-seedadas (ordenadas por sua classificação original na fase de grupos) e cruzadas em **4 jogos**:
-- Melhor classificado restante vs pior classificado restante
-- Segundo melhor classificado restante vs segundo pior classificado restante
-- Terceiro melhor classificado restante vs terceiro pior classificado restante
-- Quarto melhor classificado restante vs quarto pior classificado restante
+| Partida | Equipe 1 | Equipe 2 |
+|---------|----------|----------|
+| 3 | Melhor classificado restante | Pior classificado restante |
+| 4 | Segundo melhor classificado restante | Segundo pior classificado restante |
+| 5 | Terceiro melhor classificado restante | Terceiro pior classificado restante |
+| 6 | Quarto melhor classificado restante | Quarto pior classificado restante |
 
 Os vencedores destas partidas avançam para as Quartas de Final.
 
-#### 4.2.4 Quartas de Final (Após Re-Seeding)
+#### 4.2.4 Quartas de Final (4 equipes)
 As 4 vencedoras das oitavas são re-seedadas novamente (ordenadas por sua classificação original na fase de grupos) e cruzadas em **2 jogos**:
-- Melhor classificado restante vs pior classificado restante
-- Segundo melhor classificado restante vs segundo pior classificado restante
+| Partida | Equipe 1 | Equipe 2 |
+|---------|----------|----------|
+| 7 | Melhor classificado restante | Pior classificado restante |
+| 8 | Segundo melhor classificado restante | Segundo pior classificado restante |
 
 Os vencedores destas partidas avançam para as Semifinais.
 
-#### 4.2.5 Semifinais (Após Re-Seeding)
+#### 4.2.5 Semifinais (2 equipes)
 As 2 vencedoras das quartas são re-seedadas novamente (ordenadas por sua classificação original na fase de grupos) e cruzadas em **1 jogo**:
-- Melhor classificado restante vs pior classificado restante
+| Partida | Equipe 1 | Equipe 2 |
+|---------|----------|----------|
+| 9 | Melhor classificado restante | Pior classificado restante |
 
 Os vencedores destas partidas avançam para a Final.
 
 #### 4.2.6 Final
-Os vencedores das semifinais disputam a Final.
+Os vencedores das semifinais disputam a Final para definir o campeão do torneio.
 
 ### 4.3 Regras das Partidas no Mata-Mata
 As partidas do mata-mata seguem as mesmas regras da fase de grupos: **1 set até 6 games com tiebreak**.
@@ -201,6 +207,8 @@ Cruzamentos após re-seeding (2 jogos):
 
 Vencedores: A e B (exemplo)
 
+---
+
 #### Passo 4: Semifinais (Re-Seeding)
 Vencedoras das quartas, re-seedadas por posição original:
 1. A (1º)
@@ -212,6 +220,8 @@ Cruzamento (1 jogo):
 | 9 | 1º (A) | 2º (B) |
 
 Vencedor: A (exemplo)
+
+---
 
 #### Passo 5: Final
 O vencedor das semifinais é o campeão do torneio.
