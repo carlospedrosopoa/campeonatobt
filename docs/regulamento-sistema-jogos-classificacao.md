@@ -53,7 +53,7 @@ As **10 melhores duplas da fase de grupos** se classificam para o mata-mata.
 ### 4.2 Estrutura do Chaveamento e Re-Seeding
 A chave tem o tamanho da **próxima potência de 2** acima do número de classificados, que no caso de 10 duplas é **16**.
 
-Isso significa que as **6 top seeds (1º a 6º classificados)** recebem **bye** (passam direto para a próxima fase), enquanto as duplas de 7º a 10º disputam a Primeira Fase.
+Isso significa que as **6 top seeds (1º a 6º classificados)** recebem **bye** (passam direto para a Oitavas de Final), enquanto as duplas de 7º a 10º disputam a Primeira Fase.
 
 #### 4.2.1 Re-Seeding em Todas as Fases
 Antes de cada nova fase do mata-mata, as duplas classificadas são **re-seedadas** de acordo com sua classificação original na fase de grupos:
@@ -79,44 +79,28 @@ Após a Primeira Fase, temos 8 duplas classificadas:
 - 6 com bye (1º-6º)
 - 2 vencedores da Primeira Fase
 
-Essas 8 duplas são re-seedadas (ordenadas por sua classificação original na fase de grupos) e cruzadas da seguinte forma:
+Essas 8 duplas são re-seedadas (ordenadas por sua classificação original na fase de grupos) e cruzadas em **4 jogos**:
 - Melhor classificado restante vs pior classificado restante
 - Segundo melhor classificado restante vs segundo pior classificado restante
-- E assim por diante
-
-**Exemplo**: Se o 10º classificado vencer o 7º, e o 9º vencer o 8º, as 8 duplas re-seedadas serão:
-1. 1º
-2. 2º
-3. 3º
-4. 4º
-5. 5º
-6. 6º
-7. 9º (vencedor)
-8. 10º (vencedor)
-
-Cruzamentos das Oitavas de Final:
-- 1º vs 10º
-- 4º vs 5º
-- 2º vs 9º
-- 3º vs 6º
+- Terceiro melhor classificado restante vs terceiro pior classificado restante
+- Quarto melhor classificado restante vs quarto pior classificado restante
 
 Os vencedores destas partidas avançam para as Quartas de Final.
 
-#### 4.2.5 Quartas de Final (Após Re-Seeding)
-As 4 vencedoras das oitavas são re-seedadas novamente (ordenadas por sua classificação original na fase de grupos) e cruzadas da seguinte forma:
+#### 4.2.4 Quartas de Final (Após Re-Seeding)
+As 4 vencedoras das oitavas são re-seedadas novamente (ordenadas por sua classificação original na fase de grupos) e cruzadas em **2 jogos**:
 - Melhor classificado restante vs pior classificado restante
 - Segundo melhor classificado restante vs segundo pior classificado restante
 
 Os vencedores destas partidas avançam para as Semifinais.
 
-#### 4.2.6 Semifinais (Após Re-Seeding)
-As 4 vencedoras das quartas são re-seedadas novamente (ordenadas por sua classificação original na fase de grupos) e cruzadas da seguinte forma:
+#### 4.2.5 Semifinais (Após Re-Seeding)
+As 2 vencedoras das quartas são re-seedadas novamente (ordenadas por sua classificação original na fase de grupos) e cruzadas em **1 jogo**:
 - Melhor classificado restante vs pior classificado restante
-- Segundo melhor classificado restante vs segundo pior classificado restante
 
 Os vencedores destas partidas avançam para a Final.
 
-#### 4.2.7 Final
+#### 4.2.6 Final
 Os vencedores das semifinais disputam a Final.
 
 ### 4.3 Regras das Partidas no Mata-Mata
@@ -167,7 +151,7 @@ Classificadas para as oitavas (ordenadas por posição original):
 7. G (7º, vencedor)
 8. H (8º, vencedor)
 
-Cruzamentos após re-seeding:
+Cruzamentos após re-seeding (4 jogos):
 | Partida | Equipe 1 | Equipe 2 |
 |---------|----------|----------|
 | 3 | 1º (A) | 8º (H) |
@@ -190,7 +174,7 @@ Classificadas para as oitavas (ordenadas por posição original):
 7. I (9º, vencedor)
 8. J (10º, vencedor)
 
-Cruzamentos após re-seeding:
+Cruzamentos após re-seeding (4 jogos):
 | Partida | Equipe 1 | Equipe 2 |
 |---------|----------|----------|
 | 3 | 1º (A) | 10º (J) |
@@ -200,6 +184,8 @@ Cruzamentos após re-seeding:
 
 Vencedores: A, D, B, C (exemplo)
 
+---
+
 #### Passo 3: Quartas de Final (Re-Seeding)
 Vencedoras das oitavas, re-seedadas por posição original:
 1. A (1º)
@@ -207,7 +193,7 @@ Vencedoras das oitavas, re-seedadas por posição original:
 3. C (3º)
 4. D (4º)
 
-Cruzamentos após re-seeding:
+Cruzamentos após re-seeding (2 jogos):
 | Partida | Equipe 1 | Equipe 2 |
 |---------|----------|----------|
 | 7 | 1º (A) | 4º (D) |
@@ -215,8 +201,20 @@ Cruzamentos após re-seeding:
 
 Vencedores: A e B (exemplo)
 
-#### Passo 4: Final
-As duas vencedoras disputam a Final diretamente.
+#### Passo 4: Semifinais (Re-Seeding)
+Vencedoras das quartas, re-seedadas por posição original:
+1. A (1º)
+2. B (2º)
+
+Cruzamento (1 jogo):
+| Partida | Equipe 1 | Equipe 2 |
+|---------|----------|----------|
+| 9 | 1º (A) | 2º (B) |
+
+Vencedor: A (exemplo)
+
+#### Passo 5: Final
+O vencedor das semifinais é o campeão do torneio.
 
 ---
 
