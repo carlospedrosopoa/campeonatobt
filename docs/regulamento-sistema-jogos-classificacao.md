@@ -98,11 +98,12 @@ As 4 vencedoras das oitavas são re-seedadas novamente (ordenadas por sua classi
 
 Os vencedores destas partidas avançam para as Semifinais.
 
-#### 4.2.5 Semifinais (2 equipes)
-As 2 vencedoras das quartas são re-seedadas novamente (ordenadas por sua classificação original na fase de grupos) e cruzadas em **1 jogo**:
+#### 4.2.5 Semifinais (4 equipes)
+As 4 vencedoras das quartas são re-seedadas novamente (ordenadas por sua classificação original na fase de grupos) e cruzadas em **2 jogos**:
 | Partida | Equipe 1 | Equipe 2 |
 |---------|----------|----------|
 | 9 | Melhor classificado restante | Pior classificado restante |
+| 10 | Segundo melhor classificado restante | Segundo pior classificado restante |
 
 Os vencedores destas partidas avançam para a Final.
 
@@ -205,7 +206,7 @@ Cruzamentos após re-seeding (2 jogos):
 | 7 | 1º (A) | 4º (D) |
 | 8 | 2º (B) | 3º (C) |
 
-Vencedores: A e B (exemplo)
+Vencedores: A, C, B, D (exemplo)
 
 ---
 
@@ -213,18 +214,21 @@ Vencedores: A e B (exemplo)
 Vencedoras das quartas, re-seedadas por posição original:
 1. A (1º)
 2. B (2º)
+3. C (3º)
+4. D (4º)
 
-Cruzamento (1 jogo):
+Cruzamentos após re-seeding (2 jogos):
 | Partida | Equipe 1 | Equipe 2 |
 |---------|----------|----------|
-| 9 | 1º (A) | 2º (B) |
+| 9 | 1º (A) | 4º (D) |
+| 10 | 2º (B) | 3º (C) |
 
-Vencedor: A (exemplo)
+Vencedores: A e B (exemplo)
 
 ---
 
 #### Passo 5: Final
-O vencedor das semifinais é o campeão do torneio.
+Os vencedores das semifinais disputam a Final para definir o campeão do torneio.
 
 ---
 
