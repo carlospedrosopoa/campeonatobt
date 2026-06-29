@@ -851,7 +851,7 @@ export async function gerarCardProgramacaoTorneioAdmin(params: GerarCardPrograma
   const leftX = 70;
   const colGap = 30;
   const colW = (width - leftX * 2 - colGap) / 2;
-  const yStart = 300;
+  const yStart = 470;
   const rowH = 76;
   const maxRows = 14;
 
