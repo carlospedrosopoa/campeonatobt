@@ -59,6 +59,8 @@ export class MataMataService {
     if (config.formato !== "GRUPOS") throw new Error("Formato da categoria não é GRUPOS");
     if (config.fase2?.habilitada === false) throw new Error("Fase 2 desabilitada");
     const superCampeonato = await this.isSuperCampeonato({ categoriaId: params.categoriaId });
+    const porGrupo = config.classificacao?.porGrupo ?? 2;
+    const melhoresTerceiros = config.classificacao?.melhoresTerceiros ?? 0;
 
     const grupos = await classificacaoCategoriaService.obterClassificacao(params.categoriaId);
     if (grupos.length === 0) throw new Error("Nenhum grupo encontrado");
@@ -496,8 +498,6 @@ export class MataMataService {
           throw new Error("Super Campeonato precisa de pelo menos 6 equipes no Grupo Único para gerar o mata-mata (Quartas: 3ºx6º e 4ºx5º; 1º e 2º bye).");
         }
 
-        const s1 = seedIds[0];
-        const s2 = seedIds[1];
         const s3 = seedIds[2];
         const s4 = seedIds[3];
         const s5 = seedIds[4];
@@ -528,8 +528,6 @@ export class MataMataService {
       } else {
         // Estrutura PADRAO (chave com byes)
         const tamanhoChave = getNextPowerOfTwo(total);
-        const byes = tamanhoChave - total;
-
         // Calcula a primeira fase da chave
         let primeiraFase: Fase;
         if (tamanhoChave === 2) primeiraFase = "FINAL";

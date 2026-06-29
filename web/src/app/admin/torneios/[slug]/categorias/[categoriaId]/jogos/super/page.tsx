@@ -1201,7 +1201,7 @@ export default function AdminCategoriaJogosSuperPage() {
                   setConfig((prev) => prev ? {
                     ...prev,
                     mataMata: {
-                      ...prev.mataMata,
+                      estrutura: prev.mataMata?.estrutura ?? "SUPER_CAMPEONATO_6",
                       quantidadeClassificados: isNaN(val) ? undefined : val
                     }
                   } : prev);
