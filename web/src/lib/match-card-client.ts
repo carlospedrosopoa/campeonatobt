@@ -839,27 +839,6 @@ export async function gerarCardProgramacaoTorneioAdmin(params: GerarCardPrograma
     return `${dd}/${mm} ${hh}:${mi}`;
   };
 
-  ctx.fillStyle = "rgba(249,115,22,0.18)";
-  const tagX = 70;
-  const tagY = 230;
-  const tagW = 940;
-  const tagH = 72;
-  ctx.fillRect(tagX, tagY, tagW, tagH);
-  ctx.strokeStyle = "rgba(249,115,22,0.60)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(tagX, tagY, tagW, tagH);
-  ctx.fillStyle = "#ffedd5";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "900 36px Inter, Arial, sans-serif";
-  ctx.fillText("PROGRAMAÇÃO", tagX + tagW / 2, tagY + tagH / 2);
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "900 54px Inter, Arial, sans-serif";
-  drawTextCenter(ctx, (params.torneioNome || "Torneio").trim(), width / 2, 330, 980, 62);
-
   const categorias = (params.categorias ?? [])
     .slice()
     .sort((a, b) => {
@@ -872,7 +851,7 @@ export async function gerarCardProgramacaoTorneioAdmin(params: GerarCardPrograma
   const leftX = 70;
   const colGap = 30;
   const colW = (width - leftX * 2 - colGap) / 2;
-  const yStart = 470;
+  const yStart = 300;
   const rowH = 76;
   const maxRows = 14;
 

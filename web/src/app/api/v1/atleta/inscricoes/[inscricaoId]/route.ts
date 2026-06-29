@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, partidas, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { validarGeneroInscricao } from "@/services/inscricoes.service";
 
 async function upsertAtleta(dados: {
   nome: string;
@@ -174,9 +175,11 @@ export async function PUT(
       inscricaoId: inscricoes.id,
       torneioId: inscricoes.torneioId,
       categoriaId: inscricoes.categoriaId,
+      categoriaGenero: categorias.genero,
       equipeId: inscricoes.equipeId,
     })
     .from(inscricoes)
+    .innerJoin(categorias, eq(categorias.id, inscricoes.categoriaId))
     .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, inscricoes.equipeId))
     .where(and(eq(inscricoes.id, id), eq(equipeIntegrantes.usuarioId, auth.user.id)))
     .limit(1);
@@ -204,6 +207,20 @@ export async function PUT(
   const meuId = auth.user.id;
   const parceiroAtualId = ids.find((x) => x !== meuId) ?? null;
   if (!parceiroAtualId) return NextResponse.json({ error: "Falha ao identificar parceiro atual" }, { status: 400 });
+
+  await validarGeneroInscricao({
+    categoriaGenero: ins.categoriaGenero,
+    atletaA: {
+      nome: auth.user.nome,
+      email: auth.user.email,
+      playnaquadraAtletaId: auth.user.playnaquadraAtletaId ?? null,
+    },
+    atletaB: {
+      nome: parceiroNome,
+      email: parceiroEmail,
+      playnaquadraAtletaId: parceiroPlayId,
+    },
+  });
 
   const novoParceiroId = await upsertAtleta({
     nome: parceiroNome,
@@ -269,6 +286,7 @@ export async function DELETE(
       inscricaoId: inscricoes.id,
       torneioId: inscricoes.torneioId,
       categoriaId: inscricoes.categoriaId,
+      status: inscricoes.status,
     })
     .from(inscricoes)
     .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, inscricoes.equipeId))
@@ -276,6 +294,9 @@ export async function DELETE(
     .limit(1);
   const ins = insRows[0];
   if (!ins) return NextResponse.json({ error: "Inscrição não encontrada" }, { status: 404 });
+  if (ins.status !== "PENDENTE") {
+    return NextResponse.json({ error: "Só é possível cancelar inscrições pendentes" }, { status: 400 });
+  }
 
   const torneioComJogosEmAndamento = await db
     .select({ id: partidas.id })

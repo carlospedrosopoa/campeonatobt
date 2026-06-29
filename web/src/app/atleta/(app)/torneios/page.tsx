@@ -974,9 +974,14 @@ export default function AtletaTorneiosPage() {
                               const podePagar = pixOk && statusPg === "PENDENTE" && valorNum > 0;
                               const podeEditar = statusPg === "PENDENTE";
                               const torneioComJogos = Boolean(t.torneio.temJogosEmAndamento);
-                              const podeCancelar = statusPg === "PENDENTE" && !torneioComJogos;
+                              const podeCancelar = c.status === "PENDENTE" && statusPg === "PENDENTE" && !torneioComJogos;
                               const bloqueioAcao = pago ? "Bloqueado: pagamento já confirmado" : processando ? "Bloqueado: pagamento em processamento" : "Bloqueado";
-                              const bloqueioCancelar = torneioComJogos ? "Bloqueado: torneio com jogos em andamento" : bloqueioAcao;
+                              const bloqueioCancelar =
+                                c.status !== "PENDENTE"
+                                  ? "Bloqueado: só é possível cancelar inscrições pendentes"
+                                  : torneioComJogos
+                                    ? "Bloqueado: torneio com jogos em andamento"
+                                    : bloqueioAcao;
                               const statusLabel = pago ? "Pago" : processando ? "Em processamento" : "Pendente";
                               const statusClass = pago ? "text-emerald-700 font-semibold" : processando ? "text-blue-700 font-semibold" : "text-amber-800 font-semibold";
 

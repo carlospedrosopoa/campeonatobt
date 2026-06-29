@@ -1,6 +1,8 @@
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
+import { playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
 
 export type CriarInscricaoDTO = {
   torneioId: string;
@@ -22,6 +24,153 @@ export type AtualizarInscricaoDTO = {
 
 function normalizeEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
+}
+
+type GeneroCategoria = "MASCULINO" | "FEMININO" | "MISTO";
+type GeneroAtleta = "MASCULINO" | "FEMININO";
+type AtletaGeneroInput = {
+  nome?: string | null;
+  email?: string | null;
+  playnaquadraAtletaId?: string | null;
+};
+
+function normalizeGeneroAtleta(value: unknown): GeneroAtleta | null {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return null;
+  if (["m", "masculino", "male", "homem"].includes(normalized)) return "MASCULINO";
+  if (["f", "feminino", "female", "mulher"].includes(normalized)) return "FEMININO";
+  return null;
+}
+
+function extractPlayAtletaGenero(payload: any) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const nested = [source.atleta, source.usuario, source.user, source.profile].filter((item) => item && typeof item === "object");
+  const nome = String(
+    source.nome ||
+      nested.map((item: any) => item?.nome).find(Boolean) ||
+      nested.map((item: any) => item?.name).find(Boolean) ||
+      ""
+  ).trim();
+  const email = normalizeEmail(
+    source.email ||
+      nested.map((item: any) => item?.email).find(Boolean) ||
+      ""
+  );
+  const playnaquadraAtletaId =
+    String(
+      source.id ||
+        source._id ||
+        source.atletaId ||
+        source.usuarioId ||
+        source.atleta?.id ||
+        source.atleta?._id ||
+        ""
+    ).trim() || null;
+  const genero = normalizeGeneroAtleta(
+    source.genero ||
+      source.sexo ||
+      source.gender ||
+      source.atleta?.genero ||
+      source.atleta?.sexo ||
+      source.usuario?.genero ||
+      source.usuario?.sexo ||
+      source.user?.genero ||
+      source.user?.sexo
+  );
+
+  return {
+    nome: nome || null,
+    email: email || null,
+    playnaquadraAtletaId,
+    genero,
+  };
+}
+
+async function resolverGeneroAtleta(params: AtletaGeneroInput) {
+  const token = await getPlayAdminToken();
+  const email = normalizeEmail(params.email);
+  const playId = String(params.playnaquadraAtletaId || "").trim();
+
+  if (playId) {
+    const byId = await playGetAtletaById({ token, atletaId: playId });
+    if (!byId.res.ok) {
+      throw new Error(`Falha ao validar o perfil de ${params.nome || email || "atleta"} no Play na Quadra`);
+    }
+
+    const parsed = extractPlayAtletaGenero(byId.data);
+    return {
+      nome: parsed.nome || params.nome || email || "atleta",
+      genero: parsed.genero,
+    };
+  }
+
+  if (!email) {
+    throw new Error(`Não foi possível validar o gênero de ${params.nome || "um atleta"}: email não informado`);
+  }
+
+  const result = await playBuscarAtletas({ token, q: email, limite: 10 });
+  if (!result.res.ok) {
+    throw new Error(`Falha ao buscar o perfil de ${params.nome || email} no Play na Quadra`);
+  }
+
+  const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+  const exactMatch = rawCandidates
+    .map((item) => extractPlayAtletaGenero(item))
+    .find((item) => item.email && item.email === email);
+
+  if (!exactMatch?.playnaquadraAtletaId) {
+    throw new Error(`Não foi possível localizar o perfil de ${params.nome || email} no Play na Quadra para validar o gênero`);
+  }
+
+  const byId = await playGetAtletaById({ token, atletaId: exactMatch.playnaquadraAtletaId });
+  if (!byId.res.ok) {
+    throw new Error(`Falha ao validar o perfil de ${params.nome || email} no Play na Quadra`);
+  }
+
+  const parsed = extractPlayAtletaGenero(byId.data);
+  return {
+    nome: parsed.nome || params.nome || email,
+    genero: parsed.genero,
+  };
+}
+
+export async function validarGeneroInscricao(params: {
+  categoriaGenero: string | null | undefined;
+  atletaA: AtletaGeneroInput;
+  atletaB: AtletaGeneroInput;
+}) {
+  const categoriaGenero = String(params.categoriaGenero || "").trim().toUpperCase() as GeneroCategoria;
+  if (!["MASCULINO", "FEMININO", "MISTO"].includes(categoriaGenero)) return;
+
+  const [atletaA, atletaB] = await Promise.all([
+    resolverGeneroAtleta(params.atletaA),
+    resolverGeneroAtleta(params.atletaB),
+  ]);
+
+  if (!atletaA.genero) {
+    throw new Error(`Não foi possível validar o gênero de ${atletaA.nome}. Atualize o perfil no Play na Quadra.`);
+  }
+
+  if (!atletaB.genero) {
+    throw new Error(`Não foi possível validar o gênero de ${atletaB.nome}. Atualize o perfil no Play na Quadra.`);
+  }
+
+  if (categoriaGenero === "MASCULINO" && (atletaA.genero !== "MASCULINO" || atletaB.genero !== "MASCULINO")) {
+    throw new Error("A categoria masculina aceita apenas duplas com dois atletas do gênero masculino.");
+  }
+
+  if (categoriaGenero === "FEMININO" && (atletaA.genero !== "FEMININO" || atletaB.genero !== "FEMININO")) {
+    throw new Error("A categoria feminina aceita apenas duplas com duas atletas do gênero feminino.");
+  }
+
+  if (categoriaGenero === "MISTO" && atletaA.genero === atletaB.genero) {
+    throw new Error("A categoria mista exige uma atleta do gênero feminino e um atleta do gênero masculino.");
+  }
 }
 
 export class InscricoesService {
@@ -138,6 +287,20 @@ export class InscricoesService {
 
     if (!atletaAEmail || !atletaBEmail) throw new Error("Emails dos atletas são obrigatórios");
     if (atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
+
+    await validarGeneroInscricao({
+      categoriaGenero: categoria.genero,
+      atletaA: {
+        nome: dados.atletaA.nome,
+        email: atletaAEmail,
+        playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
+      },
+      atletaB: {
+        nome: dados.atletaB.nome,
+        email: atletaBEmail,
+        playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
+      },
+    });
 
     const atletaAId = await this.upsertAtleta({
       nome: dados.atletaA.nome.trim(),
