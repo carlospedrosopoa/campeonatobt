@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { torneioAtletaPrefs, torneios } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { playGetAtletaMe } from "@/services/playnaquadra-client";
+import { extractCamisetaFromPlay } from "@/services/playnaquadra-camiseta";
 
 function normalizeOption(value: string) {
   return (value || "").trim().replace(/\s+/g, " ");
@@ -14,45 +15,6 @@ function findMatch(opcoes: string[], value: string | null) {
   if (!v) return null;
   const byLower = new Map(opcoes.map((o) => [normalizeOption(o).toLowerCase(), o]));
   return byLower.get(v.toLowerCase()) ?? null;
-}
-
-function extractCamisetaFromPlay(payload: any) {
-  const candidates = [
-    payload,
-    payload?.atleta,
-    payload?.perfil,
-    payload?.perfilAtleta,
-    payload?.usuario,
-    payload?.user,
-    payload?.data,
-  ];
-  const keys = [
-    "camiseta",
-    "tamanhoCamiseta",
-    "tamanho_camiseta",
-    "camisetaTamanho",
-    "camiseta_tamanho",
-    "tamanhoCamisa",
-    "tamanho_camisa",
-    "shirtSize",
-    "jerseySize",
-  ];
-
-  for (const obj of candidates) {
-    if (!obj || typeof obj !== "object") continue;
-    for (const k of keys) {
-      const v = (obj as any)?.[k];
-      if (typeof v === "string" && v.trim()) return v.trim();
-    }
-    const nested = (obj as any)?.camiseta || (obj as any)?.uniforme;
-    if (nested && typeof nested === "object") {
-      for (const k of keys) {
-        const v = (nested as any)?.[k];
-        if (typeof v === "string" && v.trim()) return v.trim();
-      }
-    }
-  }
-  return null;
 }
 
 export async function GET(
@@ -154,4 +116,3 @@ export async function PUT(
     { headers: { "Cache-Control": "no-store", Vary: "Authorization" } }
   );
 }
-

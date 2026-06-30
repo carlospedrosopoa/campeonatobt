@@ -29,6 +29,7 @@ type Inscricao = {
       email: string;
       telefone: string | null;
       fotoUrl?: string | null;
+      camisetaOpcao?: string | null;
       pago: boolean;
       pagamentoStatus?: string | null;
       valorDevido?: string | null;
@@ -54,6 +55,7 @@ export default function AdminCategoriaInscricoesPage() {
   const [torneioNome, setTorneioNome] = useState("Torneio");
   const [torneioTemplateInscricaoUrl, setTorneioTemplateInscricaoUrl] = useState<string | null>(null);
   const [torneioSuperCampeonato, setTorneioSuperCampeonato] = useState(false);
+  const [torneioCamisetaOpcoes, setTorneioCamisetaOpcoes] = useState<string[]>([]);
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -79,11 +81,13 @@ export default function AdminCategoriaInscricoesPage() {
     atletaATelefone: "",
     atletaAPlayId: "",
     atletaAFotoUrl: "",
+    atletaACamiseta: "",
     atletaBNome: "",
     atletaBEmail: "",
     atletaBTelefone: "",
     atletaBPlayId: "",
     atletaBFotoUrl: "",
+    atletaBCamiseta: "",
     status: "APROVADA" as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA",
   });
 
@@ -106,6 +110,7 @@ export default function AdminCategoriaInscricoesPage() {
         const t = (await resTorneio.json().catch(() => null)) as any;
         if (t?.nome) setTorneioNome(String(t.nome));
         setTorneioSuperCampeonato(Boolean(t?.superCampeonato));
+        setTorneioCamisetaOpcoes(Array.isArray(t?.camisetaOpcoes) ? t.camisetaOpcoes.map((item: unknown) => String(item)) : []);
         setTorneioTemplateInscricaoUrl(
           (t?.templateInscricaoUrl as string | null | undefined) ??
             (t?.templateUrl as string | null | undefined) ??
@@ -238,11 +243,13 @@ export default function AdminCategoriaInscricoesPage() {
       atletaATelefone: "",
       atletaAPlayId: "",
       atletaAFotoUrl: "",
+      atletaACamiseta: "",
       atletaBNome: "",
       atletaBEmail: "",
       atletaBTelefone: "",
       atletaBPlayId: "",
       atletaBFotoUrl: "",
+      atletaBCamiseta: "",
       status: "APROVADA",
     });
   }
@@ -273,11 +280,13 @@ export default function AdminCategoriaInscricoesPage() {
       atletaATelefone: a1?.telefone || "",
       atletaAPlayId: "",
       atletaAFotoUrl: a1?.fotoUrl || "",
+      atletaACamiseta: a1?.camisetaOpcao || "",
       atletaBNome: a2?.nome || "",
       atletaBEmail: a2?.email || "",
       atletaBTelefone: a2?.telefone || "",
       atletaBPlayId: "",
       atletaBFotoUrl: a2?.fotoUrl || "",
+      atletaBCamiseta: a2?.camisetaOpcao || "",
       status: (inscricao.status as any) || "APROVADA",
     });
   }
@@ -301,6 +310,7 @@ export default function AdminCategoriaInscricoesPage() {
           telefone: form.atletaATelefone.trim() || undefined,
           playnaquadraAtletaId: form.atletaAPlayId || undefined,
           fotoUrl: form.atletaAFotoUrl || undefined,
+          camisetaOpcao: form.atletaACamiseta.trim() || null,
         },
         atletaB: {
           nome: form.atletaBNome.trim(),
@@ -308,6 +318,7 @@ export default function AdminCategoriaInscricoesPage() {
           telefone: form.atletaBTelefone.trim() || undefined,
           playnaquadraAtletaId: form.atletaBPlayId || undefined,
           fotoUrl: form.atletaBFotoUrl || undefined,
+          camisetaOpcao: form.atletaBCamiseta.trim() || null,
         },
       };
 
@@ -610,6 +621,30 @@ export default function AdminCategoriaInscricoesPage() {
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Camiseta</label>
+                {torneioCamisetaOpcoes.length > 0 ? (
+                  <select
+                    value={form.atletaACamiseta}
+                    onChange={(e) => setForm((p) => ({ ...p, atletaACamiseta: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+                  >
+                    <option value="">Selecione</option>
+                    {torneioCamisetaOpcoes.map((opcao) => (
+                      <option key={opcao} value={opcao}>
+                        {opcao}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={form.atletaACamiseta}
+                    onChange={(e) => setForm((p) => ({ ...p, atletaACamiseta: e.target.value }))}
+                    placeholder="Ex: M, G, Baby Look M"
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  />
+                )}
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -677,6 +712,30 @@ export default function AdminCategoriaInscricoesPage() {
                   onChange={(e) => setForm((p) => ({ ...p, atletaBTelefone: e.target.value }))}
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Camiseta</label>
+                {torneioCamisetaOpcoes.length > 0 ? (
+                  <select
+                    value={form.atletaBCamiseta}
+                    onChange={(e) => setForm((p) => ({ ...p, atletaBCamiseta: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+                  >
+                    <option value="">Selecione</option>
+                    {torneioCamisetaOpcoes.map((opcao) => (
+                      <option key={opcao} value={opcao}>
+                        {opcao}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={form.atletaBCamiseta}
+                    onChange={(e) => setForm((p) => ({ ...p, atletaBCamiseta: e.target.value }))}
+                    placeholder="Ex: M, G, Baby Look M"
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  />
+                )}
               </div>
             </div>
           </div>

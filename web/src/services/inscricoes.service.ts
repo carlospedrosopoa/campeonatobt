@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneios, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
@@ -8,8 +8,8 @@ export type CriarInscricaoDTO = {
   torneioId: string;
   categoriaId: string;
   equipeNome?: string;
-  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null };
-  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null };
+  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
+  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
 };
 
@@ -17,13 +17,17 @@ export type AtualizarInscricaoDTO = {
   torneioId: string;
   categoriaId: string;
   equipeNome?: string | null;
-  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null };
-  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null };
+  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
+  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
 };
 
 function normalizeEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeOption(value?: string | null) {
+  return String(value || "").trim().replace(/\s+/g, " ");
 }
 
 type GeneroCategoria = "MASCULINO" | "FEMININO" | "MISTO";
@@ -180,6 +184,7 @@ export class InscricoesService {
         inscricaoId: inscricoes.id,
         status: inscricoes.status,
         dataInscricao: inscricoes.dataInscricao,
+        torneioId: inscricoes.torneioId,
         equipeId: equipes.id,
         equipeNome: equipes.nome,
         atletaId: usuarios.id,
@@ -187,6 +192,7 @@ export class InscricoesService {
         atletaEmail: usuarios.email,
         atletaTelefone: usuarios.telefone,
         atletaFotoUrl: usuarios.fotoUrl,
+        atletaCamisetaOpcao: torneioAtletaPrefs.camisetaOpcao,
         atletaPago: inscricaoPagamentos.pago,
         atletaPagamentoStatus: inscricaoPagamentos.status,
         atletaValorDevido: inscricaoPagamentos.valorDevido,
@@ -195,6 +201,7 @@ export class InscricoesService {
       .innerJoin(equipes, eq(inscricoes.equipeId, equipes.id))
       .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, equipes.id))
       .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
+      .leftJoin(torneioAtletaPrefs, and(eq(torneioAtletaPrefs.torneioId, inscricoes.torneioId), eq(torneioAtletaPrefs.usuarioId, usuarios.id)))
       .leftJoin(inscricaoPagamentos, and(eq(inscricaoPagamentos.inscricaoId, inscricoes.id), eq(inscricaoPagamentos.usuarioId, usuarios.id)))
       .where(eq(inscricoes.categoriaId, categoriaId));
 
@@ -213,6 +220,7 @@ export class InscricoesService {
             email: string;
             telefone: string | null;
             fotoUrl: string | null;
+            camisetaOpcao?: string | null;
             pago: boolean;
             pagamentoStatus?: string;
             valorDevido?: string | null;
@@ -239,6 +247,7 @@ export class InscricoesService {
                 email: r.atletaEmail,
                 telefone: r.atletaTelefone ?? null,
                 fotoUrl: r.atletaFotoUrl ?? null,
+                camisetaOpcao: r.atletaCamisetaOpcao ?? null,
                 pagamentoStatus: r.atletaPagamentoStatus ?? (Boolean(r.atletaPago) ? "PAGO" : "PENDENTE"),
                 pago: Boolean(r.atletaPago) || r.atletaPagamentoStatus === "PAGO",
                 valorDevido: r.atletaValorDevido ?? null,
@@ -253,6 +262,7 @@ export class InscricoesService {
           email: r.atletaEmail,
           telefone: r.atletaTelefone ?? null,
           fotoUrl: r.atletaFotoUrl ?? null,
+          camisetaOpcao: r.atletaCamisetaOpcao ?? null,
           pagamentoStatus: r.atletaPagamentoStatus ?? (Boolean(r.atletaPago) ? "PAGO" : "PENDENTE"),
           pago: Boolean(r.atletaPago) || r.atletaPagamentoStatus === "PAGO",
           valorDevido: r.atletaValorDevido ?? null,
@@ -338,10 +348,14 @@ export class InscricoesService {
       .select({
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
         valorInscricaoAdicional: torneios.valorInscricaoAdicional,
+        camisetaOpcoes: torneios.camisetaOpcoes,
       })
       .from(torneios)
       .where(eq(torneios.id, dados.torneioId))
       .limit(1);
+
+    const camisetaAtletaA = this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaA.camisetaOpcao);
+    const camisetaAtletaB = this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaB.camisetaOpcao);
 
     const pagamentosPrevios = await db
       .select({
@@ -381,6 +395,9 @@ export class InscricoesService {
         { inscricaoId: novaInscricao.id, usuarioId: atletaBId, pago: false, valorDevido: valorPara(atletaBId) },
       ])
       .onConflictDoNothing();
+
+    await this.salvarPreferenciaCamiseta(dados.torneioId, atletaAId, camisetaAtletaA);
+    await this.salvarPreferenciaCamiseta(dados.torneioId, atletaBId, camisetaAtletaB);
 
     return novaInscricao;
   }
@@ -431,6 +448,15 @@ export class InscricoesService {
 
     if (atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
 
+    const [torneioRow] = await db
+      .select({ camisetaOpcoes: torneios.camisetaOpcoes })
+      .from(torneios)
+      .where(eq(torneios.id, dados.torneioId))
+      .limit(1);
+
+    const camisetaAtletaA = this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaA.camisetaOpcao);
+    const camisetaAtletaB = this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaB.camisetaOpcao);
+
     const conflito = await db
       .select({ inscricaoId: inscricoes.id })
       .from(inscricoes)
@@ -474,6 +500,9 @@ export class InscricoesService {
         { inscricaoId, usuarioId: atletaBId, pago: false },
       ])
       .onConflictDoNothing();
+
+    await this.salvarPreferenciaCamiseta(dados.torneioId, atletaAId, camisetaAtletaA);
+    await this.salvarPreferenciaCamiseta(dados.torneioId, atletaBId, camisetaAtletaB);
 
     return { ok: true };
   }
@@ -634,6 +663,44 @@ export class InscricoesService {
       .limit(1);
 
     return candidatos[0]?.equipeId ?? null;
+  }
+
+  private normalizeCamisetaOpcao(opcoesTorneio: string[] | null | undefined, value?: string | null) {
+    const normalized = normalizeOption(value);
+    if (!normalized) return null;
+
+    const opcoes = Array.isArray(opcoesTorneio) ? opcoesTorneio.map((item) => String(item)) : [];
+    if (opcoes.length === 0) return normalized;
+
+    const byLower = new Map(opcoes.map((item) => [normalizeOption(item).toLowerCase(), item]));
+    const match = byLower.get(normalized.toLowerCase()) ?? null;
+    if (!match) {
+      throw new Error("Opção de camiseta inválida para este torneio");
+    }
+    return match;
+  }
+
+  private async salvarPreferenciaCamiseta(torneioId: string, usuarioId: string, camisetaOpcao?: string | null) {
+    const normalized = normalizeOption(camisetaOpcao);
+    if (!normalized) {
+      await db
+        .delete(torneioAtletaPrefs)
+        .where(and(eq(torneioAtletaPrefs.torneioId, torneioId), eq(torneioAtletaPrefs.usuarioId, usuarioId)));
+      return;
+    }
+
+    await db
+      .insert(torneioAtletaPrefs)
+      .values({
+        torneioId,
+        usuarioId,
+        camisetaOpcao: normalized,
+        atualizadoEm: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [torneioAtletaPrefs.torneioId, torneioAtletaPrefs.usuarioId],
+        set: { camisetaOpcao: normalized, atualizadoEm: new Date() },
+      });
   }
 
   private async criarEquipeComIntegrantes(torneioId: string, nome: string | undefined, atletaAId: string, atletaBId: string) {
