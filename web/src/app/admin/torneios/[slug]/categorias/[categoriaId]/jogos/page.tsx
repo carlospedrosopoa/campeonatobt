@@ -203,6 +203,7 @@ export default function AdminCategoriaJogosPage() {
 
   function getRegraJogoValue(regras?: CategoriaConfig["regrasPartida"]) {
     if (regras?.melhorDe === 3 && regras?.superTiebreakDecisivo?.habilitado) return "2SETS_SUPER10";
+    if (regras?.melhorDe === 1 && regras?.gamesPorSet === 6 && regras?.tiebreak?.habilitado === false) return "1SET_6_SEM_TB";
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 5 && regras?.tiebreak?.habilitado === false) return "1SET_5_SEM_TB";
     return "1SET_6_TB";
   }
@@ -1094,6 +1095,22 @@ export default function AdminCategoriaJogosPage() {
                           }
                         : p
                     );
+                  } else if (v === "1SET_6_SEM_TB") {
+                    setConfig((p) =>
+                      p
+                        ? {
+                            ...p,
+                            regrasPartida: {
+                              tipo: "SETS",
+                              melhorDe: 1,
+                              gamesPorSet: 6,
+                              tiebreak: { habilitado: false, em: 6, ate: 0, diffMin: 2 },
+                              superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+                              incluirSuperTieEmGames: false,
+                            },
+                          }
+                        : p
+                    );
                   } else if (v === "1SET_5_SEM_TB") {
                     setConfig((p) =>
                       p
@@ -1131,6 +1148,7 @@ export default function AdminCategoriaJogosPage() {
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
               >
                 <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
+                <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
                 <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
                 <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
               </select>

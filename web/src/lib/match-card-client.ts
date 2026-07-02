@@ -697,8 +697,11 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
   const titleHeight = 52;
   const contentTopPadding = 10;
   const boxPaddingBottom = 16;
-  const rowsPerColumn = Math.ceil(categoriasProgramacao.length / 2);
-  const columnWidth = (programacaoBoxW - boxPaddingX * 2 - columnGap) / 2;
+  const usarColunaUnica = categoriasProgramacao.length === 1;
+  const rowsPerColumn = usarColunaUnica ? categoriasProgramacao.length : Math.ceil(categoriasProgramacao.length / 2);
+  const columnWidth = usarColunaUnica
+    ? programacaoBoxW - boxPaddingX * 2
+    : (programacaoBoxW - boxPaddingX * 2 - columnGap) / 2;
   const programacaoBoxH = titleHeight + contentTopPadding + rowsPerColumn * rowHeight + boxPaddingBottom;
 
   if (categoriasProgramacao.length > 0) {
@@ -714,15 +717,17 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
     ctx.font = "800 28px Inter, Arial, sans-serif";
     ctx.fillText("PROGRAMACAO DAS CATEGORIAS", width / 2, programacaoBoxY + titleHeight / 2);
 
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(programacaoBoxX + programacaoBoxW / 2, programacaoBoxY + titleHeight + 10);
-    ctx.lineTo(programacaoBoxX + programacaoBoxW / 2, programacaoBoxY + programacaoBoxH - 12);
-    ctx.stroke();
+    if (!usarColunaUnica) {
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(programacaoBoxX + programacaoBoxW / 2, programacaoBoxY + titleHeight + 10);
+      ctx.lineTo(programacaoBoxX + programacaoBoxW / 2, programacaoBoxY + programacaoBoxH - 12);
+      ctx.stroke();
+    }
 
     categoriasProgramacao.forEach((categoriaItem, index) => {
-      const columnIndex = Math.floor(index / rowsPerColumn);
+      const columnIndex = usarColunaUnica ? 0 : Math.floor(index / rowsPerColumn);
       const rowIndex = index % rowsPerColumn;
       const x = programacaoBoxX + boxPaddingX + columnIndex * (columnWidth + columnGap);
       const y = programacaoBoxY + titleHeight + contentTopPadding + rowIndex * rowHeight;
@@ -741,16 +746,26 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
         ctx.fillRect(x, y + 2, columnWidth, rowHeight - 8);
       }
 
-      ctx.textAlign = "left";
       ctx.textBaseline = "top";
       ctx.fillStyle = isCurrent ? "#ffedd5" : "#f8fafc";
       ctx.font = isCurrent ? "800 18px Inter, Arial, sans-serif" : "700 17px Inter, Arial, sans-serif";
-      drawTextLeft(ctx, categoriaItem.nome || "Categoria", x + 14, y + 10, columnWidth - 28, 24);
+      if (usarColunaUnica) {
+        ctx.textAlign = "center";
+        drawTextCenter(ctx, categoriaItem.nome || "Categoria", x + columnWidth / 2, y + 8, columnWidth - 28, 22);
+      } else {
+        ctx.textAlign = "left";
+        drawTextLeft(ctx, categoriaItem.nome || "Categoria", x + 14, y + 10, columnWidth - 28, 24);
+      }
 
-      ctx.textAlign = "left";
       ctx.fillStyle = isCurrent ? "#fdba74" : "#cbd5e1";
       ctx.font = isCurrent ? "800 15px Inter, Arial, sans-serif" : "700 15px Inter, Arial, sans-serif";
-      ctx.fillText(`${programacao.data}  ${programacao.hora}`, x + 14, y + 33);
+      if (usarColunaUnica) {
+        ctx.textAlign = "center";
+        ctx.fillText(`${programacao.data}  ${programacao.hora}`, x + columnWidth / 2, y + 33);
+      } else {
+        ctx.textAlign = "left";
+        ctx.fillText(`${programacao.data}  ${programacao.hora}`, x + 14, y + 33);
+      }
     });
   }
 
