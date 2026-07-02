@@ -17,6 +17,7 @@ export const formatoPanelinhaPlayEnum = pgEnum('formato_panelinha_play', ['SUPER
 export const statusPanelinhaPlayParticipanteEnum = pgEnum('status_panelinha_play_participante', ['ATIVO', 'REMOVIDO']);
 export const statusPanelinhaPlayJogoEnum = pgEnum('status_panelinha_play_jogo', ['PENDENTE', 'REGISTRADO', 'CONFIRMADO', 'CANCELADO']);
 export const statusPanelinhaTemporadaEnum = pgEnum('status_panelinha_temporada', ['ABERTA', 'ENCERRADA']);
+export const statusComunicacaoWhatsappEnum = pgEnum('status_comunicacao_whatsapp', ['PENDENTE', 'ENVIADO', 'FALHA', 'SEM_TELEFONE', 'NAO_ENVIADO']);
 
 // Tabelas
 
@@ -341,6 +342,43 @@ export const torneioAtletaPrefs = pgTable(
   },
   (t) => ({
     unq: unique().on(t.torneioId, t.usuarioId),
+  })
+);
+
+export const torneioComunicacoes = pgTable('torneio_comunicacoes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  torneioId: uuid('torneio_id').references(() => torneios.id, { onDelete: "cascade" }).notNull(),
+  categoriaId: uuid('categoria_id').references(() => categorias.id, { onDelete: "set null" }),
+  criadoPorId: uuid('criado_por_id').references(() => usuarios.id).notNull(),
+  titulo: text('titulo'),
+  mensagem: text('mensagem').notNull(),
+  enviarWhatsapp: boolean('enviar_whatsapp').default(true).notNull(),
+  publicarNoApp: boolean('publicar_no_app').default(true).notNull(),
+  totalDestinatarios: integer('total_destinatarios').default(0).notNull(),
+  totalWhatsappEnviados: integer('total_whatsapp_enviados').default(0).notNull(),
+  totalWhatsappFalhas: integer('total_whatsapp_falhas').default(0).notNull(),
+  totalWhatsappSemTelefone: integer('total_whatsapp_sem_telefone').default(0).notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});
+
+export const torneioComunicacaoDestinatarios = pgTable(
+  'torneio_comunicacao_destinatarios',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    comunicacaoId: uuid('comunicacao_id').references(() => torneioComunicacoes.id, { onDelete: "cascade" }).notNull(),
+    torneioId: uuid('torneio_id').references(() => torneios.id, { onDelete: "cascade" }).notNull(),
+    usuarioId: uuid('usuario_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+    telefone: text('telefone'),
+    whatsappStatus: statusComunicacaoWhatsappEnum('whatsapp_status').default('PENDENTE').notNull(),
+    whatsappEnviadoEm: timestamp('whatsapp_enviado_em'),
+    whatsappErro: text('whatsapp_erro'),
+    lidaEm: timestamp('lida_em'),
+    criadoEm: timestamp('criado_em').defaultNow().notNull(),
+    atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+  },
+  (t) => ({
+    unq: unique().on(t.comunicacaoId, t.usuarioId),
   })
 );
 
