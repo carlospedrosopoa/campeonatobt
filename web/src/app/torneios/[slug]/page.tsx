@@ -117,7 +117,11 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
               </div>
               
               {categorias.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div
+                  className={`grid grid-cols-1 gap-4 ${
+                    categorias.length === 1 ? "mx-auto w-full max-w-2xl" : "md:grid-cols-2"
+                  }`}
+                >
                   {categorias.map((cat) => (
                     <div key={cat.id} className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 hover:border-blue-200 transition-colors">
                       <div>
