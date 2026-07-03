@@ -17,24 +17,28 @@ function resumoFase(partida: { fase: string; grupoNome?: string | null }) {
   return partida.fase;
 }
 
-function mapPartidaPublica(
-  partida: {
-    id: string;
-    categoriaNome: string;
-    fase: string;
-    grupoNome: string | null;
-    status: string;
-    arenaNome: string | null;
-    dataHorario: string | null;
-    iniciadoEm: string | null;
-    finalizadoEm: string | null;
-    equipeANome: string | null;
-    equipeBNome: string | null;
-    placarA: number;
-    placarB: number;
-    quadra: string | null;
-  } | null
-) {
+type PartidaPainelPublicoFonte = {
+  id: string;
+  categoriaId: string;
+  categoriaNome: string;
+  fase: string;
+  grupoId: string | null;
+  grupoNome: string | null;
+  status: string;
+  arenaNome: string | null;
+  dataHorario: string | null;
+  iniciadoEm: string | null;
+  finalizadoEm: string | null;
+  equipeANome: string | null;
+  equipeBNome: string | null;
+  placarA: number;
+  placarB: number;
+  quadra: string | null;
+};
+
+type PartidaPainelPublicoEscopo = Pick<PartidaPainelPublicoFonte, "categoriaId" | "fase" | "grupoId" | "grupoNome">;
+
+function mapPartidaPublica(partida: PartidaPainelPublicoFonte | null) {
   if (!partida) return null;
   return {
     id: partida.id,
@@ -59,19 +63,19 @@ function chaveClassificacao(params: { categoriaId: string; grupoId: string }) {
 }
 
 function resolverProximaPartidaQuadra(quadra: {
-  proximaPartidaManual: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
-  proximaPartidaReserva: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
-  filaPartidas: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null }[];
+  proximaPartidaManual: PartidaPainelPublicoFonte | null;
+  proximaPartidaReserva: PartidaPainelPublicoFonte | null;
+  filaPartidas: PartidaPainelPublicoFonte[];
 }) {
   return quadra.proximaPartidaManual ?? quadra.proximaPartidaReserva ?? quadra.filaPartidas[0] ?? null;
 }
 
 function escopoClassificacaoQuadra(quadra: {
-  reservaChave: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
-  partidaAtual: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
-  proximaPartidaManual: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
-  proximaPartidaReserva: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
-  filaPartidas: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null }[];
+  reservaChave: PartidaPainelPublicoEscopo | null;
+  partidaAtual: PartidaPainelPublicoEscopo | null;
+  proximaPartidaManual: PartidaPainelPublicoFonte | null;
+  proximaPartidaReserva: PartidaPainelPublicoFonte | null;
+  filaPartidas: PartidaPainelPublicoFonte[];
 }) {
   if (quadra.reservaChave?.fase === "GRUPOS" && quadra.reservaChave.grupoId) {
     return {
