@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { painelQuadrasService } from "@/services/painel-quadras.service";
@@ -42,10 +42,31 @@ export async function PATCH(
       return NextResponse.json(updated);
     }
 
+    if (acao === "definir-proximo-jogo") {
+      const partidaId = String(body?.partidaId || "").trim();
+      if (!partidaId) {
+        return NextResponse.json({ error: "Jogo inválido para definir como próximo" }, { status: 400 });
+      }
+
+      const updated = await painelQuadrasService.definirProximoJogoQuadra({
+        torneioId: torneio.id,
+        quadraNumero: Number(quadraNumero),
+        partidaId,
+      });
+      return NextResponse.json(updated);
+    }
+
+    if (acao === "limpar-proximo-jogo") {
+      const updated = await painelQuadrasService.limparProximoJogoQuadra({
+        torneioId: torneio.id,
+        quadraNumero: Number(quadraNumero),
+      });
+      return NextResponse.json(updated);
+    }
+
     return NextResponse.json({ error: "AÃ§Ã£o invÃ¡lida" }, { status: 400 });
   } catch (error: any) {
     const msg = typeof error?.message === "string" ? error.message : "Erro interno do servidor";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
-

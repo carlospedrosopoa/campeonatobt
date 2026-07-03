@@ -58,10 +58,20 @@ function chaveClassificacao(params: { categoriaId: string; grupoId: string }) {
   return `${params.categoriaId}::${params.grupoId}`;
 }
 
+function resolverProximaPartidaQuadra(quadra: {
+  proximaPartidaManual: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
+  proximaPartidaReserva: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
+  filaPartidas: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null }[];
+}) {
+  return quadra.proximaPartidaManual ?? quadra.proximaPartidaReserva ?? quadra.filaPartidas[0] ?? null;
+}
+
 function escopoClassificacaoQuadra(quadra: {
   reservaChave: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
   partidaAtual: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
+  proximaPartidaManual: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
   proximaPartidaReserva: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null } | null;
+  filaPartidas: { categoriaId: string; fase: string; grupoId: string | null; grupoNome: string | null }[];
 }) {
   if (quadra.reservaChave?.fase === "GRUPOS" && quadra.reservaChave.grupoId) {
     return {
@@ -79,11 +89,12 @@ function escopoClassificacaoQuadra(quadra: {
     };
   }
 
-  if (quadra.proximaPartidaReserva?.fase === "GRUPOS" && quadra.proximaPartidaReserva.grupoId) {
+  const proximaPartida = resolverProximaPartidaQuadra(quadra);
+  if (proximaPartida?.fase === "GRUPOS" && proximaPartida.grupoId) {
     return {
-      categoriaId: quadra.proximaPartidaReserva.categoriaId,
-      grupoId: quadra.proximaPartidaReserva.grupoId,
-      grupoNome: quadra.proximaPartidaReserva.grupoNome,
+      categoriaId: proximaPartida.categoriaId,
+      grupoId: proximaPartida.grupoId,
+      grupoNome: proximaPartida.grupoNome,
     };
   }
 
@@ -168,6 +179,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     },
     stats: painel.stats,
     quadras: painel.quadras.map((quadra) => {
+      const proximaPartidaPublica = resolverProximaPartidaQuadra(quadra);
       const escopoClassificacao = escopoClassificacaoQuadra(quadra);
       const classificacaoGrupo =
         escopoClassificacao
@@ -194,7 +206,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             }
           : null,
         partidaAtual: mapPartidaPublica(quadra.partidaAtual),
-        proximaPartidaPrevista: mapPartidaPublica(quadra.proximaPartidaReserva),
+        proximaPartidaPrevista: mapPartidaPublica(proximaPartidaPublica),
         filaPartidas: quadra.filaPartidas.map(mapPartidaPublica).filter(Boolean),
         classificacaoGrupo: classificacaoGrupo
           ? {

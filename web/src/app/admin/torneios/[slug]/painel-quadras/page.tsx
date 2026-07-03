@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, CheckCircle2, Gamepad2, Lock, MapPin, Play, RefreshCw, Save, Timer, Undo2, Unlock, X } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle2, Gamepad2, ListOrdered, Lock, MapPin, Play, RefreshCw, Save, Timer, Undo2, Unlock, X } from "lucide-react";
 
 type Arena = {
   id: string;
@@ -39,6 +39,8 @@ type QuadraCard = {
   partidaAtual: PartidaPainel | null;
   reservaChave: ChavePainel | null;
   proximaPartidaReserva: PartidaPainel | null;
+  proximaPartidaManual: PartidaPainel | null;
+  filaPartidas: PartidaPainel[];
 };
 
 type ChavePainel = {
@@ -159,6 +161,9 @@ export default function AdminPainelQuadrasPage() {
   const [quadraReservaSelecionada, setQuadraReservaSelecionada] = useState<QuadraCard | null>(null);
   const [chaveReservaSelecionada, setChaveReservaSelecionada] = useState("");
   const [salvandoReserva, setSalvandoReserva] = useState(false);
+  const [quadraProximoJogoSelecionada, setQuadraProximoJogoSelecionada] = useState<QuadraCard | null>(null);
+  const [proximoJogoSelecionadoId, setProximoJogoSelecionadoId] = useState("");
+  const [salvandoProximoJogo, setSalvandoProximoJogo] = useState(false);
 
   const [editPartida, setEditPartida] = useState<PartidaPainel | null>(null);
   const [salvandoPlacar, setSalvandoPlacar] = useState(false);
@@ -202,13 +207,13 @@ export default function AdminPainelQuadrasPage() {
   }, []);
 
   useEffect(() => {
-    if (!quadraSelecionada && !editPartida && !quadraReservaSelecionada) return;
+    if (!quadraSelecionada && !editPartida && !quadraReservaSelecionada && !quadraProximoJogoSelecionada) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [quadraSelecionada, editPartida, quadraReservaSelecionada]);
+  }, [quadraSelecionada, editPartida, quadraReservaSelecionada, quadraProximoJogoSelecionada]);
 
   const fila = painel?.fila ?? [];
   const quadras = painel?.quadras ?? [];
@@ -226,8 +231,12 @@ export default function AdminPainelQuadrasPage() {
 
   function abrirAlocacao(quadra: QuadraCard) {
     setQuadraSelecionada(quadra);
-    const filaFiltrada = quadra.reservaChave ? fila.filter((partida) => isMesmaChave(partida, quadra.reservaChave)) : fila;
-    setPartidaSelecionadaId(filaFiltrada[0]?.id ?? "");
+    const filaFiltrada = quadra.filaPartidas?.length
+      ? quadra.filaPartidas
+      : quadra.reservaChave
+        ? fila.filter((partida) => isMesmaChave(partida, quadra.reservaChave))
+        : fila;
+    setPartidaSelecionadaId(quadra.proximaPartidaManual?.id ?? filaFiltrada[0]?.id ?? "");
     setArenaSelecionadaId("");
   }
 
@@ -249,6 +258,16 @@ export default function AdminPainelQuadrasPage() {
   function fecharReservaChave() {
     setQuadraReservaSelecionada(null);
     setChaveReservaSelecionada("");
+  }
+
+  function abrirProximoJogo(quadra: QuadraCard) {
+    setQuadraProximoJogoSelecionada(quadra);
+    setProximoJogoSelecionadoId(quadra.proximaPartidaManual?.id ?? quadra.filaPartidas[0]?.id ?? "");
+  }
+
+  function fecharProximoJogo() {
+    setQuadraProximoJogoSelecionada(null);
+    setProximoJogoSelecionadoId("");
   }
 
   async function salvarConfig() {
@@ -365,6 +384,50 @@ export default function AdminPainelQuadrasPage() {
       setErro(e?.message || "Erro inesperado");
     } finally {
       setSalvandoReserva(false);
+    }
+  }
+
+  async function salvarProximoJogoQuadra() {
+    if (!quadraProximoJogoSelecionada || !proximoJogoSelecionadoId) return;
+    try {
+      setSalvandoProximoJogo(true);
+      setErro(null);
+      const res = await fetch(`/api/v1/torneios/${slug}/painel-quadras/quadras/${quadraProximoJogoSelecionada.numero}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          acao: "definir-proximo-jogo",
+          partidaId: proximoJogoSelecionadoId,
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao definir o próximo jogo da quadra");
+      fecharProximoJogo();
+      await carregarPainel();
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoProximoJogo(false);
+    }
+  }
+
+  async function limparProximoJogoQuadra(quadra: QuadraCard) {
+    try {
+      setSalvandoProximoJogo(true);
+      setErro(null);
+      const res = await fetch(`/api/v1/torneios/${slug}/painel-quadras/quadras/${quadra.numero}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "limpar-proximo-jogo" }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao limpar o próximo jogo da quadra");
+      if (quadraProximoJogoSelecionada?.numero === quadra.numero) fecharProximoJogo();
+      await carregarPainel();
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoProximoJogo(false);
     }
   }
 
@@ -600,6 +663,17 @@ export default function AdminPainelQuadrasPage() {
                         </div>
                       </div>
                     )}
+                    {quadra.proximaPartidaManual && (
+                      <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-left text-sm text-emerald-800">
+                        <div className="font-semibold">Próximo jogo definido manualmente</div>
+                        <div className="mt-1">
+                          {quadra.proximaPartidaManual.equipeANome || "Equipe A"} x {quadra.proximaPartidaManual.equipeBNome || "Equipe B"}
+                        </div>
+                        <div className="mt-1 text-xs">
+                          {quadra.proximaPartidaManual.categoriaNome} • {resumoFase(quadra.proximaPartidaManual)} • {formatDataHora(quadra.proximaPartidaManual.dataHorario)}
+                        </div>
+                      </div>
+                    )}
                     <button
                       type="button"
                       disabled={!(quadra.reservaChave ? fila.some((partida) => isMesmaChave(partida, quadra.reservaChave)) : fila.length)}
@@ -610,6 +684,26 @@ export default function AdminPainelQuadrasPage() {
                       {quadra.reservaChave ? "Colocar jogo da chave" : "Colocar jogo"}
                     </button>
                     <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!quadra.filaPartidas.length}
+                        onClick={() => abrirProximoJogo(quadra)}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        <ListOrdered className="h-4 w-4" />
+                        Definir próximo jogo
+                      </button>
+                      {quadra.proximaPartidaManual && (
+                        <button
+                          type="button"
+                          disabled={salvandoProximoJogo}
+                          onClick={() => limparProximoJogoQuadra(quadra)}
+                          className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <X className="h-4 w-4" />
+                          Limpar próximo jogo
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => abrirReservaChave(quadra)}
@@ -664,7 +758,39 @@ export default function AdminPainelQuadrasPage() {
                       </div>
                     </div>
 
+                    {quadra.proximaPartidaManual && (
+                      <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        <div className="font-semibold">Próximo jogo desta quadra</div>
+                        <div className="mt-1">
+                          {quadra.proximaPartidaManual.equipeANome || "Equipe A"} x {quadra.proximaPartidaManual.equipeBNome || "Equipe B"}
+                        </div>
+                        <div className="mt-1 text-xs">
+                          {quadra.proximaPartidaManual.categoriaNome} • {resumoFase(quadra.proximaPartidaManual)} • {formatDataHora(quadra.proximaPartidaManual.dataHorario)}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={!quadra.filaPartidas.length}
+                        onClick={() => abrirProximoJogo(quadra)}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        <ListOrdered className="h-4 w-4" />
+                        Definir próximo jogo
+                      </button>
+                      {quadra.proximaPartidaManual && (
+                        <button
+                          type="button"
+                          disabled={salvandoProximoJogo}
+                          onClick={() => limparProximoJogoQuadra(quadra)}
+                          className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <X className="h-4 w-4" />
+                          Limpar próximo jogo
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => abrirReservaChave(quadra)}
@@ -976,6 +1102,92 @@ export default function AdminPainelQuadrasPage() {
                 >
                   <Save className="h-4 w-4" />
                   {salvandoReserva ? "Salvando..." : "Salvar reserva"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {quadraProximoJogoSelecionada && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-slate-500">Definir próximo jogo</div>
+                <h3 className="text-lg font-bold text-slate-900">{quadraProximoJogoSelecionada.nome}</h3>
+              </div>
+              <button type="button" onClick={fecharProximoJogo} className="text-sm text-slate-500 hover:text-slate-800">
+                Fechar
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Próximo jogo preferencial</label>
+                <select
+                  value={proximoJogoSelecionadoId}
+                  onChange={(e) => setProximoJogoSelecionadoId(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+                >
+                  <option value="">Selecione uma partida</option>
+                  {quadraProximoJogoSelecionada.filaPartidas.map((partida) => (
+                    <option key={partida.id} value={partida.id}>
+                      {partida.categoriaNome} • {resumoFase(partida)} • {partida.equipeANome || "Equipe A"} x {partida.equipeBNome || "Equipe B"}
+                    </option>
+                  ))}
+                </select>
+                {quadraProximoJogoSelecionada.reservaChave && (
+                  <p className="text-xs text-violet-700">
+                    Como a quadra está reservada para {quadraProximoJogoSelecionada.reservaChave.descricao}, só aparecem jogos dessa chave.
+                  </p>
+                )}
+              </div>
+
+              {quadraProximoJogoSelecionada.proximaPartidaManual && (
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  Atual: {quadraProximoJogoSelecionada.proximaPartidaManual.equipeANome || "Equipe A"} x{" "}
+                  {quadraProximoJogoSelecionada.proximaPartidaManual.equipeBNome || "Equipe B"}
+                </div>
+              )}
+
+              {!quadraProximoJogoSelecionada.filaPartidas.length && (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                  Não há jogos elegíveis na fila para definir como próximo nesta quadra agora.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between gap-2">
+              <div>
+                {quadraProximoJogoSelecionada.proximaPartidaManual && (
+                  <button
+                    type="button"
+                    disabled={salvandoProximoJogo}
+                    onClick={() => limparProximoJogoQuadra(quadraProximoJogoSelecionada)}
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" />
+                    Limpar prioridade
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={fecharProximoJogo}
+                  className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!proximoJogoSelecionadoId || salvandoProximoJogo}
+                  onClick={salvarProximoJogoQuadra}
+                  className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  {salvandoProximoJogo ? "Salvando..." : "Salvar prioridade"}
                 </button>
               </div>
             </div>

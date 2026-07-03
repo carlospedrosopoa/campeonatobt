@@ -15,7 +15,7 @@ export default async function TorneioPainelQuadrasPublicPage({ params, searchPar
   const { slug } = await params;
   const query = (await searchParams) ?? {};
   const torneio = await torneiosService.buscarPorSlug(slug);
-  const modoInicial = query.modo === "destaque" ? "destaque" : "grade";
+  const modoInicial = query.modo === "grade" ? "grade" : "destaque";
 
   if (!torneio || torneio.oculto) notFound();
 

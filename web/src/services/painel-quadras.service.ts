@@ -9,9 +9,10 @@ type ActiveStatus = (typeof ACTIVE_MATCH_STATUSES)[number];
 
 type PainelQuadraReservaConfig = {
   quadraNumero: number;
-  categoriaId: string;
-  fase: string;
+  categoriaId: string | null;
+  fase: string | null;
   grupoId: string | null;
+  proximaPartidaId: string | null;
 };
 
 export type PainelQuadrasPartida = {
@@ -59,6 +60,7 @@ type QuadraCard = {
   partidaAtual: PainelQuadrasPartida | null;
   reservaChave: QuadraReservaPainel | null;
   proximaPartidaReserva: PainelQuadrasPartida | null;
+  proximaPartidaManual: PainelQuadrasPartida | null;
   filaPartidas: PainelQuadrasPartida[];
 };
 
@@ -67,6 +69,10 @@ export type PainelQuadrasChaveDisponivel = ChaveDisponivelPainel;
 
 function nomeQuadra(numero: number) {
   return `Quadra ${numero}`;
+}
+
+function temReservaEscopo(config?: Pick<PainelQuadraReservaConfig, "categoriaId" | "fase"> | null) {
+  return Boolean(config?.categoriaId && config?.fase);
 }
 
 function chaveEscopoKey(params: { categoriaId: string; fase: string; grupoId?: string | null }) {
@@ -183,10 +189,10 @@ export class PainelQuadrasService {
     }));
 
     const partidasAbertas = partidasComNomes.filter((partida) => isActiveStatus(partida.status)).slice().sort(ordenarPartidasPainel);
+    const partidasAgendadasSemQuadraAtiva = new Map<string, PainelQuadrasPartida>();
     const chavesAbertasMap = new Map<string, ChaveDisponivelPainel>();
     const proximasPartidasPorChave = new Map<string, PainelQuadrasPartida>();
     const partidasAbertasPorChave = new Map<string, PainelQuadrasPartida[]>();
-    const partidasAbertasPorQuadra = new Map<string, PainelQuadrasPartida[]>();
 
     for (const partida of partidasAbertas) {
       if (!isActiveStatus(partida.status)) continue;
@@ -218,51 +224,104 @@ export class PainelQuadrasService {
       partidasDaChave.push(partida);
       partidasAbertasPorChave.set(key, partidasDaChave);
 
-      const nomeQuadraPartida = (partida.quadra || "").trim();
-      if (nomeQuadraPartida) {
-        const partidasDaQuadra = partidasAbertasPorQuadra.get(nomeQuadraPartida) ?? [];
-        partidasDaQuadra.push(partida);
-        partidasAbertasPorQuadra.set(nomeQuadraPartida, partidasDaQuadra);
-      }
     }
 
     const quadrasAtivas = Math.max(0, torneio.quadrasAtivas ?? 0);
-    const reservasNormalizadas = this.normalizarReservasQuadras(torneio.painelQuadrasReservas);
-    const reservasAtivas = reservasNormalizadas
-      .filter((reserva) => reserva.quadraNumero >= 1 && reserva.quadraNumero <= quadrasAtivas)
-      .filter((reserva) => chavesAbertasMap.has(chaveEscopoKey(reserva)));
+    const configuracoesNormalizadas = this.normalizarReservasQuadras(torneio.painelQuadrasReservas);
 
-    if (JSON.stringify(reservasAtivas) !== JSON.stringify(reservasNormalizadas)) {
+    const courtNames = new Set<string>();
+    for (let i = 1; i <= quadrasAtivas; i += 1) {
+      courtNames.add(nomeQuadra(i));
+    }
+
+    const fila = partidasComNomes.filter((partida) => {
+      if (partida.status !== "AGENDADA") return false;
+      const quadra = (partida.quadra || "").trim();
+      return !quadra || !courtNames.has(quadra);
+    });
+
+    for (const partida of fila) {
+      partidasAgendadasSemQuadraAtiva.set(partida.id, partida);
+    }
+
+    const configuracoesAtivas = configuracoesNormalizadas
+      .filter((config) => config.quadraNumero >= 1 && config.quadraNumero <= quadrasAtivas)
+      .map((config) => {
+        const reservaValida = temReservaEscopo(config) && chavesAbertasMap.has(chaveEscopoKey({
+          categoriaId: config.categoriaId as string,
+          fase: config.fase as string,
+          grupoId: config.grupoId ?? null,
+        }));
+
+        const categoriaId = reservaValida ? config.categoriaId : null;
+        const fase = reservaValida ? config.fase : null;
+        const grupoId = reservaValida ? (config.grupoId ?? null) : null;
+
+        let proximaPartidaId = config.proximaPartidaId ?? null;
+        const partidaPrioritaria = proximaPartidaId ? partidasAgendadasSemQuadraAtiva.get(proximaPartidaId) ?? null : null;
+        const prioridadeValida =
+          !!partidaPrioritaria &&
+          (!reservaValida ||
+            chaveEscopoKey(partidaPrioritaria) ===
+              chaveEscopoKey({
+                categoriaId: categoriaId as string,
+                fase: fase as string,
+                grupoId,
+              }));
+
+        if (!prioridadeValida) {
+          proximaPartidaId = null;
+        }
+
+        return {
+          quadraNumero: config.quadraNumero,
+          categoriaId,
+          fase,
+          grupoId,
+          proximaPartidaId,
+        };
+      })
+      .filter((config) => temReservaEscopo(config) || config.proximaPartidaId);
+
+    if (JSON.stringify(configuracoesAtivas) !== JSON.stringify(configuracoesNormalizadas)) {
       await db
         .update(torneios)
         .set({
-          painelQuadrasReservas: reservasAtivas.length ? (reservasAtivas as any) : null,
+          painelQuadrasReservas: configuracoesAtivas.length ? (configuracoesAtivas as any) : null,
           atualizadoEm: new Date(),
         })
         .where(eq(torneios.id, torneioId));
     }
 
     const reservaPorQuadra = new Map<number, QuadraReservaPainel>();
-    for (const reserva of reservasAtivas) {
-      const chave = chavesAbertasMap.get(chaveEscopoKey(reserva));
+    const configPorQuadra = new Map<number, PainelQuadraReservaConfig>();
+    for (const config of configuracoesAtivas) {
+      configPorQuadra.set(config.quadraNumero, config);
+      if (!temReservaEscopo(config)) continue;
+      const chave = chavesAbertasMap.get(
+        chaveEscopoKey({
+          categoriaId: config.categoriaId as string,
+          fase: config.fase as string,
+          grupoId: config.grupoId ?? null,
+        })
+      );
       if (!chave) continue;
-      reservaPorQuadra.set(reserva.quadraNumero, {
-        quadraNumero: reserva.quadraNumero,
+      reservaPorQuadra.set(config.quadraNumero, {
+        quadraNumero: config.quadraNumero,
         ...chave,
       });
     }
 
     const quadrasMap = new Map<string, QuadraCard>();
-    const courtNames = new Set<string>();
     for (let i = 1; i <= quadrasAtivas; i += 1) {
       const nome = nomeQuadra(i);
-      courtNames.add(nome);
       quadrasMap.set(nome, {
         numero: i,
         nome,
         partidaAtual: null,
         reservaChave: reservaPorQuadra.get(i) ?? null,
         proximaPartidaReserva: null,
+        proximaPartidaManual: null,
         filaPartidas: [],
       });
     }
@@ -280,21 +339,18 @@ export class PainelQuadrasService {
       current.partidaAtual = partida;
     }
 
-    const fila = partidasComNomes.filter((partida) => {
-      if (partida.status !== "AGENDADA") return false;
-      const quadra = (partida.quadra || "").trim();
-      return !quadra || !courtNames.has(quadra);
-    });
-
     for (const quadra of quadrasMap.values()) {
+      const config = configPorQuadra.get(quadra.numero) ?? null;
       if (quadra.reservaChave) {
         const key = chaveEscopoKey(quadra.reservaChave);
         quadra.proximaPartidaReserva = proximasPartidasPorChave.get(key) ?? null;
-        quadra.filaPartidas = (partidasAbertasPorChave.get(key) ?? []).slice();
-        continue;
+        quadra.filaPartidas = fila.filter((partida) => chaveEscopoKey(partida) === key);
+      } else {
+        quadra.filaPartidas = fila.slice();
       }
 
-      quadra.filaPartidas = (partidasAbertasPorQuadra.get(quadra.nome) ?? []).slice();
+      quadra.proximaPartidaManual =
+        config?.proximaPartidaId ? quadra.filaPartidas.find((partida) => partida.id === config.proximaPartidaId) ?? null : null;
     }
 
     const historicoRecente = partidasComNomes
@@ -517,11 +573,17 @@ export class PainelQuadrasService {
     }
 
     const reservas = this.normalizarReservasQuadras(torneio.painelQuadrasReservas).filter((item) => item.quadraNumero !== quadraNumero);
+    const atual = this.normalizarReservasQuadras(torneio.painelQuadrasReservas).find((item) => item.quadraNumero === quadraNumero);
+    const proximaPartidaId =
+      atual?.proximaPartidaId && atual.categoriaId === params.categoriaId && atual.fase === params.fase && (atual.grupoId ?? null) === grupoId
+        ? atual.proximaPartidaId
+        : null;
     reservas.push({
       quadraNumero,
       categoriaId: params.categoriaId,
       fase: params.fase,
       grupoId,
+      proximaPartidaId,
     });
 
     await db
@@ -551,12 +613,109 @@ export class PainelQuadrasService {
     const torneio = torneioRows[0];
     if (!torneio) throw new Error("Torneio não encontrado");
 
+    const atual = this.normalizarReservasQuadras(torneio.painelQuadrasReservas).find((item) => item.quadraNumero === quadraNumero);
     const reservas = this.normalizarReservasQuadras(torneio.painelQuadrasReservas).filter((item) => item.quadraNumero !== quadraNumero);
+    if (atual?.proximaPartidaId) {
+      reservas.push({
+        quadraNumero,
+        categoriaId: null,
+        fase: null,
+        grupoId: null,
+        proximaPartidaId: atual.proximaPartidaId,
+      });
+    }
 
     await db
       .update(torneios)
       .set({
         painelQuadrasReservas: reservas.length ? (reservas as any) : null,
+        atualizadoEm: new Date(),
+      })
+      .where(eq(torneios.id, params.torneioId));
+
+    return { ok: true };
+  }
+
+  async definirProximoJogoQuadra(params: { torneioId: string; quadraNumero: number; partidaId: string }) {
+    const quadraNumero = Math.max(1, Math.min(99, Math.trunc(Number(params.quadraNumero) || 0)));
+    if (!quadraNumero) throw new Error("Quadra inválida");
+
+    const torneioRows = await db
+      .select({
+        id: torneios.id,
+        quadrasAtivas: torneios.quadrasAtivas,
+        painelQuadrasReservas: torneios.painelQuadrasReservas,
+      })
+      .from(torneios)
+      .where(eq(torneios.id, params.torneioId))
+      .limit(1);
+
+    const torneio = torneioRows[0];
+    if (!torneio) throw new Error("Torneio não encontrado");
+    if (quadraNumero > Math.max(0, torneio.quadrasAtivas ?? 0)) throw new Error("Quadra fora da quantidade ativa do painel");
+
+    const partida = await this.buscarPartidaOperacional(params.torneioId, params.partidaId);
+    if (!partida) throw new Error("Partida não encontrada");
+    if (partida.status !== "AGENDADA") throw new Error("Só é possível definir como próximo um jogo ainda aguardando");
+    if ((partida.quadra || "").trim()) throw new Error("Esse jogo já está alocado em uma quadra");
+
+    const configuracoes = this.normalizarReservasQuadras(torneio.painelQuadrasReservas).filter((item) => item.quadraNumero !== quadraNumero);
+    const atual = this.normalizarReservasQuadras(torneio.painelQuadrasReservas).find((item) => item.quadraNumero === quadraNumero) ?? null;
+
+    if (temReservaEscopo(atual)) {
+      const mesmaChave =
+        atual!.categoriaId === partida.categoriaId &&
+        atual!.fase === partida.fase &&
+        (atual!.grupoId ?? null) === (partida.grupoId ?? null);
+
+      if (!mesmaChave) {
+        throw new Error(`A ${nomeQuadra(quadraNumero)} está reservada para outra chave`);
+      }
+    }
+
+    configuracoes.push({
+      quadraNumero,
+      categoriaId: atual?.categoriaId ?? null,
+      fase: atual?.fase ?? null,
+      grupoId: atual?.grupoId ?? null,
+      proximaPartidaId: params.partidaId,
+    });
+
+    await db
+      .update(torneios)
+      .set({
+        painelQuadrasReservas: configuracoes as any,
+        atualizadoEm: new Date(),
+      })
+      .where(eq(torneios.id, params.torneioId));
+
+    return { ok: true };
+  }
+
+  async limparProximoJogoQuadra(params: { torneioId: string; quadraNumero: number }) {
+    const quadraNumero = Math.max(1, Math.min(99, Math.trunc(Number(params.quadraNumero) || 0)));
+    if (!quadraNumero) throw new Error("Quadra inválida");
+
+    const torneioRows = await db
+      .select({
+        id: torneios.id,
+        painelQuadrasReservas: torneios.painelQuadrasReservas,
+      })
+      .from(torneios)
+      .where(eq(torneios.id, params.torneioId))
+      .limit(1);
+
+    const torneio = torneioRows[0];
+    if (!torneio) throw new Error("Torneio não encontrado");
+
+    const configuracoes = this.normalizarReservasQuadras(torneio.painelQuadrasReservas)
+      .map((item) => (item.quadraNumero === quadraNumero ? { ...item, proximaPartidaId: null } : item))
+      .filter((item) => temReservaEscopo(item) || item.proximaPartidaId);
+
+    await db
+      .update(torneios)
+      .set({
+        painelQuadrasReservas: configuracoes.length ? (configuracoes as any) : null,
         atualizadoEm: new Date(),
       })
       .where(eq(torneios.id, params.torneioId));
@@ -603,6 +762,7 @@ export class PainelQuadrasService {
       .find((item) => item.quadraNumero === quadraNumero);
 
     if (!reserva) return;
+    if (!temReservaEscopo(reserva)) return;
 
     const mesmaChave =
       reserva.categoriaId === partida.categoriaId &&
@@ -646,11 +806,13 @@ export class PainelQuadrasService {
       .map((item) => {
         const raw = item as Record<string, unknown>;
         const quadraNumero = Math.trunc(Number(raw?.quadraNumero) || 0);
-        const categoriaId = typeof raw?.categoriaId === "string" ? raw.categoriaId.trim() : "";
-        const fase = typeof raw?.fase === "string" ? raw.fase.trim() : "";
+        const categoriaId = typeof raw?.categoriaId === "string" && raw.categoriaId.trim() ? raw.categoriaId.trim() : null;
+        const fase = typeof raw?.fase === "string" && raw.fase.trim() ? raw.fase.trim() : null;
         const grupoId = typeof raw?.grupoId === "string" && raw.grupoId.trim() ? raw.grupoId.trim() : null;
-        if (!quadraNumero || !categoriaId || !fase) return null;
-        return { quadraNumero, categoriaId, fase, grupoId };
+        const proximaPartidaId =
+          typeof raw?.proximaPartidaId === "string" && raw.proximaPartidaId.trim() ? raw.proximaPartidaId.trim() : null;
+        if (!quadraNumero) return null;
+        return { quadraNumero, categoriaId, fase, grupoId, proximaPartidaId };
       })
       .filter((item): item is PainelQuadraReservaConfig => Boolean(item))
       .sort((a, b) => a.quadraNumero - b.quadraNumero);
