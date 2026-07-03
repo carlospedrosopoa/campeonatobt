@@ -330,7 +330,7 @@ export default function AdminCategoriaChavePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
             <ArrowLeft className="h-4 w-4" />
@@ -339,24 +339,24 @@ export default function AdminCategoriaChavePage() {
           <h1 className="text-2xl font-bold text-slate-900 mt-2">{categoria ? `Chave — ${categoria.nome}` : "Chave"}</h1>
           <p className="text-sm text-slate-600">Acompanhamento do mata-mata em colunas.</p>
 
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-1">
+          <div className="mt-4 inline-flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white p-1 sm:w-auto">
             <Link
               href={`/admin/torneios/${slug}/categorias/${categoriaId}/inscricoes`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-initial"
             >
               <Banknote className="h-4 w-4" />
               Inscrições
             </Link>
             <Link
               href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-initial"
             >
               <Gamepad2 className="h-4 w-4" />
               Jogos
             </Link>
             <Link
               href={`/admin/torneios/${slug}/categorias/${categoriaId}/chave`}
-              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-medium text-white sm:flex-initial"
             >
               <Network className="h-4 w-4" />
               Chave
@@ -378,7 +378,7 @@ export default function AdminCategoriaChavePage() {
               setAtualizando(false);
             }
           }}
-          className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 lg:w-auto"
         >
           <RefreshCcw className="h-4 w-4" />
           {atualizando ? "Atualizando…" : "Atualizar"}
@@ -387,7 +387,65 @@ export default function AdminCategoriaChavePage() {
 
       {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
 
-      <div className="overflow-x-auto">
+      <div className="space-y-4 md:hidden">
+        {(["OITAVAS", "QUARTAS", "SEMI", "FINAL"] as Fase[]).map((fase) => {
+          const jogos = fasesView[fase];
+          const visible = jogos.length > 0;
+
+          return (
+            <section key={`${fase}:mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-bold uppercase tracking-wide text-slate-700">{nomeFase(fase)}</div>
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                  {visible ? `${jogos.length} jogo(s)` : "Sem jogos"}
+                </div>
+              </div>
+
+              {!visible ? (
+                <div className="mt-4 text-sm text-slate-500">Sem jogos nesta fase.</div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {jogos.map((p) => {
+                    const winnerA = p.vencedorId && p.vencedorId === p.equipeAId;
+                    const winnerB = p.vencedorId && p.vencedorId === p.equipeBId;
+                    return (
+                      <div key={`${p.id}:mobile`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className={`truncate text-sm font-semibold ${winnerA ? "text-slate-900" : "text-slate-700"}`}>
+                              {p.equipeANome || p.equipeAId.slice(0, 8)}
+                            </div>
+                            <div className={`mt-1 truncate text-sm font-semibold ${winnerB ? "text-slate-900" : "text-slate-700"}`}>
+                              {p.equipeBNome || p.equipeBId.slice(0, 8)}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-slate-900">{p.status === "AGUARDANDO" ? "-" : formatPlacar(p.detalhesPlacar)}</div>
+                            <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{p.status}</div>
+                          </div>
+                        </div>
+
+                        {!p.id.startsWith("placeholder:") ? (
+                          <button
+                            type="button"
+                            onClick={() => void abrirAlterarConfronto(p)}
+                            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Alterar confronto
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
         <div className="min-w-[960px] grid grid-cols-4 gap-6">
           {(["OITAVAS", "QUARTAS", "SEMI", "FINAL"] as Fase[]).map((fase) => {
             const jogos = fasesView[fase];
@@ -444,7 +502,7 @@ export default function AdminCategoriaChavePage() {
       {partidaEditando ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditConfrontoId(null)}>
           <div
-            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg"
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[88vh] overflow-y-auto"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="border-b border-slate-200 px-6 py-4">
@@ -547,11 +605,11 @@ export default function AdminCategoriaChavePage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-6 py-4">
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
                 onClick={() => setEditConfrontoId(null)}
-                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex w-full items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
               >
                 Cancelar
               </button>
@@ -590,7 +648,7 @@ export default function AdminCategoriaChavePage() {
                   !substituicaoEquipeDestinoId ||
                   substituicaoEquipeOrigemId === substituicaoEquipeDestinoId
                 }
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50 sm:w-auto"
               >
                 <Save className="h-4 w-4" />
                 {substituindoEquipe ? "Substituindo..." : "Substituir na fase"}
@@ -628,7 +686,7 @@ export default function AdminCategoriaChavePage() {
                   }
                 }}
                 disabled={salvandoConfronto || carregandoEquipes || !confrontoEquipeAId || !confrontoEquipeBId || confrontoEquipeAId === confrontoEquipeBId}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 sm:w-auto"
               >
                 <Save className="h-4 w-4" />
                 {salvandoConfronto ? "Salvando..." : "Salvar confronto"}

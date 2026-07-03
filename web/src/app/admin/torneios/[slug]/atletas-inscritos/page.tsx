@@ -257,7 +257,7 @@ export default function AdminAtletasInscritosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
             <ArrowLeft className="h-4 w-4" />
@@ -268,11 +268,11 @@ export default function AdminAtletasInscritosPage() {
             {data?.torneio?.nome || "Torneio"} • {totalAtletas} atleta(s) • {totalDuplas} dupla(s)
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto">
           <button
             onClick={exportarExcel}
             disabled={!data || carregando || totalAtletas === 0}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
             Exportar Excel
@@ -280,7 +280,7 @@ export default function AdminAtletasInscritosPage() {
           <button
             onClick={carregar}
             disabled={carregando}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} />
             Atualizar
@@ -308,8 +308,8 @@ export default function AdminAtletasInscritosPage() {
             const totalDuplasCategoria = new Set(c.atletas.map((a) => a.equipeId)).size;
 
             return (
-            <div key={c.categoriaId} className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+            <div key={c.categoriaId} className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                 <div>
                   <div className="font-bold text-slate-900">{c.categoriaNome}</div>
                   <div className="text-xs text-slate-500 mt-1">
@@ -320,7 +320,79 @@ export default function AdminAtletasInscritosPage() {
                   {c.categoriaGenero}
                 </div>
               </div>
-              <div className="overflow-x-auto">
+
+              <div className="space-y-3 p-4 md:hidden">
+                {c.atletas.length === 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                    Nenhum inscrito nesta categoria.
+                  </div>
+                )}
+
+                {c.atletas.map((a) => (
+                  <div key={`${c.categoriaId}:${a.atletaId}:${a.inscricaoId}:mobile`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-base font-semibold text-slate-900">{a.atletaNome}</div>
+                        <div className="mt-1 text-xs text-slate-500">{a.equipeNome || "Sem dupla"}</div>
+                      </div>
+                      <div className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase text-slate-700">
+                        {a.inscricaoStatus}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 text-sm">
+                      <div className="rounded-xl bg-slate-50 px-3 py-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Telefone</div>
+                        <div className="mt-1 text-slate-800">{a.atletaTelefone || "-"}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Camiseta</label>
+                      <div className="space-y-2">
+                        {(data?.torneio?.camisetaOpcoes || []).length > 0 ? (
+                          <select
+                            value={camisetasEditadas[a.atletaId] ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setCamisetasEditadas((prev) => ({ ...prev, [a.atletaId]: value }));
+                            }}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+                          >
+                            <option value="">Sem informar</option>
+                            {(data?.torneio?.camisetaOpcoes || []).map((opcao) => (
+                              <option key={opcao} value={opcao}>
+                                {opcao}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            value={camisetasEditadas[a.atletaId] ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setCamisetasEditadas((prev) => ({ ...prev, [a.atletaId]: value }));
+                            }}
+                            placeholder="Informar camiseta"
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => salvarCamiseta(a.atletaId)}
+                          disabled={salvandoAtletaId === a.atletaId}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <Save className="h-4 w-4" />
+                          {salvandoAtletaId === a.atletaId ? "Salvando" : "Salvar camiseta"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[760px] text-sm">
                   <thead className="bg-slate-50 border-b border-slate-100">
                     <tr className="text-left text-slate-500">
@@ -391,12 +463,38 @@ export default function AdminAtletasInscritosPage() {
             </div>
           )})}
 
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
+          <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 py-4">
               <div className="font-bold text-slate-900">Grade de camisetas</div>
               <div className="text-xs text-slate-500 mt-1">Resumo final por tipo e tamanho</div>
             </div>
-            <div className="overflow-x-auto">
+
+            <div className="space-y-3 p-4 md:hidden">
+              {gradeCamisetas.length === 0 && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  Nenhuma camiseta informada para montar a grade.
+                </div>
+              )}
+
+              {gradeCamisetas.map((item) => (
+                <div key={`${item.tipo}:${item.tamanho}:mobile`} className="grid grid-cols-3 gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tipo</div>
+                    <div className="mt-1 font-semibold text-slate-900">{item.tipo}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tamanho</div>
+                    <div className="mt-1 text-slate-700">{item.tamanho}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Qtd.</div>
+                    <div className="mt-1 text-slate-700">{item.quantidade}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[520px] text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr className="text-left text-slate-500">

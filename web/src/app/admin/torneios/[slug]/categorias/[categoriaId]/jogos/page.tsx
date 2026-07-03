@@ -1050,7 +1050,7 @@ export default function AdminCategoriaJogosPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Dinâmica da categoria</h2>
@@ -1245,14 +1245,14 @@ export default function AdminCategoriaJogosPage() {
           <div className="text-sm text-slate-600">Carregando configuração…</div>
         )}
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex flex-col gap-3">
           <div className="text-xs text-slate-500">Desempate padrão: VITORIAS → SALDO_GAMES → CONFRONTO_DIRETO (ENTRE 2) → GAMES_PRO → SORTEIO</div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <button
               type="button"
               disabled={!categoria || gerandoRelatorioJogos}
               onClick={gerarRelatorioJogos}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
               title="Gerar PDF da tabela de jogos agrupada por chave"
             >
               <FileText className="h-4 w-4" />
@@ -1263,7 +1263,7 @@ export default function AdminCategoriaJogosPage() {
               type="button"
               disabled={!categoria || gerandoPlanilhaContingencia}
               onClick={gerarPlanilhaContingencia}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
               title="Gerar Excel offline para contingência com lancamento e classificacao por chave"
             >
               <FileText className="h-4 w-4" />
@@ -1292,7 +1292,7 @@ export default function AdminCategoriaJogosPage() {
                   setSalvandoConfig(false);
                 }
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
             >
               <Save className="h-4 w-4" />
               {salvandoConfig ? "Salvando…" : "Salvar config"}
@@ -1324,7 +1324,7 @@ export default function AdminCategoriaJogosPage() {
                   setGerandoGrupos(false);
                 }
               }}
-              className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-2.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50 sm:px-4 sm:text-sm"
             >
               {gerandoGrupos ? "Gerando…" : "Gerar grupos/jogos"}
             </button>
@@ -1333,7 +1333,7 @@ export default function AdminCategoriaJogosPage() {
               type="button"
               disabled={!config || carregandoMontagemGrupos}
               onClick={abrirMontagemManualGrupos}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
               title="Definir manualmente em qual grupo cada dupla ficará"
             >
               {carregandoMontagemGrupos ? "Carregando…" : "Montar grupos manual"}
@@ -1343,7 +1343,7 @@ export default function AdminCategoriaJogosPage() {
               type="button"
               disabled={classificacao.length < 2 || salvandoTrocaGrupos}
               onClick={abrirTrocaEntreGrupos}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
               title="Trocar duas duplas entre grupos e regerar os jogos"
             >
               Trocar duplas grupos
@@ -1368,7 +1368,7 @@ export default function AdminCategoriaJogosPage() {
                   setRecalculando(false);
                 }
               }}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
             >
               {recalculando ? "Recalculando…" : "Recalcular"}
             </button>
@@ -1394,7 +1394,7 @@ export default function AdminCategoriaJogosPage() {
                   setGerandoMataMata(false);
                 }
               }}
-              className="inline-flex items-center justify-center rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-md bg-orange-500 px-3 py-2.5 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50 sm:px-4 sm:text-sm"
             >
               {gerandoMataMata ? "Gerando…" : "Gerar mata-mata"}
             </button>
@@ -1425,7 +1425,7 @@ export default function AdminCategoriaJogosPage() {
                   setGerandoProximaFase(false);
                 }
               }}
-              className="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-white px-3 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 sm:px-4 sm:text-sm"
               title="Força a geração ou sincronização da fase seguinte"
             >
               {gerandoProximaFase ? "Gerando…" : "Gerar próxima fase"}
@@ -1435,7 +1435,7 @@ export default function AdminCategoriaJogosPage() {
               type="button"
               disabled={resetando}
               onClick={resetarJogos}
-              className="inline-flex items-center justify-center rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 ml-2"
+              className="inline-flex items-center justify-center rounded-md border border-red-200 bg-white px-3 py-2.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 sm:ml-2 sm:px-4 sm:text-sm"
               title="Excluir todos os jogos e grupos"
             >
               <Trash2 className="h-4 w-4" />
@@ -1480,13 +1480,13 @@ export default function AdminCategoriaJogosPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-        <div className="flex items-start justify-between gap-4">
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Partidas</h2>
             <p className="text-sm text-slate-600">Lance placares conforme a regra da categoria.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
             <select
               value={filtroAtletaId}
               onChange={(e) => setFiltroAtletaId(e.target.value)}
@@ -1515,7 +1515,7 @@ export default function AdminCategoriaJogosPage() {
               type="button"
               onClick={() => carregarPartidas()}
               disabled={carregandoPartidas}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               {carregandoPartidas ? "Atualizando…" : "Atualizar"}
             </button>

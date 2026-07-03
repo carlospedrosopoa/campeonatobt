@@ -433,7 +433,7 @@ export default function AdminTorneioDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <Link href="/admin/torneios" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
             <ArrowLeft className="h-4 w-4" />
@@ -442,23 +442,23 @@ export default function AdminTorneioDashboardPage() {
           <h1 className="text-2xl font-bold text-slate-900 mt-2">{torneio ? torneio.nome : "Torneio"}</h1>
           <p className="text-sm text-slate-600">Dashboard e gerenciamento de categorias.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:w-auto">
           <Link
             href={`/admin/torneios/${slugAtual}/editar`}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             Editar dados
           </Link>
           <Link
             href={`/admin/torneios/${slugAtual}/arenas`}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <MapPin className="h-4 w-4" />
             Arenas
           </Link>
           <Link
             href={`/admin/torneios/${slugAtual}/apoiadores`}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <Handshake className="h-4 w-4" />
             Apoiadores
@@ -467,42 +467,42 @@ export default function AdminTorneioDashboardPage() {
             <>
               <Link
                 href={`/admin/torneios/${slugAtual}/atletas-inscritos`}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 <Users className="h-4 w-4" />
                 Atletas
               </Link>
               <Link
                 href={`/admin/torneios/${slugAtual}/comunicacoes`}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 <MessageSquare className="h-4 w-4" />
                 Comunicações
               </Link>
               <Link
                 href={`/admin/torneios/${slugAtual}/jogos-do-dia`}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 <Calendar className="h-4 w-4" />
                 Jogos do dia
               </Link>
           <Link
             href={`/admin/torneios/${slugAtual}/painel-quadras`}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <Gamepad2 className="h-4 w-4" />
             Painel de quadras
           </Link>
               <Link
                 href={`/admin/torneios/${slugAtual}/importar-supercampeonato`}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 <FileUp className="h-4 w-4" />
                 Importar Excel
               </Link>
               <Link
                 href={`/torneios/${torneio.slug}`}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 <ExternalLink className="h-4 w-4" />
                 Público
@@ -522,7 +522,7 @@ export default function AdminTorneioDashboardPage() {
 
       {!carregando && torneio && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -572,18 +572,18 @@ export default function AdminTorneioDashboardPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <div className="flex items-start justify-between gap-4">
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Categorias</h2>
                 <p className="text-sm text-slate-600">Crie e edite as categorias do torneio.</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
                 <button
                   type="button"
                   disabled={gerandoCardProgramacao || categorias.length === 0}
                   onClick={() => void gerarCardProgramacaoTorneio()}
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                   title={categorias.length === 0 ? "Cadastre ao menos 1 categoria para gerar o card" : "Gerar card da programação (categorias e horários)"}
                 >
                   <ImageIcon className="h-4 w-4" />
@@ -592,7 +592,7 @@ export default function AdminTorneioDashboardPage() {
                 <button
                   type="button"
                   onClick={abrirNovaCategoria}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
                 >
                   <Plus className="h-4 w-4" />
                   Nova categoria
@@ -606,7 +606,7 @@ export default function AdminTorneioDashboardPage() {
 
             {mostraFormCategoria && (
               <form onSubmit={onSalvarCategoria} className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="font-semibold text-slate-900">
                     {editandoCategoriaId ? "Editar categoria" : "Nova categoria"}
                   </div>
@@ -681,18 +681,18 @@ export default function AdminTorneioDashboardPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3">
+                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
                   <button
                     type="button"
                     onClick={cancelarCategoria}
-                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    className="inline-flex w-full items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={!podeSalvarCategoria || salvandoCategoria}
-                    className="inline-flex items-center justify-center gap-2 rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50 sm:w-auto"
                   >
                     <Save className="h-4 w-4" />
                     {salvandoCategoria ? "Salvando…" : "Salvar categoria"}
@@ -701,7 +701,101 @@ export default function AdminTorneioDashboardPage() {
               </form>
             )}
 
-            <div className="overflow-x-auto">
+            <div className="md:hidden space-y-3">
+              {categorias.length === 0 && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  Nenhuma categoria cadastrada.
+                </div>
+              )}
+
+              {categorias.map((cat) => {
+                const ocupadas = Math.max(0, (cat.inscricoesTotal ?? 0) - (cat.inscricoesRecusadas ?? 0));
+                const totalVagas = cat.vagasMaximas;
+                const percent =
+                  totalVagas && totalVagas > 0 ? Math.min(100, Math.round((ocupadas / totalVagas) * 100)) : null;
+                const barColor =
+                  percent === null
+                    ? "bg-slate-200"
+                    : percent >= 100
+                      ? "bg-red-500"
+                      : percent >= 80
+                        ? "bg-orange-500"
+                        : "bg-green-500";
+
+                return (
+                  <div key={cat.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-base font-semibold text-slate-900">{cat.nome}</div>
+                        <div className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">{cat.genero}</div>
+                      </div>
+                      <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                        {cat.valorInscricao
+                          ? Number(cat.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                          : "Sem taxa"}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-xl bg-slate-50 px-3 py-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Data/Hora</div>
+                        <div className="mt-1 text-slate-800">{formatDataHora(cat.dataHorario) || "-"}</div>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 px-3 py-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Vagas</div>
+                        <div className="mt-1 text-slate-800">{totalVagas ? `${ocupadas}/${totalVagas}` : "Sem limite"}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-1">
+                      <div className="flex items-center justify-between text-xs text-slate-600">
+                        <span>{ocupadas} inscr.</span>
+                        <span>{totalVagas ? `${percent ?? 0}% ocupado` : "Livre"}</span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div className={`h-2 ${barColor}`} style={{ width: `${percent ?? 35}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <Link
+                        href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/inscricoes`}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700"
+                      >
+                        <Ticket className="h-4 w-4" />
+                        Inscrições
+                      </Link>
+                      <Link
+                        href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/jogos`}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700"
+                      >
+                        <Gamepad2 className="h-4 w-4" />
+                        Jogos
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => abrirEditarCategoria(cat)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onExcluirCategoria(cat.id)}
+                        disabled={excluindoCategoriaId === cat.id}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs font-semibold text-red-700 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {excluindoCategoriaId === cat.id ? "Excluindo…" : "Excluir"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-slate-500 border-b border-slate-100">
