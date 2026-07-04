@@ -599,6 +599,13 @@ export class MataMataService {
       const gb = gruposOrdenados[1].equipes;
       pairings.push({ a: ga[0].equipeId, b: gb[1].equipeId });
       pairings.push({ a: gb[0].equipeId, b: ga[1].equipeId });
+    } else if (gruposOrdenados.length === 2 && (config.classificacao?.porGrupo ?? 2) >= 4 && total === 8) {
+      const ga = gruposOrdenados[0].equipes;
+      const gb = gruposOrdenados[1].equipes;
+      pairings.push({ a: ga[0].equipeId, b: gb[3].equipeId });
+      pairings.push({ a: ga[1].equipeId, b: gb[2].equipeId });
+      pairings.push({ a: gb[0].equipeId, b: ga[3].equipeId });
+      pairings.push({ a: gb[1].equipeId, b: ga[2].equipeId });
     } else if (gruposOrdenados.length === 4 && (config.classificacao?.porGrupo ?? 2) >= 2 && total === 8) {
       const g0 = gruposOrdenados[0].equipes;
       const g1 = gruposOrdenados[1].equipes;
