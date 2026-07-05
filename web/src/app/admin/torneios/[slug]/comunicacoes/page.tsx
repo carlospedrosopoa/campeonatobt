@@ -26,6 +26,16 @@ type ComunicacaoResumo = {
   totalWhatsappSemTelefone: number;
   criadoEm: string;
   criadoPorNome: string | null;
+  falhasDestinatarios: Array<{
+    usuarioId: string;
+    usuarioNome: string | null;
+    telefone: string | null;
+    whatsappErro: string | null;
+  }>;
+  semTelefoneDestinatarios: Array<{
+    usuarioId: string;
+    usuarioNome: string | null;
+  }>;
 };
 
 type ApiResponse = {
@@ -46,6 +56,11 @@ function formatarDataHora(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatarTelefone(value?: string | null) {
+  const telefone = String(value || "").trim();
+  return telefone || "Telefone não informado";
 }
 
 export default function AdminTorneioComunicacoesPage() {
@@ -319,6 +334,41 @@ export default function AdminTorneioComunicacoesPage() {
                       <div>Sem telefone: <span className="font-semibold text-slate-900">{item.totalWhatsappSemTelefone}</span></div>
                       <div>Canais: <span className="font-semibold text-slate-900">{item.enviarWhatsapp ? "WhatsApp" : ""}{item.enviarWhatsapp && item.publicarNoApp ? " + " : ""}{item.publicarNoApp ? "App" : ""}</span></div>
                     </div>
+                    {item.falhasDestinatarios.length > 0 ? (
+                      <details className="mt-4 rounded-xl border border-red-100 bg-red-50/70 p-4">
+                        <summary className="cursor-pointer text-sm font-semibold text-red-800">
+                          Ver falhas detalhadas ({item.falhasDestinatarios.length})
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          {item.falhasDestinatarios.map((falha) => (
+                            <div key={falha.usuarioId} className="rounded-lg border border-red-100 bg-white px-3 py-3 text-sm">
+                              <div className="font-medium text-slate-900">{falha.usuarioNome || "Atleta sem nome"}</div>
+                              <div className="mt-1 text-xs text-slate-600">{formatarTelefone(falha.telefone)}</div>
+                              <div className="mt-2 text-xs text-red-700">
+                                {falha.whatsappErro || "Falha sem detalhe retornado pela integração."}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
+                    {item.semTelefoneDestinatarios.length > 0 ? (
+                      <details className="mt-3 rounded-xl border border-amber-100 bg-amber-50/70 p-4">
+                        <summary className="cursor-pointer text-sm font-semibold text-amber-800">
+                          Ver atletas sem telefone ({item.semTelefoneDestinatarios.length})
+                        </summary>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {item.semTelefoneDestinatarios.map((destinatario) => (
+                            <div
+                              key={destinatario.usuarioId}
+                              className="rounded-lg border border-amber-100 bg-white px-3 py-3 text-sm font-medium text-slate-900"
+                            >
+                              {destinatario.usuarioNome || "Atleta sem nome"}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
                     {item.enviarWhatsapp && item.totalWhatsappFalhas > 0 ? (
                       <div className="mt-4 flex justify-end">
                         <button

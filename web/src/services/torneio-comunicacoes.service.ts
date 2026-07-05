@@ -174,7 +174,7 @@ export const torneioComunicacoesService = {
   },
 
   async listarComunicacoesAdmin(torneioId: string) {
-    return db
+    const comunicacoes = await db
       .select({
         id: torneioComunicacoes.id,
         categoriaId: torneioComunicacoes.categoriaId,
@@ -195,6 +195,83 @@ export const torneioComunicacoesService = {
       .leftJoin(usuarios, eq(torneioComunicacoes.criadoPorId, usuarios.id))
       .where(eq(torneioComunicacoes.torneioId, torneioId))
       .orderBy(desc(torneioComunicacoes.criadoEm));
+
+    if (comunicacoes.length === 0) {
+      return [];
+    }
+
+    const comunicacaoIds = comunicacoes.map((item) => item.id);
+    const detalhesRows = await db
+      .select({
+        comunicacaoId: torneioComunicacaoDestinatarios.comunicacaoId,
+        usuarioId: torneioComunicacaoDestinatarios.usuarioId,
+        usuarioNome: usuarios.nome,
+        telefone: torneioComunicacaoDestinatarios.telefone,
+        whatsappStatus: torneioComunicacaoDestinatarios.whatsappStatus,
+        whatsappErro: torneioComunicacaoDestinatarios.whatsappErro,
+      })
+      .from(torneioComunicacaoDestinatarios)
+      .leftJoin(usuarios, eq(torneioComunicacaoDestinatarios.usuarioId, usuarios.id))
+      .where(
+        and(
+          eq(torneioComunicacaoDestinatarios.torneioId, torneioId),
+          inArray(torneioComunicacaoDestinatarios.comunicacaoId, comunicacaoIds),
+          inArray(torneioComunicacaoDestinatarios.whatsappStatus, ["FALHA", "SEM_TELEFONE"])
+        )
+      )
+      .orderBy(asc(usuarios.nome), asc(torneioComunicacaoDestinatarios.usuarioId));
+
+    const detalhesPorComunicacao = new Map<
+      string,
+      {
+        falhasDestinatarios: Array<{
+          usuarioId: string;
+          usuarioNome: string | null;
+          telefone: string | null;
+          whatsappErro: string | null;
+        }>;
+        semTelefoneDestinatarios: Array<{
+          usuarioId: string;
+          usuarioNome: string | null;
+        }>;
+      }
+    >();
+
+    for (const row of detalhesRows) {
+      const atual =
+        detalhesPorComunicacao.get(row.comunicacaoId) ??
+        {
+          falhasDestinatarios: [],
+          semTelefoneDestinatarios: [],
+        };
+
+      if (row.whatsappStatus === "FALHA") {
+        atual.falhasDestinatarios.push({
+          usuarioId: row.usuarioId,
+          usuarioNome: row.usuarioNome ?? null,
+          telefone: row.telefone ?? null,
+          whatsappErro: row.whatsappErro ?? null,
+        });
+      }
+
+      if (row.whatsappStatus === "SEM_TELEFONE") {
+        atual.semTelefoneDestinatarios.push({
+          usuarioId: row.usuarioId,
+          usuarioNome: row.usuarioNome ?? null,
+        });
+      }
+
+      detalhesPorComunicacao.set(row.comunicacaoId, atual);
+    }
+
+    return comunicacoes.map((item) => {
+      const detalhes = detalhesPorComunicacao.get(item.id);
+      return {
+        ...item,
+        falhasDestinatarios: detalhes?.falhasDestinatarios ?? [],
+        semTelefoneDestinatarios: detalhes?.semTelefoneDestinatarios ?? [],
+      };
+    });
   },
 
   async criarComunicacao(params: {
