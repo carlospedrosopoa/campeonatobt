@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Trophy } from "lucide-react";
+import { isRegrasVoleiSets, type RegrasPartidaConfig, type RegrasPartidaSets } from "@/lib/regras-partida";
 
 type Partida = {
   id: string;
@@ -19,7 +20,34 @@ type Partida = {
   quadra: string | null;
   meuLado: "A" | "B" | null;
   placarSubmissaoPendente?: boolean;
+  regrasPartida?: RegrasPartidaConfig | RegrasPartidaSets | null;
 };
+
+type FormPlacar = {
+  s1a: string;
+  s1b: string;
+  s2a: string;
+  s2b: string;
+  s3a: string;
+  s3b: string;
+  s4a: string;
+  s4b: string;
+  s5a: string;
+  s5b: string;
+};
+
+const emptyFormPlacar = (): FormPlacar => ({
+  s1a: "",
+  s1b: "",
+  s2a: "",
+  s2b: "",
+  s3a: "",
+  s3b: "",
+  s4a: "",
+  s4b: "",
+  s5a: "",
+  s5b: "",
+});
 
 function formatDataHora(value?: string | null) {
   if (!value) return null;
@@ -40,12 +68,7 @@ export default function AtletaJogosPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [modal, setModal] = useState<Partida | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [s1a, setS1a] = useState("");
-  const [s1b, setS1b] = useState("");
-  const [s2a, setS2a] = useState("");
-  const [s2b, setS2b] = useState("");
-  const [s3a, setS3a] = useState("");
-  const [s3b, setS3b] = useState("");
+  const [formPlacar, setFormPlacar] = useState<FormPlacar>(emptyFormPlacar);
 
   async function carregar() {
     try {
@@ -76,32 +99,71 @@ export default function AtletaJogosPage() {
 
   function abrirModal(p: Partida) {
     setModal(p);
-    setS1a("");
-    setS1b("");
-    setS2a("");
-    setS2b("");
-    setS3a("");
-    setS3b("");
+    setFormPlacar(emptyFormPlacar());
   }
 
   async function enviarPlacar() {
     if (!modal) return;
     const detalhes: Array<{ set: number; a: number; b: number }> = [];
-    const p1a = s1a.trim() === "" ? null : Number(s1a);
-    const p1b = s1b.trim() === "" ? null : Number(s1b);
-    const p2a = s2a.trim() === "" ? null : Number(s2a);
-    const p2b = s2b.trim() === "" ? null : Number(s2b);
-    const p3a = s3a.trim() === "" ? null : Number(s3a);
-    const p3b = s3b.trim() === "" ? null : Number(s3b);
+    const regras = modal.regrasPartida;
+    const campos = [
+      { a: formPlacar.s1a.trim(), b: formPlacar.s1b.trim() },
+      { a: formPlacar.s2a.trim(), b: formPlacar.s2b.trim() },
+      { a: formPlacar.s3a.trim(), b: formPlacar.s3b.trim() },
+      { a: formPlacar.s4a.trim(), b: formPlacar.s4b.trim() },
+      { a: formPlacar.s5a.trim(), b: formPlacar.s5b.trim() },
+    ];
 
-    if (p1a === null || p1b === null || p2a === null || p2b === null) {
-      setErro("Informe pelo menos os 2 primeiros sets.");
-      return;
+    if (isRegrasVoleiSets(regras)) {
+      let encontrouSetVazio = false;
+      for (let index = 0; index < regras.melhorDe; index += 1) {
+        const atual = campos[index];
+        const ambosVazios = !atual.a && !atual.b;
+        if (ambosVazios) {
+          encontrouSetVazio = true;
+          continue;
+        }
+        if (!atual.a || !atual.b) {
+          setErro(`Informe o placar completo do set ${index + 1}.`);
+          return;
+        }
+        if (encontrouSetVazio) {
+          setErro("Preencha os sets em ordem, sem pular placares.");
+          return;
+        }
+        detalhes.push({ set: index + 1, a: Number(atual.a), b: Number(atual.b) });
+      }
+
+      if (detalhes.length === 0) {
+        setErro("Informe pelo menos o set 1.");
+        return;
+      }
+    } else {
+      const melhorDe = regras?.melhorDe ?? 1;
+      const set1 = campos[0];
+      if (!set1.a || !set1.b) {
+        setErro("Informe o placar do set 1.");
+        return;
+      }
+      detalhes.push({ set: 1, a: Number(set1.a), b: Number(set1.b) });
+
+      if (melhorDe === 3) {
+        const set2 = campos[1];
+        if (!set2.a || !set2.b) {
+          setErro("Informe o placar do set 2.");
+          return;
+        }
+        detalhes.push({ set: 2, a: Number(set2.a), b: Number(set2.b) });
+
+        if (campos[2].a || campos[2].b) {
+          if (!campos[2].a || !campos[2].b) {
+            setErro("Informe o placar completo do set 3.");
+            return;
+          }
+          detalhes.push({ set: 3, a: Number(campos[2].a), b: Number(campos[2].b) });
+        }
+      }
     }
-
-    detalhes.push({ set: 1, a: p1a, b: p1b });
-    detalhes.push({ set: 2, a: p2a, b: p2b });
-    if (p3a !== null && p3b !== null) detalhes.push({ set: 3, a: p3a, b: p3b });
 
     try {
       setErro(null);
@@ -122,6 +184,21 @@ export default function AtletaJogosPage() {
       setSalvando(false);
     }
   }
+
+  const modalCampos = useMemo(() => {
+    if (!modal) return [];
+    const regras = modal.regrasPartida;
+    const quantidadeSets = isRegrasVoleiSets(regras) ? regras.melhorDe : (regras?.melhorDe ?? 1);
+    return Array.from({ length: quantidadeSets }, (_, index) => ({
+      set: index + 1,
+      label:
+        isRegrasVoleiSets(regras) && regras.tieBreakDecisivo?.habilitado && index + 1 === quantidadeSets
+          ? `Set ${index + 1} (tie-break)`
+          : `Set ${index + 1}`,
+      aKey: `s${index + 1}a` as keyof FormPlacar,
+      bKey: `s${index + 1}b` as keyof FormPlacar,
+    }));
+  }, [modal]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -240,19 +317,29 @@ export default function AtletaJogosPage() {
             </div>
 
             <div className="grid grid-cols-3 gap-2 items-center">
-              <div className="text-sm text-slate-600">Set 1</div>
-              <input value={s1a} onChange={(e) => setS1a(e.target.value)} type="number" className="rounded-md border border-slate-200 px-3 py-2 text-sm text-center" />
-              <input value={s1b} onChange={(e) => setS1b(e.target.value)} type="number" className="rounded-md border border-slate-200 px-3 py-2 text-sm text-center" />
-              <div className="text-sm text-slate-600">Set 2</div>
-              <input value={s2a} onChange={(e) => setS2a(e.target.value)} type="number" className="rounded-md border border-slate-200 px-3 py-2 text-sm text-center" />
-              <input value={s2b} onChange={(e) => setS2b(e.target.value)} type="number" className="rounded-md border border-slate-200 px-3 py-2 text-sm text-center" />
-              <div className="text-sm text-slate-600">Set 3</div>
-              <input value={s3a} onChange={(e) => setS3a(e.target.value)} type="number" className="rounded-md border border-slate-200 px-3 py-2 text-sm text-center" />
-              <input value={s3b} onChange={(e) => setS3b(e.target.value)} type="number" className="rounded-md border border-slate-200 px-3 py-2 text-sm text-center" />
+              {modalCampos.map((campo) => (
+                <div key={campo.aKey} className="contents">
+                  <div className="text-sm text-slate-600">{campo.label}</div>
+                  <input
+                    value={formPlacar[campo.aKey]}
+                    onChange={(e) => setFormPlacar((prev) => ({ ...prev, [campo.aKey]: e.target.value }))}
+                    type="number"
+                    className="rounded-md border border-slate-200 px-3 py-2 text-sm text-center"
+                  />
+                  <input
+                    value={formPlacar[campo.bKey]}
+                    onChange={(e) => setFormPlacar((prev) => ({ ...prev, [campo.bKey]: e.target.value }))}
+                    type="number"
+                    className="rounded-md border border-slate-200 px-3 py-2 text-sm text-center"
+                  />
+                </div>
+              ))}
             </div>
 
             <div className="text-xs text-slate-500">
-              Ao enviar, o placar ficará pendente e será aprovado pelo gestor do torneio.
+              {isRegrasVoleiSets(modal.regrasPartida)
+                ? "Preencha os sets em ordem. Ao enviar, o placar ficará pendente e será aprovado pelo gestor do torneio."
+                : "Ao enviar, o placar ficará pendente e será aprovado pelo gestor do torneio."}
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">

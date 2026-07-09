@@ -39,7 +39,8 @@ export async function PUT(
     return NextResponse.json(atualizado);
   } catch (error) {
     console.error("Erro ao atualizar torneio:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    const msg = typeof (error as any)?.message === "string" ? (error as any).message : "Erro interno do servidor";
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
 

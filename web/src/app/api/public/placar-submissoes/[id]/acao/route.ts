@@ -4,7 +4,7 @@ import { partidas, placarSubmissoes, torneios } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { sha256Hex } from "@/lib/token";
 import { categoriaConfigService } from "@/services/categoria-config.service";
-import { calcularResultadoSets } from "@/lib/regras-partida";
+import { calcularResultadoPartida, obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 import { MataMataService } from "@/services/mata-mata.service";
 
 export async function POST(
@@ -66,6 +66,7 @@ export async function POST(
       equipeAId: partidas.equipeAId,
       equipeBId: partidas.equipeBId,
       superCampeonato: torneios.superCampeonato,
+      superCampeonatoFormato: torneios.superCampeonatoFormato,
     })
     .from(partidas)
     .innerJoin(torneios, eq(partidas.torneioId, torneios.id))
@@ -75,31 +76,13 @@ export async function POST(
   if (!partida) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
 
   const config = await categoriaConfigService.obterOuDefault(partida.categoriaId);
-  const regrasBase = config.regrasPartida ?? {
-    tipo: "SETS" as const,
-    melhorDe: 1 as const,
-    gamesPorSet: 6 as const,
-    tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-    superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
-    incluirSuperTieEmGames: false,
-  };
-  const regras =
-    partida.superCampeonato
-      ? ({
-          ...regrasBase,
-          tipo: "SETS" as const,
-          melhorDe: 3 as const,
-          tiebreak: regrasBase.tiebreak ?? { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-          superTiebreakDecisivo: {
-            habilitado: true,
-            ate: regrasBase.superTiebreakDecisivo?.ate ?? 10,
-            diffMin: regrasBase.superTiebreakDecisivo?.diffMin ?? 2,
-          },
-          incluirSuperTieEmGames: false,
-        } as const)
-      : regrasBase;
+  const regras = obterRegrasPartidaEfetivas({
+    regrasBase: config.regrasPartida,
+    superCampeonato: partida.superCampeonato,
+    superCampeonatoFormato: partida.superCampeonatoFormato,
+  });
 
-  const resultado = calcularResultadoSets({
+  const resultado = calcularResultadoPartida({
     regras,
     equipeAId: partida.equipeAId,
     equipeBId: partida.equipeBId,

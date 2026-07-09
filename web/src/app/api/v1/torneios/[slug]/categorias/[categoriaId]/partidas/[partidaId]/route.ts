@@ -1,13 +1,12 @@
-﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
-import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { MataMataService } from "@/services/mata-mata.service";
 import { db } from "@/db";
 import { partidas } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { calcularResultadoSets } from "@/lib/regras-partida";
+import { calcularResultadoPartida, obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 
 export async function PUT(
   request: NextRequest,
@@ -44,32 +43,13 @@ export async function PUT(
     const detalhesPlacar = Array.isArray(body?.detalhesPlacar) ? body.detalhesPlacar : [];
 
     const config = await categoriaConfigService.obterOuDefault(categoriaId);
-    const regrasBase = config.regrasPartida ?? {
-      tipo: "SETS" as const,
-      melhorDe: 1 as const,
-      gamesPorSet: 6 as const,
-      tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-      superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
-      incluirSuperTieEmGames: false,
-    };
+    const regras = obterRegrasPartidaEfetivas({
+      regrasBase: config.regrasPartida,
+      superCampeonato: torneio.superCampeonato,
+      superCampeonatoFormato: torneio.superCampeonatoFormato,
+    });
 
-    const regras =
-      torneio.superCampeonato
-        ? ({
-            ...regrasBase,
-            tipo: "SETS" as const,
-            melhorDe: 3 as const,
-            tiebreak: regrasBase.tiebreak ?? { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-            superTiebreakDecisivo: {
-              habilitado: true,
-              ate: regrasBase.superTiebreakDecisivo?.ate ?? 10,
-              diffMin: regrasBase.superTiebreakDecisivo?.diffMin ?? 2,
-            },
-            incluirSuperTieEmGames: false,
-          } as const)
-        : regrasBase;
-
-    const resultado = calcularResultadoSets({
+    const resultado = calcularResultadoPartida({
       regras,
       equipeAId: partida.equipeAId,
       equipeBId: partida.equipeBId,
@@ -119,7 +99,7 @@ export async function PATCH(
   { params }: { params: Promise<{ slug: string; categoriaId: string; partidaId: string }> }
 ) {
   try {
-    const { slug, categoriaId, partidaId } = await params;
+    const { slug, partidaId } = await params;
     const acesso = await requireTournamentAdminBySlug(slug);
     if ("response" in acesso) return acesso.response;
     const { torneio } = acesso;
@@ -144,4 +124,3 @@ export async function PATCH(
     return NextResponse.json({ error: error.message || "Erro ao atualizar partida" }, { status: 500 });
   }
 }
-

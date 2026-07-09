@@ -10,7 +10,7 @@ import {
   panelinhas,
   usuarios,
 } from "@/db/schema";
-import { calcularResultadoSets, type SetScore } from "@/lib/regras-partida";
+import { calcularResultadoPartida, DEFAULT_REGRAS_PARTIDA_BT, type SetScore } from "@/lib/regras-partida";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { playBuscarAtletas } from "@/services/playnaquadra-client";
 import { panelinhaRankingService } from "@/services/panelinha-ranking.service";
@@ -1108,15 +1108,8 @@ export class PanelinhasService {
     if (placares.length !== 1) throw new Error("Cada jogo deve ter exatamente 1 set nesta versão");
     if (Number(placares[0]?.set || 0) !== 1) throw new Error("O único set do jogo deve ser informado como set 1");
 
-    const regras = {
-      tipo: "SETS" as const,
-      melhorDe: 1 as const,
-      gamesPorSet: 6 as const,
-      tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-    };
-
-    const calculated = calcularResultadoSets({
-      regras,
+    const calculated = calcularResultadoPartida({
+      regras: DEFAULT_REGRAS_PARTIDA_BT,
       equipeAId: "A",
       equipeBId: "B",
       detalhesPlacar: placares,

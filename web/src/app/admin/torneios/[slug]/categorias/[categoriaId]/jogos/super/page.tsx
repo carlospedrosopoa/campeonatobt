@@ -7,6 +7,7 @@ import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageI
 import { gerarCardPartidaAdmin, gerarCardProgramacaoAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
+import { isRegrasBeachTennisSets, type RegrasPartidaConfig } from "@/lib/regras-partida";
 
 type Categoria = {
   id: string;
@@ -28,14 +29,7 @@ type CategoriaConfig = {
     estrutura: "PADRAO" | "SUPER_CAMPEONATO_6";
     quantidadeClassificados?: number;
   };
-  regrasPartida?: {
-    tipo: "SETS";
-    melhorDe: 1 | 3;
-    gamesPorSet: 4 | 5 | 6;
-    tiebreak: { habilitado: boolean; em: number; ate: number; diffMin: number };
-    superTiebreakDecisivo?: { habilitado: boolean; ate: number; diffMin: number };
-    incluirSuperTieEmGames?: boolean;
-  };
+  regrasPartida?: RegrasPartidaConfig;
 };
 
 type GrupoClassificacao = {
@@ -171,6 +165,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
   const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
+  const [torneioSuperCampeonatoFormato, setTorneioSuperCampeonatoFormato] = useState<"2_SET_SUPER_TIE" | "1_SET">("2_SET_SUPER_TIE");
   const [gerandoRelatorioClassificacao, setGerandoRelatorioClassificacao] = useState(false);
   const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
   const [gerandoPlanilhaContingencia, setGerandoPlanilhaContingencia] = useState(false);
@@ -205,6 +200,7 @@ export default function AdminCategoriaJogosSuperPage() {
     setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
     setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
     setTorneioCardApenasComFotos(Boolean(t?.cardApenasComFotos));
+    setTorneioSuperCampeonatoFormato(t?.superCampeonatoFormato === "1_SET" ? "1_SET" : "2_SET_SUPER_TIE");
   }
 
   async function salvarCategoriaDataHorario() {
@@ -475,6 +471,7 @@ export default function AdminCategoriaJogosSuperPage() {
         partidas: partidasGrupos,
         classificacao: classificacaoAtual,
         superCampeonato: true,
+        superCampeonatoFormato: torneioSuperCampeonatoFormato,
       });
     } catch (e: any) {
       setErro(e?.message || "Erro ao gerar Excel de contingência");
@@ -854,10 +851,11 @@ export default function AdminCategoriaJogosSuperPage() {
       setErro(null);
 
       const regras = config?.regrasPartida;
+      const regrasBT = isRegrasBeachTennisSets(regras) ? regras : null;
       const melhorDe = 3;
       const superTie = true;
-      const tbHabilitado = regras?.tiebreak?.habilitado ?? true;
-      const tbEm = regras?.tiebreak?.em ?? (regras?.gamesPorSet ?? 6);
+      const tbHabilitado = regrasBT?.tiebreak?.habilitado ?? true;
+      const tbEm = regrasBT?.tiebreak?.em ?? (regrasBT?.gamesPorSet ?? 6);
 
       const detalhes: any[] = [];
       const s1a = formPlacar.s1a.trim();
@@ -1040,8 +1038,9 @@ export default function AdminCategoriaJogosSuperPage() {
 
   const melhorDe = 3;
   const superTie = true;
-  const tbHabilitado = config?.regrasPartida?.tiebreak?.habilitado ?? true;
-  const tbEm = config?.regrasPartida?.tiebreak?.em ?? (config?.regrasPartida?.gamesPorSet ?? 6);
+  const regrasBT = isRegrasBeachTennisSets(config?.regrasPartida) ? config?.regrasPartida : null;
+  const tbHabilitado = regrasBT?.tiebreak?.habilitado ?? true;
+  const tbEm = regrasBT?.tiebreak?.em ?? (regrasBT?.gamesPorSet ?? 6);
   const isTbScore = (a: number, b: number) =>
     Number.isFinite(a) && Number.isFinite(b) && ((a === tbEm && b === tbEm) || (Math.max(a, b) === tbEm + 1 && Math.min(a, b) === tbEm));
 

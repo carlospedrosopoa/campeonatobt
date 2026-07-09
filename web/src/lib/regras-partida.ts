@@ -1,21 +1,73 @@
+export type TieBreakConfig = {
+  habilitado: boolean;
+  em: number;
+  ate: number;
+  diffMin: number;
+};
+
+export type SuperTieConfig = {
+  habilitado: boolean;
+  ate: number;
+  diffMin: number;
+};
+
+export type RegrasPartidaBTSets = {
+  tipo: "BT_SETS";
+  melhorDe: 1 | 3;
+  gamesPorSet: 4 | 5 | 6;
+  tiebreak: TieBreakConfig;
+  superTiebreakDecisivo?: SuperTieConfig;
+  incluirSuperTieEmGames?: boolean;
+};
+
 export type RegrasPartidaSets = {
   tipo: "SETS";
   melhorDe: 1 | 3;
   gamesPorSet: 4 | 5 | 6;
-  tiebreak: { habilitado: boolean; em: number; ate: number; diffMin: number };
-  superTiebreakDecisivo?: { habilitado: boolean; ate: number; diffMin: number };
+  tiebreak: TieBreakConfig;
+  superTiebreakDecisivo?: SuperTieConfig;
+  incluirSuperTieEmGames?: boolean;
 };
+
+export type RegrasPartidaVoleiSets = {
+  tipo: "VOLEI_SETS";
+  melhorDe: 3 | 5;
+  pontosPorSet: 21 | 25;
+  tieBreakDecisivo?: { habilitado: boolean; ate: 15; diffMin: 2 };
+  diffMin: 2;
+};
+
+export type RegrasPartidaConfig = RegrasPartidaBTSets | RegrasPartidaVoleiSets;
+export type SuperCampeonatoFormato = "2_SET_SUPER_TIE" | "1_SET";
 
 export type SetScore = { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number };
 
-export function calcularResultadoSets(params: {
-  regras: RegrasPartidaSets;
-  equipeAId: string;
-  equipeBId: string;
+export const DEFAULT_REGRAS_PARTIDA_BT: RegrasPartidaBTSets = {
+  tipo: "BT_SETS",
+  melhorDe: 1,
+  gamesPorSet: 6,
+  tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
+  superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+  incluirSuperTieEmGames: false,
+};
+
+export const DEFAULT_REGRAS_PARTIDA_VOLEI: RegrasPartidaVoleiSets = {
+  tipo: "VOLEI_SETS",
+  melhorDe: 3,
+  pontosPorSet: 21,
+  tieBreakDecisivo: { habilitado: true, ate: 15, diffMin: 2 },
+  diffMin: 2,
+};
+
+export type ResultadoPartidaCalculado = {
+  placarA: number;
+  placarB: number;
+  vencedorId: string;
   detalhesPlacar: SetScore[];
-}) {
-  const regras = params.regras;
-  const detalhes = (Array.isArray(params.detalhesPlacar) ? params.detalhesPlacar : [])
+};
+
+function normalizarDetalhesPlacar(detalhesPlacar: SetScore[]) {
+  return (Array.isArray(detalhesPlacar) ? detalhesPlacar : [])
     .map((s, idx) => ({
       set: idx + 1,
       a: Number(s?.a) || 0,
@@ -33,6 +85,100 @@ export function calcularResultadoSets(params: {
         (s.tbA === undefined || (Number.isFinite(s.tbA) && s.tbA >= 0)) &&
         (s.tbB === undefined || (Number.isFinite(s.tbB) && s.tbB >= 0))
     );
+}
+
+export function isRegrasBeachTennisSets(
+  regras: RegrasPartidaConfig | RegrasPartidaSets | null | undefined
+): regras is RegrasPartidaBTSets | RegrasPartidaSets {
+  return Boolean(regras && (regras.tipo === "BT_SETS" || regras.tipo === "SETS"));
+}
+
+export function isRegrasVoleiSets(regras: RegrasPartidaConfig | RegrasPartidaSets | null | undefined): regras is RegrasPartidaVoleiSets {
+  return Boolean(regras && regras.tipo === "VOLEI_SETS");
+}
+
+export function normalizarRegrasBeachTennis(regras: RegrasPartidaBTSets | RegrasPartidaSets): RegrasPartidaBTSets {
+  return {
+    ...regras,
+    tipo: "BT_SETS",
+  };
+}
+
+export function obterRegrasPartidaEfetivas(params: {
+  regrasBase?: RegrasPartidaConfig | RegrasPartidaSets | null;
+  superCampeonato?: boolean | null;
+  superCampeonatoFormato?: SuperCampeonatoFormato | null;
+}): RegrasPartidaConfig | RegrasPartidaSets {
+  const regrasBase = params.regrasBase ?? DEFAULT_REGRAS_PARTIDA_BT;
+
+  if (!params.superCampeonato) {
+    return regrasBase;
+  }
+
+  if (!isRegrasBeachTennisSets(regrasBase)) {
+    return regrasBase;
+  }
+
+  const regras = normalizarRegrasBeachTennis(regrasBase);
+  const formatoSuperCampeonato = params.superCampeonatoFormato ?? "2_SET_SUPER_TIE";
+
+  if (formatoSuperCampeonato === "1_SET") {
+    return {
+      ...regras,
+      tipo: "BT_SETS",
+      melhorDe: 1,
+      superTiebreakDecisivo: {
+        habilitado: false,
+        ate: regras.superTiebreakDecisivo?.ate ?? 10,
+        diffMin: regras.superTiebreakDecisivo?.diffMin ?? 2,
+      },
+    };
+  }
+
+  return {
+    ...regras,
+    tipo: "BT_SETS",
+    melhorDe: 3,
+    tiebreak: regras.tiebreak ?? { habilitado: true, em: 6, ate: 7, diffMin: 2 },
+    superTiebreakDecisivo: {
+      habilitado: true,
+      ate: regras.superTiebreakDecisivo?.ate ?? 10,
+      diffMin: regras.superTiebreakDecisivo?.diffMin ?? 2,
+    },
+    incluirSuperTieEmGames: false,
+  };
+}
+
+export function obterIgnoreSuperTieMin(params: {
+  regras?: RegrasPartidaConfig | RegrasPartidaSets | null;
+  superCampeonato?: boolean | null;
+  superCampeonatoFormato?: SuperCampeonatoFormato | null;
+}): number | null {
+  if (!isRegrasBeachTennisSets(params.regras)) {
+    return null;
+  }
+
+  const regras = normalizarRegrasBeachTennis(params.regras);
+  if (params.superCampeonato) {
+    if ((params.superCampeonatoFormato ?? "2_SET_SUPER_TIE") === "1_SET") {
+      return null;
+    }
+    return regras.superTiebreakDecisivo?.ate ?? 10;
+  }
+
+  return regras.superTiebreakDecisivo?.habilitado && regras.incluirSuperTieEmGames !== true
+    ? regras.superTiebreakDecisivo.ate ?? 10
+    : null;
+}
+
+export function calcularResultadoBeachTennisSets(params: {
+  regras: RegrasPartidaBTSets | RegrasPartidaSets;
+  equipeAId: string;
+  equipeBId: string;
+  detalhesPlacar: SetScore[];
+}): ResultadoPartidaCalculado {
+  const regras = normalizarRegrasBeachTennis(params.regras);
+  const detalhes = normalizarDetalhesPlacar(params.detalhesPlacar);
 
   const setsNeeded = regras.melhorDe === 1 ? 1 : 2;
   const maxSets = regras.melhorDe === 1 ? 1 : 3;
@@ -123,4 +269,89 @@ export function calcularResultadoSets(params: {
 
   const vencedorId = setsA > setsB ? params.equipeAId : params.equipeBId;
   return { placarA: setsA, placarB: setsB, vencedorId, detalhesPlacar: normalized };
+}
+
+export function calcularResultadoVoleiSets(params: {
+  regras: RegrasPartidaVoleiSets;
+  equipeAId: string;
+  equipeBId: string;
+  detalhesPlacar: SetScore[];
+}): ResultadoPartidaCalculado {
+  const regras = params.regras;
+  const detalhes = normalizarDetalhesPlacar(params.detalhesPlacar);
+  const setsNeeded = regras.melhorDe === 5 ? 3 : 2;
+  const maxSets = regras.melhorDe;
+
+  if (detalhes.length === 0) throw new Error("Informe o placar por set");
+  if (detalhes.length > maxSets) throw new Error("Quantidade de sets invalida para a regra de jogo");
+
+  let setsA = 0;
+  let setsB = 0;
+  const normalized: SetScore[] = [];
+
+  for (let i = 0; i < detalhes.length; i++) {
+    const s = detalhes[i];
+    const setIndex = i + 1;
+    const isTieBreakDecisivo = Boolean(regras.tieBreakDecisivo?.habilitado) && setIndex === maxSets;
+    const alvo = isTieBreakDecisivo ? regras.tieBreakDecisivo?.ate ?? 15 : regras.pontosPorSet;
+    const diffMin = isTieBreakDecisivo ? regras.tieBreakDecisivo?.diffMin ?? 2 : regras.diffMin;
+    const winner = Math.max(s.a, s.b);
+    const loser = Math.min(s.a, s.b);
+
+    if (s.a === s.b) throw new Error("Set nao pode terminar empatado");
+    if (winner < alvo) throw new Error("Set precisa atingir a pontuacao minima");
+    if (winner - loser < diffMin) throw new Error("Set precisa ter diferenca minima");
+
+    if (s.a > s.b) setsA += 1;
+    else setsB += 1;
+
+    normalized.push({ set: setIndex, a: s.a, b: s.b, tiebreak: isTieBreakDecisivo });
+
+    if ((setsA === setsNeeded || setsB === setsNeeded) && i !== detalhes.length - 1) {
+      throw new Error("Existem sets extras apos a definicao do vencedor");
+    }
+  }
+
+  if (setsA !== setsNeeded && setsB !== setsNeeded) {
+    throw new Error("Placar incompleto para definir vencedor");
+  }
+
+  const vencedorId = setsA > setsB ? params.equipeAId : params.equipeBId;
+  return { placarA: setsA, placarB: setsB, vencedorId, detalhesPlacar: normalized };
+}
+
+export function calcularResultadoPartida(params: {
+  regras: RegrasPartidaConfig | RegrasPartidaSets;
+  equipeAId: string;
+  equipeBId: string;
+  detalhesPlacar: SetScore[];
+}): ResultadoPartidaCalculado {
+  if (isRegrasVoleiSets(params.regras)) {
+    return calcularResultadoVoleiSets(params as {
+      regras: RegrasPartidaVoleiSets;
+      equipeAId: string;
+      equipeBId: string;
+      detalhesPlacar: SetScore[];
+    });
+  }
+
+  if (isRegrasBeachTennisSets(params.regras)) {
+    return calcularResultadoBeachTennisSets(params as {
+      regras: RegrasPartidaBTSets | RegrasPartidaSets;
+      equipeAId: string;
+      equipeBId: string;
+      detalhesPlacar: SetScore[];
+    });
+  }
+
+  throw new Error("Regra de partida invalida");
+}
+
+export function calcularResultadoSets(params: {
+  regras: RegrasPartidaBTSets | RegrasPartidaSets;
+  equipeAId: string;
+  equipeBId: string;
+  detalhesPlacar: SetScore[];
+}) {
+  return calcularResultadoBeachTennisSets(params);
 }

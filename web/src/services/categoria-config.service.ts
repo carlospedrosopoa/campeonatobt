@@ -1,17 +1,15 @@
 import { db } from "@/db";
-import { categoriaConfiguracoes } from "@/db/schema";
+import { categoriaConfiguracoes, categorias, esportes, torneios } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import {
+  DEFAULT_REGRAS_PARTIDA_BT,
+  DEFAULT_REGRAS_PARTIDA_VOLEI,
+  type RegrasPartidaBTSets,
+  type RegrasPartidaConfig,
+  type RegrasPartidaVoleiSets,
+} from "@/lib/regras-partida";
 
 export type CategoriaFormato = "GRUPOS" | "MATA_MATA" | "LIGA";
-
-export type RegrasPartidaSets = {
-  tipo: "SETS";
-  melhorDe: 1 | 3;
-  gamesPorSet: 4 | 5 | 6;
-  tiebreak: { habilitado: boolean; em: number; ate: number; diffMin: number };
-  superTiebreakDecisivo?: { habilitado: boolean; ate: number; diffMin: number };
-  incluirSuperTieEmGames?: boolean;
-};
 
 export type MataMataEstrutura = "PADRAO" | "SUPER_CAMPEONATO_6";
 
@@ -35,7 +33,7 @@ export type CategoriaConfigV1 = {
     estrutura: MataMataEstrutura;
     quantidadeClassificados?: number;
   };
-  regrasPartida?: RegrasPartidaSets;
+  regrasPartida?: RegrasPartidaConfig;
   desempate?: ("PONTOS" | "CONFRONTO_DIRETO" | "SALDO_GAMES" | "GAMES_PRO" | "VITORIAS" | "SORTEIO")[];
 };
 
@@ -46,16 +44,29 @@ export const defaultCategoriaConfigV1: CategoriaConfigV1 = {
   classificacao: { porGrupo: 2 },
   fase2: { habilitada: true, temFinal: true },
   mataMata: { estrutura: "SUPER_CAMPEONATO_6" },
-  regrasPartida: {
-    tipo: "SETS",
-    melhorDe: 1,
-    gamesPorSet: 6,
-    tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-    superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
-    incluirSuperTieEmGames: false,
-  },
+  regrasPartida: { ...DEFAULT_REGRAS_PARTIDA_BT },
   desempate: ["VITORIAS", "SALDO_GAMES", "CONFRONTO_DIRETO", "GAMES_PRO", "SORTEIO"],
 };
+
+function isEsporteVolei(esporte?: { slug?: string | null; nome?: string | null } | null) {
+  const normalizado = `${esporte?.slug ?? ""} ${esporte?.nome ?? ""}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return normalizado.includes("volei") || normalizado.includes("volleyball");
+}
+
+function criarConfigPadrao(esporte?: { slug?: string | null; nome?: string | null } | null): CategoriaConfigV1 {
+  return {
+    ...defaultCategoriaConfigV1,
+    grupos: defaultCategoriaConfigV1.grupos ? { ...defaultCategoriaConfigV1.grupos } : undefined,
+    classificacao: defaultCategoriaConfigV1.classificacao ? { ...defaultCategoriaConfigV1.classificacao } : undefined,
+    fase2: defaultCategoriaConfigV1.fase2 ? { ...defaultCategoriaConfigV1.fase2 } : undefined,
+    mataMata: defaultCategoriaConfigV1.mataMata ? { ...defaultCategoriaConfigV1.mataMata } : undefined,
+    regrasPartida: isEsporteVolei(esporte) ? { ...DEFAULT_REGRAS_PARTIDA_VOLEI } : { ...DEFAULT_REGRAS_PARTIDA_BT },
+    desempate: [...(defaultCategoriaConfigV1.desempate ?? [])],
+  };
+}
 
 function normalizeConfig(input: any): CategoriaConfigV1 {
   const versao = 1;
@@ -88,26 +99,51 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
       ? Math.floor(input.mataMata.quantidadeClassificados)
       : undefined;
 
-  const tipo = input?.regrasPartida?.tipo === "SETS" ? "SETS" : "SETS";
-  const melhorDe: 1 | 3 = input?.regrasPartida?.melhorDe === 3 ? 3 : 1;
-  const gamesPorSet: 4 | 5 | 6 = input?.regrasPartida?.gamesPorSet === 4 ? 4 : input?.regrasPartida?.gamesPorSet === 5 ? 5 : 6;
-  const tbHabilitado = input?.regrasPartida?.tiebreak?.habilitado === false ? false : true;
-  const tbEm = typeof input?.regrasPartida?.tiebreak?.em === "number" ? input.regrasPartida.tiebreak.em : gamesPorSet;
-  const tbAte = typeof input?.regrasPartida?.tiebreak?.ate === "number" ? input.regrasPartida.tiebreak.ate : gamesPorSet + 1;
-  const tbDiff = typeof input?.regrasPartida?.tiebreak?.diffMin === "number" ? input.regrasPartida.tiebreak.diffMin : 2;
-  const stHabilitado = input?.regrasPartida?.superTiebreakDecisivo?.habilitado === true;
-  const stAte = typeof input?.regrasPartida?.superTiebreakDecisivo?.ate === "number" ? input.regrasPartida.superTiebreakDecisivo.ate : 10;
-  const stDiff = typeof input?.regrasPartida?.superTiebreakDecisivo?.diffMin === "number" ? input.regrasPartida.superTiebreakDecisivo.diffMin : 2;
-  const incluirSuperTieEmGames = input?.regrasPartida?.incluirSuperTieEmGames === true;
+  const regrasInput = input?.regrasPartida;
+  const regrasPartida: RegrasPartidaConfig = (() => {
+    if (regrasInput?.tipo === "VOLEI_SETS") {
+      const melhorDe: 3 | 5 = regrasInput?.melhorDe === 5 ? 5 : 3;
+      const pontosPorSet: 21 | 25 = regrasInput?.pontosPorSet === 21 ? 21 : 25;
+      const tieBreakHabilitado = regrasInput?.tieBreakDecisivo?.habilitado !== false;
+      const tieBreakAte: 15 = 15;
+      const tieBreakDiff: 2 = 2;
+      const diffMin: 2 = 2;
+      const normalizado: RegrasPartidaVoleiSets = {
+        tipo: "VOLEI_SETS",
+        melhorDe,
+        pontosPorSet,
+        tieBreakDecisivo: {
+          habilitado: tieBreakHabilitado,
+          ate: tieBreakAte,
+          diffMin: tieBreakDiff,
+        },
+        diffMin,
+      };
+      return normalizado;
+    }
 
-  const regrasPartida: RegrasPartidaSets = {
-    tipo,
-    melhorDe,
-    gamesPorSet,
-    tiebreak: { habilitado: tbHabilitado, em: tbEm, ate: tbAte, diffMin: tbDiff },
-    superTiebreakDecisivo: { habilitado: melhorDe === 3 ? stHabilitado : false, ate: stAte, diffMin: stDiff },
-    incluirSuperTieEmGames,
-  };
+    const melhorDe: 1 | 3 = regrasInput?.melhorDe === 3 ? 3 : 1;
+    const gamesPorSet: 4 | 5 | 6 =
+      regrasInput?.gamesPorSet === 4 ? 4 : regrasInput?.gamesPorSet === 5 ? 5 : 6;
+    const tbHabilitado = regrasInput?.tiebreak?.habilitado === false ? false : true;
+    const tbEm = typeof regrasInput?.tiebreak?.em === "number" ? regrasInput.tiebreak.em : gamesPorSet;
+    const tbAte = typeof regrasInput?.tiebreak?.ate === "number" ? regrasInput.tiebreak.ate : gamesPorSet + 1;
+    const tbDiff = typeof regrasInput?.tiebreak?.diffMin === "number" ? regrasInput.tiebreak.diffMin : 2;
+    const stHabilitado = regrasInput?.superTiebreakDecisivo?.habilitado === true;
+    const stAte = typeof regrasInput?.superTiebreakDecisivo?.ate === "number" ? regrasInput.superTiebreakDecisivo.ate : 10;
+    const stDiff = typeof regrasInput?.superTiebreakDecisivo?.diffMin === "number" ? regrasInput.superTiebreakDecisivo.diffMin : 2;
+    const incluirSuperTieEmGames = regrasInput?.incluirSuperTieEmGames === true;
+
+    const normalizado: RegrasPartidaBTSets = {
+      tipo: "BT_SETS",
+      melhorDe,
+      gamesPorSet,
+      tiebreak: { habilitado: tbHabilitado, em: tbEm, ate: tbAte, diffMin: tbDiff },
+      superTiebreakDecisivo: { habilitado: melhorDe === 3 ? stHabilitado : false, ate: stAte, diffMin: stDiff },
+      incluirSuperTieEmGames,
+    };
+    return normalizado;
+  })();
 
   const desempateBase = Array.isArray(input?.desempate) ? input.desempate : defaultCategoriaConfigV1.desempate;
   const desempate = (desempateBase as any[]).filter(Boolean);
@@ -133,7 +169,22 @@ export class CategoriaConfigService {
       .limit(1);
 
     const row = resultado[0];
-    if (!row) return defaultCategoriaConfigV1;
+    if (!row) {
+      const categoriaMeta = await db
+        .select({
+          esporteSlug: esportes.slug,
+          esporteNome: esportes.nome,
+        })
+        .from(categorias)
+        .innerJoin(torneios, eq(categorias.torneioId, torneios.id))
+        .leftJoin(esportes, eq(torneios.esporteId, esportes.id))
+        .where(eq(categorias.id, categoriaId))
+        .limit(1);
+      return criarConfigPadrao({
+        slug: categoriaMeta[0]?.esporteSlug ?? null,
+        nome: categoriaMeta[0]?.esporteNome ?? null,
+      });
+    }
     return normalizeConfig({ ...row.config, versao: row.versao });
   }
 

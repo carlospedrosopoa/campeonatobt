@@ -1,9 +1,11 @@
-﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
+import { obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 import { db } from "@/db";
 import { arenas, categorias, equipeIntegrantes, partidas, usuarios, torneios } from "@/db/schema";
 import { and, asc, eq, inArray, gte, lte, sql } from "drizzle-orm";
+import { categoriaConfigService } from "@/services/categoria-config.service";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
@@ -528,6 +530,11 @@ export async function GET(
 
     const equipeIds = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
     const mapNomes = await equipesDisplayService.mapNomesEquipes(equipeIds);
+    const categoriaIds = Array.from(new Set(rows.map((r) => r.categoriaId).filter(Boolean))) as string[];
+    const configEntries = await Promise.all(
+      categoriaIds.map(async (categoriaId) => [categoriaId, await categoriaConfigService.obterOuDefault(categoriaId)] as const)
+    );
+    const configMap = new Map(configEntries);
     
     const atletasRows = await db
       .select({
@@ -547,13 +554,21 @@ export async function GET(
       mapAtletas.set(a.equipeId, current);
     }
 
-    const partidasResult = rows.map((r) => ({
-      ...r,
-      equipeANome: mapNomes.get(r.equipeAId) ?? null,
-      equipeBNome: mapNomes.get(r.equipeBId) ?? null,
-      equipeAAtletas: r.equipeAId ? mapAtletas.get(r.equipeAId) ?? [] : [],
-      equipeBAtletas: r.equipeBId ? mapAtletas.get(r.equipeBId) ?? [] : [],
-    }));
+    const partidasResult = rows.map((r) => {
+      const config = configMap.get(r.categoriaId);
+      return {
+        ...r,
+        equipeANome: mapNomes.get(r.equipeAId) ?? null,
+        equipeBNome: mapNomes.get(r.equipeBId) ?? null,
+        equipeAAtletas: r.equipeAId ? mapAtletas.get(r.equipeAId) ?? [] : [],
+        equipeBAtletas: r.equipeBId ? mapAtletas.get(r.equipeBId) ?? [] : [],
+        regrasPartida: obterRegrasPartidaEfetivas({
+          regrasBase: config?.regrasPartida,
+          superCampeonato: torneio.superCampeonato,
+          superCampeonatoFormato: torneio.superCampeonatoFormato,
+        }),
+      };
+    });
 
     return NextResponse.json({
       torneio,
@@ -794,4 +809,3 @@ export async function POST(
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
-

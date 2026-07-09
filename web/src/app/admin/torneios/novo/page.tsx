@@ -20,6 +20,7 @@ type CriarTorneioPayload = {
   dataFim: string;
   local: string;
   esporteId: string;
+  modeloTorneio?: "NORMAL" | "SUPERCAMPEONATO";
   superCampeonato?: boolean;
   superCampeonatoFormato?: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos?: boolean;
@@ -89,6 +90,7 @@ export default function AdminNovoTorneioPage() {
     dataFim: "",
     local: "",
     esporteId: "",
+    modeloTorneio: "NORMAL",
     superCampeonato: false,
     superCampeonatoFormato: "2_SET_SUPER_TIE",
     cardApenasComFotos: false,
@@ -249,7 +251,8 @@ export default function AdminNovoTorneioPage() {
         dataFim: form.dataFim,
         local: form.local,
         esporteId: form.esporteId,
-        superCampeonato: form.superCampeonato,
+        modeloTorneio: form.modeloTorneio,
+        superCampeonato: form.modeloTorneio === "SUPERCAMPEONATO",
         superCampeonatoFormato: form.superCampeonatoFormato,
         cardApenasComFotos: form.cardApenasComFotos,
         oculto: form.oculto,
@@ -368,17 +371,23 @@ export default function AdminNovoTorneioPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Modelo</label>
             <select
-              value={form.superCampeonato ? "SUPER" : "NORMAL"}
-              onChange={(e) => setForm((prev) => ({ ...prev, superCampeonato: e.target.value === "SUPER" }))}
+              value={form.modeloTorneio}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  modeloTorneio: e.target.value as "NORMAL" | "SUPERCAMPEONATO",
+                  superCampeonato: e.target.value === "SUPERCAMPEONATO",
+                }))
+              }
               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
             >
               <option value="NORMAL">Normal</option>
-              <option value="SUPER">Super Campeonato</option>
+              <option value="SUPERCAMPEONATO">Super Campeonato</option>
             </select>
             <div className="text-xs text-slate-500">A classificação usa pontuação especial no Super Campeonato.</div>
           </div>
 
-          {form.superCampeonato && (
+          {form.modeloTorneio === "SUPERCAMPEONATO" && (
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Formato do Super Campeonato</label>
               <select

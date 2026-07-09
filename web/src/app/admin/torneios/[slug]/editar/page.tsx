@@ -21,6 +21,7 @@ type Torneio = {
   dataFim: string;
   local: string;
   status: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
+  modeloTorneio: "NORMAL" | "SUPERCAMPEONATO";
   superCampeonato: boolean;
   superCampeonatoFormato: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos: boolean;
@@ -98,6 +99,7 @@ export default function AdminEditarDadosTorneioPage() {
     templateUrl: "",
     templateInscricaoUrl: "",
     status: "RASCUNHO" as Torneio["status"],
+    modeloTorneio: "NORMAL" as Torneio["modeloTorneio"],
     superCampeonato: false,
     superCampeonatoFormato: "2_SET_SUPER_TIE" as "2_SET_SUPER_TIE" | "1_SET",
     cardApenasComFotos: false,
@@ -158,6 +160,7 @@ export default function AdminEditarDadosTorneioPage() {
           templateUrl: t.templateUrl ?? "",
           templateInscricaoUrl: t.templateInscricaoUrl ?? "",
           status: t.status,
+          modeloTorneio: t.modeloTorneio ?? (t.superCampeonato ? "SUPERCAMPEONATO" : "NORMAL"),
           superCampeonato: Boolean(t.superCampeonato),
           superCampeonatoFormato: t.superCampeonatoFormato ?? "2_SET_SUPER_TIE",
           cardApenasComFotos: Boolean(t.cardApenasComFotos),
@@ -249,6 +252,8 @@ export default function AdminEditarDadosTorneioPage() {
     return Boolean(form.nome && form.slug && form.dataInicio && form.dataFim && form.local && form.esporteId);
   }, [form]);
 
+  const bloqueioEstrutural = torneio?.status !== "RASCUNHO";
+
   function onChangeNome(nome: string) {
     setForm((prev) => {
       const next = { ...prev, nome };
@@ -285,7 +290,8 @@ export default function AdminEditarDadosTorneioPage() {
         templateUrl: form.templateUrl?.trim() ? form.templateUrl : null,
         templateInscricaoUrl: form.templateInscricaoUrl?.trim() ? form.templateInscricaoUrl : null,
         status: form.status,
-        superCampeonato: form.superCampeonato,
+        modeloTorneio: form.modeloTorneio,
+        superCampeonato: form.modeloTorneio === "SUPERCAMPEONATO",
         superCampeonatoFormato: form.superCampeonatoFormato,
         cardApenasComFotos: form.cardApenasComFotos,
         oculto: form.oculto,
@@ -411,6 +417,11 @@ export default function AdminEditarDadosTorneioPage() {
       {!carregando && torneio && (
         <form onSubmit={onSubmit} className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-6">
           {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
+          {bloqueioEstrutural ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Esporte, modelo e formato estrutural ficam bloqueados depois que o torneio sai de RASCUNHO.
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -439,6 +450,7 @@ export default function AdminEditarDadosTorneioPage() {
               <select
                 value={form.esporteId}
                 onChange={(e) => setForm((prev) => ({ ...prev, esporteId: e.target.value }))}
+                disabled={bloqueioEstrutural}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
               >
                 {esportes.map((e) => (
@@ -467,22 +479,30 @@ export default function AdminEditarDadosTorneioPage() {
             <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Modelo</label>
             <select
-              value={form.superCampeonato ? "SUPER" : "NORMAL"}
-              onChange={(e) => setForm((prev) => ({ ...prev, superCampeonato: e.target.value === "SUPER" }))}
+              value={form.modeloTorneio}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  modeloTorneio: e.target.value as Torneio["modeloTorneio"],
+                  superCampeonato: e.target.value === "SUPERCAMPEONATO",
+                }))
+              }
+              disabled={bloqueioEstrutural}
               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
             >
               <option value="NORMAL">Normal</option>
-              <option value="SUPER">Super Campeonato</option>
+              <option value="SUPERCAMPEONATO">Super Campeonato</option>
             </select>
             <div className="text-xs text-slate-500">A classificação usa pontuação especial no Super Campeonato.</div>
           </div>
 
-          {form.superCampeonato && (
+          {form.modeloTorneio === "SUPERCAMPEONATO" && (
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Formato do Super Campeonato</label>
               <select
                 value={form.superCampeonatoFormato}
                 onChange={(e) => setForm((prev) => ({ ...prev, superCampeonatoFormato: e.target.value as "2_SET_SUPER_TIE" | "1_SET" }))}
+                disabled={bloqueioEstrutural}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
               >
                 <option value="2_SET_SUPER_TIE">2 Sets + Super Tie</option>

@@ -1,6 +1,8 @@
 import { db } from "@/db";
 import { arenas, categorias, grupos, partidas, torneios } from "@/db/schema";
+import { obterRegrasPartidaEfetivas, type RegrasPartidaConfig, type RegrasPartidaSets } from "@/lib/regras-partida";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { categoriaConfigService } from "@/services/categoria-config.service";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 
 const ACTIVE_MATCH_STATUSES = ["AGENDADA", "EM_ANDAMENTO"] as const;
@@ -36,6 +38,7 @@ export type PainelQuadrasPartida = {
   placarA: number;
   placarB: number;
   detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
+  regrasPartida?: RegrasPartidaConfig | RegrasPartidaSets | null;
 };
 
 type ChaveDisponivelPainel = {
@@ -117,6 +120,8 @@ export class PainelQuadrasService {
         slug: torneios.slug,
         quadrasAtivas: torneios.quadrasAtivas,
         painelQuadrasReservas: torneios.painelQuadrasReservas,
+        superCampeonato: torneios.superCampeonato,
+        superCampeonatoFormato: torneios.superCampeonatoFormato,
       })
       .from(torneios)
       .where(eq(torneios.id, torneioId))
@@ -164,29 +169,42 @@ export class PainelQuadrasService {
 
     const equipeIds = Array.from(new Set(rows.flatMap((row) => [row.equipeAId, row.equipeBId]).filter(Boolean))) as string[];
     const nomesEquipes = await equipesDisplayService.mapNomesEquipes(equipeIds);
+    const categoriaIds = Array.from(new Set(rows.map((row) => row.categoriaId).filter(Boolean))) as string[];
+    const configEntries = await Promise.all(
+      categoriaIds.map(async (categoriaId) => [categoriaId, await categoriaConfigService.obterOuDefault(categoriaId)] as const)
+    );
+    const configMap = new Map(configEntries);
 
-    const partidasComNomes: PainelQuadrasPartida[] = rows.map((row) => ({
-      id: row.id,
-      categoriaId: row.categoriaId,
-      categoriaNome: row.categoriaNome,
-      fase: row.fase,
-      grupoId: row.grupoId ?? null,
-      grupoNome: row.grupoNome ?? null,
-      status: row.status,
-      arenaId: row.arenaId ?? null,
-      arenaNome: row.arenaNome ?? null,
-      quadra: row.quadra ?? null,
-      dataHorario: row.dataHorario ? new Date(row.dataHorario).toISOString() : null,
-      iniciadoEm: row.iniciadoEm ? new Date(row.iniciadoEm).toISOString() : null,
-      finalizadoEm: row.finalizadoEm ? new Date(row.finalizadoEm).toISOString() : null,
-      equipeAId: row.equipeAId,
-      equipeBId: row.equipeBId,
-      equipeANome: nomesEquipes.get(row.equipeAId) ?? null,
-      equipeBNome: nomesEquipes.get(row.equipeBId) ?? null,
-      placarA: row.placarA ?? 0,
-      placarB: row.placarB ?? 0,
-      detalhesPlacar: (row.detalhesPlacar as PainelQuadrasPartida["detalhesPlacar"]) ?? null,
-    }));
+    const partidasComNomes: PainelQuadrasPartida[] = rows.map((row) => {
+      const config = configMap.get(row.categoriaId);
+      return {
+        id: row.id,
+        categoriaId: row.categoriaId,
+        categoriaNome: row.categoriaNome,
+        fase: row.fase,
+        grupoId: row.grupoId ?? null,
+        grupoNome: row.grupoNome ?? null,
+        status: row.status,
+        arenaId: row.arenaId ?? null,
+        arenaNome: row.arenaNome ?? null,
+        quadra: row.quadra ?? null,
+        dataHorario: row.dataHorario ? new Date(row.dataHorario).toISOString() : null,
+        iniciadoEm: row.iniciadoEm ? new Date(row.iniciadoEm).toISOString() : null,
+        finalizadoEm: row.finalizadoEm ? new Date(row.finalizadoEm).toISOString() : null,
+        equipeAId: row.equipeAId,
+        equipeBId: row.equipeBId,
+        equipeANome: nomesEquipes.get(row.equipeAId) ?? null,
+        equipeBNome: nomesEquipes.get(row.equipeBId) ?? null,
+        placarA: row.placarA ?? 0,
+        placarB: row.placarB ?? 0,
+        detalhesPlacar: (row.detalhesPlacar as PainelQuadrasPartida["detalhesPlacar"]) ?? null,
+        regrasPartida: obterRegrasPartidaEfetivas({
+          regrasBase: config?.regrasPartida,
+          superCampeonato: torneio.superCampeonato,
+          superCampeonatoFormato: torneio.superCampeonatoFormato,
+        }),
+      };
+    });
 
     const partidasAbertas = partidasComNomes.filter((partida) => isActiveStatus(partida.status)).slice().sort(ordenarPartidasPainel);
     const partidasAgendadasSemQuadraAtiva = new Map<string, PainelQuadrasPartida>();

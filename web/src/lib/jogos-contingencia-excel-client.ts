@@ -1,12 +1,9 @@
 "use client";
 
+import { obterIgnoreSuperTieMin, type RegrasPartidaConfig, type RegrasPartidaSets, type SuperCampeonatoFormato } from "@/lib/regras-partida";
+
 type CategoriaConfigContingencia = {
-  regrasPartida?: {
-    melhorDe?: 1 | 3;
-    gamesPorSet?: 4 | 5 | 6;
-    incluirSuperTieEmGames?: boolean;
-    superTiebreakDecisivo?: { habilitado?: boolean; ate?: number };
-  };
+  regrasPartida?: RegrasPartidaConfig | RegrasPartidaSets;
 };
 
 type PartidaContingencia = {
@@ -47,6 +44,7 @@ type ExportarPlanilhaContingenciaParams = {
   partidas: PartidaContingencia[];
   classificacao?: GrupoClassificacaoContingencia[];
   superCampeonato?: boolean;
+  superCampeonatoFormato?: SuperCampeonatoFormato | null;
 };
 
 type GrupoContingencia = {
@@ -166,12 +164,11 @@ function obterEquipesGrupo(
 function montarGrupos(params: ExportarPlanilhaContingenciaParams) {
   const porGrupo = new Map<string, PartidaContingencia[]>();
   const classificacaoMap = new Map((params.classificacao ?? []).map((grupo) => [grupo.grupoNome, grupo]));
-  const ignoreSuperTieMin =
-    params.superCampeonato
-      ? (params.config?.regrasPartida?.superTiebreakDecisivo?.ate ?? 10)
-      : params.config?.regrasPartida?.superTiebreakDecisivo?.habilitado && params.config?.regrasPartida?.incluirSuperTieEmGames !== true
-        ? (params.config?.regrasPartida?.superTiebreakDecisivo?.ate ?? 10)
-        : null;
+  const ignoreSuperTieMin = obterIgnoreSuperTieMin({
+    regras: params.config?.regrasPartida,
+    superCampeonato: params.superCampeonato,
+    superCampeonatoFormato: params.superCampeonatoFormato,
+  });
 
   for (const partida of params.partidas) {
     const grupoNome = (partida.grupoNome || "Sem grupo").trim() || "Sem grupo";
@@ -216,7 +213,11 @@ function adicionarAbaInstrucoes(
     : "Vitorias > Saldo de Games > Confronto Direto (empate entre 2) > Games Pro > ordem da planilha";
 
   const observacaoSuperTie =
-    params.config?.regrasPartida?.superTiebreakDecisivo?.habilitado && params.config?.regrasPartida?.incluirSuperTieEmGames !== true
+    obterIgnoreSuperTieMin({
+      regras: params.config?.regrasPartida,
+      superCampeonato: params.superCampeonato,
+      superCampeonatoFormato: params.superCampeonatoFormato,
+    }) !== null
       ? "Se houver super tie decisivo, preencha Games A/B sem os pontos do super tie."
       : "Games A/B devem refletir os games validos da partida conforme o torneio.";
 

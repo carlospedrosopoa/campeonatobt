@@ -22,6 +22,8 @@ import {
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { torneioAdministradoresService } from "@/services/torneio-administradores.service";
 
+export type ModeloTorneio = "NORMAL" | "SUPERCAMPEONATO";
+
 export type CriarTorneioDTO = {
   nome: string;
   slug: string;
@@ -30,6 +32,7 @@ export type CriarTorneioDTO = {
   dataFim: string; // YYYY-MM-DD
   local: string;
   esporteId: string;
+  modeloTorneio?: ModeloTorneio | null;
   superCampeonato?: boolean;
   superCampeonatoFormato?: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos?: boolean;
@@ -62,6 +65,12 @@ const normalizeText = (value: string | null | undefined) => {
   if (value === undefined) return undefined;
   const trimmed = (value || "").trim();
   return trimmed ? trimmed : null;
+};
+
+const normalizeModeloTorneio = (value: unknown, superCampeonato?: boolean | null): ModeloTorneio => {
+  if (value === "SUPERCAMPEONATO") return "SUPERCAMPEONATO";
+  if (value === "NORMAL") return "NORMAL";
+  return superCampeonato ? "SUPERCAMPEONATO" : "NORMAL";
 };
 
 const normalizeStringArray = (value: unknown) => {
@@ -101,6 +110,7 @@ export class TorneiosService {
         logoUrl: torneios.logoUrl,
         templateUrl: torneios.templateUrl,
         templateInscricaoUrl: torneios.templateInscricaoUrl,
+        modeloTorneio: torneios.modeloTorneio,
         superCampeonato: torneios.superCampeonato,
         superCampeonatoFormato: torneios.superCampeonatoFormato,
         cardApenasComFotos: torneios.cardApenasComFotos,
@@ -119,7 +129,13 @@ export class TorneiosService {
       .leftJoin(esportes, eq(torneios.esporteId, esportes.id))
       .orderBy(desc(torneios.criadoEm))
       .limit(limit)
-      .offset(offset);
+      .offset(offset)
+      .then((rows) =>
+        rows.map((row) => ({
+          ...row,
+          modeloTorneio: normalizeModeloTorneio(row.modeloTorneio, row.superCampeonato),
+        }))
+      );
   }
 
   async listarParaUsuario(user: { id: string; perfil: "ADMIN" | "ORGANIZADOR" | "ATLETA" }, params?: { limit?: number; offset?: number }) {
@@ -150,6 +166,7 @@ export class TorneiosService {
         logoUrl: torneios.logoUrl,
         templateUrl: torneios.templateUrl,
         templateInscricaoUrl: torneios.templateInscricaoUrl,
+        modeloTorneio: torneios.modeloTorneio,
         superCampeonato: torneios.superCampeonato,
         cardApenasComFotos: torneios.cardApenasComFotos,
         quadrasAtivas: torneios.quadrasAtivas,
@@ -168,7 +185,13 @@ export class TorneiosService {
       .where(inArray(torneios.id, ids))
       .orderBy(desc(torneios.criadoEm))
       .limit(limit)
-      .offset(offset);
+      .offset(offset)
+      .then((rows) =>
+        rows.map((row) => ({
+          ...row,
+          modeloTorneio: normalizeModeloTorneio(row.modeloTorneio, row.superCampeonato),
+        }))
+      );
   }
 
   async listarRecentes() {
@@ -191,6 +214,7 @@ export class TorneiosService {
         logoUrl: torneios.logoUrl,
         templateUrl: torneios.templateUrl,
         templateInscricaoUrl: torneios.templateInscricaoUrl,
+        modeloTorneio: torneios.modeloTorneio,
         superCampeonato: torneios.superCampeonato,
         superCampeonatoFormato: torneios.superCampeonatoFormato,
         cardApenasComFotos: torneios.cardApenasComFotos,
@@ -210,7 +234,13 @@ export class TorneiosService {
       .where(eq(torneios.oculto, false))
       .orderBy(desc(torneios.criadoEm))
       .limit(limit)
-      .offset(offset);
+      .offset(offset)
+      .then((rows) =>
+        rows.map((row) => ({
+          ...row,
+          modeloTorneio: normalizeModeloTorneio(row.modeloTorneio, row.superCampeonato),
+        }))
+      );
   }
 
   async listarRecentesPublicos() {
@@ -233,6 +263,7 @@ export class TorneiosService {
       logoUrl: torneios.logoUrl,
       templateUrl: torneios.templateUrl,
       templateInscricaoUrl: torneios.templateInscricaoUrl,
+      modeloTorneio: torneios.modeloTorneio,
       superCampeonato: torneios.superCampeonato,
       superCampeonatoFormato: torneios.superCampeonatoFormato,
       cardApenasComFotos: torneios.cardApenasComFotos,
@@ -252,7 +283,12 @@ export class TorneiosService {
     .where(eq(torneios.slug, slug))
     .limit(1);
 
-    return resultado[0] || null;
+    const torneio = resultado[0] || null;
+    if (!torneio) return null;
+    return {
+      ...torneio,
+      modeloTorneio: normalizeModeloTorneio(torneio.modeloTorneio, torneio.superCampeonato),
+    };
   }
 
   async buscarOrganizadorPadrao() {
@@ -272,6 +308,7 @@ export class TorneiosService {
       throw new Error("Nenhum organizador padrão encontrado");
     }
 
+    const modeloTorneio = normalizeModeloTorneio(dados.modeloTorneio, dados.superCampeonato);
     const administradorIds = Array.isArray(dados.administradorIds) ? dados.administradorIds : [];
     const extras = await torneioAdministradoresService.validarUsuariosGestao(organizadorId, administradorIds);
 
@@ -280,6 +317,7 @@ export class TorneiosService {
         .insert(torneios)
         .values({
           ...dados,
+          modeloTorneio,
           valorPrimeiraInscricao: normalizeDecimal(dados.valorPrimeiraInscricao),
           valorInscricaoAdicional: normalizeDecimal(dados.valorInscricaoAdicional),
           pixChave: normalizeText(dados.pixChave),
@@ -291,7 +329,7 @@ export class TorneiosService {
           cardApenasComFotos: dados.cardApenasComFotos ?? false,
           quadrasAtivas: Math.max(0, Math.min(20, Number(dados.quadrasAtivas ?? 0) || 0)),
           organizadorId,
-          superCampeonato: dados.superCampeonato ?? false,
+          superCampeonato: modeloTorneio === "SUPERCAMPEONATO",
           superCampeonatoFormato: dados.superCampeonatoFormato ?? "2_SET_SUPER_TIE",
           status: "RASCUNHO",
         })
@@ -309,13 +347,17 @@ export class TorneiosService {
       return criado;
     });
 
-    return novoTorneio;
+    return {
+      ...novoTorneio,
+      modeloTorneio: normalizeModeloTorneio(novoTorneio.modeloTorneio, novoTorneio.superCampeonato),
+    };
   }
 
   async atualizarPorSlug(
     slug: string,
     dados: Partial<Omit<CriarTorneioDTO, "organizadorId">> & {
       status?: "RASCUNHO" | "ABERTO" | "EM_ANDAMENTO" | "FINALIZADO" | "CANCELADO";
+      modeloTorneio?: ModeloTorneio | null;
       superCampeonato?: boolean;
       cardApenasComFotos?: boolean;
       quadrasAtivas?: number;
@@ -323,10 +365,38 @@ export class TorneiosService {
       inscricaoComIa?: boolean;
     }
   ) {
+    const atual = await this.buscarPorSlug(slug);
+    if (!atual) return null;
+
+    const modeloTorneio =
+      dados.modeloTorneio !== undefined || dados.superCampeonato !== undefined
+        ? normalizeModeloTorneio(dados.modeloTorneio, dados.superCampeonato)
+        : undefined;
+
+    const bloqueiaMudancaEstrutural = atual.status !== "RASCUNHO";
+    const novoEsporteId = dados.esporteId ?? atual.esporteId ?? null;
+    const novoModeloTorneio = modeloTorneio ?? atual.modeloTorneio;
+    const novoSuperFormato = dados.superCampeonatoFormato ?? atual.superCampeonatoFormato ?? "2_SET_SUPER_TIE";
+
+    if (bloqueiaMudancaEstrutural) {
+      const mudouEsporte = novoEsporteId !== (atual.esporteId ?? null);
+      const mudouModelo = novoModeloTorneio !== atual.modeloTorneio;
+      const mudouFormatoSuper = novoSuperFormato !== (atual.superCampeonatoFormato ?? "2_SET_SUPER_TIE");
+
+      if (mudouEsporte || mudouModelo || mudouFormatoSuper) {
+        throw new Error("Esporte, modelo e formato estrutural do torneio so podem ser alterados enquanto ele estiver em RASCUNHO.");
+      }
+    }
+
     const [atualizado] = await db
       .update(torneios)
       .set({
         ...dados,
+        modeloTorneio,
+        superCampeonato:
+          modeloTorneio === undefined
+            ? dados.superCampeonato
+            : modeloTorneio === "SUPERCAMPEONATO",
         quadrasAtivas:
           dados.quadrasAtivas === undefined ? undefined : Math.max(0, Math.min(20, Number(dados.quadrasAtivas) || 0)),
         valorPrimeiraInscricao: normalizeDecimal(dados.valorPrimeiraInscricao),
@@ -340,7 +410,12 @@ export class TorneiosService {
       .where(eq(torneios.slug, slug))
       .returning();
 
-    return atualizado ?? null;
+    return atualizado
+      ? {
+          ...atualizado,
+          modeloTorneio: normalizeModeloTorneio(atualizado.modeloTorneio, atualizado.superCampeonato),
+        }
+      : null;
   }
 
   async excluirPorSlug(slug: string) {

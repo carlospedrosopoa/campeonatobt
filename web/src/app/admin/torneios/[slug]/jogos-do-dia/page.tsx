@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Calendar, FileText, ImageIcon, Loader2, MapPin, Pencil, RefreshCw, Save, Users, X } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
+import { isRegrasBeachTennisSets, isRegrasVoleiSets, type RegrasPartidaConfig, type RegrasPartidaSets } from "@/lib/regras-partida";
 
 type Partida = {
   id: string;
@@ -26,6 +27,7 @@ type Partida = {
   placarA: number;
   placarB: number;
   detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
+  regrasPartida?: RegrasPartidaConfig | RegrasPartidaSets | null;
 };
 
 type Torneio = {
@@ -46,6 +48,10 @@ type PlacarForm = {
   tb2b: string;
   s3a: string;
   s3b: string;
+  s4a: string;
+  s4b: string;
+  s5a: string;
+  s5b: string;
 };
 
 const avatarPlaceholder =
@@ -117,6 +123,10 @@ export default function AdminJogosDoDiaPage() {
     tb2b: "",
     s3a: "",
     s3b: "",
+    s4a: "",
+    s4b: "",
+    s5a: "",
+    s5b: "",
   });
 
   async function carregarDados(dataYmd?: string) {
@@ -190,6 +200,8 @@ export default function AdminJogosDoDiaPage() {
     const s1 = detalhes.find((d) => d.set === 1);
     const s2 = detalhes.find((d) => d.set === 2);
     const s3 = detalhes.find((d) => d.set === 3);
+    const s4 = detalhes.find((d) => d.set === 4);
+    const s5 = detalhes.find((d) => d.set === 5);
     setFormPlacar({
       s1a: s1 ? String(s1.a ?? "") : "",
       s1b: s1 ? String(s1.b ?? "") : "",
@@ -201,6 +213,10 @@ export default function AdminJogosDoDiaPage() {
       tb2b: s2 && s2.tiebreak ? String(s2.tbB ?? "") : "",
       s3a: s3 ? String(s3.a ?? "") : "",
       s3b: s3 ? String(s3.b ?? "") : "",
+      s4a: s4 ? String(s4.a ?? "") : "",
+      s4b: s4 ? String(s4.b ?? "") : "",
+      s5a: s5 ? String(s5.a ?? "") : "",
+      s5b: s5 ? String(s5.b ?? "") : "",
     });
     setEditPartida(p);
   }
@@ -223,43 +239,79 @@ export default function AdminJogosDoDiaPage() {
       setSalvandoPlacar(true);
 
       const detalhes: Array<{ set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }> = [];
+      const regras = editPartida.regrasPartida;
 
-      const s1a = toNum(formPlacar.s1a);
-      const s1b = toNum(formPlacar.s1b);
-      if (s1a === null || s1b === null) throw new Error("Informe o placar do set 1");
-      if (Number.isNaN(s1a) || Number.isNaN(s1b)) throw new Error("Placar inválido no set 1");
-      const tb1a = toNum(formPlacar.tb1a);
-      const tb1b = toNum(formPlacar.tb1b);
-      if (tb1a !== null || tb1b !== null) {
-        if (tb1a === null || tb1b === null) throw new Error("Informe o tie-break completo do set 1");
-        if (Number.isNaN(tb1a) || Number.isNaN(tb1b)) throw new Error("Tie-break inválido no set 1");
-        detalhes.push({ set: 1, a: s1a, b: s1b, tiebreak: true, tbA: tb1a, tbB: tb1b });
-      } else {
-        detalhes.push({ set: 1, a: s1a, b: s1b });
-      }
+      if (isRegrasVoleiSets(regras)) {
+        const campos = [
+          { a: formPlacar.s1a, b: formPlacar.s1b },
+          { a: formPlacar.s2a, b: formPlacar.s2b },
+          { a: formPlacar.s3a, b: formPlacar.s3b },
+          { a: formPlacar.s4a, b: formPlacar.s4b },
+          { a: formPlacar.s5a, b: formPlacar.s5b },
+        ];
+        let encontrouSetVazio = false;
 
-      const s2a = toNum(formPlacar.s2a);
-      const s2b = toNum(formPlacar.s2b);
-      if (s2a !== null || s2b !== null) {
-        if (s2a === null || s2b === null) throw new Error("Informe o placar completo do set 2");
-        if (Number.isNaN(s2a) || Number.isNaN(s2b)) throw new Error("Placar inválido no set 2");
-        const tb2a = toNum(formPlacar.tb2a);
-        const tb2b = toNum(formPlacar.tb2b);
-        if (tb2a !== null || tb2b !== null) {
-          if (tb2a === null || tb2b === null) throw new Error("Informe o tie-break completo do set 2");
-          if (Number.isNaN(tb2a) || Number.isNaN(tb2b)) throw new Error("Tie-break inválido no set 2");
-          detalhes.push({ set: 2, a: s2a, b: s2b, tiebreak: true, tbA: tb2a, tbB: tb2b });
-        } else {
-          detalhes.push({ set: 2, a: s2a, b: s2b });
+        for (let index = 0; index < regras.melhorDe; index += 1) {
+          const atual = campos[index];
+          const a = toNum(atual.a);
+          const b = toNum(atual.b);
+          const ambosVazios = a === null && b === null;
+          if (ambosVazios) {
+            encontrouSetVazio = true;
+            continue;
+          }
+          if (a === null || b === null) throw new Error(`Informe o placar completo do set ${index + 1}`);
+          if (Number.isNaN(a) || Number.isNaN(b)) throw new Error(`Placar inválido no set ${index + 1}`);
+          if (encontrouSetVazio) throw new Error("Preencha os sets em ordem, sem pular placares");
+          detalhes.push({ set: index + 1, a, b });
         }
-      }
 
-      const s3a = toNum(formPlacar.s3a);
-      const s3b = toNum(formPlacar.s3b);
-      if (s3a !== null || s3b !== null) {
-        if (s3a === null || s3b === null) throw new Error("Informe o placar completo do set 3");
-        if (Number.isNaN(s3a) || Number.isNaN(s3b)) throw new Error("Placar inválido no set 3");
-        detalhes.push({ set: 3, a: s3a, b: s3b });
+        if (detalhes.length === 0) throw new Error("Informe o placar do set 1");
+      } else {
+        const regrasBT = isRegrasBeachTennisSets(regras) ? regras : null;
+        const melhorDe = regrasBT?.melhorDe ?? 1;
+
+        const s1a = toNum(formPlacar.s1a);
+        const s1b = toNum(formPlacar.s1b);
+        if (s1a === null || s1b === null) throw new Error("Informe o placar do set 1");
+        if (Number.isNaN(s1a) || Number.isNaN(s1b)) throw new Error("Placar inválido no set 1");
+        const tb1a = toNum(formPlacar.tb1a);
+        const tb1b = toNum(formPlacar.tb1b);
+        if (tb1a !== null || tb1b !== null) {
+          if (tb1a === null || tb1b === null) throw new Error("Informe o tie-break completo do set 1");
+          if (Number.isNaN(tb1a) || Number.isNaN(tb1b)) throw new Error("Tie-break inválido no set 1");
+          detalhes.push({ set: 1, a: s1a, b: s1b, tiebreak: true, tbA: tb1a, tbB: tb1b });
+        } else {
+          detalhes.push({ set: 1, a: s1a, b: s1b });
+        }
+
+        if (melhorDe === 3) {
+          const s2a = toNum(formPlacar.s2a);
+          const s2b = toNum(formPlacar.s2b);
+          if (s2a === null || s2b === null) throw new Error("Informe o placar do set 2");
+          if (Number.isNaN(s2a) || Number.isNaN(s2b)) throw new Error("Placar inválido no set 2");
+          const tb2a = toNum(formPlacar.tb2a);
+          const tb2b = toNum(formPlacar.tb2b);
+          if (tb2a !== null || tb2b !== null) {
+            if (tb2a === null || tb2b === null) throw new Error("Informe o tie-break completo do set 2");
+            if (Number.isNaN(tb2a) || Number.isNaN(tb2b)) throw new Error("Tie-break inválido no set 2");
+            detalhes.push({ set: 2, a: s2a, b: s2b, tiebreak: true, tbA: tb2a, tbB: tb2b });
+          } else {
+            detalhes.push({ set: 2, a: s2a, b: s2b });
+          }
+
+          const s3a = toNum(formPlacar.s3a);
+          const s3b = toNum(formPlacar.s3b);
+          if (s3a !== null || s3b !== null) {
+            if (s3a === null || s3b === null) throw new Error("Informe o placar completo do set 3");
+            if (Number.isNaN(s3a) || Number.isNaN(s3b)) throw new Error("Placar inválido no set 3");
+            detalhes.push({ set: 3, a: s3a, b: s3b });
+          }
+        } else {
+          const s2a = toNum(formPlacar.s2a);
+          const s2b = toNum(formPlacar.s2b);
+          if (s2a !== null || s2b !== null) throw new Error("Esta regra aceita apenas 1 set");
+        }
       }
 
       const res = await fetch(`/api/v1/torneios/${slug}/categorias/${editPartida.categoriaId}/partidas/${editPartida.id}`, {
@@ -791,27 +843,73 @@ export default function AdminJogosDoDiaPage() {
             <div className="p-4 space-y-3">
               {erroPlacar && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erroPlacar}</div>}
 
-              <div className="grid grid-cols-5 gap-2 items-center">
-                <div className="col-span-1 text-xs font-bold text-slate-600">Set</div>
-                <div className="col-span-2 text-xs font-bold text-slate-600 text-center">{editPartida.equipeANome || "Equipe A"}</div>
-                <div className="col-span-2 text-xs font-bold text-slate-600 text-center">{editPartida.equipeBNome || "Equipe B"}</div>
+              {(() => {
+                const regras = editPartida.regrasPartida;
+                const regrasBT = isRegrasBeachTennisSets(regras) ? regras : null;
+                const regrasVolei = isRegrasVoleiSets(regras) ? regras : null;
+                const melhorDe = regrasVolei?.melhorDe ?? regrasBT?.melhorDe ?? 1;
+                const superTie = regrasBT?.superTiebreakDecisivo?.habilitado ?? false;
+                const tbHabilitado = regrasBT?.tiebreak?.habilitado ?? true;
+                const tbEm = regrasBT?.tiebreak?.em ?? (regrasBT?.gamesPorSet ?? 6);
+                const s1aN = Number(formPlacar.s1a);
+                const s1bN = Number(formPlacar.s1b);
+                const s2aN = Number(formPlacar.s2a);
+                const s2bN = Number(formPlacar.s2b);
+                const isTbScore = (a: number, b: number) =>
+                  Number.isFinite(a) && Number.isFinite(b) && ((a === tbEm && b === tbEm) || (Math.max(a, b) === tbEm + 1 && Math.min(a, b) === tbEm));
+                const showTb1 = Boolean(regrasBT) && tbHabilitado && (Boolean(formPlacar.tb1a.trim() || formPlacar.tb1b.trim()) || isTbScore(s1aN, s1bN));
+                const showTb2 = Boolean(regrasBT) && tbHabilitado && (Boolean(formPlacar.tb2a.trim() || formPlacar.tb2b.trim()) || isTbScore(s2aN, s2bN));
+                const camposSets: Array<{
+                  aKey: keyof PlacarForm;
+                  bKey: keyof PlacarForm;
+                  tbAKey?: keyof PlacarForm;
+                  tbBKey?: keyof PlacarForm;
+                }> = [
+                  { aKey: "s1a", bKey: "s1b", tbAKey: "tb1a", tbBKey: "tb1b" },
+                  { aKey: "s2a", bKey: "s2b", tbAKey: "tb2a", tbBKey: "tb2b" },
+                  { aKey: "s3a", bKey: "s3b" },
+                  { aKey: "s4a", bKey: "s4b" },
+                  { aKey: "s5a", bKey: "s5b" },
+                ];
 
-                <div className="col-span-1 text-xs font-bold text-slate-700">1</div>
-                <input value={formPlacar.s1a} onChange={(e) => updatePlacarField("s1a", e.target.value)} inputMode="numeric" className="col-span-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-                <input value={formPlacar.tb1a} onChange={(e) => updatePlacarField("tb1a", e.target.value)} inputMode="numeric" placeholder="TB" className="col-span-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-                <input value={formPlacar.s1b} onChange={(e) => updatePlacarField("s1b", e.target.value)} inputMode="numeric" className="col-span-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-                <input value={formPlacar.tb1b} onChange={(e) => updatePlacarField("tb1b", e.target.value)} inputMode="numeric" placeholder="TB" className="col-span-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2 items-center text-xs font-bold text-slate-600">
+                      <div>Set</div>
+                      <div className="text-center">{editPartida.equipeANome || "Equipe A"}</div>
+                      <div className="text-center">{editPartida.equipeBNome || "Equipe B"}</div>
+                    </div>
+                    {camposSets.slice(0, melhorDe).map((campo, index) => {
+                      const mostrarTb = index === 0 ? showTb1 : index === 1 ? showTb2 : false;
+                      const tbAKey = campo.tbAKey;
+                      const tbBKey = campo.tbBKey;
+                      const label =
+                        regrasVolei && index === melhorDe - 1 && regrasVolei.tieBreakDecisivo?.habilitado
+                          ? `${index + 1} (TB)`
+                          : regrasBT && index === 2 && superTie
+                            ? "ST"
+                            : String(index + 1);
 
-                <div className="col-span-1 text-xs font-bold text-slate-700">2</div>
-                <input value={formPlacar.s2a} onChange={(e) => updatePlacarField("s2a", e.target.value)} inputMode="numeric" className="col-span-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-                <input value={formPlacar.tb2a} onChange={(e) => updatePlacarField("tb2a", e.target.value)} inputMode="numeric" placeholder="TB" className="col-span-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-                <input value={formPlacar.s2b} onChange={(e) => updatePlacarField("s2b", e.target.value)} inputMode="numeric" className="col-span-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-                <input value={formPlacar.tb2b} onChange={(e) => updatePlacarField("tb2b", e.target.value)} inputMode="numeric" placeholder="TB" className="col-span-1 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-
-                <div className="col-span-1 text-xs font-bold text-slate-700">3</div>
-                <input value={formPlacar.s3a} onChange={(e) => updatePlacarField("s3a", e.target.value)} inputMode="numeric" className="col-span-2 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-                <input value={formPlacar.s3b} onChange={(e) => updatePlacarField("s3b", e.target.value)} inputMode="numeric" className="col-span-2 rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-              </div>
+                      return (
+                        <div key={campo.aKey} className="space-y-2">
+                          <div className="grid grid-cols-3 gap-2 items-center">
+                            <div className="text-xs font-bold text-slate-700">{label}</div>
+                            <input value={formPlacar[campo.aKey]} onChange={(e) => updatePlacarField(campo.aKey, e.target.value)} inputMode="numeric" className="rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
+                            <input value={formPlacar[campo.bKey]} onChange={(e) => updatePlacarField(campo.bKey, e.target.value)} inputMode="numeric" className="rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
+                          </div>
+                          {mostrarTb && tbAKey && tbBKey ? (
+                            <div className="grid grid-cols-3 gap-2 items-center">
+                              <div className="text-[11px] font-semibold text-slate-500">Tie-break</div>
+                              <input value={formPlacar[tbAKey]} onChange={(e) => updatePlacarField(tbAKey, e.target.value)} inputMode="numeric" placeholder="TB" className="rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
+                              <input value={formPlacar[tbBKey]} onChange={(e) => updatePlacarField(tbBKey, e.target.value)} inputMode="numeric" placeholder="TB" className="rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-slate-100 p-4">

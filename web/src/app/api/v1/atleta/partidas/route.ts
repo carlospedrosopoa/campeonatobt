@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, partidas, placarSubmissoes, torneios } from "@/db/schema";
+import { obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
+import { categoriaConfigService } from "@/services/categoria-config.service";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
@@ -25,6 +27,8 @@ export async function GET(request: NextRequest) {
       torneioSlug: torneios.slug,
       categoriaId: partidas.categoriaId,
       categoriaNome: categorias.nome,
+      superCampeonato: torneios.superCampeonato,
+      superCampeonatoFormato: torneios.superCampeonatoFormato,
       fase: partidas.fase,
       status: partidas.status,
       equipeAId: partidas.equipeAId,
@@ -44,6 +48,11 @@ export async function GET(request: NextRequest) {
 
   const ids = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
   const mapNomes = await equipesDisplayService.mapNomesEquipes(ids);
+  const categoriaIds = Array.from(new Set(rows.map((r) => r.categoriaId).filter(Boolean))) as string[];
+  const configEntries = await Promise.all(
+    categoriaIds.map(async (categoriaId) => [categoriaId, await categoriaConfigService.obterOuDefault(categoriaId)] as const)
+  );
+  const configMap = new Map(configEntries);
 
   const partidaIds = Array.from(new Set(rows.map((r) => r.id))).filter(Boolean) as string[];
   const pendentes = new Set<string>();
@@ -55,22 +64,30 @@ export async function GET(request: NextRequest) {
     for (const pr of pendentesRows) pendentes.add(pr.partidaId);
   }
 
-  const partidasResult = rows.map((r) => ({
-    id: r.id,
-    torneio: { id: r.torneioId, nome: r.torneioNome, slug: r.torneioSlug },
-    categoria: { id: r.categoriaId, nome: r.categoriaNome },
-    fase: r.fase,
-    status: r.status,
-    equipeA: { id: r.equipeAId, nome: mapNomes.get(r.equipeAId) ?? null },
-    equipeB: { id: r.equipeBId, nome: mapNomes.get(r.equipeBId) ?? null },
-    placarA: r.placarA,
-    placarB: r.placarB,
-    detalhesPlacar: r.detalhesPlacar,
-    dataHorario: r.dataHorario,
-    quadra: r.quadra,
-    meuLado: equipeIds.includes(r.equipeAId) ? "A" : equipeIds.includes(r.equipeBId) ? "B" : null,
-    placarSubmissaoPendente: pendentes.has(r.id),
-  }));
+  const partidasResult = rows.map((r) => {
+    const config = configMap.get(r.categoriaId);
+    return {
+      id: r.id,
+      torneio: { id: r.torneioId, nome: r.torneioNome, slug: r.torneioSlug },
+      categoria: { id: r.categoriaId, nome: r.categoriaNome },
+      fase: r.fase,
+      status: r.status,
+      equipeA: { id: r.equipeAId, nome: mapNomes.get(r.equipeAId) ?? null },
+      equipeB: { id: r.equipeBId, nome: mapNomes.get(r.equipeBId) ?? null },
+      placarA: r.placarA,
+      placarB: r.placarB,
+      detalhesPlacar: r.detalhesPlacar,
+      dataHorario: r.dataHorario,
+      quadra: r.quadra,
+      meuLado: equipeIds.includes(r.equipeAId) ? "A" : equipeIds.includes(r.equipeBId) ? "B" : null,
+      placarSubmissaoPendente: pendentes.has(r.id),
+      regrasPartida: obterRegrasPartidaEfetivas({
+        regrasBase: config?.regrasPartida,
+        superCampeonato: r.superCampeonato,
+        superCampeonatoFormato: r.superCampeonatoFormato,
+      }),
+    };
+  });
 
   return NextResponse.json({ partidas: partidasResult }, { headers: { "Cache-Control": "no-store" } });
 }

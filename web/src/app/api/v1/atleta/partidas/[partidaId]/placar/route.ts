@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { categorias, equipeIntegrantes, partidas, placarSubmissoes, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
-import { calcularResultadoSets } from "@/lib/regras-partida";
+import { calcularResultadoPartida, obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 import { gerarTokenAleatorio, sha256Hex } from "@/lib/token";
 import { enviarMensagemGzappy } from "@/services/gzappy.service";
 import { gzappyConfigService } from "@/services/gzappy-config.service";
@@ -37,6 +37,7 @@ export async function POST(
       torneioNome: torneios.nome,
       torneioSlug: torneios.slug,
       superCampeonato: torneios.superCampeonato,
+      superCampeonatoFormato: torneios.superCampeonatoFormato,
       categoriaNome: categorias.nome,
     })
     .from(partidas)
@@ -68,32 +69,13 @@ export async function POST(
   }
 
   const config = await categoriaConfigService.obterOuDefault(partida.categoriaId);
-  const regrasBase = config.regrasPartida ?? {
-    tipo: "SETS" as const,
-    melhorDe: 1 as const,
-    gamesPorSet: 6 as const,
-    tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-    superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
-    incluirSuperTieEmGames: false,
-  };
+  const regras = obterRegrasPartidaEfetivas({
+    regrasBase: config.regrasPartida,
+    superCampeonato: partida.superCampeonato,
+    superCampeonatoFormato: partida.superCampeonatoFormato,
+  });
 
-  const regras =
-    partida.superCampeonato
-      ? ({
-          ...regrasBase,
-          tipo: "SETS" as const,
-          melhorDe: 3 as const,
-          tiebreak: regrasBase.tiebreak ?? { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-          superTiebreakDecisivo: {
-            habilitado: true,
-            ate: regrasBase.superTiebreakDecisivo?.ate ?? 10,
-            diffMin: regrasBase.superTiebreakDecisivo?.diffMin ?? 2,
-          },
-          incluirSuperTieEmGames: false,
-        } as const)
-      : regrasBase;
-
-  const resultado = calcularResultadoSets({
+  const resultado = calcularResultadoPartida({
     regras,
     equipeAId: partida.equipeAId,
     equipeBId: partida.equipeBId,

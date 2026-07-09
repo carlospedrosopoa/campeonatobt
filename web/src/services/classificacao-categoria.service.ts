@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { categorias, grupoEquipes, grupos, partidas, torneios } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import { obterIgnoreSuperTieMin } from "@/lib/regras-partida";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 
@@ -133,11 +134,11 @@ export class ClassificacaoCategoriaService {
       .limit(1);
     const superCampeonato = torneioRow[0]?.superCampeonato ?? false;
     const superCampeonatoFormato = torneioRow[0]?.superCampeonatoFormato ?? "2_SET_SUPER_TIE";
-    const ignoreSuperTieMin = superCampeonato
-      ? (config.regrasPartida?.superTiebreakDecisivo?.ate ?? 10)
-      : config.regrasPartida?.superTiebreakDecisivo?.habilitado && config.regrasPartida?.incluirSuperTieEmGames !== true
-        ? config.regrasPartida.superTiebreakDecisivo.ate ?? 10
-        : null;
+    const ignoreSuperTieMin = obterIgnoreSuperTieMin({
+      regras: config.regrasPartida,
+      superCampeonato,
+      superCampeonatoFormato,
+    });
 
     const gruposRows = await db.select({ id: grupos.id }).from(grupos).where(eq(grupos.categoriaId, categoriaId));
     const grupoIds = gruposRows.map((g) => g.id);
@@ -269,22 +270,23 @@ export class ClassificacaoCategoriaService {
   async obterClassificacao(categoriaId: string) {
     const config = await categoriaConfigService.obterOuDefault(categoriaId);
     const torneioRow = await db
-      .select({ superCampeonato: torneios.superCampeonato })
+      .select({ superCampeonato: torneios.superCampeonato, superCampeonatoFormato: torneios.superCampeonatoFormato })
       .from(categorias)
       .innerJoin(torneios, eq(categorias.torneioId, torneios.id))
       .where(eq(categorias.id, categoriaId))
       .limit(1);
     const superCampeonato = torneioRow[0]?.superCampeonato ?? false;
+    const superCampeonatoFormato = torneioRow[0]?.superCampeonatoFormato ?? "2_SET_SUPER_TIE";
 
     const desempate: CriterioDesempate[] = superCampeonato
       ? ["PONTOS", "VITORIAS", "SETS_PRO", "SALDO_GAMES", "SORTEIO"]
       : ["VITORIAS", "SALDO_GAMES", "CONFRONTO_DIRETO", "GAMES_PRO", "SORTEIO"];
 
-    const ignoreSuperTieMin = superCampeonato
-      ? (config.regrasPartida?.superTiebreakDecisivo?.ate ?? 10)
-      : config.regrasPartida?.superTiebreakDecisivo?.habilitado && config.regrasPartida?.incluirSuperTieEmGames !== true
-        ? config.regrasPartida.superTiebreakDecisivo.ate ?? 10
-        : null;
+    const ignoreSuperTieMin = obterIgnoreSuperTieMin({
+      regras: config.regrasPartida,
+      superCampeonato,
+      superCampeonatoFormato,
+    });
 
     const gruposRows = await db.select({ id: grupos.id, nome: grupos.nome }).from(grupos).where(eq(grupos.categoriaId, categoriaId));
     const grupoIds = gruposRows.map((g) => g.id);

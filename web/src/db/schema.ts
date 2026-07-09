@@ -18,6 +18,7 @@ export const statusPanelinhaPlayParticipanteEnum = pgEnum('status_panelinha_play
 export const statusPanelinhaPlayJogoEnum = pgEnum('status_panelinha_play_jogo', ['PENDENTE', 'REGISTRADO', 'CONFIRMADO', 'CANCELADO']);
 export const statusPanelinhaTemporadaEnum = pgEnum('status_panelinha_temporada', ['ABERTA', 'ENCERRADA']);
 export const statusComunicacaoWhatsappEnum = pgEnum('status_comunicacao_whatsapp', ['PENDENTE', 'ENVIADO', 'FALHA', 'SEM_TELEFONE', 'NAO_ENVIADO']);
+export const modeloTorneioEnum = pgEnum('modelo_torneio', ['NORMAL', 'SUPERCAMPEONATO']);
 
 // Tabelas
 
@@ -234,6 +235,7 @@ export const torneios = pgTable('torneios', {
   status: statusTorneioEnum('status').default('RASCUNHO').notNull(),
   oculto: boolean('oculto').default(false).notNull(),
   inscricaoComIa: boolean('inscricao_com_ia').default(false).notNull(),
+  modeloTorneio: modeloTorneioEnum('modelo_torneio'),
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
   superCampeonatoFormato: superCampeonatoFormatoEnum('super_campeonato_formato').default('2_SET_SUPER_TIE'),
   cardApenasComFotos: boolean('card_apenas_com_fotos').default(false).notNull(),

@@ -1,14 +1,13 @@
-﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { arenas, categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, rodadas, usuarios } from "@/db/schema";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { slugify } from "@/lib/utils";
-import { calcularResultadoSets } from "@/lib/regras-partida";
+import { calcularResultadoPartida, obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
 import { categoriasService } from "@/services/categorias.service";
-import { torneiosService } from "@/services/torneios.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playGetAtletaById } from "@/services/playnaquadra-client";
 import { parseSuperCampeonatoResultadosXlsx, type SuperImportPreview } from "@/services/supercampeonato-import.service";
@@ -231,29 +230,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const warnings: string[] = [];
 
     const config = await categoriaConfigService.obterOuDefault(categoria.id);
-    const regrasBase = config.regrasPartida ?? {
-      tipo: "SETS" as const,
-      melhorDe: 1 as const,
-      gamesPorSet: 6 as const,
-      tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-      superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
-      incluirSuperTieEmGames: false,
-    };
-    const regras =
-      torneio.superCampeonato
-        ? ({
-            ...regrasBase,
-            tipo: "SETS" as const,
-            melhorDe: 3 as const,
-            tiebreak: regrasBase.tiebreak ?? { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-            superTiebreakDecisivo: {
-              habilitado: true,
-              ate: (regrasBase as any).superTiebreakDecisivo?.ate ?? 10,
-              diffMin: (regrasBase as any).superTiebreakDecisivo?.diffMin ?? 2,
-            },
-            incluirSuperTieEmGames: false,
-          } as const)
-        : (regrasBase as any);
+    const regras = obterRegrasPartidaEfetivas({
+      regrasBase: config.regrasPartida,
+      superCampeonato: torneio.superCampeonato,
+      superCampeonatoFormato: torneio.superCampeonatoFormato,
+    });
 
     const usuarioIdByNorm = new Map<string, string>();
     const equipeIdByKey = new Map<string, string>();
@@ -413,8 +394,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           let patchResultado: Partial<typeof partidas.$inferInsert> = {};
           if (Array.isArray(jogo.detalhesPlacar) && jogo.detalhesPlacar.length > 0) {
             try {
-              const resultado = calcularResultadoSets({
-                regras: regras as any,
+              const resultado = calcularResultadoPartida({
+                regras,
                 equipeAId,
                 equipeBId,
                 detalhesPlacar: jogo.detalhesPlacar as any,
@@ -516,4 +497,3 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
-
