@@ -7,6 +7,7 @@ import { ArrowLeft, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, Ma
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
+import { isRegrasBeachTennisSets, isRegrasVoleiSets, type RegrasPartidaConfig } from "@/lib/regras-partida";
 
 type Categoria = {
   id: string;
@@ -23,14 +24,7 @@ type CategoriaConfig = {
   grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean };
-  regrasPartida?: {
-    tipo: "SETS";
-    melhorDe: 1 | 3;
-    gamesPorSet: 4 | 5 | 6;
-    tiebreak: { habilitado: boolean; em: number; ate: number; diffMin: number };
-    superTiebreakDecisivo?: { habilitado: boolean; ate: number; diffMin: number };
-    incluirSuperTieEmGames?: boolean;
-  };
+  regrasPartida?: RegrasPartidaConfig;
   desempate?: string[];
 };
 
@@ -131,6 +125,20 @@ function calcularTamanhosEsperados(totalEquipes: number, qtdGrupos: number) {
   return Array.from({ length: qtdGrupos }, (_, index) => base + (index < extras ? 1 : 0));
 }
 
+const REGRA_JOGO_VOLEI_PRAIA = "VOLEI_3_21";
+
+function normalizarTexto(value?: string | null) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function isEsporteVoleiPraia(esporteNome?: string | null) {
+  const normalizado = normalizarTexto(esporteNome);
+  return normalizado.includes("volei de praia") || normalizado.includes("beach volleyball");
+}
+
 export default function AdminCategoriaJogosPage() {
   const params = useParams<{ slug: string; categoriaId: string }>();
   const slug = params.slug;
@@ -139,7 +147,6 @@ export default function AdminCategoriaJogosPage() {
   const searchParams = useSearchParams();
 
   const [categoria, setCategoria] = useState<Categoria | null>(null);
-  const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -191,10 +198,15 @@ export default function AdminCategoriaJogosPage() {
     tb2b: "",
     s3a: "",
     s3b: "",
+    s4a: "",
+    s4b: "",
+    s5a: "",
+    s5b: "",
   });
   const [fotoUrl, setFotoUrl] = useState("");
   const [transmissaoUrl, setTransmissaoUrl] = useState("");
   const [torneioNome, setTorneioNome] = useState("Torneio");
+  const [torneioEsporteNome, setTorneioEsporteNome] = useState<string | null>(null);
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
   const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
@@ -202,11 +214,92 @@ export default function AdminCategoriaJogosPage() {
   const [gerandoPlanilhaContingencia, setGerandoPlanilhaContingencia] = useState(false);
 
   function getRegraJogoValue(regras?: CategoriaConfig["regrasPartida"]) {
+    if (isRegrasVoleiSets(regras)) {
+      if (regras.melhorDe === 5) return "VOLEI_5_25";
+      if (regras.pontosPorSet === 21) return "VOLEI_3_21";
+      return "VOLEI_3_25";
+    }
+
     if (regras?.melhorDe === 3 && regras?.superTiebreakDecisivo?.habilitado) return "2SETS_SUPER10";
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 6 && regras?.tiebreak?.habilitado === false) return "1SET_6_SEM_TB";
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 5 && regras?.tiebreak?.habilitado === false) return "1SET_5_SEM_TB";
     return "1SET_6_TB";
   }
+
+  function buildRegrasPartidaPreset(valor: string): RegrasPartidaConfig {
+    if (valor === "VOLEI_5_25") {
+      return {
+        tipo: "VOLEI_SETS",
+        melhorDe: 5,
+        pontosPorSet: 25,
+        tieBreakDecisivo: { habilitado: true, ate: 15, diffMin: 2 },
+        diffMin: 2,
+      };
+    }
+    if (valor === "VOLEI_3_21") {
+      return {
+        tipo: "VOLEI_SETS",
+        melhorDe: 3,
+        pontosPorSet: 21,
+        tieBreakDecisivo: { habilitado: true, ate: 15, diffMin: 2 },
+        diffMin: 2,
+      };
+    }
+    if (valor === "VOLEI_3_25") {
+      return {
+        tipo: "VOLEI_SETS",
+        melhorDe: 3,
+        pontosPorSet: 25,
+        tieBreakDecisivo: { habilitado: true, ate: 15, diffMin: 2 },
+        diffMin: 2,
+      };
+    }
+    if (valor === "2SETS_SUPER10") {
+      return {
+        tipo: "BT_SETS",
+        melhorDe: 3,
+        gamesPorSet: 6,
+        tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
+        superTiebreakDecisivo: { habilitado: true, ate: 10, diffMin: 2 },
+        incluirSuperTieEmGames: false,
+      };
+    }
+    if (valor === "1SET_6_SEM_TB") {
+      return {
+        tipo: "BT_SETS",
+        melhorDe: 1,
+        gamesPorSet: 6,
+        tiebreak: { habilitado: false, em: 6, ate: 0, diffMin: 2 },
+        superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+        incluirSuperTieEmGames: false,
+      };
+    }
+    if (valor === "1SET_5_SEM_TB") {
+      return {
+        tipo: "BT_SETS",
+        melhorDe: 1,
+        gamesPorSet: 5,
+        tiebreak: { habilitado: false, em: 5, ate: 0, diffMin: 2 },
+        superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+        incluirSuperTieEmGames: false,
+      };
+    }
+
+    return {
+      tipo: "BT_SETS",
+      melhorDe: 1,
+      gamesPorSet: 6,
+      tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
+      superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+      incluirSuperTieEmGames: false,
+    };
+  }
+
+  const ehVoleiPraia = useMemo(() => isEsporteVoleiPraia(torneioEsporteNome), [torneioEsporteNome]);
+  const regraJogoSelecionada = useMemo(
+    () => (ehVoleiPraia ? REGRA_JOGO_VOLEI_PRAIA : getRegraJogoValue(config?.regrasPartida)),
+    [ehVoleiPraia, config]
+  );
 
   async function carregarCategoria() {
     const resCat = await fetch(`/api/v1/torneios/${slug}/categorias`, { cache: "no-store" });
@@ -260,12 +353,12 @@ export default function AdminCategoriaJogosPage() {
     let ativo = true;
     async function carregar() {
       try {
-        setCarregando(true);
         setErro(null);
         const resTorneio = await fetch(`/api/v1/torneios/${slug}`, { cache: "no-store" });
         if (resTorneio.ok) {
           const t = (await resTorneio.json()) as any;
           if (t?.nome) setTorneioNome(String(t.nome));
+          setTorneioEsporteNome((t?.esporteNome as string | null | undefined) ?? null);
           setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
           setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
           setTorneioCardApenasComFotos(Boolean(t?.cardApenasComFotos));
@@ -286,7 +379,6 @@ export default function AdminCategoriaJogosPage() {
         setErro(e?.message || "Erro inesperado");
       } finally {
         if (!ativo) return;
-        setCarregando(false);
       }
     }
     void carregar();
@@ -298,6 +390,12 @@ export default function AdminCategoriaJogosPage() {
   useEffect(() => {
     void carregarPartidas();
   }, [slug, categoriaId, fasePartidas]);
+
+  useEffect(() => {
+    if (!ehVoleiPraia || !config) return;
+    if (getRegraJogoValue(config.regrasPartida) === REGRA_JOGO_VOLEI_PRAIA) return;
+    setConfig((prev) => (prev ? { ...prev, regrasPartida: buildRegrasPartidaPreset(REGRA_JOGO_VOLEI_PRAIA) } : prev));
+  }, [ehVoleiPraia, config]);
 
   useEffect(() => {
     const partidaId = (searchParams.get("partidaId") || "").trim();
@@ -659,6 +757,10 @@ export default function AdminCategoriaJogosPage() {
       tb2b: det[1]?.tbB?.toString?.() ?? "",
       s3a: det[2]?.a?.toString?.() ?? "",
       s3b: det[2]?.b?.toString?.() ?? "",
+      s4a: det[3]?.a?.toString?.() ?? "",
+      s4b: det[3]?.b?.toString?.() ?? "",
+      s5a: det[4]?.a?.toString?.() ?? "",
+      s5b: det[4]?.b?.toString?.() ?? "",
     });
   }
 
@@ -743,64 +845,99 @@ export default function AdminCategoriaJogosPage() {
       }
 
       const regras = config?.regrasPartida;
-      const melhorDe = regras?.melhorDe ?? 1;
-      const superTie = regras?.superTiebreakDecisivo?.habilitado ?? false;
-      const tbHabilitado = regras?.tiebreak?.habilitado ?? true;
-      const tbEm = regras?.tiebreak?.em ?? (regras?.gamesPorSet ?? 6);
-
       const detalhes: any[] = [];
-      const s1a = formPlacar.s1a.trim();
-      const s1b = formPlacar.s1b.trim();
-      if (!s1a || !s1b) throw new Error("Informe o placar do set 1");
-      const s1aN = Number(s1a);
-      const s1bN = Number(s1b);
-      const isTbSet1 =
-        tbHabilitado && ((s1aN === tbEm && s1bN === tbEm) || (Math.max(s1aN, s1bN) === tbEm + 1 && Math.min(s1aN, s1bN) === tbEm));
-      if (isTbSet1) {
-        const tb1a = formPlacar.tb1a.trim();
-        const tb1b = formPlacar.tb1b.trim();
-        if (!tb1a || !tb1b) throw new Error("Informe o tie-break do set 1");
-        detalhes.push({ set: 1, a: s1aN, b: s1bN, tiebreak: true, tbA: Number(tb1a), tbB: Number(tb1b) });
-      } else {
-        detalhes.push({ set: 1, a: s1aN, b: s1bN });
-      }
 
-      if (melhorDe === 3) {
-        const s2a = formPlacar.s2a.trim();
-        const s2b = formPlacar.s2b.trim();
-        if (!s2a || !s2b) throw new Error("Informe o placar do set 2");
-        const s2aN = Number(s2a);
-        const s2bN = Number(s2b);
-        const isTbSet2 =
-          tbHabilitado && ((s2aN === tbEm && s2bN === tbEm) || (Math.max(s2aN, s2bN) === tbEm + 1 && Math.min(s2aN, s2bN) === tbEm));
-        if (isTbSet2) {
-          const tb2a = formPlacar.tb2a.trim();
-          const tb2b = formPlacar.tb2b.trim();
-          if (!tb2a || !tb2b) throw new Error("Informe o tie-break do set 2");
-          detalhes.push({ set: 2, a: s2aN, b: s2bN, tiebreak: true, tbA: Number(tb2a), tbB: Number(tb2b) });
-        } else {
-          detalhes.push({ set: 2, a: s2aN, b: s2bN });
+      if (isRegrasVoleiSets(regras)) {
+        const totalSets = regras.melhorDe;
+        const sets = [
+          { a: formPlacar.s1a.trim(), b: formPlacar.s1b.trim() },
+          { a: formPlacar.s2a.trim(), b: formPlacar.s2b.trim() },
+          { a: formPlacar.s3a.trim(), b: formPlacar.s3b.trim() },
+          { a: formPlacar.s4a.trim(), b: formPlacar.s4b.trim() },
+          { a: formPlacar.s5a.trim(), b: formPlacar.s5b.trim() },
+        ];
+        let encontrouSetVazio = false;
+
+        for (let index = 0; index < totalSets; index += 1) {
+          const atual = sets[index];
+          const ambosVazios = !atual.a && !atual.b;
+          if (ambosVazios) {
+            encontrouSetVazio = true;
+            continue;
+          }
+          if (!atual.a || !atual.b) {
+            throw new Error(`Informe o placar completo do set ${index + 1}`);
+          }
+          if (encontrouSetVazio) {
+            throw new Error("Preencha os sets em ordem, sem pular placares intermediarios");
+          }
+          detalhes.push({ set: index + 1, a: Number(atual.a), b: Number(atual.b) });
         }
 
-        const setsFrom = (set: any) => {
-          if (!set) return { a: 0, b: 0 };
-          const isTb = Boolean(set.tiebreak) && ((Number(set.a) === tbEm && Number(set.b) === tbEm) || (Math.max(Number(set.a), Number(set.b)) === tbEm + 1 && Math.min(Number(set.a), Number(set.b)) === tbEm));
-          if (isTb && typeof set.tbA === "number" && typeof set.tbB === "number") {
-            return { a: set.tbA > set.tbB ? 1 : 0, b: set.tbB > set.tbA ? 1 : 0 };
-          }
-          return { a: Number(set.a) > Number(set.b) ? 1 : 0, b: Number(set.b) > Number(set.a) ? 1 : 0 };
-        };
-        const s1w = setsFrom(detalhes[0]);
-        const s2w = setsFrom(detalhes[1]);
-        const aSets = s1w.a + s2w.a;
-        const bSets = s1w.b + s2w.b;
-        const precisaTerceiro = aSets === bSets;
+        if (detalhes.length === 0) {
+          throw new Error("Informe o placar do set 1");
+        }
+      } else {
+        const melhorDe = regras?.melhorDe ?? 1;
+        const superTie = regras?.superTiebreakDecisivo?.habilitado ?? false;
+        const tbHabilitado = regras?.tiebreak?.habilitado ?? true;
+        const tbEm = regras?.tiebreak?.em ?? (regras?.gamesPorSet ?? 6);
 
-        if (precisaTerceiro) {
-          const s3a = formPlacar.s3a.trim();
-          const s3b = formPlacar.s3b.trim();
-          if (!s3a || !s3b) throw new Error(superTie ? "Informe o super tie" : "Informe o set 3");
-          detalhes.push({ set: 3, a: Number(s3a), b: Number(s3b), tiebreak: superTie });
+        const s1a = formPlacar.s1a.trim();
+        const s1b = formPlacar.s1b.trim();
+        if (!s1a || !s1b) throw new Error("Informe o placar do set 1");
+        const s1aN = Number(s1a);
+        const s1bN = Number(s1b);
+        const isTbSet1 =
+          tbHabilitado && ((s1aN === tbEm && s1bN === tbEm) || (Math.max(s1aN, s1bN) === tbEm + 1 && Math.min(s1aN, s1bN) === tbEm));
+        if (isTbSet1) {
+          const tb1a = formPlacar.tb1a.trim();
+          const tb1b = formPlacar.tb1b.trim();
+          if (!tb1a || !tb1b) throw new Error("Informe o tie-break do set 1");
+          detalhes.push({ set: 1, a: s1aN, b: s1bN, tiebreak: true, tbA: Number(tb1a), tbB: Number(tb1b) });
+        } else {
+          detalhes.push({ set: 1, a: s1aN, b: s1bN });
+        }
+
+        if (melhorDe === 3) {
+          const s2a = formPlacar.s2a.trim();
+          const s2b = formPlacar.s2b.trim();
+          if (!s2a || !s2b) throw new Error("Informe o placar do set 2");
+          const s2aN = Number(s2a);
+          const s2bN = Number(s2b);
+          const isTbSet2 =
+            tbHabilitado && ((s2aN === tbEm && s2bN === tbEm) || (Math.max(s2aN, s2bN) === tbEm + 1 && Math.min(s2aN, s2bN) === tbEm));
+          if (isTbSet2) {
+            const tb2a = formPlacar.tb2a.trim();
+            const tb2b = formPlacar.tb2b.trim();
+            if (!tb2a || !tb2b) throw new Error("Informe o tie-break do set 2");
+            detalhes.push({ set: 2, a: s2aN, b: s2bN, tiebreak: true, tbA: Number(tb2a), tbB: Number(tb2b) });
+          } else {
+            detalhes.push({ set: 2, a: s2aN, b: s2bN });
+          }
+
+          const setsFrom = (set: any) => {
+            if (!set) return { a: 0, b: 0 };
+            const isTb =
+              Boolean(set.tiebreak) &&
+              ((Number(set.a) === tbEm && Number(set.b) === tbEm) || (Math.max(Number(set.a), Number(set.b)) === tbEm + 1 && Math.min(Number(set.a), Number(set.b)) === tbEm));
+            if (isTb && typeof set.tbA === "number" && typeof set.tbB === "number") {
+              return { a: set.tbA > set.tbB ? 1 : 0, b: set.tbB > set.tbA ? 1 : 0 };
+            }
+            return { a: Number(set.a) > Number(set.b) ? 1 : 0, b: Number(set.b) > Number(set.a) ? 1 : 0 };
+          };
+          const s1w = setsFrom(detalhes[0]);
+          const s2w = setsFrom(detalhes[1]);
+          const aSets = s1w.a + s2w.a;
+          const bSets = s1w.b + s2w.b;
+          const precisaTerceiro = aSets === bSets;
+
+          if (precisaTerceiro) {
+            const s3a = formPlacar.s3a.trim();
+            const s3b = formPlacar.s3b.trim();
+            if (!s3a || !s3b) throw new Error(superTie ? "Informe o super tie" : "Informe o set 3");
+            detalhes.push({ set: 3, a: Number(s3a), b: Number(s3b), tiebreak: superTie });
+          }
         }
       }
 
@@ -1076,81 +1213,26 @@ export default function AdminCategoriaJogosPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Regra do jogo</label>
               <select
-                value={getRegraJogoValue(config.regrasPartida)}
+                value={regraJogoSelecionada}
                 onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "2SETS_SUPER10") {
-                    setConfig((p) =>
-                      p
-                        ? {
-                            ...p,
-                            regrasPartida: {
-                              tipo: "SETS",
-                              melhorDe: 3,
-                              gamesPorSet: 6,
-                              tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-                              superTiebreakDecisivo: { habilitado: true, ate: 10, diffMin: 2 },
-                              incluirSuperTieEmGames: false,
-                            },
-                          }
-                        : p
-                    );
-                  } else if (v === "1SET_6_SEM_TB") {
-                    setConfig((p) =>
-                      p
-                        ? {
-                            ...p,
-                            regrasPartida: {
-                              tipo: "SETS",
-                              melhorDe: 1,
-                              gamesPorSet: 6,
-                              tiebreak: { habilitado: false, em: 6, ate: 0, diffMin: 2 },
-                              superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
-                              incluirSuperTieEmGames: false,
-                            },
-                          }
-                        : p
-                    );
-                  } else if (v === "1SET_5_SEM_TB") {
-                    setConfig((p) =>
-                      p
-                        ? {
-                            ...p,
-                            regrasPartida: {
-                              tipo: "SETS",
-                              melhorDe: 1,
-                              gamesPorSet: 5,
-                              tiebreak: { habilitado: false, em: 5, ate: 0, diffMin: 2 },
-                              superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
-                              incluirSuperTieEmGames: false,
-                            },
-                          }
-                        : p
-                    );
-                  } else {
-                    setConfig((p) =>
-                      p
-                        ? {
-                            ...p,
-                            regrasPartida: {
-                              tipo: "SETS",
-                              melhorDe: 1,
-                              gamesPorSet: 6,
-                              tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
-                              superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
-                              incluirSuperTieEmGames: false,
-                            },
-                          }
-                        : p
-                    );
-                  }
+                  const regrasPartida = buildRegrasPartidaPreset(e.target.value);
+                  setConfig((p) => (p ? { ...p, regrasPartida } : p));
                 }}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
               >
-                <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
-                <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
-                <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
-                <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
+                {ehVoleiPraia ? (
+                  <option value={REGRA_JOGO_VOLEI_PRAIA}>Vôlei de praia: 2 sets até 21 + 3º set até 15</option>
+                ) : (
+                  <>
+                    <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
+                    <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
+                    <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
+                    <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
+                    <option value="VOLEI_3_21">Vôlei melhor de 3 até 21</option>
+                    <option value="VOLEI_3_25">Vôlei melhor de 3 até 25</option>
+                    <option value="VOLEI_5_25">Vôlei melhor de 5 até 25</option>
+                  </>
+                )}
               </select>
             </div>
 
@@ -1549,10 +1631,13 @@ export default function AdminCategoriaJogosPage() {
         (() => {
           const partida = partidas.find((p) => p.id === editPartidaId);
           if (!partida) return null;
-          const melhorDe = config?.regrasPartida?.melhorDe ?? 1;
-          const superTie = config?.regrasPartida?.superTiebreakDecisivo?.habilitado ?? false;
-          const tbHabilitado = config?.regrasPartida?.tiebreak?.habilitado ?? true;
-          const tbEm = config?.regrasPartida?.tiebreak?.em ?? (config?.regrasPartida?.gamesPorSet ?? 6);
+          const regras = config?.regrasPartida;
+          const regrasBT = isRegrasBeachTennisSets(regras) ? regras : null;
+          const regrasVolei = isRegrasVoleiSets(regras) ? regras : null;
+          const melhorDe = regrasVolei?.melhorDe ?? regrasBT?.melhorDe ?? 1;
+          const superTie = regrasBT?.superTiebreakDecisivo?.habilitado ?? false;
+          const tbHabilitado = regrasBT?.tiebreak?.habilitado ?? true;
+          const tbEm = regrasBT?.tiebreak?.em ?? (regrasBT?.gamesPorSet ?? 6);
           const s1aN = Number(formPlacar.s1a);
           const s1bN = Number(formPlacar.s1b);
           const s2aN = Number(formPlacar.s2a);
@@ -1560,8 +1645,20 @@ export default function AdminCategoriaJogosPage() {
           const isTbScore = (a: number, b: number) =>
             Number.isFinite(a) && Number.isFinite(b) && ((a === tbEm && b === tbEm) || (Math.max(a, b) === tbEm + 1 && Math.min(a, b) === tbEm));
 
-          const showTb1 = tbHabilitado && (Boolean(formPlacar.tb1a.trim() || formPlacar.tb1b.trim()) || isTbScore(s1aN, s1bN));
-          const showTb2 = tbHabilitado && (Boolean(formPlacar.tb2a.trim() || formPlacar.tb2b.trim()) || isTbScore(s2aN, s2bN));
+          const showTb1 = Boolean(regrasBT) && tbHabilitado && (Boolean(formPlacar.tb1a.trim() || formPlacar.tb1b.trim()) || isTbScore(s1aN, s1bN));
+          const showTb2 = Boolean(regrasBT) && tbHabilitado && (Boolean(formPlacar.tb2a.trim() || formPlacar.tb2b.trim()) || isTbScore(s2aN, s2bN));
+          const camposSets: Array<{
+            aKey: keyof typeof formPlacar;
+            bKey: keyof typeof formPlacar;
+            tbAKey?: keyof typeof formPlacar;
+            tbBKey?: keyof typeof formPlacar;
+          }> = [
+            { aKey: "s1a", bKey: "s1b", tbAKey: "tb1a", tbBKey: "tb1b" },
+            { aKey: "s2a", bKey: "s2b", tbAKey: "tb2a", tbBKey: "tb2b" },
+            { aKey: "s3a", bKey: "s3b" },
+            { aKey: "s4a", bKey: "s4b" },
+            { aKey: "s5a", bKey: "s5b" },
+          ];
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditPartidaId(null)}>
@@ -1609,57 +1706,59 @@ export default function AdminCategoriaJogosPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Set 1</label>
-                      <div className="flex items-center gap-2">
-                        <input value={formPlacar.s1a} onChange={(e) => setFormPlacar((p) => ({ ...p, s1a: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
-                        <span className="text-slate-400">x</span>
-                        <input value={formPlacar.s1b} onChange={(e) => setFormPlacar((p) => ({ ...p, s1b: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
-                      </div>
-                      {showTb1 && (
-                        <div className="pt-2">
-                          <div className="text-xs text-slate-500 mb-1">Tie-break</div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {camposSets.slice(0, melhorDe).map((campo, index) => {
+                      const mostrarTb = index === 0 ? showTb1 : index === 1 ? showTb2 : false;
+                      const tbAKey = campo.tbAKey;
+                      const tbBKey = campo.tbBKey;
+                      const label =
+                        regrasVolei && index === melhorDe - 1 && regrasVolei.tieBreakDecisivo?.habilitado
+                          ? `Set ${index + 1} (tie-break)`
+                          : regrasBT && index === 2 && superTie
+                            ? "Super tie"
+                            : `Set ${index + 1}`;
+
+                      return (
+                        <div key={campo.aKey} className="space-y-2">
+                          <label className="text-sm font-medium text-slate-700">{label}</label>
                           <div className="flex items-center gap-2">
-                            <input value={formPlacar.tb1a} onChange={(e) => setFormPlacar((p) => ({ ...p, tb1a: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
+                            <input
+                              value={formPlacar[campo.aKey]}
+                              onChange={(e) => setFormPlacar((p) => ({ ...p, [campo.aKey]: e.target.value }))}
+                              type="number"
+                              className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                            />
                             <span className="text-slate-400">x</span>
-                            <input value={formPlacar.tb1b} onChange={(e) => setFormPlacar((p) => ({ ...p, tb1b: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
+                            <input
+                              value={formPlacar[campo.bKey]}
+                              onChange={(e) => setFormPlacar((p) => ({ ...p, [campo.bKey]: e.target.value }))}
+                              type="number"
+                              className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                            />
                           </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {melhorDe === 3 && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Set 2</label>
-                        <div className="flex items-center gap-2">
-                          <input value={formPlacar.s2a} onChange={(e) => setFormPlacar((p) => ({ ...p, s2a: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
-                          <span className="text-slate-400">x</span>
-                          <input value={formPlacar.s2b} onChange={(e) => setFormPlacar((p) => ({ ...p, s2b: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
-                        </div>
-                        {showTb2 && (
-                          <div className="pt-2">
-                            <div className="text-xs text-slate-500 mb-1">Tie-break</div>
-                            <div className="flex items-center gap-2">
-                              <input value={formPlacar.tb2a} onChange={(e) => setFormPlacar((p) => ({ ...p, tb2a: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
-                              <span className="text-slate-400">x</span>
-                              <input value={formPlacar.tb2b} onChange={(e) => setFormPlacar((p) => ({ ...p, tb2b: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
+                          {mostrarTb && tbAKey && tbBKey ? (
+                            <div className="pt-2">
+                              <div className="text-xs text-slate-500 mb-1">Tie-break</div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  value={formPlacar[tbAKey]}
+                                  onChange={(e) => setFormPlacar((p) => ({ ...p, [tbAKey]: e.target.value }))}
+                                  type="number"
+                                  className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                                />
+                                <span className="text-slate-400">x</span>
+                                <input
+                                  value={formPlacar[tbBKey]}
+                                  onChange={(e) => setFormPlacar((p) => ({ ...p, [tbBKey]: e.target.value }))}
+                                  type="number"
+                                  className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                                />
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {melhorDe === 3 && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">{superTie ? "Super tie" : "Set 3"}</label>
-                        <div className="flex items-center gap-2">
-                          <input value={formPlacar.s3a} onChange={(e) => setFormPlacar((p) => ({ ...p, s3a: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
-                          <span className="text-slate-400">x</span>
-                          <input value={formPlacar.s3b} onChange={(e) => setFormPlacar((p) => ({ ...p, s3b: e.target.value }))} type="number" className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300" />
+                          ) : null}
                         </div>
-                      </div>
-                    )}
+                      );
+                    })}
                   </div>
 
                   <div className="flex items-center justify-end gap-2">
