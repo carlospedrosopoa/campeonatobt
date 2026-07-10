@@ -656,8 +656,8 @@ export default function AdminCategoriaJogosSuperPage() {
     };
   }, [classificacao]);
 
-  function formatPlacar(detalhes: Partida["detalhesPlacar"]) {
-    if (!detalhes || detalhes.length === 0) return "X";
+  function getPlacarSets(detalhes: Partida["detalhesPlacar"]) {
+    if (!detalhes || detalhes.length === 0) return [];
     return detalhes
       .slice()
       .sort((a, b) => a.set - b.set)
@@ -667,7 +667,27 @@ export default function AdminCategoriaJogosSuperPage() {
         }
         return `${s.a}-${s.b}`;
       })
-      .join(" ");
+  }
+
+  function renderPlacarResumo(detalhes: Partida["detalhesPlacar"]) {
+    const sets = getPlacarSets(detalhes);
+    if (sets.length === 0) {
+      return (
+        <div className="flex min-w-[4.5rem] items-center justify-center rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+          <span className="font-mono text-sm font-bold tracking-tight text-slate-500">X</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex min-w-[4.75rem] flex-col items-center gap-1 rounded-md border border-slate-100 bg-slate-50 px-2 py-2">
+        {sets.map((setScore, index) => (
+          <span key={`${index}-${setScore}`} className="font-mono text-xs font-bold leading-none tracking-tight text-slate-900 whitespace-nowrap">
+            {setScore}
+          </span>
+        ))}
+      </div>
+    );
   }
 
   function formatData(value?: string | null) {
@@ -1555,21 +1575,19 @@ export default function AdminCategoriaJogosSuperPage() {
                           {getStatusBadge(p.status, p.dataHorario)}
                         </div>
 
-                        <div className="flex items-center justify-between gap-4 mb-4">
-                          <div className="flex-1 text-right">
-                            <div className="font-bold text-slate-900 leading-tight">
+                        <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                          <div className="min-w-0 text-right">
+                            <div className="font-bold text-slate-900 leading-tight break-words">
                               {p.equipeANome || p.equipeAId.slice(0, 8)}
                             </div>
                           </div>
-                          
-                          <div className="flex flex-col items-center justify-center min-w-[3rem]">
-                            <span className="text-lg font-bold text-slate-900 font-mono tracking-tight bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                              {formatPlacar(p.detalhesPlacar)}
-                            </span>
+
+                          <div className="self-stretch flex items-center justify-center">
+                            {renderPlacarResumo(p.detalhesPlacar)}
                           </div>
 
-                          <div className="flex-1 text-left">
-                            <div className="font-bold text-slate-900 leading-tight">
+                          <div className="min-w-0 text-left">
+                            <div className="font-bold text-slate-900 leading-tight break-words">
                               {p.equipeBNome || p.equipeBId.slice(0, 8)}
                             </div>
                           </div>
@@ -1693,21 +1711,19 @@ export default function AdminCategoriaJogosSuperPage() {
                           {getStatusBadge(p.status, p.dataHorario)}
                         </div>
 
-                    <div className="flex items-center justify-between gap-4 mb-4">
-                      <div className="flex-1 text-right">
-                        <div className="font-bold text-slate-900 leading-tight">
+                    <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                      <div className="min-w-0 text-right">
+                        <div className="font-bold text-slate-900 leading-tight break-words">
                           {p.equipeANome || p.equipeAId.slice(0, 8)}
                         </div>
                       </div>
-                      
-                      <div className="flex flex-col items-center justify-center min-w-[3rem]">
-                        <span className="text-lg font-bold text-slate-900 font-mono tracking-tight bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                          {formatPlacar(p.detalhesPlacar)}
-                        </span>
+
+                      <div className="self-stretch flex items-center justify-center">
+                        {renderPlacarResumo(p.detalhesPlacar)}
                       </div>
 
-                      <div className="flex-1 text-left">
-                        <div className="font-bold text-slate-900 leading-tight">
+                      <div className="min-w-0 text-left">
+                        <div className="font-bold text-slate-900 leading-tight break-words">
                           {p.equipeBNome || p.equipeBId.slice(0, 8)}
                         </div>
                       </div>
