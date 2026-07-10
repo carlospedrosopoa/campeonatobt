@@ -1,10 +1,10 @@
-﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { categoriasService } from "@/services/categorias.service";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { MataMataService } from "@/services/mata-mata.service";
 import { db } from "@/db";
-import { partidas } from "@/db/schema";
+import { partidas, placarSubmissoes } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { calcularResultadoPartida, obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 
@@ -69,6 +69,16 @@ export async function PUT(
       })
       .where(eq(partidas.id, partidaId))
       .returning();
+
+    await db
+      .update(placarSubmissoes)
+      .set({
+        status: "CANCELADA",
+        canceladoEm: new Date(),
+        canceladoMotivo: "Placar lançado pelo administrador",
+        atualizadoEm: new Date(),
+      })
+      .where(and(eq(placarSubmissoes.partidaId, partidaId), eq(placarSubmissoes.status, "PENDENTE")));
 
     let proximaFaseCriada: string | null = null;
     let partidasCriadas = 0;

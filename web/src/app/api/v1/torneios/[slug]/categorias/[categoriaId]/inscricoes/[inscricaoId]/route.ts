@@ -47,6 +47,7 @@ export async function PATCH(
     const body = await request.json().catch(() => null);
     const equipeNome = body?.equipeNome as string | null | undefined;
     const status = body?.status as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA" | undefined;
+    const capitaoPosicao = body?.capitaoPosicao === "B" ? "B" : "A";
 
     const atletaA = body?.atletaA as { nome?: string; email?: string; telefone?: string; playnaquadraAtletaId?: string; fotoUrl?: string; camisetaOpcao?: string | null } | undefined;
     const atletaB = body?.atletaB as { nome?: string; email?: string; telefone?: string; playnaquadraAtletaId?: string; fotoUrl?: string; camisetaOpcao?: string | null } | undefined;
@@ -59,6 +60,7 @@ export async function PATCH(
       torneioId: torneio.id,
       categoriaId,
       equipeNome: equipeNome === undefined ? undefined : equipeNome,
+      capitaoPosicao,
       status,
       atletaA: { nome: atletaA.nome, email: atletaA.email, telefone: atletaA.telefone, playnaquadraAtletaId: atletaA.playnaquadraAtletaId, fotoUrl: atletaA.fotoUrl, camisetaOpcao: atletaA.camisetaOpcao ?? null },
       atletaB: { nome: atletaB.nome, email: atletaB.email, telefone: atletaB.telefone, playnaquadraAtletaId: atletaB.playnaquadraAtletaId, fotoUrl: atletaB.fotoUrl, camisetaOpcao: atletaB.camisetaOpcao ?? null },
@@ -71,4 +73,3 @@ export async function PATCH(
     return NextResponse.json({ error: msg }, { status });
   }
 }
-

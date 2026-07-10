@@ -46,6 +46,7 @@ export async function POST(
 
     const equipeNome = (body?.equipeNome as string | undefined)?.trim();
     const status = body?.status as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA" | undefined;
+    const capitaoPosicao = body?.capitaoPosicao === "B" ? "B" : "A";
 
     const atletaA = body?.atletaA as { nome?: string; email?: string; telefone?: string; playnaquadraAtletaId?: string; fotoUrl?: string; camisetaOpcao?: string | null } | undefined;
     const atletaB = body?.atletaB as { nome?: string; email?: string; telefone?: string; playnaquadraAtletaId?: string; fotoUrl?: string; camisetaOpcao?: string | null } | undefined;
@@ -58,6 +59,7 @@ export async function POST(
       torneioId: torneio.id,
       categoriaId,
       equipeNome,
+      capitaoPosicao,
       status,
       atletaA: { nome: atletaA.nome, email: atletaA.email, telefone: atletaA.telefone, playnaquadraAtletaId: atletaA.playnaquadraAtletaId, fotoUrl: atletaA.fotoUrl, camisetaOpcao: atletaA.camisetaOpcao ?? null },
       atletaB: { nome: atletaB.nome, email: atletaB.email, telefone: atletaB.telefone, playnaquadraAtletaId: atletaB.playnaquadraAtletaId, fotoUrl: atletaB.fotoUrl, camisetaOpcao: atletaB.camisetaOpcao ?? null },
@@ -70,5 +72,4 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status });
   }
 }
-
 

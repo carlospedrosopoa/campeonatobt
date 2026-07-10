@@ -65,6 +65,8 @@ export default function AdminTorneioDashboardPage() {
   const [mostraFormCategoria, setMostraFormCategoria] = useState(false);
   const [salvandoCategoria, setSalvandoCategoria] = useState(false);
   const [excluindoCategoriaId, setExcluindoCategoriaId] = useState<string | null>(null);
+  const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<Categoria | null>(null);
+  const [senhaExclusaoCategoria, setSenhaExclusaoCategoria] = useState("");
   const [formCategoria, setFormCategoria] = useState({
     nome: "",
     genero: "MISTO" as Categoria["genero"],
@@ -230,18 +232,44 @@ export default function AdminTorneioDashboardPage() {
   }
 
   async function onExcluirCategoria(categoriaId: string) {
+    const categoria = categorias.find((item) => item.id === categoriaId) ?? null;
+    setCategoriaParaExcluir(categoria);
+    setSenhaExclusaoCategoria("");
     setErroCategorias(null);
-    const ok = window.confirm("Deseja excluir esta categoria?");
-    if (!ok) return;
+  }
+
+  function fecharModalExcluirCategoria() {
+    if (excluindoCategoriaId) return;
+    setCategoriaParaExcluir(null);
+    setSenhaExclusaoCategoria("");
+  }
+
+  async function confirmarExclusaoCategoria() {
+    if (!categoriaParaExcluir) return;
+    setErroCategorias(null);
+
+    if (!senhaExclusaoCategoria.trim()) {
+      setErroCategorias("Informe sua senha para confirmar a exclusão da categoria.");
+      return;
+    }
 
     try {
-      setExcluindoCategoriaId(categoriaId);
-      const res = await fetch(`/api/v1/torneios/${slugAtual}/categorias/${categoriaId}`, { method: "DELETE" });
+      setExcluindoCategoriaId(categoriaParaExcluir.id);
+      const res = await fetch(`/api/v1/torneios/${slugAtual}/categorias/${categoriaParaExcluir.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          senha: senhaExclusaoCategoria,
+          forcar: true,
+        }),
+      });
       if (!res.ok) {
         const msg = await res.json().catch(() => null);
         throw new Error(msg?.error || "Falha ao excluir categoria");
       }
       await recarregarDashboard();
+      setCategoriaParaExcluir(null);
+      setSenhaExclusaoCategoria("");
     } catch (e: any) {
       setErroCategorias(e?.message || "Erro inesperado");
     } finally {
@@ -895,6 +923,95 @@ export default function AdminTorneioDashboardPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {categoriaParaExcluir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={fecharModalExcluirCategoria}>
+          <div
+            className="w-full max-w-xl rounded-2xl border border-red-200 bg-white shadow-2xl"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-red-100 bg-red-50 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm font-semibold uppercase tracking-wide text-red-700">Exclusão permanente</div>
+                  <h3 className="mt-1 text-xl font-bold text-slate-900">Excluir categoria com inscrições e jogos</h3>
+                  <p className="mt-2 text-sm text-slate-700">
+                    Esta ação é destrutiva e não poderá ser desfeita.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fecharModalExcluirCategoria}
+                  disabled={Boolean(excluindoCategoriaId)}
+                  className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                <div className="font-semibold">Você está prestes a excluir a categoria `{categoriaParaExcluir.nome}`.</div>
+                <div className="mt-2">
+                  O sistema removerá os dados relacionados a esta categoria, incluindo inscrições, jogos, grupos,
+                  placares pendentes, configurações e vínculos internos necessários para o torneio continuar íntegro.
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Categoria</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{categoriaParaExcluir.nome}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Inscrições</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{categoriaParaExcluir.inscricoesTotal ?? 0}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Status</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">Exclusão forçada</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Digite sua senha para confirmar</label>
+                <input
+                  type="password"
+                  value={senhaExclusaoCategoria}
+                  onChange={(e) => setSenhaExclusaoCategoria(e.target.value)}
+                  autoComplete="current-password"
+                  placeholder="Sua senha de administrador"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-red-300 focus:ring-2 focus:ring-red-500/10"
+                />
+                <div className="text-xs text-slate-500">
+                  A exclusão só será executada após a validação da sua senha atual.
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={fecharModalExcluirCategoria}
+                  disabled={Boolean(excluindoCategoriaId)}
+                  className="inline-flex w-full items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmarExclusaoCategoria()}
+                  disabled={excluindoCategoriaId === categoriaParaExcluir.id}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 sm:w-auto"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {excluindoCategoriaId === categoriaParaExcluir.id ? "Excluindo categoria..." : "Excluir categoria definitivamente"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

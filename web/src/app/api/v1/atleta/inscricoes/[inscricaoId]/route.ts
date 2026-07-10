@@ -249,6 +249,13 @@ export async function PUT(
     await tx.insert(equipeIntegrantes).values({ equipeId: ins.equipeId, usuarioId: novoParceiroId });
 
     await tx
+      .update(equipes)
+      .set({
+        capitaoUsuarioId: meuId,
+      })
+      .where(eq(equipes.id, ins.equipeId));
+
+    await tx
       .delete(inscricaoPagamentos)
       .where(and(eq(inscricaoPagamentos.inscricaoId, ins.inscricaoId), eq(inscricaoPagamentos.usuarioId, parceiroAtualId)));
 

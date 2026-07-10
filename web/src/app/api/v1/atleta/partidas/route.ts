@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, partidas, placarSubmissoes, torneios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, partidas, placarSubmissoes, torneios } from "@/db/schema";
 import { obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
@@ -55,17 +55,57 @@ export async function GET(request: NextRequest) {
   const configMap = new Map(configEntries);
 
   const partidaIds = Array.from(new Set(rows.map((r) => r.id))).filter(Boolean) as string[];
-  const pendentes = new Set<string>();
+  const pendentesMap = new Map<
+    string,
+    {
+      id: string;
+      usuarioId: string;
+      vencedorId: string | null;
+      placarA: number;
+      placarB: number;
+      detalhesPlacar: any;
+    }
+  >();
   if (partidaIds.length > 0) {
     const pendentesRows = await db
-      .select({ partidaId: placarSubmissoes.partidaId })
+      .select({
+        id: placarSubmissoes.id,
+        partidaId: placarSubmissoes.partidaId,
+        usuarioId: placarSubmissoes.usuarioId,
+        vencedorId: placarSubmissoes.vencedorId,
+        placarA: placarSubmissoes.placarA,
+        placarB: placarSubmissoes.placarB,
+        detalhesPlacar: placarSubmissoes.detalhesPlacar,
+      })
       .from(placarSubmissoes)
       .where(and(inArray(placarSubmissoes.partidaId, partidaIds), eq(placarSubmissoes.status, "PENDENTE")));
-    for (const pr of pendentesRows) pendentes.add(pr.partidaId);
+    for (const pr of pendentesRows) {
+      pendentesMap.set(pr.partidaId, {
+        id: pr.id,
+        usuarioId: pr.usuarioId,
+        vencedorId: pr.vencedorId ?? null,
+        placarA: pr.placarA,
+        placarB: pr.placarB,
+        detalhesPlacar: pr.detalhesPlacar,
+      });
+    }
   }
+
+  const equipesRows = ids.length
+    ? await db.select({ id: equipes.id, capitaoUsuarioId: equipes.capitaoUsuarioId }).from(equipes).where(inArray(equipes.id, ids))
+    : [];
+  const capitaoMap = new Map(equipesRows.map((e) => [e.id, e.capitaoUsuarioId ?? null] as const));
 
   const partidasResult = rows.map((r) => {
     const config = configMap.get(r.categoriaId);
+    const pendente = pendentesMap.get(r.id) ?? null;
+    const capitaoEquipeAId = capitaoMap.get(r.equipeAId) ?? null;
+    const capitaoEquipeBId = capitaoMap.get(r.equipeBId) ?? null;
+    const souCapitao =
+      (capitaoEquipeAId && capitaoEquipeAId === auth.user.id) || (capitaoEquipeBId && capitaoEquipeBId === auth.user.id);
+    const souCapitaoA = Boolean(capitaoEquipeAId && capitaoEquipeAId === auth.user.id);
+    const souCapitaoB = Boolean(capitaoEquipeBId && capitaoEquipeBId === auth.user.id);
+
     return {
       id: r.id,
       torneio: { id: r.torneioId, nome: r.torneioNome, slug: r.torneioSlug },
@@ -80,7 +120,22 @@ export async function GET(request: NextRequest) {
       dataHorario: r.dataHorario,
       quadra: r.quadra,
       meuLado: equipeIds.includes(r.equipeAId) ? "A" : equipeIds.includes(r.equipeBId) ? "B" : null,
-      placarSubmissaoPendente: pendentes.has(r.id),
+      souCapitao,
+      souCapitaoDoLado: souCapitaoA ? "A" : souCapitaoB ? "B" : null,
+      capitaoEquipeAId,
+      capitaoEquipeBId,
+      placarSubmissaoPendente: Boolean(pendente),
+      placarSubmissao: pendente
+        ? {
+            id: pendente.id,
+            status: "PENDENTE" as const,
+            informadoPorUsuarioId: pendente.usuarioId,
+            vencedorId: pendente.vencedorId,
+            placarA: pendente.placarA,
+            placarB: pendente.placarB,
+            detalhesPlacar: pendente.detalhesPlacar,
+          }
+        : null,
       regrasPartida: obterRegrasPartidaEfetivas({
         regrasBase: config?.regrasPartida,
         superCampeonato: r.superCampeonato,
@@ -89,5 +144,5 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ partidas: partidasResult }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ meuUsuarioId: auth.user.id, partidas: partidasResult }, { headers: { "Cache-Control": "no-store" } });
 }

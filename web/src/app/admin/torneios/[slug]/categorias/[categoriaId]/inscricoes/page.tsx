@@ -23,6 +23,7 @@ type Inscricao = {
   equipe: {
     id: string;
     nome: string | null;
+    capitaoUsuarioId?: string | null;
     atletas: {
       id: string;
       nome: string;
@@ -76,6 +77,7 @@ export default function AdminCategoriaInscricoesPage() {
 
   const [form, setForm] = useState({
     equipeNome: "",
+    capitaoPosicao: "A" as "A" | "B",
     atletaANome: "",
     atletaAEmail: "",
     atletaATelefone: "",
@@ -238,6 +240,7 @@ export default function AdminCategoriaInscricoesPage() {
     setResultadosAtletaB([]);
     setForm({
       equipeNome: "",
+      capitaoPosicao: "A",
       atletaANome: "",
       atletaAEmail: "",
       atletaATelefone: "",
@@ -267,6 +270,7 @@ export default function AdminCategoriaInscricoesPage() {
     const atletas = inscricao.equipe.atletas.slice(0, 2);
     const a1 = atletas[0];
     const a2 = atletas[1];
+    const capitaoPosicao = inscricao.equipe.capitaoUsuarioId && inscricao.equipe.capitaoUsuarioId === a2?.id ? "B" : "A";
     setMostraForm(true);
     setEditandoInscricao(inscricao);
     setBuscaAtletaA("");
@@ -275,6 +279,7 @@ export default function AdminCategoriaInscricoesPage() {
     setResultadosAtletaB([]);
     setForm({
       equipeNome: inscricao.equipe.nome || "",
+      capitaoPosicao,
       atletaANome: a1?.nome || "",
       atletaAEmail: a1?.email || "",
       atletaATelefone: a1?.telefone || "",
@@ -303,6 +308,7 @@ export default function AdminCategoriaInscricoesPage() {
       setSalvando(true);
       const payload = {
         equipeNome: form.equipeNome.trim() || undefined,
+        capitaoPosicao: form.capitaoPosicao,
         status: form.status,
         atletaA: {
           nome: form.atletaANome.trim(),
@@ -551,6 +557,19 @@ export default function AdminCategoriaInscricoesPage() {
                 <option value="RECUSADA">RECUSADA</option>
                 <option value="FILA_ESPERA">FILA_ESPERA</option>
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Capitão da dupla</label>
+              <select
+                value={form.capitaoPosicao}
+                onChange={(e) => setForm((p) => ({ ...p, capitaoPosicao: e.target.value === "B" ? "B" : "A" }))}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="A">Atleta 1</option>
+                <option value="B">Atleta 2</option>
+              </select>
+              <div className="text-xs text-slate-500">No fluxo do admin, você pode escolher qual atleta será o capitão da dupla.</div>
             </div>
           </div>
 

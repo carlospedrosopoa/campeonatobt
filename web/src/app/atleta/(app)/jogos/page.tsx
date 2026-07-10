@@ -19,7 +19,18 @@ type Partida = {
   dataHorario: string | null;
   quadra: string | null;
   meuLado: "A" | "B" | null;
+  souCapitao?: boolean;
+  souCapitaoDoLado?: "A" | "B" | null;
   placarSubmissaoPendente?: boolean;
+  placarSubmissao?: {
+    id: string;
+    status: "PENDENTE";
+    informadoPorUsuarioId: string;
+    vencedorId: string | null;
+    placarA: number;
+    placarB: number;
+    detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[];
+  } | null;
   regrasPartida?: RegrasPartidaConfig | RegrasPartidaSets | null;
 };
 
@@ -64,6 +75,7 @@ function formatDataHora(value?: string | null) {
 
 export default function AtletaJogosPage() {
   const [partidas, setPartidas] = useState<Partida[]>([]);
+  const [meuUsuarioId, setMeuUsuarioId] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modal, setModal] = useState<Partida | null>(null);
@@ -77,6 +89,7 @@ export default function AtletaJogosPage() {
       const res = await fetch("/api/v1/atleta/partidas", { cache: "no-store" });
       const data = (await res.json().catch(() => null)) as any;
       if (!res.ok) throw new Error(data?.error || "Erro ao carregar jogos");
+      setMeuUsuarioId(typeof data?.meuUsuarioId === "string" ? data.meuUsuarioId : null);
       setPartidas((data?.partidas as Partida[]) ?? []);
     } catch (e: any) {
       setErro(e?.message || "Erro ao carregar jogos");
@@ -99,7 +112,69 @@ export default function AtletaJogosPage() {
 
   function abrirModal(p: Partida) {
     setModal(p);
-    setFormPlacar(emptyFormPlacar());
+    const next = emptyFormPlacar();
+    const detalhesBase = Array.isArray(p.placarSubmissao?.detalhesPlacar)
+      ? p.placarSubmissao?.detalhesPlacar
+      : Array.isArray(p.detalhesPlacar)
+        ? p.detalhesPlacar
+        : [];
+    for (const s of detalhesBase) {
+      const aKey = `s${s.set}a` as keyof FormPlacar;
+      const bKey = `s${s.set}b` as keyof FormPlacar;
+      if (aKey in next) next[aKey] = String(s.a ?? "");
+      if (bKey in next) next[bKey] = String(s.b ?? "");
+    }
+    setFormPlacar(next);
+  }
+
+  async function limparPlacarPendente(partidaId: string) {
+    try {
+      setErro(null);
+      setSalvando(true);
+      const res = await fetch(`/api/v1/atleta/partidas/${partidaId}/placar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ detalhesPlacar: [] }),
+      });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Falha ao limpar placar");
+      setModal(null);
+      await carregar();
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao limpar placar");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function confirmarPlacar(partidaId: string) {
+    try {
+      setErro(null);
+      setSalvando(true);
+      const res = await fetch(`/api/v1/atleta/partidas/${partidaId}/placar/confirmar`, { method: "POST" });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Falha ao confirmar placar");
+      await carregar();
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao confirmar placar");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function recusarPlacar(partidaId: string) {
+    try {
+      setErro(null);
+      setSalvando(true);
+      const res = await fetch(`/api/v1/atleta/partidas/${partidaId}/placar/recusar`, { method: "POST" });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.error || "Falha ao recusar placar");
+      await carregar();
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao recusar placar");
+    } finally {
+      setSalvando(false);
+    }
   }
 
   async function enviarPlacar() {
@@ -175,7 +250,7 @@ export default function AtletaJogosPage() {
       });
       const data = (await res.json().catch(() => null)) as any;
       if (!res.ok) throw new Error(data?.error || "Falha ao enviar placar");
-      alert("Placar enviado. Aguardando aprovação do gestor do torneio.");
+      alert("Placar enviado. Aguardando confirmação do capitão adversário.");
       setModal(null);
       await carregar();
     } catch (e: any) {
@@ -208,7 +283,7 @@ export default function AtletaJogosPage() {
             <Trophy className="h-6 w-6 text-orange-500" />
             <div>
               <div className="font-bold text-slate-900">Meus jogos</div>
-              <div className="text-xs text-slate-500">Informe o placar e aguarde a aprovação do gestor do torneio.</div>
+              <div className="text-xs text-slate-500">Capitão da dupla vencedora informa o placar e o capitão adversário confirma.</div>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -260,15 +335,75 @@ export default function AtletaJogosPage() {
                   {(() => {
                     const temPlacar =
                       (p.detalhesPlacar?.length || 0) > 0 || p.status === "FINALIZADA" || p.status === "WO";
+                    const pendente = p.placarSubmissaoPendente && p.placarSubmissao?.status === "PENDENTE" ? p.placarSubmissao : null;
+                    const informadoPorMim = Boolean(pendente && meuUsuarioId && pendente.informadoPorUsuarioId === meuUsuarioId);
+                    const souCapitao = Boolean(p.souCapitao);
                     const podeInformar =
-                      !temPlacar &&
-                      !p.placarSubmissaoPendente &&
-                      (p.status === "AGENDADA" || p.status === "EM_ANDAMENTO");
+                      !temPlacar && !pendente && souCapitao && (p.status === "AGENDADA" || p.status === "EM_ANDAMENTO");
+                    const podeEditar = !temPlacar && pendente && informadoPorMim && souCapitao;
+                    const podeConfirmar = !temPlacar && pendente && !informadoPorMim && souCapitao;
 
-                    if (p.placarSubmissaoPendente) {
+                    if (temPlacar) {
+                      return (
+                        <span className="rounded-md bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-800">
+                          Placar confirmado
+                        </span>
+                      );
+                    }
+
+                    if (podeConfirmar) {
+                      return (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => confirmarPlacar(p.id)}
+                            disabled={salvando}
+                            className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            Confirmar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => recusarPlacar(p.id)}
+                            disabled={salvando}
+                            className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            Recusar
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    if (podeEditar) {
+                      return (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => abrirModal(p)}
+                            disabled={salvando}
+                            className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => limparPlacarPendente(p.id)}
+                            disabled={salvando}
+                            className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            Zerar
+                          </button>
+                          <span className="rounded-md bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">
+                            Aguardando confirmação
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    if (pendente) {
                       return (
                         <span className="rounded-md bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">
-                          Aguardando aprovação
+                          Aguardando confirmação
                         </span>
                       );
                     }
@@ -282,14 +417,6 @@ export default function AtletaJogosPage() {
                         >
                           Informar placar
                         </button>
-                      );
-                    }
-
-                    if (temPlacar) {
-                      return (
-                        <span className="rounded-md bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-800">
-                          Placar informado
-                        </span>
                       );
                     }
 
@@ -338,8 +465,8 @@ export default function AtletaJogosPage() {
 
             <div className="text-xs text-slate-500">
               {isRegrasVoleiSets(modal.regrasPartida)
-                ? "Preencha os sets em ordem. Ao enviar, o placar ficará pendente e será aprovado pelo gestor do torneio."
-                : "Ao enviar, o placar ficará pendente e será aprovado pelo gestor do torneio."}
+                ? "Preencha os sets em ordem. Ao enviar, o placar ficará pendente até o capitão adversário confirmar."
+                : "Ao enviar, o placar ficará pendente até o capitão adversário confirmar."}
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
@@ -357,9 +484,20 @@ export default function AtletaJogosPage() {
                 disabled={salvando}
                 className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
               >
-                {salvando ? "Enviando..." : "Enviar para arbitragem"}
+                {salvando ? "Enviando..." : "Enviar para confirmação"}
               </button>
             </div>
+
+            {Boolean(modal.placarSubmissao && meuUsuarioId && modal.placarSubmissao.informadoPorUsuarioId === meuUsuarioId) && (
+              <button
+                type="button"
+                onClick={() => limparPlacarPendente(modal.id)}
+                disabled={salvando}
+                className="w-full rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Zerar placar pendente
+              </button>
+            )}
           </div>
         </div>
       )}

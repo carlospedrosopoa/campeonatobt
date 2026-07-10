@@ -305,6 +305,7 @@ export const equipes = pgTable('equipes', {
   id: uuid('id').defaultRandom().primaryKey(),
   nome: text('nome'), // Opcional, ex: "Os Invencíveis"
   torneioId: uuid('torneio_id').references(() => torneios.id), // Equipe pode ser específica de um torneio ou global (a decidir)
+  capitaoUsuarioId: uuid('capitao_usuario_id').references(() => usuarios.id),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
 });
 
@@ -489,6 +490,7 @@ export const placarSubmissoes = pgTable('placar_submissoes', {
   tokenHash: text('token_hash').notNull(),
   tokenExpiraEm: timestamp('token_expira_em'),
   confirmadoEm: timestamp('confirmado_em'),
+  confirmadoPorUsuarioId: uuid('confirmado_por_usuario_id').references(() => usuarios.id),
   canceladoEm: timestamp('cancelado_em'),
   canceladoMotivo: text('cancelado_motivo'),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),

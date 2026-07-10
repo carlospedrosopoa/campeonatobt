@@ -1,4 +1,8 @@
-﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { usuarios } from "@/db/schema";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
@@ -52,18 +56,53 @@ export async function DELETE(
     const { slug, categoriaId } = await params;
     const acesso = await requireTournamentAdminBySlug(slug);
     if ("response" in acesso) return acesso.response;
-    const { torneio } = acesso;
+    const { torneio, user } = acesso;
 
     const existe = await categoriasService.buscarPorId(categoriaId);
     if (!existe || existe.torneioId !== torneio.id) {
       return NextResponse.json({ error: "Categoria nÃ£o encontrada" }, { status: 404 });
     }
 
-    await categoriasService.excluir(categoriaId);
+    const body = await request.json().catch(() => null);
+    const senha = typeof body?.senha === "string" ? body.senha : "";
+    const forcar = body?.forcar === true;
+
+    if (!senha.trim()) {
+      return NextResponse.json({ error: "Informe a senha para confirmar a exclusão da categoria" }, { status: 400 });
+    }
+
+    const usuarioRows = await db
+      .select({
+        id: usuarios.id,
+        senha: usuarios.senha,
+      })
+      .from(usuarios)
+      .where(eq(usuarios.id, user.id))
+      .limit(1);
+
+    const usuario = usuarioRows[0];
+    if (!usuario) {
+      return NextResponse.json({ error: "Usuário administrador não encontrado" }, { status: 404 });
+    }
+
+    const senhaSalva = usuario.senha ?? "";
+    const senhaOk = senhaSalva.startsWith("$2")
+      ? await bcrypt.compare(senha, senhaSalva)
+      : senha === senhaSalva;
+
+    if (!senhaOk) {
+      return NextResponse.json({ error: "Senha inválida" }, { status: 401 });
+    }
+
+    if (forcar) {
+      await categoriasService.excluirForcado(categoriaId);
+    } else {
+      await categoriasService.excluir(categoriaId);
+    }
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Erro ao excluir categoria:", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
-

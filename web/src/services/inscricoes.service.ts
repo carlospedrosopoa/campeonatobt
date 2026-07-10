@@ -8,6 +8,7 @@ export type CriarInscricaoDTO = {
   torneioId: string;
   categoriaId: string;
   equipeNome?: string;
+  capitaoPosicao?: "A" | "B";
   atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
   atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
@@ -17,6 +18,7 @@ export type AtualizarInscricaoDTO = {
   torneioId: string;
   categoriaId: string;
   equipeNome?: string | null;
+  capitaoPosicao?: "A" | "B";
   atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
   atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
@@ -187,6 +189,7 @@ export class InscricoesService {
         torneioId: inscricoes.torneioId,
         equipeId: equipes.id,
         equipeNome: equipes.nome,
+        equipeCapitaoUsuarioId: equipes.capitaoUsuarioId,
         atletaId: usuarios.id,
         atletaNome: usuarios.nome,
         atletaEmail: usuarios.email,
@@ -214,6 +217,7 @@ export class InscricoesService {
         equipe: {
           id: string;
           nome: string | null;
+          capitaoUsuarioId?: string | null;
           atletas: {
             id: string;
             nome: string;
@@ -240,6 +244,7 @@ export class InscricoesService {
           equipe: {
             id: r.equipeId,
             nome: r.equipeNome,
+            capitaoUsuarioId: r.equipeCapitaoUsuarioId ?? null,
             atletas: [
               {
                 id: r.atletaId,
@@ -329,6 +334,7 @@ export class InscricoesService {
     });
 
     if (atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
+    const capitaoUsuarioId = dados.capitaoPosicao === "B" ? atletaBId : atletaAId;
 
     const conflito = await db
       .select({ inscricaoId: inscricoes.id })
@@ -343,6 +349,7 @@ export class InscricoesService {
 
     const equipeIdExistente = await this.buscarEquipePorDupla(dados.torneioId, atletaAId, atletaBId);
     const equipeId = equipeIdExistente ?? (await this.criarEquipeComIntegrantes(dados.torneioId, dados.equipeNome?.trim(), atletaAId, atletaBId));
+    await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, equipeId));
 
     const [torneioRow] = await db
       .select({
@@ -447,6 +454,7 @@ export class InscricoesService {
     });
 
     if (atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
+    const capitaoUsuarioId = dados.capitaoPosicao === "B" ? atletaBId : atletaAId;
 
     const [torneioRow] = await db
       .select({ camisetaOpcoes: torneios.camisetaOpcoes })
@@ -478,6 +486,8 @@ export class InscricoesService {
       const nome = (dados.equipeNome || "").trim();
       await db.update(equipes).set({ nome: nome ? nome : null }).where(eq(equipes.id, ins.equipeId));
     }
+
+    await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, ins.equipeId));
 
     if (dados.status) {
       await db.update(inscricoes).set({ status: dados.status }).where(eq(inscricoes.id, inscricaoId));
@@ -709,6 +719,7 @@ export class InscricoesService {
       .values({
         torneioId,
         nome: nome || null,
+        capitaoUsuarioId: atletaAId,
       })
       .returning();
 

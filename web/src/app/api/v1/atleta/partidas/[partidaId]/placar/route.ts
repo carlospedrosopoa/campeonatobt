@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, partidas, placarSubmissoes, torneios, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, partidas, placarSubmissoes, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { calcularResultadoPartida, obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 import { gerarTokenAleatorio, sha256Hex } from "@/lib/token";
-import { enviarMensagemGzappy } from "@/services/gzappy.service";
-import { gzappyConfigService } from "@/services/gzappy-config.service";
-import { equipesDisplayService } from "@/services/equipes-display.service";
 
 export async function POST(
   request: NextRequest,
@@ -56,16 +53,59 @@ export async function POST(
     .limit(1);
   if (!membro[0]) return NextResponse.json({ error: "Você não faz parte desta partida" }, { status: 403 });
 
-  const pendente = await db
-    .select({ id: placarSubmissoes.id })
+  const equipesRows = await db
+    .select({
+      id: equipes.id,
+      capitaoUsuarioId: equipes.capitaoUsuarioId,
+    })
+    .from(equipes)
+    .where(inArray(equipes.id, [partida.equipeAId, partida.equipeBId]));
+
+  const getCapitao = async (equipeId: string) => {
+    const row = equipesRows.find((x) => x.id === equipeId);
+    if (row?.capitaoUsuarioId) return row.capitaoUsuarioId;
+    const [fallback] = await db
+      .select({ usuarioId: equipeIntegrantes.usuarioId })
+      .from(equipeIntegrantes)
+      .where(eq(equipeIntegrantes.equipeId, equipeId))
+      .limit(1);
+    return fallback?.usuarioId ?? null;
+  };
+
+  const capitaoEquipeAId = await getCapitao(partida.equipeAId);
+  const capitaoEquipeBId = await getCapitao(partida.equipeBId);
+  const isCapitaoA = capitaoEquipeAId === auth.user.id;
+  const isCapitaoB = capitaoEquipeBId === auth.user.id;
+  if (!isCapitaoA && !isCapitaoB) {
+    return NextResponse.json({ error: "Apenas o capitão da dupla pode informar/alterar placar" }, { status: 403 });
+  }
+
+  const [pendenteAtual] = await db
+    .select({
+      id: placarSubmissoes.id,
+      usuarioId: placarSubmissoes.usuarioId,
+    })
     .from(placarSubmissoes)
     .where(and(eq(placarSubmissoes.partidaId, partidaId), eq(placarSubmissoes.status, "PENDENTE")))
     .limit(1);
-  if (pendente[0]) return NextResponse.json({ error: "Já existe um placar pendente de confirmação para esta partida" }, { status: 409 });
 
-  const gzappy = await gzappyConfigService.obter();
-  if (!gzappy.ativo || !gzappy.whatsappArbitragem) {
-    return NextResponse.json({ error: "Arbitragem não configurada para confirmação via WhatsApp" }, { status: 400 });
+  if (detalhesPlacar.length === 0) {
+    if (pendenteAtual?.id && pendenteAtual.usuarioId === auth.user.id) {
+      await db
+        .update(placarSubmissoes)
+        .set({
+          status: "CANCELADA",
+          canceladoEm: new Date(),
+          canceladoMotivo: "Zerado pelo capitão da dupla vencedora",
+          atualizadoEm: new Date(),
+        })
+        .where(eq(placarSubmissoes.id, pendenteAtual.id));
+    }
+    return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  }
+
+  if (pendenteAtual?.id && pendenteAtual.usuarioId !== auth.user.id) {
+    return NextResponse.json({ error: "Já existe um placar pendente informado pelo outro capitão" }, { status: 409 });
   }
 
   const config = await categoriaConfigService.obterOuDefault(partida.categoriaId);
@@ -82,56 +122,54 @@ export async function POST(
     detalhesPlacar,
   });
 
-  const token = gerarTokenAleatorio(32);
-  const tokenHash = sha256Hex(token);
-  const expira = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const capitaoVencedor =
+    resultado.vencedorId === partida.equipeAId ? capitaoEquipeAId : resultado.vencedorId === partida.equipeBId ? capitaoEquipeBId : null;
+  if (!capitaoVencedor || capitaoVencedor !== auth.user.id) {
+    return NextResponse.json({ error: "Somente o capitão da dupla vencedora pode informar o placar" }, { status: 403 });
+  }
 
-  const [submissao] = await db
-    .insert(placarSubmissoes)
-    .values({
-      partidaId: partida.id,
-      usuarioId: auth.user.id,
-      status: "PENDENTE",
-      detalhesPlacar: resultado.detalhesPlacar as any,
-      placarA: resultado.placarA,
-      placarB: resultado.placarB,
-      vencedorId: resultado.vencedorId,
-      tokenHash,
-      tokenExpiraEm: expira,
-      atualizadoEm: new Date(),
-    })
-    .returning();
+  const tokenHash = sha256Hex(gerarTokenAleatorio(32));
+  const expira = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  const origin = new URL(request.url).origin;
-  const link = `${origin}/arbitragem/placar/${submissao.id}?token=${encodeURIComponent(token)}`;
-  const nomesEquipes = await equipesDisplayService.mapNomesEquipes([partida.equipeAId, partida.equipeBId]);
-  const equipeANome = nomesEquipes.get(partida.equipeAId) ?? "Equipe A";
-  const equipeBNome = nomesEquipes.get(partida.equipeBId) ?? "Equipe B";
-
-  const userInfo = await db
-    .select({ nome: usuarios.nome, email: usuarios.email, telefone: usuarios.telefone })
-    .from(usuarios)
-    .where(eq(usuarios.id, auth.user.id))
-    .limit(1);
-  const informante = userInfo[0];
-
-  const msg =
-    `Placar informado para confirmação.\n\n` +
-    `Torneio: ${partida.torneioNome}\n` +
-    `Categoria: ${partida.categoriaNome}\n` +
-    `Jogo: ${equipeANome} x ${equipeBNome}\n` +
-    `Resultado: ${resultado.placarA} x ${resultado.placarB}\n` +
-    `Detalhes: ${Array.isArray(resultado.detalhesPlacar) ? resultado.detalhesPlacar.map((s: any) => `${s.a}-${s.b}`).join(" ") : "-"}\n` +
-    `Data/Hora: ${partida.dataHorario ? new Date(partida.dataHorario).toLocaleString("pt-BR") : "-"}\n` +
-    `Quadra: ${partida.quadra || "-"}\n\n` +
-    `Informado por: ${informante?.nome || auth.user.nome} (${informante?.email || auth.user.email})\n` +
-    `Telefone: ${informante?.telefone || "-"}\n\n` +
-    `Confirmar ou cancelar: ${link}`;
-
-  const envio = await enviarMensagemGzappy({ destinatario: gzappy.whatsappArbitragem, mensagem: msg });
+  const upsert = pendenteAtual?.id
+    ? await db
+        .update(placarSubmissoes)
+        .set({
+          usuarioId: auth.user.id,
+          status: "PENDENTE",
+          detalhesPlacar: resultado.detalhesPlacar as any,
+          placarA: resultado.placarA,
+          placarB: resultado.placarB,
+          vencedorId: resultado.vencedorId,
+          tokenHash,
+          tokenExpiraEm: expira,
+          confirmadoEm: null,
+          confirmadoPorUsuarioId: null,
+          canceladoEm: null,
+          canceladoMotivo: null,
+          atualizadoEm: new Date(),
+        })
+        .where(eq(placarSubmissoes.id, pendenteAtual.id))
+        .returning()
+    : await db
+        .insert(placarSubmissoes)
+        .values({
+          partidaId: partida.id,
+          usuarioId: auth.user.id,
+          status: "PENDENTE",
+          detalhesPlacar: resultado.detalhesPlacar as any,
+          placarA: resultado.placarA,
+          placarB: resultado.placarB,
+          vencedorId: resultado.vencedorId,
+          tokenHash,
+          tokenExpiraEm: expira,
+          atualizadoEm: new Date(),
+        })
+        .returning();
+  const submissao = upsert[0];
 
   return NextResponse.json(
-    { ok: true, submissaoId: submissao.id, ...(envio.ok ? {} : { avisos: ["Falha ao notificar a arbitragem via WhatsApp"] }) },
+    { ok: true, submissaoId: submissao.id, status: "PENDENTE" },
     { headers: { "Cache-Control": "no-store" } }
   );
 }
