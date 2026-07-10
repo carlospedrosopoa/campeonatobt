@@ -836,9 +836,37 @@ export default function AdminCategoriaJogosPage() {
         body: JSON.stringify({ fotoUrl, transmissaoUrl }),
       });
 
-      // Se todos os campos de placar estiverem vazios, considera que foi apenas edição de mídia
+      const partidaTemPlacarInformado =
+        p.status === "FINALIZADA" ||
+        p.status === "WO" ||
+        Boolean(p.vencedorId) ||
+        (p.placarA ?? 0) !== 0 ||
+        (p.placarB ?? 0) !== 0 ||
+        (Array.isArray(p.detalhesPlacar) && p.detalhesPlacar.length > 0);
+
+      // Se o formulário estiver vazio e já existir placar, cancela e volta a partida para "sem placar".
       const temAlgumPlacar = Object.values(formPlacar).some((v) => v.trim() !== "");
       if (!temAlgumPlacar) {
+        if (partidaTemPlacarInformado) {
+          const resCancelar = await fetch(
+            `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/cancelar-placar`,
+            { method: "POST" }
+          );
+          const payloadCancelar = (await resCancelar.json().catch(() => null)) as any;
+          if (!resCancelar.ok) throw new Error(payloadCancelar?.error || "Falha ao limpar placar");
+
+          if (fasePartidas === "GRUPOS") {
+            await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" }).catch(() => null);
+            const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+            if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+          }
+
+          await carregarPartidas();
+          await carregarResultadoFinal();
+          setEditPartidaId(null);
+          return;
+        }
+
         await carregarPartidas();
         setEditPartidaId(null);
         return;

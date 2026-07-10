@@ -485,6 +485,35 @@ export default function AdminPainelQuadrasPage() {
       setSalvandoPlacar(true);
       setErroPlacar(null);
 
+      const partidaTemPlacarInformado =
+        editPartida.status === "FINALIZADA" ||
+        editPartida.status === "WO" ||
+        (editPartida.placarA ?? 0) !== 0 ||
+        (editPartida.placarB ?? 0) !== 0 ||
+        (Array.isArray(editPartida.detalhesPlacar) && editPartida.detalhesPlacar.length > 0);
+
+      const temAlgumPlacar = Object.values(formPlacar).some((v) => v.trim() !== "");
+      if (!temAlgumPlacar) {
+        if (partidaTemPlacarInformado) {
+          const resCancelar = await fetch(
+            `/api/v1/torneios/${slug}/categorias/${editPartida.categoriaId}/partidas/${editPartida.id}/cancelar-placar`,
+            { method: "POST" }
+          );
+          const payloadCancelar = (await resCancelar.json().catch(() => null)) as any;
+          if (!resCancelar.ok) throw new Error(payloadCancelar?.error || "Falha ao limpar placar");
+
+          if (editPartida.fase === "GRUPOS") {
+            await fetch(`/api/v1/torneios/${slug}/categorias/${editPartida.categoriaId}/recalcular-classificacao`, {
+              method: "POST",
+            }).catch(() => null);
+          }
+        }
+
+        setEditPartida(null);
+        await carregarPainel();
+        return;
+      }
+
       const detalhes: Array<{ set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }> = [];
       const regras = editPartida.regrasPartida;
 
