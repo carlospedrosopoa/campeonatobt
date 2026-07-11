@@ -194,6 +194,7 @@ export class InscricoesService {
         atletaNome: usuarios.nome,
         atletaEmail: usuarios.email,
         atletaTelefone: usuarios.telefone,
+        atletaPlaynaquadraAtletaId: usuarios.playnaquadraAtletaId,
         atletaFotoUrl: usuarios.fotoUrl,
         atletaCamisetaOpcao: torneioAtletaPrefs.camisetaOpcao,
         atletaPago: inscricaoPagamentos.pago,
@@ -223,6 +224,7 @@ export class InscricoesService {
             nome: string;
             email: string;
             telefone: string | null;
+              playnaquadraAtletaId?: string | null;
             fotoUrl: string | null;
             camisetaOpcao?: string | null;
             pago: boolean;
@@ -251,6 +253,7 @@ export class InscricoesService {
                 nome: r.atletaNome,
                 email: r.atletaEmail,
                 telefone: r.atletaTelefone ?? null,
+                playnaquadraAtletaId: r.atletaPlaynaquadraAtletaId ?? null,
                 fotoUrl: r.atletaFotoUrl ?? null,
                 camisetaOpcao: r.atletaCamisetaOpcao ?? null,
                 pagamentoStatus: r.atletaPagamentoStatus ?? (Boolean(r.atletaPago) ? "PAGO" : "PENDENTE"),
@@ -266,6 +269,7 @@ export class InscricoesService {
           nome: r.atletaNome,
           email: r.atletaEmail,
           telefone: r.atletaTelefone ?? null,
+          playnaquadraAtletaId: r.atletaPlaynaquadraAtletaId ?? null,
           fotoUrl: r.atletaFotoUrl ?? null,
           camisetaOpcao: r.atletaCamisetaOpcao ?? null,
           pagamentoStatus: r.atletaPagamentoStatus ?? (Boolean(r.atletaPago) ? "PAGO" : "PENDENTE"),

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
@@ -32,6 +32,7 @@ export async function POST(
 
     const body = await request.json().catch(() => null);
     const nome = (body?.nome as string | undefined)?.trim();
+    const categoriaOrigemId = (body?.categoriaOrigemId as string | undefined)?.trim();
     const genero = body?.genero as "MASCULINO" | "FEMININO" | "MISTO" | undefined;
     const valorInscricao = body?.valorInscricao as string | number | undefined;
     const vagasMaximas = body?.vagasMaximas as number | null | undefined;
@@ -41,7 +42,21 @@ export async function POST(
       return NextResponse.json({ error: "Data/hora invÃ¡lida" }, { status: 400 });
     }
 
-    if (!nome || !genero) {
+    if (!nome) {
+      return NextResponse.json({ error: "Nome da categoria é obrigatório" }, { status: 400 });
+    }
+
+    if (categoriaOrigemId) {
+      const nova = await categoriasService.clonarComInscricoes({
+        torneioId: torneio.id,
+        categoriaOrigemId,
+        nome,
+      });
+
+      return NextResponse.json(nova, { status: 201 });
+    }
+
+    if (!genero) {
       return NextResponse.json({ error: "Campos obrigatÃ³rios faltando" }, { status: 400 });
     }
 
@@ -60,4 +75,3 @@ export async function POST(
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
-

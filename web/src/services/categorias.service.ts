@@ -13,6 +13,8 @@ import {
 } from "@/db/schema";
 import { eq, asc, and, sql, inArray, or } from "drizzle-orm";
 import { slugify } from "@/lib/utils";
+import { categoriaConfigService } from "@/services/categoria-config.service";
+import { inscricoesService } from "@/services/inscricoes.service";
 
 export type CriarCategoriaDTO = {
   torneioId: string;
@@ -29,6 +31,12 @@ export type AtualizarCategoriaDTO = {
   valorInscricao?: string | number | null;
   vagasMaximas?: number | null;
   dataHorario?: Date | null;
+};
+
+export type ClonarCategoriaDTO = {
+  torneioId: string;
+  categoriaOrigemId: string;
+  nome: string;
 };
 
 export class CategoriasService {
@@ -75,6 +83,64 @@ export class CategoriasService {
       })
       .returning();
     return nova;
+  }
+
+  async clonarComInscricoes(dados: ClonarCategoriaDTO) {
+    const origem = await this.buscarPorId(dados.categoriaOrigemId);
+    if (!origem || origem.torneioId !== dados.torneioId) {
+      throw new Error("Categoria de origem inválida para o torneio");
+    }
+
+    const nome = dados.nome.trim();
+    if (!nome) throw new Error("Informe o nome da nova categoria");
+
+    const novaCategoria = await this.criar({
+      torneioId: dados.torneioId,
+      nome,
+      genero: origem.genero,
+      valorInscricao: origem.valorInscricao,
+      vagasMaximas: origem.vagasMaximas,
+      dataHorario: origem.dataHorario,
+    });
+
+    const configOrigem = await categoriaConfigService.obterOuDefault(origem.id);
+    await categoriaConfigService.salvar(novaCategoria.id, configOrigem);
+
+    const inscricoesOrigem = await inscricoesService.listarPorCategoria(origem.id);
+    for (const inscricao of inscricoesOrigem) {
+      const atletas = inscricao.equipe.atletas.slice(0, 2);
+      if (atletas.length < 2) continue;
+
+      const atletaA = atletas[0];
+      const atletaB = atletas[1];
+      const capitaoPosicao = inscricao.equipe.capitaoUsuarioId && inscricao.equipe.capitaoUsuarioId === atletaB.id ? "B" : "A";
+
+      await inscricoesService.criar({
+        torneioId: dados.torneioId,
+        categoriaId: novaCategoria.id,
+        equipeNome: inscricao.equipe.nome ?? undefined,
+        capitaoPosicao,
+        status: inscricao.status as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA",
+        atletaA: {
+          nome: atletaA.nome,
+          email: atletaA.email,
+          telefone: atletaA.telefone ?? undefined,
+          playnaquadraAtletaId: atletaA.playnaquadraAtletaId ?? null,
+          fotoUrl: atletaA.fotoUrl ?? null,
+          camisetaOpcao: atletaA.camisetaOpcao ?? null,
+        },
+        atletaB: {
+          nome: atletaB.nome,
+          email: atletaB.email,
+          telefone: atletaB.telefone ?? undefined,
+          playnaquadraAtletaId: atletaB.playnaquadraAtletaId ?? null,
+          fotoUrl: atletaB.fotoUrl ?? null,
+          camisetaOpcao: atletaB.camisetaOpcao ?? null,
+        },
+      });
+    }
+
+    return novaCategoria;
   }
 
   async atualizar(id: string, dados: AtualizarCategoriaDTO) {

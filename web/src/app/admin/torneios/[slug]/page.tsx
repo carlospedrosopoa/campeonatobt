@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, ExternalLink, FileUp, Gamepad2, Handshake, ImageIcon, List, MapPin, MessageSquare, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Calendar, Copy, ExternalLink, FileUp, Gamepad2, Handshake, ImageIcon, List, MapPin, MessageSquare, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
 import { gerarCardProgramacaoTorneioAdmin } from "@/lib/match-card-client";
 
 type Torneio = {
@@ -64,8 +64,11 @@ export default function AdminTorneioDashboardPage() {
   const [editandoCategoriaId, setEditandoCategoriaId] = useState<string | null>(null);
   const [mostraFormCategoria, setMostraFormCategoria] = useState(false);
   const [salvandoCategoria, setSalvandoCategoria] = useState(false);
+  const [clonandoCategoriaId, setClonandoCategoriaId] = useState<string | null>(null);
   const [excluindoCategoriaId, setExcluindoCategoriaId] = useState<string | null>(null);
+  const [categoriaParaClonar, setCategoriaParaClonar] = useState<Categoria | null>(null);
   const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<Categoria | null>(null);
+  const [nomeCloneCategoria, setNomeCloneCategoria] = useState("");
   const [senhaExclusaoCategoria, setSenhaExclusaoCategoria] = useState("");
   const [formCategoria, setFormCategoria] = useState({
     nome: "",
@@ -176,6 +179,18 @@ export default function AdminTorneioDashboardPage() {
     setErroCategorias(null);
   }
 
+  function abrirClonarCategoria(cat: Categoria) {
+    setCategoriaParaClonar(cat);
+    setNomeCloneCategoria(`${cat.nome} - Cópia`);
+    setErroCategorias(null);
+  }
+
+  function fecharModalClonarCategoria() {
+    if (clonandoCategoriaId) return;
+    setCategoriaParaClonar(null);
+    setNomeCloneCategoria("");
+  }
+
   async function recarregarDashboard() {
     const res = await fetch(`/api/v1/torneios/${slugAtual}/dashboard`, { cache: "no-store" });
     if (!res.ok) return;
@@ -236,6 +251,42 @@ export default function AdminTorneioDashboardPage() {
     setCategoriaParaExcluir(categoria);
     setSenhaExclusaoCategoria("");
     setErroCategorias(null);
+  }
+
+  async function confirmarClonagemCategoria() {
+    if (!categoriaParaClonar) return;
+    setErroCategorias(null);
+
+    const nome = nomeCloneCategoria.trim();
+    if (!nome) {
+      setErroCategorias("Informe o nome da nova categoria.");
+      return;
+    }
+
+    try {
+      setClonandoCategoriaId(categoriaParaClonar.id);
+      const res = await fetch(`/api/v1/torneios/${slugAtual}/categorias`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome,
+          categoriaOrigemId: categoriaParaClonar.id,
+        }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.json().catch(() => null);
+        throw new Error(msg?.error || "Falha ao clonar categoria");
+      }
+
+      await recarregarDashboard();
+      setCategoriaParaClonar(null);
+      setNomeCloneCategoria("");
+    } catch (e: any) {
+      setErroCategorias(e?.message || "Erro inesperado");
+    } finally {
+      setClonandoCategoriaId(null);
+    }
   }
 
   function fecharModalExcluirCategoria() {
@@ -810,6 +861,15 @@ export default function AdminTorneioDashboardPage() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => abrirClonarCategoria(cat)}
+                        disabled={Boolean(clonandoCategoriaId)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+                      >
+                        <Copy className="h-4 w-4" />
+                        {clonandoCategoriaId === cat.id ? "Clonando..." : "Clonar"}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => onExcluirCategoria(cat.id)}
                         disabled={excluindoCategoriaId === cat.id}
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs font-semibold text-red-700 disabled:opacity-50"
@@ -906,6 +966,15 @@ export default function AdminTorneioDashboardPage() {
                             >
                               <Pencil className="h-4 w-4" />
                               Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => abrirClonarCategoria(cat)}
+                              disabled={Boolean(clonandoCategoriaId)}
+                              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              <Copy className="h-4 w-4" />
+                              {clonandoCategoriaId === cat.id ? "Clonando..." : "Clonar"}
                             </button>
                             <button
                               type="button"
@@ -1010,6 +1079,94 @@ export default function AdminTorneioDashboardPage() {
                 >
                   <Trash2 className="h-4 w-4" />
                   {excluindoCategoriaId === categoriaParaExcluir.id ? "Excluindo categoria..." : "Excluir categoria definitivamente"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {categoriaParaClonar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={fecharModalClonarCategoria}>
+          <div
+            className="w-full max-w-xl rounded-2xl border border-orange-200 bg-white shadow-2xl"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-orange-100 bg-orange-50 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm font-semibold uppercase tracking-wide text-orange-700">Clonagem de categoria</div>
+                  <h3 className="mt-1 text-xl font-bold text-slate-900">Criar nova categoria com as mesmas inscrições</h3>
+                  <p className="mt-2 text-sm text-slate-700">
+                    A nova categoria copiará configuração e duplas inscritas da categoria original. Aqui você altera apenas o nome.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fecharModalClonarCategoria}
+                  disabled={Boolean(clonandoCategoriaId)}
+                  className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
+                <div className="font-semibold">Categoria de origem: {categoriaParaClonar.nome}</div>
+                <div className="mt-2">
+                  Serão clonados o gênero, taxa, vagas, data/hora, configuração da modalidade e as inscrições com os mesmos atletas.
+                  Jogos, grupos e chave não serão copiados.
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Origem</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{categoriaParaClonar.nome}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gênero</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{categoriaParaClonar.genero}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Inscrições</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{categoriaParaClonar.inscricoesTotal ?? 0}</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Novo nome da categoria</label>
+                <input
+                  type="text"
+                  value={nomeCloneCategoria}
+                  onChange={(e) => setNomeCloneCategoria(e.target.value)}
+                  placeholder="Ex.: Masculino B"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-500/10"
+                />
+                <div className="text-xs text-slate-500">
+                  A rotina de clonagem permite alterar somente o nome da nova categoria. Os demais dados vêm da categoria original.
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={fecharModalClonarCategoria}
+                  disabled={Boolean(clonandoCategoriaId)}
+                  className="inline-flex w-full items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmarClonagemCategoria()}
+                  disabled={clonandoCategoriaId === categoriaParaClonar.id}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50 sm:w-auto"
+                >
+                  <Copy className="h-4 w-4" />
+                  {clonandoCategoriaId === categoriaParaClonar.id ? "Clonando categoria..." : "Clonar categoria"}
                 </button>
               </div>
             </div>
