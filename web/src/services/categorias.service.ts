@@ -6,6 +6,7 @@ import {
   equipes,
   grupoEquipes,
   grupos,
+  inscricaoPagamentos,
   inscricoes,
   partidas,
   placarSubmissoes,
@@ -94,53 +95,85 @@ export class CategoriasService {
     const nome = dados.nome.trim();
     if (!nome) throw new Error("Informe o nome da nova categoria");
 
-    const novaCategoria = await this.criar({
-      torneioId: dados.torneioId,
-      nome,
-      genero: origem.genero,
-      valorInscricao: origem.valorInscricao,
-      vagasMaximas: origem.vagasMaximas,
-      dataHorario: origem.dataHorario,
-    });
-
-    const configOrigem = await categoriaConfigService.obterOuDefault(origem.id);
-    await categoriaConfigService.salvar(novaCategoria.id, configOrigem);
-
     const inscricoesOrigem = await inscricoesService.listarPorCategoria(origem.id);
-    for (const inscricao of inscricoesOrigem) {
-      const atletas = inscricao.equipe.atletas.slice(0, 2);
-      if (atletas.length < 2) continue;
+    const configOrigem = await categoriaConfigService.obterOuDefault(origem.id);
 
-      const atletaA = atletas[0];
-      const atletaB = atletas[1];
-      const capitaoPosicao = inscricao.equipe.capitaoUsuarioId && inscricao.equipe.capitaoUsuarioId === atletaB.id ? "B" : "A";
+    return await db.transaction(async (tx) => {
+      const [novaCategoria] = await tx
+        .insert(categorias)
+        .values({
+          torneioId: dados.torneioId,
+          nome,
+          slug: await this.gerarSlugDisponivel(dados.torneioId, nome, tx),
+          genero: origem.genero,
+          valorInscricao: origem.valorInscricao,
+          vagasMaximas: origem.vagasMaximas,
+          dataHorario: origem.dataHorario,
+        })
+        .returning();
 
-      await inscricoesService.criar({
-        torneioId: dados.torneioId,
+      await tx.insert(categoriaConfiguracoes).values({
         categoriaId: novaCategoria.id,
-        equipeNome: inscricao.equipe.nome ?? undefined,
-        capitaoPosicao,
-        status: inscricao.status as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA",
-        atletaA: {
-          nome: atletaA.nome,
-          email: atletaA.email,
-          telefone: atletaA.telefone ?? undefined,
-          playnaquadraAtletaId: atletaA.playnaquadraAtletaId ?? null,
-          fotoUrl: atletaA.fotoUrl ?? null,
-          camisetaOpcao: atletaA.camisetaOpcao ?? null,
-        },
-        atletaB: {
-          nome: atletaB.nome,
-          email: atletaB.email,
-          telefone: atletaB.telefone ?? undefined,
-          playnaquadraAtletaId: atletaB.playnaquadraAtletaId ?? null,
-          fotoUrl: atletaB.fotoUrl ?? null,
-          camisetaOpcao: atletaB.camisetaOpcao ?? null,
-        },
+        versao: configOrigem.versao,
+        config: configOrigem as any,
       });
-    }
 
-    return novaCategoria;
+      for (const inscricao of inscricoesOrigem) {
+        const atletas = inscricao.equipe.atletas.slice(0, 2);
+        if (atletas.length < 2) continue;
+
+        const [novaInscricao] = await tx
+          .insert(inscricoes)
+          .values({
+            torneioId: dados.torneioId,
+            categoriaId: novaCategoria.id,
+            equipeId: inscricao.equipe.id,
+            status: inscricao.status as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA",
+            dataInscricao: inscricao.dataInscricao,
+          })
+          .returning();
+
+        await tx
+          .insert(inscricaoPagamentos)
+          .values(
+            atletas.map((atleta) => ({
+              inscricaoId: novaInscricao.id,
+              usuarioId: atleta.id,
+              status: atleta.pagamentoStatus ?? (atleta.pago ? "PAGO" : "PENDENTE"),
+              valorDevido: atleta.valorDevido ?? null,
+              pago: Boolean(atleta.pago),
+            }))
+          )
+          .onConflictDoNothing();
+      }
+
+      return novaCategoria;
+    });
+  }
+
+  private async gerarSlugDisponivel(
+    torneioId: string,
+    nome: string,
+    executor: Pick<typeof db, "select"> = db
+  ) {
+    const base = slugify(nome);
+    let slug = base;
+    let sufixo = 2;
+
+    while (true) {
+      const existente = await executor
+        .select({ id: categorias.id })
+        .from(categorias)
+        .where(and(eq(categorias.torneioId, torneioId), eq(categorias.slug, slug)))
+        .limit(1);
+
+      if (!existente[0]) {
+        return slug;
+      }
+
+      slug = `${base}-${sufixo}`;
+      sufixo += 1;
+    }
   }
 
   async atualizar(id: string, dados: AtualizarCategoriaDTO) {

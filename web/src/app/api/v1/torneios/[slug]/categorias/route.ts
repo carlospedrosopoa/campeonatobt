@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
@@ -72,6 +72,7 @@ export async function POST(
     return NextResponse.json(nova, { status: 201 });
   } catch (error) {
     console.error("Erro ao criar categoria:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    const mensagem = error instanceof Error && error.message ? error.message : "Erro interno do servidor";
+    return NextResponse.json({ error: mensagem }, { status: 500 });
   }
 }
