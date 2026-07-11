@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, Clock3, Gamepad2, MapPin, RefreshCw, Tv } from "lucide-react";
+import { Calendar, Clock3, Gamepad2, MapPin, Pause, Play, RefreshCw, Tv } from "lucide-react";
 
 type PartidaPublica = {
   id: string;
@@ -167,6 +167,7 @@ export default function PainelQuadrasPublicContent({
   const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null);
   const [agora, setAgora] = useState(() => Date.now());
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [rotacaoAutomaticaAtiva, setRotacaoAutomaticaAtiva] = useState(false);
 
   async function carregarPainel() {
     try {
@@ -221,12 +222,12 @@ export default function PainelQuadrasPublicContent({
   }, [quadrasOrdenadasDestaque.length]);
 
   useEffect(() => {
-    if (!isModoDestaque || quadrasOrdenadasDestaque.length <= 1) return;
+    if (!isModoDestaque || !rotacaoAutomaticaAtiva || quadrasOrdenadasDestaque.length <= 1) return;
     const timer = window.setInterval(() => {
       setHighlightIndex((current) => (current + 1) % quadrasOrdenadasDestaque.length);
     }, HIGHLIGHT_ROTATION_MS);
     return () => window.clearInterval(timer);
-  }, [isModoDestaque, quadrasOrdenadasDestaque.length]);
+  }, [isModoDestaque, rotacaoAutomaticaAtiva, quadrasOrdenadasDestaque.length]);
 
   function avancarQuadraDestaque() {
     if (!isModoDestaque || quadrasOrdenadasDestaque.length <= 1) return;
@@ -273,7 +274,7 @@ export default function PainelQuadrasPublicContent({
               {isModoDestaque ? "Modo destaque" : "Modo grade"}
             </div>
             <a
-              href={`/torneios/${slug}/painel-quadras`}
+              href={`/torneios/${slug}/painel-quadras?modo=grade`}
               className={`inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 ${
                 !isModoDestaque ? "border-orange-300/40 bg-orange-500/20 text-orange-100" : "border-white/10 bg-white/5 text-slate-200"
               }`}
@@ -323,18 +324,34 @@ export default function PainelQuadrasPublicContent({
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-left lg:text-right">
                   <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Troca automatica</div>
-                  <div className="mt-2 text-3xl font-black">{quadrasOrdenadasDestaque.length > 1 ? "12s" : "-"}</div>
+                  <div className="mt-2 text-3xl font-black">
+                    {quadrasOrdenadasDestaque.length > 1 ? (rotacaoAutomaticaAtiva ? "12s" : "Pausada") : "-"}
+                  </div>
                   <div className="mt-1 text-sm text-slate-300">
-                    {quadrasOrdenadasDestaque.length > 1 ? "prioridade para quadras em andamento" : "somente uma quadra relevante"}
+                    {quadrasOrdenadasDestaque.length > 1
+                      ? rotacaoAutomaticaAtiva
+                        ? "prioridade para quadras em andamento"
+                        : "troca automatica desativada manualmente"
+                      : "somente uma quadra relevante"}
                   </div>
                   {quadrasOrdenadasDestaque.length > 1 ? (
-                    <button
-                      type="button"
-                      onClick={avancarQuadraDestaque}
-                      className="mt-4 inline-flex items-center justify-center rounded-full border border-orange-300/40 bg-orange-500/20 px-4 py-2 text-sm font-bold text-orange-50 hover:bg-orange-500/30"
-                    >
-                      Proxima quadra
-                    </button>
+                    <div className="mt-4 flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setRotacaoAutomaticaAtiva((current) => !current)}
+                        className="inline-flex items-center justify-center gap-2 rounded-full border border-orange-300/40 bg-orange-500/20 px-4 py-2 text-sm font-bold text-orange-50 hover:bg-orange-500/30"
+                      >
+                        {rotacaoAutomaticaAtiva ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                        {rotacaoAutomaticaAtiva ? "Pausar rotacao" : "Ativar rotacao"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={avancarQuadraDestaque}
+                        className="inline-flex items-center justify-center rounded-full border border-orange-300/40 bg-orange-500/20 px-4 py-2 text-sm font-bold text-orange-50 hover:bg-orange-500/30"
+                      >
+                        Proxima quadra
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               </div>
