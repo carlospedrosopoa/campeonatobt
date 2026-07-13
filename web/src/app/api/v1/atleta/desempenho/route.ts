@@ -44,7 +44,7 @@ function obterPesoFase(fase?: string | null) {
 }
 
 function obterLabelFase(fase?: string | null) {
-  if (!fase) return "Inscricao aprovada";
+  if (!fase) return "Inscrição aprovada";
   return FASE_LABEL[fase] ?? fase;
 }
 
@@ -77,7 +77,7 @@ function obterResumoAtleta(item?: {
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
   if (auth instanceof NextResponse) return auth;
-  if (auth.user.perfil !== "ATLETA") return NextResponse.json({ error: "Nao autorizado" }, { status: 403 });
+  if (auth.user.perfil !== "ATLETA") return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
   const oponenteId = request.nextUrl.searchParams.get("oponenteId")?.trim() || "";
 
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
       .limit(1);
 
     if (!oponenteRow) {
-      return NextResponse.json({ error: "Atleta adversario nao encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Atleta adversário não encontrado" }, { status: 404 });
     }
 
     oponente = obterResumoAtleta(oponenteRow);
@@ -276,7 +276,7 @@ export async function GET(request: NextRequest) {
         atletas: atletasPorEquipe.get(item.equipeId) ?? [],
       },
       faseAlcancada: melhorPartida?.fase ?? null,
-      faseLabel: melhorPartida?.fase ? obterLabelFase(melhorPartida.fase) : "Inscricao aprovada",
+      faseLabel: melhorPartida?.fase ? obterLabelFase(melhorPartida.fase) : "Inscrição aprovada",
       destaque,
       medalha,
       vitorias: vitoriasCategoria,
