@@ -40,7 +40,7 @@ export class DashboardAdminService {
       .leftJoin(inscricoes, eq(inscricoes.categoriaId, categorias.id))
       .where(eq(categorias.torneioId, torneioId))
       .groupBy(categorias.id)
-      .orderBy(asc(categorias.nome));
+      .orderBy(sql`${categorias.dataHorario} asc nulls last`, asc(categorias.nome));
 
     return rows as unknown as CategoriaResumoAdmin[];
   }
