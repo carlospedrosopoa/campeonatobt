@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, Gamepad2, Network, Pencil, RefreshCcw, Save } from "lucide-react";
+import { ArrowLeft, Banknote, Gamepad2, Network, Pencil, PlusCircle, RefreshCcw, Save } from "lucide-react";
 
 type Categoria = {
   id: string;
@@ -116,6 +116,13 @@ export default function AdminCategoriaChavePage() {
   const [substituicaoEquipeDestinoId, setSubstituicaoEquipeDestinoId] = useState("");
   const [substituindoEquipe, setSubstituindoEquipe] = useState(false);
   const [modoManutencaoConfronto, setModoManutencaoConfronto] = useState(false);
+  const [montagemAberta, setMontagemAberta] = useState(false);
+  const [faseMontagem, setFaseMontagem] = useState<Fase>("OITAVAS");
+  const [limparPosterioresMontagem, setLimparPosterioresMontagem] = useState(true);
+  const [qtdConfrontosMontagem, setQtdConfrontosMontagem] = useState(4);
+  const [confrontosMontagem, setConfrontosMontagem] = useState<Array<{ equipeAId: string; equipeBId: string }>>([]);
+  const [salvandoMontagem, setSalvandoMontagem] = useState(false);
+  const [erroMontagem, setErroMontagem] = useState<string | null>(null);
 
   const [jogosPorFase, setJogosPorFase] = useState<Record<Fase, Partida[]>>({
     OITAVAS: [],
@@ -311,6 +318,11 @@ export default function AdminCategoriaChavePage() {
     setSubstituicaoEquipeDestinoId("");
     setModoManutencaoConfronto(false);
     if (equipes.length > 0) return;
+    await carregarEquipesAprovadas();
+  }
+
+  async function carregarEquipesAprovadas() {
+    if (equipes.length > 0) return;
     try {
       setCarregandoEquipes(true);
       const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes`, { cache: "no-store" });
@@ -323,6 +335,94 @@ export default function AdminCategoriaChavePage() {
       setEquipes(aprovadas);
     } finally {
       setCarregandoEquipes(false);
+    }
+  }
+
+  function sugestaoQtdConfrontos(fase: Fase) {
+    if (fase === "OITAVAS") return 4;
+    if (fase === "QUARTAS") return 2;
+    if (fase === "SEMI") return 2;
+    return 1;
+  }
+
+  async function abrirMontagemManual(fase: Fase) {
+    setErroMontagem(null);
+    setFaseMontagem(fase);
+    setLimparPosterioresMontagem(true);
+    const existentes = jogosPorFase[fase] ?? [];
+    const qtd = existentes.length > 0 ? existentes.length : sugestaoQtdConfrontos(fase);
+    setQtdConfrontosMontagem(qtd);
+    setConfrontosMontagem(
+      existentes.length > 0
+        ? existentes.map((p) => ({ equipeAId: p.equipeAId, equipeBId: p.equipeBId }))
+        : Array.from({ length: qtd }, () => ({ equipeAId: "", equipeBId: "" }))
+    );
+    setMontagemAberta(true);
+    await carregarEquipesAprovadas();
+  }
+
+  function fecharMontagemManual() {
+    if (salvandoMontagem) return;
+    setMontagemAberta(false);
+    setErroMontagem(null);
+  }
+
+  function ajustarQtdConfrontos(nextQtd: number) {
+    const qtd = Math.max(1, Math.min(8, nextQtd));
+    setQtdConfrontosMontagem(qtd);
+    setConfrontosMontagem((prev) => {
+      const current = Array.isArray(prev) ? prev.slice() : [];
+      if (current.length === qtd) return current;
+      if (current.length > qtd) return current.slice(0, qtd);
+      const extra = Array.from({ length: qtd - current.length }, () => ({ equipeAId: "", equipeBId: "" }));
+      return [...current, ...extra];
+    });
+  }
+
+  function validarMontagem(confrontos: Array<{ equipeAId: string; equipeBId: string }>) {
+    const usados = new Set<string>();
+    for (const c of confrontos) {
+      const a = String(c.equipeAId || "").trim();
+      const b = String(c.equipeBId || "").trim();
+      if (!a || !b) return "Preencha Dupla A e Dupla B em todos os confrontos.";
+      if (a === b) return "Dupla A e Dupla B precisam ser diferentes em cada confronto.";
+      if (usados.has(a) || usados.has(b)) return "Uma mesma dupla não pode aparecer em mais de um confronto nesta fase.";
+      usados.add(a);
+      usados.add(b);
+    }
+    return null;
+  }
+
+  async function confirmarMontagemManual() {
+    setErroMontagem(null);
+    const erroLocal = validarMontagem(confrontosMontagem);
+    if (erroLocal) {
+      setErroMontagem(erroLocal);
+      return;
+    }
+
+    try {
+      setSalvandoMontagem(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/montar-mata-mata-fase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fase: faseMontagem,
+          confrontos: confrontosMontagem,
+          limparPosteriores: limparPosterioresMontagem,
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.error || "Falha ao montar a fase manualmente");
+      }
+
+      await carregarChave();
+      setMontagemAberta(false);
+    } catch (e: any) {
+      setErroMontagem(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoMontagem(false);
     }
   }
 
@@ -364,25 +464,35 @@ export default function AdminCategoriaChavePage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          disabled={atualizando}
-          onClick={async () => {
-            try {
-              setAtualizando(true);
-              const [isSuper, classRows] = await Promise.all([carregarTorneioSuper(), carregarClassificacao()]);
-              setSuperCampeonato(isSuper);
-              setClassificacao(classRows);
-              await carregarChave();
-            } finally {
-              setAtualizando(false);
-            }
-          }}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 lg:w-auto"
-        >
-          <RefreshCcw className="h-4 w-4" />
-          {atualizando ? "Atualizando…" : "Atualizar"}
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+          <button
+            type="button"
+            disabled={atualizando}
+            onClick={async () => {
+              try {
+                setAtualizando(true);
+                const [isSuper, classRows] = await Promise.all([carregarTorneioSuper(), carregarClassificacao()]);
+                setSuperCampeonato(isSuper);
+                setClassificacao(classRows);
+                await carregarChave();
+              } finally {
+                setAtualizando(false);
+              }
+            }}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 lg:w-auto"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            {atualizando ? "Atualizando…" : "Atualizar"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void abrirMontagemManual("OITAVAS")}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 lg:w-auto"
+          >
+            <PlusCircle className="h-4 w-4" />
+            Montar fase manual
+          </button>
+        </div>
       </div>
 
       {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
@@ -691,6 +801,136 @@ export default function AdminCategoriaChavePage() {
                 <Save className="h-4 w-4" />
                 {salvandoConfronto ? "Salvando..." : "Salvar confronto"}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {montagemAberta ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={fecharMontagemManual}>
+          <div
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[88vh] overflow-y-auto"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-200 px-6 py-4">
+              <div className="text-lg font-semibold text-slate-900">Montagem manual do mata-mata</div>
+              <div className="mt-1 text-sm text-slate-600">
+                Crie os confrontos da fase e, se necessário, limpe as fases seguintes para remontar depois.
+              </div>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              {erroMontagem ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erroMontagem}</div>
+              ) : null}
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-slate-700">Fase</label>
+                  <select
+                    value={faseMontagem}
+                    onChange={(e) => void abrirMontagemManual((e.target.value as Fase) || "OITAVAS")}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+                    disabled={salvandoMontagem}
+                  >
+                    <option value="OITAVAS">Oitavas</option>
+                    <option value="QUARTAS">Quartas</option>
+                    <option value="SEMI">Semifinal</option>
+                    <option value="FINAL">Final</option>
+                  </select>
+                </div>
+                <div className="space-y-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-slate-700">Confrontos</label>
+                  <select
+                    value={qtdConfrontosMontagem}
+                    onChange={(e) => ajustarQtdConfrontos(Number(e.target.value))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+                    disabled={salvandoMontagem}
+                  >
+                    {Array.from({ length: 8 }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end sm:col-span-1">
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={limparPosterioresMontagem}
+                      onChange={(e) => setLimparPosterioresMontagem(Boolean(e.target.checked))}
+                      disabled={salvandoMontagem}
+                    />
+                    Apagar fase e posteriores
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {confrontosMontagem.map((c, idx) => (
+                  <div key={`montagem:${idx}`} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Dupla A</label>
+                      <select
+                        value={c.equipeAId}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setConfrontosMontagem((prev) => prev.map((p, i) => (i === idx ? { ...p, equipeAId: value } : p)));
+                        }}
+                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+                        disabled={salvandoMontagem || carregandoEquipes}
+                      >
+                        <option value="">Selecione</option>
+                        {equipes.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Dupla B</label>
+                      <select
+                        value={c.equipeBId}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setConfrontosMontagem((prev) => prev.map((p, i) => (i === idx ? { ...p, equipeBId: value } : p)));
+                        }}
+                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+                        disabled={salvandoMontagem || carregandoEquipes}
+                      >
+                        <option value="">Selecione</option>
+                        {equipes.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={fecharMontagemManual}
+                  disabled={salvandoMontagem}
+                  className="inline-flex w-full items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmarMontagemManual()}
+                  disabled={salvandoMontagem}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 sm:w-auto"
+                >
+                  <Save className="h-4 w-4" />
+                  {salvandoMontagem ? "Salvando..." : "Salvar fase"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { categorias, partidas, torneios } from "@/db/schema";
+import { categorias, equipes, inscricoes, partidas, placarSubmissoes, torneios } from "@/db/schema";
 import { and, eq, inArray, not, or } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
@@ -330,6 +330,101 @@ export class MataMataService {
   async resetarChaveDepoisDeFaseSePossivel(params: { torneioId: string; categoriaId: string; faseAtual: Fase }) {
     await this.limparFasesPosteriores({ torneioId: params.torneioId, categoriaId: params.categoriaId, apos: params.faseAtual });
     return { ok: true };
+  }
+
+  async montarFaseManual(params: {
+    torneioId: string;
+    categoriaId: string;
+    fase: Fase;
+    confrontos: Array<{ equipeAId: string; equipeBId: string }>;
+    limparPosteriores?: boolean;
+  }) {
+    const fase = params.fase;
+    if (!ordemFases.includes(fase)) {
+      throw new Error("Fase inválida para montagem manual");
+    }
+
+    const confrontos = Array.isArray(params.confrontos) ? params.confrontos : [];
+    if (confrontos.length === 0) {
+      throw new Error("Informe ao menos um confronto para montar a fase");
+    }
+
+    const equipesUsadas = new Set<string>();
+    for (const c of confrontos) {
+      const a = String(c?.equipeAId || "").trim();
+      const b = String(c?.equipeBId || "").trim();
+      if (!a || !b) throw new Error("Todos os confrontos precisam ter Dupla A e Dupla B");
+      if (a === b) throw new Error("Dupla A e Dupla B precisam ser diferentes no confronto");
+      if (equipesUsadas.has(a) || equipesUsadas.has(b)) {
+        throw new Error("Uma mesma dupla não pode aparecer em mais de um confronto na mesma fase");
+      }
+      equipesUsadas.add(a);
+      equipesUsadas.add(b);
+    }
+
+    const equipesPermitidasRows = await db
+      .select({ id: equipes.id })
+      .from(inscricoes)
+      .innerJoin(equipes, eq(inscricoes.equipeId, equipes.id))
+      .where(and(eq(inscricoes.torneioId, params.torneioId), eq(inscricoes.categoriaId, params.categoriaId), eq(inscricoes.status, "APROVADA")));
+
+    const permitidas = new Set(equipesPermitidasRows.map((r) => r.id));
+    for (const id of equipesUsadas) {
+      if (!permitidas.has(id)) {
+        throw new Error("Uma das duplas selecionadas não está aprovada nesta categoria");
+      }
+    }
+
+    const idx = ordemFases.indexOf(fase);
+    const fasesAlvo = params.limparPosteriores === false ? [fase] : ordemFases.slice(Math.max(0, idx));
+
+    const existentes = await db
+      .select({
+        id: partidas.id,
+        status: partidas.status,
+        vencedorId: partidas.vencedorId,
+        placarA: partidas.placarA,
+        placarB: partidas.placarB,
+        detalhesPlacar: partidas.detalhesPlacar,
+      })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), inArray(partidas.fase, fasesAlvo as any)));
+
+    if (existentes.some(partidaIniciada)) {
+      throw new Error("Não é possível montar a fase: existem jogos iniciados ou com placar lançado na fase escolhida (ou posteriores)");
+    }
+
+    const idsParaApagar = existentes.map((r) => r.id);
+
+    await db.transaction(async (tx) => {
+      if (idsParaApagar.length > 0) {
+        await tx.delete(placarSubmissoes).where(inArray(placarSubmissoes.partidaId, idsParaApagar));
+        await tx
+          .delete(partidas)
+          .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), inArray(partidas.fase, fasesAlvo as any)));
+      }
+
+      for (const c of confrontos) {
+        await tx.insert(partidas).values({
+          torneioId: params.torneioId,
+          categoriaId: params.categoriaId,
+          rodadaId: null,
+          grupoId: null,
+          arenaId: null,
+          equipeAId: c.equipeAId,
+          equipeBId: c.equipeBId,
+          fase,
+          status: "AGENDADA",
+          placarA: 0,
+          placarB: 0,
+          detalhesPlacar: null as any,
+          vencedorId: null,
+          atualizadoEm: new Date(),
+        });
+      }
+    });
+
+    return { ok: true, fase, partidasCriadas: confrontos.length, fasesAfetadas: fasesAlvo };
   }
 
   async substituirEquipeNaFase(params: {
