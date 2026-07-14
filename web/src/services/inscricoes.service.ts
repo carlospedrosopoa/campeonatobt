@@ -9,8 +9,8 @@ export type CriarInscricaoDTO = {
   categoriaId: string;
   equipeNome?: string;
   capitaoPosicao?: "A" | "B";
-  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
-  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
+  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null; genero?: string | null };
+  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null; genero?: string | null };
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
 };
 
@@ -19,8 +19,8 @@ export type AtualizarInscricaoDTO = {
   categoriaId: string;
   equipeNome?: string | null;
   capitaoPosicao?: "A" | "B";
-  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
-  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null };
+  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null; genero?: string | null };
+  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null; genero?: string | null };
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
 };
 
@@ -38,6 +38,7 @@ type AtletaGeneroInput = {
   nome?: string | null;
   email?: string | null;
   playnaquadraAtletaId?: string | null;
+  genero?: string | null;
 };
 
 function normalizeGeneroAtleta(value: unknown): GeneroAtleta | null {
@@ -98,6 +99,14 @@ function extractPlayAtletaGenero(payload: any) {
 }
 
 async function resolverGeneroAtleta(params: AtletaGeneroInput) {
+  const generoInformado = normalizeGeneroAtleta(params.genero);
+  if (generoInformado) {
+    return {
+      nome: params.nome || normalizeEmail(params.email) || "atleta",
+      genero: generoInformado,
+    };
+  }
+
   const token = await getPlayAdminToken();
   const email = normalizeEmail(params.email);
   const playId = String(params.playnaquadraAtletaId || "").trim();
@@ -313,11 +322,13 @@ export class InscricoesService {
         nome: dados.atletaA.nome,
         email: atletaAEmail,
         playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
+        genero: dados.atletaA.genero ?? null,
       },
       atletaB: {
         nome: dados.atletaB.nome,
         email: atletaBEmail,
         playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
+        genero: dados.atletaB.genero ?? null,
       },
     });
 
@@ -440,6 +451,29 @@ export class InscricoesService {
     const atletaBEmail = dados.atletaB.email.trim().toLowerCase();
     if (!atletaAEmail || !atletaBEmail) throw new Error("Emails dos atletas são obrigatórios");
     if (atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
+
+    const categoriaRows = await db
+      .select({ genero: categorias.genero })
+      .from(categorias)
+      .where(eq(categorias.id, dados.categoriaId))
+      .limit(1);
+    const categoria = categoriaRows[0];
+
+    await validarGeneroInscricao({
+      categoriaGenero: categoria?.genero,
+      atletaA: {
+        nome: dados.atletaA.nome,
+        email: atletaAEmail,
+        playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
+        genero: dados.atletaA.genero ?? null,
+      },
+      atletaB: {
+        nome: dados.atletaB.nome,
+        email: atletaBEmail,
+        playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
+        genero: dados.atletaB.genero ?? null,
+      },
+    });
 
     const atletaAId = await this.upsertAtleta({
       nome: dados.atletaA.nome.trim(),

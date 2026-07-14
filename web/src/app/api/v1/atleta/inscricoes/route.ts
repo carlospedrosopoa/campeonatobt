@@ -164,6 +164,8 @@ export async function POST(request: NextRequest) {
   const parceiroNome = (parceiro?.nome as string | undefined)?.trim();
   const parceiroEmail = (parceiro?.email as string | undefined)?.trim().toLowerCase();
   const parceiroTelefone = (parceiro?.telefone as string | undefined)?.trim();
+  const parceiroGenero = (typeof parceiro?.genero === "string" ? parceiro.genero : "").trim() || null;
+  const parceiroCamisetaOpcaoRaw = typeof parceiro?.camisetaOpcao === "string" ? parceiro.camisetaOpcao.trim() : "";
   const parceiroPlayAtletaId =
     (parceiro?.playnaquadraAtletaId as string | undefined | null)?.trim() ||
     (parceiro?.id as string | undefined | null)?.trim() ||
@@ -198,8 +200,12 @@ export async function POST(request: NextRequest) {
   const normalize = (v: string) => (v || "").trim().replace(/\s+/g, " ");
   const mapLower = new Map(opcoes.map((o) => [normalize(o).toLowerCase(), o]));
   const match = camisetaOpcaoRaw ? mapLower.get(normalize(camisetaOpcaoRaw).toLowerCase()) ?? null : null;
+  const parceiroMatch = parceiroCamisetaOpcaoRaw ? mapLower.get(normalize(parceiroCamisetaOpcaoRaw).toLowerCase()) ?? null : null;
   if (opcoes.length > 0 && camisetaOpcaoRaw && !match) {
     return NextResponse.json({ error: "Opção de camiseta inválida para este torneio" }, { status: 400 });
+  }
+  if (opcoes.length > 0 && parceiroCamisetaOpcaoRaw && !parceiroMatch) {
+    return NextResponse.json({ error: "Opção de camiseta do parceiro inválida para este torneio" }, { status: 400 });
   }
 
   if (opcoes.length > 0 && !match) {
@@ -211,6 +217,9 @@ export async function POST(request: NextRequest) {
     if (!pref[0]) {
       return NextResponse.json({ error: "Selecione o tamanho/modelo de camiseta para este torneio" }, { status: 400 });
     }
+  }
+  if (opcoes.length > 0 && !parceiroMatch) {
+    return NextResponse.json({ error: "Selecione o tamanho/modelo de camiseta do parceiro para este torneio" }, { status: 400 });
   }
 
   const partidasExistentes = await db.select({ id: partidas.id }).from(partidas).where(eq(partidas.categoriaId, categoriaId)).limit(1);
@@ -247,12 +256,15 @@ export async function POST(request: NextRequest) {
         email: atletaUser.email,
         telefone: atletaUser.telefone ?? undefined,
         playnaquadraAtletaId: atletaUser.playnaquadraAtletaId ?? null,
+        camisetaOpcao: match,
       },
       atletaB: {
         nome: parceiroNome,
         email: parceiroEmail,
         telefone: parceiroTelefone || undefined,
         playnaquadraAtletaId: parceiroPlayAtletaId,
+        genero: parceiroGenero,
+        camisetaOpcao: parceiroMatch,
       },
       status: "PENDENTE",
     });
