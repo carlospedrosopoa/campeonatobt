@@ -74,6 +74,7 @@ export default function AdminCategoriaInscricoesPage() {
   const [buscaAtletaB, setBuscaAtletaB] = useState("");
   const [resultadosAtletaB, setResultadosAtletaB] = useState<Atleta[]>([]);
   const [buscandoAtletaB, setBuscandoAtletaB] = useState(false);
+  const [carregandoCamisetaAtleta, setCarregandoCamisetaAtleta] = useState<"" | "A" | "B">("");
 
   const [form, setForm] = useState({
     equipeNome: "",
@@ -264,6 +265,36 @@ export default function AdminCategoriaInscricoesPage() {
     setResultadosAtletaA([]);
     setBuscaAtletaB("");
     setResultadosAtletaB([]);
+  }
+
+  async function preencherCamisetaDoPerfil(posicao: "A" | "B", atleta: Atleta) {
+    if (!slug) return;
+
+    try {
+      setCarregandoCamisetaAtleta(posicao);
+      const email = String(atleta.email || "").trim();
+      const qs = new URLSearchParams();
+      if (email) qs.set("email", email);
+      const res = await fetch(`/api/v1/torneios/${slug}/atletas-inscritos/${encodeURIComponent(atleta.id)}/camiseta?${qs.toString()}`, {
+        cache: "no-store",
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) return;
+
+      const camiseta =
+        String(payload?.selecionada || "").trim() ||
+        String(payload?.playDefault || "").trim() ||
+        "";
+
+      if (!camiseta) return;
+
+      setForm((prev) => ({
+        ...prev,
+        ...(posicao === "A" ? { atletaACamiseta: camiseta } : { atletaBCamiseta: camiseta }),
+      }));
+    } finally {
+      setCarregandoCamisetaAtleta((atual) => (atual === posicao ? "" : atual));
+    }
   }
 
   function abrirEditar(inscricao: Inscricao) {
@@ -602,6 +633,7 @@ export default function AdminCategoriaInscricoesPage() {
                           }));
                           setBuscaAtletaA("");
                           setResultadosAtletaA([]);
+                          void preencherCamisetaDoPerfil("A", a);
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-slate-50"
                       >
@@ -642,6 +674,7 @@ export default function AdminCategoriaInscricoesPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Camiseta</label>
+                {carregandoCamisetaAtleta === "A" ? <div className="text-xs text-slate-500">Buscando camiseta do perfil...</div> : null}
                 {torneioCamisetaOpcoes.length > 0 ? (
                   <select
                     value={form.atletaACamiseta}
@@ -694,6 +727,7 @@ export default function AdminCategoriaInscricoesPage() {
                           }));
                           setBuscaAtletaB("");
                           setResultadosAtletaB([]);
+                          void preencherCamisetaDoPerfil("B", a);
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-slate-50"
                       >
@@ -734,6 +768,7 @@ export default function AdminCategoriaInscricoesPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Camiseta</label>
+                {carregandoCamisetaAtleta === "B" ? <div className="text-xs text-slate-500">Buscando camiseta do perfil...</div> : null}
                 {torneioCamisetaOpcoes.length > 0 ? (
                   <select
                     value={form.atletaBCamiseta}
