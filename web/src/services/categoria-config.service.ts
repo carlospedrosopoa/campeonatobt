@@ -11,7 +11,11 @@ import {
 
 export type CategoriaFormato = "GRUPOS" | "MATA_MATA" | "LIGA";
 
-export type MataMataEstrutura = "PADRAO" | "SUPER_CAMPEONATO_6";
+export type MataMataEstrutura =
+  | "PADRAO"
+  | "SUPER_CAMPEONATO_6"
+  | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
+  | "GRUPOS_8_CRUZAMENTO_PADRAO";
 
 export type CategoriaConfigV1 = {
   versao: 1;
@@ -93,7 +97,14 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
   const temFinal = input?.fase2?.temFinal === false ? false : true;
 
   // Normaliza configurações de mata-mata
-  const estrutura: MataMataEstrutura = input?.mataMata?.estrutura === "PADRAO" ? "PADRAO" : "SUPER_CAMPEONATO_6";
+  const estrutura: MataMataEstrutura =
+    input?.mataMata?.estrutura === "PADRAO"
+      ? "PADRAO"
+      : input?.mataMata?.estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
+        ? "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
+        : input?.mataMata?.estrutura === "GRUPOS_8_CRUZAMENTO_PADRAO"
+          ? "GRUPOS_8_CRUZAMENTO_PADRAO"
+        : "SUPER_CAMPEONATO_6";
   const quantidadeClassificados =
     typeof input?.mataMata?.quantidadeClassificados === "number" && input.mataMata.quantidadeClassificados > 0
       ? Math.floor(input.mataMata.quantidadeClassificados)

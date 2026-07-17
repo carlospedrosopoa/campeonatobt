@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
-import { playGetAtletaById } from "@/services/playnaquadra-client";
+import { playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
 import { extractCamisetaFromPlay } from "@/services/playnaquadra-camiseta";
 
 function normalizeOption(value?: string | null) {
@@ -37,16 +37,26 @@ function normalizeGeneroAtleta(value: unknown): "MASCULINO" | "FEMININO" | null 
 
 function extractPlayGenero(payload: any) {
   const source = payload && typeof payload === "object" ? payload : {};
+  const nested = [source.atleta, source.usuario, source.user, source.profile, source.perfil].filter(
+    (item) => item && typeof item === "object"
+  );
   return normalizeGeneroAtleta(
     source.genero ||
       source.sexo ||
       source.gender ||
+      source.sex ||
+      source.generoAtleta ||
+      source.sexoAtleta ||
       source.atleta?.genero ||
       source.atleta?.sexo ||
       source.usuario?.genero ||
       source.usuario?.sexo ||
       source.user?.genero ||
-      source.user?.sexo
+      source.user?.sexo ||
+      nested.map((item: any) => item?.genero).find(Boolean) ||
+      nested.map((item: any) => item?.sexo).find(Boolean) ||
+      nested.map((item: any) => item?.gender).find(Boolean) ||
+      nested.map((item: any) => item?.sex).find(Boolean)
   );
 }
 
@@ -119,6 +129,19 @@ export async function GET(
           const camiseta = extractCamisetaFromPlay(result.data);
           playDefault = opcoes.length > 0 ? findMatch(opcoes, camiseta) : normalizeOption(camiseta);
           genero = extractPlayGenero(result.data);
+        }
+
+        if (!genero && email) {
+          const busca = await playBuscarAtletas({ token, q: email, limite: 10 });
+          if (busca.res.ok) {
+            const candidatos = Array.isArray(busca.data?.atletas) ? busca.data.atletas : Array.isArray(busca.data) ? busca.data : [];
+            const exato =
+              candidatos.find((item: any) => normalizeEmail(item?.email) === email) ??
+              candidatos.find((item: any) => normalizeEmail(item?.usuario?.email) === email) ??
+              candidatos.find((item: any) => normalizeEmail(item?.user?.email) === email) ??
+              null;
+            genero = extractPlayGenero(exato) || genero;
+          }
         }
       } catch {
         playDefault = null;

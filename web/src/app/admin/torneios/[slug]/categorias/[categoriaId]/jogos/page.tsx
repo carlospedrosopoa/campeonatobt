@@ -24,6 +24,10 @@ type CategoriaConfig = {
   grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean };
+  mataMata?: {
+    estrutura: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
+    quantidadeClassificados?: number;
+  };
   regrasPartida?: RegrasPartidaConfig;
   desempate?: string[];
 };
@@ -1349,6 +1353,38 @@ export default function AdminCategoriaJogosPage() {
                 min={0}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
               />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Estrutura do mata-mata</label>
+              <select
+                value={config.mataMata?.estrutura ?? "PADRAO"}
+                onChange={(e) =>
+                  setConfig((p) =>
+                    p
+                      ? {
+                          ...p,
+                          mataMata: {
+                            ...(p.mataMata ?? {}),
+                            estrutura: e.target.value as
+                              | "PADRAO"
+                              | "SUPER_CAMPEONATO_6"
+                              | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
+                              | "GRUPOS_8_CRUZAMENTO_PADRAO",
+                          },
+                        }
+                      : p
+                  )
+                }
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="PADRAO">Padrão do sistema</option>
+                <option value="GRUPOS_8_CRUZAMENTO_PADRAO">8 classificados com cruzamento padrão entre chaves</option>
+                <option value="GRUPOS_6_MELHORES_PRIMEIROS_BYE">6 classificados com 2 melhores primeiros direto na semifinal</option>
+              </select>
+              <div className="text-xs text-slate-500">
+                Use a opção de 8 classificados para 4 chaves com cruzamento padrão nas quartas, ou a de 6 classificados quando os 2 melhores líderes precisarem entrar direto na semifinal.
+              </div>
             </div>
           </div>
         ) : (

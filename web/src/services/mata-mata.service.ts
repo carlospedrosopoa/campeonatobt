@@ -5,6 +5,16 @@ import { categoriaConfigService } from "@/services/categoria-config.service";
 import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
 
 type Fase = "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL";
+type QualifiedSeed = {
+  equipeId: string;
+  grupoId: string;
+  rankGrupo: number;
+  pontos: number;
+  saldoGames: number;
+  gamesPro: number;
+  setsPro: number;
+  vitorias: number;
+};
 
 function isPowerOfTwo(n: number) {
   return n > 0 && (n & (n - 1)) === 0;
@@ -161,6 +171,52 @@ export class MataMataService {
     return { config, grupos, qualificados, superCampeonato, seeds: seeds.map((s) => s.equipeId) };
   }
 
+  private compararQualificados(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean) {
+    if (superCampeonato) {
+      if (b.pontos !== a.pontos) return b.pontos - a.pontos;
+      if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
+      if (b.setsPro !== a.setsPro) return b.setsPro - a.setsPro;
+      if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+    } else {
+      if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
+      if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+      if (b.gamesPro !== a.gamesPro) return b.gamesPro - a.gamesPro;
+    }
+    return a.equipeId.localeCompare(b.equipeId);
+  }
+
+  private montarEstruturaGrupos6MelhoresPrimeirosBye(params: {
+    qualificados: QualifiedSeed[];
+    superCampeonato: boolean;
+  }) {
+    const primeiros = params.qualificados
+      .filter((item) => item.rankGrupo === 1)
+      .sort((a, b) => this.compararQualificados(a, b, params.superCampeonato));
+    const segundos = params.qualificados
+      .filter((item) => item.rankGrupo === 2)
+      .sort((a, b) => this.compararQualificados(a, b, params.superCampeonato));
+
+    if (primeiros.length < 3 || segundos.length < 3) {
+      throw new Error("Esta estrutura exige 3 grupos com 2 classificados por grupo, para gerar 3 primeiros e 3 segundos colocados.");
+    }
+
+    const byeSemifinal = [primeiros[0].equipeId, primeiros[1].equipeId];
+    const quartas = [
+      { a: primeiros[2].equipeId, b: segundos[0].equipeId },
+      { a: segundos[1].equipeId, b: segundos[2].equipeId },
+    ];
+    const ordemSeeds = [
+      primeiros[0].equipeId,
+      primeiros[1].equipeId,
+      primeiros[2].equipeId,
+      segundos[0].equipeId,
+      segundos[1].equipeId,
+      segundos[2].equipeId,
+    ];
+
+    return { byeSemifinal, quartas, ordemSeeds };
+  }
+
   private async calcularPairingsProximaFase(params: { torneioId: string; categoriaId: string; faseAtual: Fase }) {
     const faseProxima = proximaFase(params.faseAtual);
     if (!faseProxima) return { faseProxima: null as any, pairings: [] as { a: string; b: string }[] };
@@ -246,7 +302,31 @@ export class MataMataService {
 
     // Caso não seja Super Campeonato, mantemos a logica original
     if (params.faseAtual === "QUARTAS" && winners.length === 2) {
-      if (seeds.length === 6) {
+      if (estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE" && seeds.length === 6) {
+        const estruturaByes = this.montarEstruturaGrupos6MelhoresPrimeirosBye({ qualificados, superCampeonato });
+        const rank = new Map<string, number>();
+        for (let i = 0; i < estruturaByes.ordemSeeds.length; i++) {
+          rank.set(estruturaByes.ordemSeeds[i], i + 1);
+        }
+
+        const jogosFull = await db
+          .select({ id: partidas.id, equipeAId: partidas.equipeAId, equipeBId: partidas.equipeBId, vencedorId: partidas.vencedorId })
+          .from(partidas)
+          .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "QUARTAS")));
+        const quartasValidas = jogosFull
+          .filter((m) => m.vencedorId && m.equipeAId && m.equipeBId)
+          .map((m) => ({
+            ...m,
+            melhorSeed: Math.min(rank.get(m.equipeAId!) ?? 999, rank.get(m.equipeBId!) ?? 999),
+          }))
+          .sort((a, b) => a.melhorSeed - b.melhorSeed || a.id.localeCompare(b.id));
+        if (quartasValidas.length !== 2) return { faseProxima, pairings: [] as { a: string; b: string }[] };
+
+        const jogoComPiorPrimeiro = quartasValidas[0];
+        const jogoEntreSegundos = quartasValidas[1];
+        pairings.push({ a: estruturaByes.byeSemifinal[0], b: jogoEntreSegundos.vencedorId! });
+        pairings.push({ a: estruturaByes.byeSemifinal[1], b: jogoComPiorPrimeiro.vencedorId! });
+      } else if (seeds.length === 6) {
         const s1 = seeds[0];
         const s2 = seeds[1];
         const rank = new Map<string, number>();
@@ -680,15 +760,32 @@ export class MataMataService {
     const gruposOrdenados = [...grupos].sort((a, b) => a.grupoNome.localeCompare(b.grupoNome));
 
     if (total === 6) {
-      const s3 = seedIds[2];
-      const s4 = seedIds[3];
-      const s5 = seedIds[4];
-      const s6 = seedIds[5];
-      if (!seedIds[0] || !seedIds[1] || !s3 || !s4 || !s5 || !s6) {
-        throw new Error("Não foi possível montar a chave para 6 classificados.");
+      if (config.mataMata?.estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") {
+        const estruturaByes = this.montarEstruturaGrupos6MelhoresPrimeirosBye({ qualificados, superCampeonato });
+        pairings.push(...estruturaByes.quartas);
+      } else {
+        const s3 = seedIds[2];
+        const s4 = seedIds[3];
+        const s5 = seedIds[4];
+        const s6 = seedIds[5];
+        if (!seedIds[0] || !seedIds[1] || !s3 || !s4 || !s5 || !s6) {
+          throw new Error("Não foi possível montar a chave para 6 classificados.");
+        }
+        pairings.push({ a: s3, b: s6 });
+        pairings.push({ a: s4, b: s5 });
       }
-      pairings.push({ a: s3, b: s6 });
-      pairings.push({ a: s4, b: s5 });
+    } else if (config.mataMata?.estrutura === "GRUPOS_8_CRUZAMENTO_PADRAO") {
+      if (!(gruposOrdenados.length === 4 && (config.classificacao?.porGrupo ?? 2) >= 2 && total === 8)) {
+        throw new Error("A estrutura de 8 classificados com cruzamento padrão exige 4 grupos com 2 classificados por grupo.");
+      }
+      const g0 = gruposOrdenados[0].equipes;
+      const g1 = gruposOrdenados[1].equipes;
+      const g2 = gruposOrdenados[2].equipes;
+      const g3 = gruposOrdenados[3].equipes;
+      pairings.push({ a: g0[0].equipeId, b: g3[1].equipeId });
+      pairings.push({ a: g1[0].equipeId, b: g2[1].equipeId });
+      pairings.push({ a: g2[0].equipeId, b: g1[1].equipeId });
+      pairings.push({ a: g3[0].equipeId, b: g0[1].equipeId });
     } else if (gruposOrdenados.length === 2 && (config.classificacao?.porGrupo ?? 2) >= 2 && total === 4) {
       const ga = gruposOrdenados[0].equipes;
       const gb = gruposOrdenados[1].equipes;

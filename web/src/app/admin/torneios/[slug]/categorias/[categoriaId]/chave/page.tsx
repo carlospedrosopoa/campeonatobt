@@ -27,8 +27,15 @@ type GrupoClassificacao = {
     jogosVencidos: number;
     jogosPerdidos: number;
     saldoGames: number;
+    gamesPro?: number;
     setsPro?: number;
   }[];
+};
+
+type CategoriaConfig = {
+  mataMata?: {
+    estrutura?: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
+  };
 };
 
 type Inscricao = {
@@ -102,6 +109,9 @@ export default function AdminCategoriaChavePage() {
 
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [superCampeonato, setSuperCampeonato] = useState(false);
+  const [mataMataEstrutura, setMataMataEstrutura] = useState<
+    "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO"
+  >("PADRAO");
   const [classificacao, setClassificacao] = useState<GrupoClassificacao[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -172,6 +182,12 @@ export default function AdminCategoriaChavePage() {
     return Array.isArray(rows) ? rows : [];
   }
 
+  async function carregarConfig() {
+    const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/config`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json().catch(() => null)) as CategoriaConfig | null;
+  }
+
   useEffect(() => {
     let ativo = true;
     async function carregar() {
@@ -181,9 +197,10 @@ export default function AdminCategoriaChavePage() {
         const cat = await carregarCategoria();
         if (!ativo) return;
         setCategoria(cat);
-        const [isSuper, classRows] = await Promise.all([carregarTorneioSuper(), carregarClassificacao()]);
+        const [isSuper, classRows, configCategoria] = await Promise.all([carregarTorneioSuper(), carregarClassificacao(), carregarConfig()]);
         if (!ativo) return;
         setSuperCampeonato(isSuper);
+        setMataMataEstrutura(configCategoria?.mataMata?.estrutura ?? "PADRAO");
         setClassificacao(classRows);
         await carregarChave();
       } catch (e: any) {
@@ -209,6 +226,27 @@ export default function AdminCategoriaChavePage() {
     return { s1: a, s2: b };
   }, [classificacao, superCampeonato]);
 
+  const gruposTop2 = useMemo(() => {
+    if (superCampeonato || mataMataEstrutura !== "GRUPOS_6_MELHORES_PRIMEIROS_BYE") return null;
+    const primeiros = classificacao
+      .map((grupo) => grupo.equipes?.[0])
+      .filter(Boolean)
+      .sort((a, b) => {
+        const vitoriasA = a?.jogosVencidos ?? 0;
+        const vitoriasB = b?.jogosVencidos ?? 0;
+        if (vitoriasB !== vitoriasA) return vitoriasB - vitoriasA;
+        const saldoA = a?.saldoGames ?? 0;
+        const saldoB = b?.saldoGames ?? 0;
+        if (saldoB !== saldoA) return saldoB - saldoA;
+        const gamesProA = a?.gamesPro ?? 0;
+        const gamesProB = b?.gamesPro ?? 0;
+        if (gamesProB !== gamesProA) return gamesProB - gamesProA;
+        return String(a?.equipeId || "").localeCompare(String(b?.equipeId || ""));
+      });
+    if (primeiros.length < 2) return null;
+    return { s1: primeiros[0], s2: primeiros[1] };
+  }, [classificacao, superCampeonato, mataMataEstrutura]);
+
   const fasesView = useMemo(() => {
     const base =
       jogosPorFase.OITAVAS.length > 0
@@ -233,7 +271,7 @@ export default function AdminCategoriaChavePage() {
       expected.FINAL = expected.SEMI > 0 ? 1 : 0;
     } else if (base === "QUARTAS") {
       expected.QUARTAS = baseCount;
-      if (superCampeonato && baseCount === 2) {
+      if ((superCampeonato || mataMataEstrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") && baseCount === 2) {
         expected.SEMI = 2;
         expected.FINAL = 1;
       } else {
@@ -262,9 +300,10 @@ export default function AdminCategoriaChavePage() {
     fill("SEMI");
     fill("FINAL");
 
-    if (superCampeonato && base === "QUARTAS" && expected.SEMI === 2 && out.SEMI.length === 2) {
-      const s1 = superTop2?.s1;
-      const s2 = superTop2?.s2;
+    if ((superCampeonato || mataMataEstrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") && base === "QUARTAS" && expected.SEMI === 2 && out.SEMI.length === 2) {
+      const semifinalistasComBye = superCampeonato ? superTop2 : gruposTop2;
+      const s1 = semifinalistasComBye?.s1;
+      const s2 = semifinalistasComBye?.s2;
       if (s1 && out.SEMI[0]?.id.startsWith("placeholder:")) {
         out.SEMI[0] = {
           ...out.SEMI[0],
@@ -286,7 +325,7 @@ export default function AdminCategoriaChavePage() {
     }
 
     return out;
-  }, [jogosPorFase, superCampeonato, superTop2]);
+  }, [jogosPorFase, superCampeonato, superTop2, gruposTop2, mataMataEstrutura]);
 
   const partidaEditando = useMemo(() => {
     if (!editConfrontoId) return null;
