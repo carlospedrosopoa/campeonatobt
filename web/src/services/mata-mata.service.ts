@@ -236,7 +236,7 @@ export class MataMataService {
       .filter(Boolean);
 
     const pairings: { a: string; b: string }[] = [];
-    const { seeds, superCampeonato, config } = await this.calcularSeeds({ categoriaId: params.categoriaId });
+    const { seeds, qualificados, superCampeonato, config } = await this.calcularSeeds({ categoriaId: params.categoriaId });
     const estrutura = config.mataMata?.estrutura ?? "SUPER_CAMPEONATO_6";
 
     if (superCampeonato) {
