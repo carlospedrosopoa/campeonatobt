@@ -21,6 +21,7 @@ import {
 } from "@/db/schema";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { torneioAdministradoresService } from "@/services/torneio-administradores.service";
+import { slugify } from "@/lib/utils";
 
 export type ModeloTorneio = "NORMAL" | "SUPERCAMPEONATO";
 
@@ -51,6 +52,11 @@ export type CriarTorneioDTO = {
   logoUrl?: string;
   templateUrl?: string;
   templateInscricaoUrl?: string;
+};
+
+export type ClonarTorneioDTO = {
+  torneioOrigemId: string;
+  nome: string;
 };
 
 const normalizeDecimal = (value: string | number | null | undefined) => {
@@ -93,6 +99,27 @@ const normalizeStringArray = (value: unknown) => {
 };
 
 export class TorneiosService {
+  private async gerarSlugDisponivel(nome: string, executor: Pick<typeof db, "select"> = db) {
+    const base = slugify(nome);
+    let slug = base;
+    let sufixo = 2;
+
+    while (true) {
+      const existente = await executor
+        .select({ id: torneios.id })
+        .from(torneios)
+        .where(eq(torneios.slug, slug))
+        .limit(1);
+
+      if (!existente[0]) {
+        return slug;
+      }
+
+      slug = `${base}-${sufixo}`;
+      sufixo += 1;
+    }
+  }
+
   async listar(params?: { limit?: number; offset?: number }) {
     const limit = Math.min(Math.max(params?.limit ?? 50, 1), 200);
     const offset = Math.max(params?.offset ?? 0, 0);
@@ -345,6 +372,160 @@ export class TorneiosService {
       }
 
       return criado;
+    });
+
+    return {
+      ...novoTorneio,
+      modeloTorneio: normalizeModeloTorneio(novoTorneio.modeloTorneio, novoTorneio.superCampeonato),
+    };
+  }
+
+  async clonarSemInscricoes(dados: ClonarTorneioDTO) {
+    const nome = String(dados.nome || "").trim();
+    if (!nome) {
+      throw new Error("Informe o nome do novo torneio.");
+    }
+
+    const origemRows = await db.select().from(torneios).where(eq(torneios.id, dados.torneioOrigemId)).limit(1);
+    const origem = origemRows[0];
+    if (!origem) {
+      throw new Error("Torneio de origem não encontrado.");
+    }
+
+    const [categoriasOrigem, configsOrigem, arenasOrigem, patrocinadoresOrigem, apoiadoresOrigem, adminsOrigem] = await Promise.all([
+      db.select().from(categorias).where(eq(categorias.torneioId, origem.id)).orderBy(asc(categorias.criadoEm)),
+      db
+        .select({
+          categoriaId: categoriaConfiguracoes.categoriaId,
+          versao: categoriaConfiguracoes.versao,
+          config: categoriaConfiguracoes.config,
+        })
+        .from(categoriaConfiguracoes)
+        .innerJoin(categorias, eq(categoriaConfiguracoes.categoriaId, categorias.id))
+        .where(eq(categorias.torneioId, origem.id)),
+      db.select().from(arenas).where(eq(arenas.torneioId, origem.id)).orderBy(asc(arenas.criadoEm)),
+      db.select().from(patrocinadores).where(eq(patrocinadores.torneioId, origem.id)).orderBy(asc(patrocinadores.criadoEm)),
+      db.select().from(apoiadores).where(eq(apoiadores.torneioId, origem.id)).orderBy(asc(apoiadores.criadoEm)),
+      db.select({ usuarioId: torneioAdministradores.usuarioId }).from(torneioAdministradores).where(eq(torneioAdministradores.torneioId, origem.id)),
+    ]);
+
+    const novoTorneio = await db.transaction(async (tx) => {
+      const slug = await this.gerarSlugDisponivel(nome, tx);
+      const [clonado] = await tx
+        .insert(torneios)
+        .values({
+          nome,
+          slug,
+          descricao: origem.descricao,
+          dataInicio: origem.dataInicio,
+          dataFim: origem.dataFim,
+          local: origem.local,
+          status: "RASCUNHO",
+          oculto: true,
+          inscricaoComIa: origem.inscricaoComIa,
+          modeloTorneio: origem.modeloTorneio,
+          superCampeonato: origem.superCampeonato,
+          superCampeonatoFormato: origem.superCampeonatoFormato,
+          cardApenasComFotos: origem.cardApenasComFotos,
+          quadrasAtivas: origem.quadrasAtivas,
+          painelQuadrasReservas: null,
+          valorPrimeiraInscricao: origem.valorPrimeiraInscricao,
+          valorInscricaoAdicional: origem.valorInscricaoAdicional,
+          pixChave: origem.pixChave,
+          pixNome: origem.pixNome,
+          pixCidade: origem.pixCidade,
+          camisetaOpcoes: origem.camisetaOpcoes,
+          esporteId: origem.esporteId,
+          organizadorId: origem.organizadorId,
+          bannerUrl: origem.bannerUrl,
+          logoUrl: origem.logoUrl,
+          templateUrl: origem.templateUrl,
+          templateInscricaoUrl: origem.templateInscricaoUrl,
+        })
+        .returning();
+
+      if (adminsOrigem.length > 0) {
+        await tx.insert(torneioAdministradores).values(
+          adminsOrigem.map((admin) => ({
+            torneioId: clonado.id,
+            usuarioId: admin.usuarioId,
+          }))
+        );
+      }
+
+      if (arenasOrigem.length > 0) {
+        await tx.insert(arenas).values(
+          arenasOrigem.map((arena) => ({
+            torneioId: clonado.id,
+            pointId: arena.pointId,
+            nome: arena.nome,
+            logoUrl: arena.logoUrl,
+          }))
+        );
+      }
+
+      if (patrocinadoresOrigem.length > 0) {
+        await tx.insert(patrocinadores).values(
+          patrocinadoresOrigem.map((patrocinador) => ({
+            torneioId: clonado.id,
+            nome: patrocinador.nome,
+            logoUrl: patrocinador.logoUrl,
+            siteUrl: patrocinador.siteUrl,
+          }))
+        );
+      }
+
+      if (apoiadoresOrigem.length > 0) {
+        await tx.insert(apoiadores).values(
+          apoiadoresOrigem.map((apoiador) => ({
+            torneioId: clonado.id,
+            nome: apoiador.nome,
+            logoUrl: apoiador.logoUrl,
+            instagram: apoiador.instagram,
+            slogan: apoiador.slogan,
+            endereco: apoiador.endereco,
+            latitude: apoiador.latitude,
+            longitude: apoiador.longitude,
+            siteUrl: apoiador.siteUrl,
+          }))
+        );
+      }
+
+      const categoriaMap = new Map<string, string>();
+      for (const categoria of categoriasOrigem) {
+        const [novaCategoria] = await tx
+          .insert(categorias)
+          .values({
+            torneioId: clonado.id,
+            nome: categoria.nome,
+            slug: categoria.slug,
+            genero: categoria.genero,
+            valorInscricao: categoria.valorInscricao,
+            vagasMaximas: categoria.vagasMaximas,
+            dataHorario: categoria.dataHorario,
+          })
+          .returning();
+
+        categoriaMap.set(categoria.id, novaCategoria.id);
+      }
+
+      if (configsOrigem.length > 0) {
+        await tx.insert(categoriaConfiguracoes).values(
+          configsOrigem.flatMap((config) => {
+            const categoriaId = categoriaMap.get(config.categoriaId);
+            if (!categoriaId) return [];
+            return [
+              {
+                categoriaId,
+                versao: config.versao,
+                config: config.config,
+              },
+            ];
+          })
+        );
+      }
+
+      return clonado;
     });
 
     return {

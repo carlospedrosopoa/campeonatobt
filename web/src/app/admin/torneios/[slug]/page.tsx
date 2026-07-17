@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Calendar, Copy, ExternalLink, FileUp, Gamepad2, Handshake, ImageIcon, List, MapPin, MessageSquare, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
 import { gerarCardProgramacaoTorneioAdmin } from "@/lib/match-card-client";
 
@@ -50,6 +50,7 @@ type DashboardStats = {
 
 export default function AdminTorneioDashboardPage() {
   const params = useParams<{ slug: string }>();
+  const router = useRouter();
   const slugAtual = params.slug;
 
   const [torneio, setTorneio] = useState<Torneio | null>(null);
@@ -66,9 +67,12 @@ export default function AdminTorneioDashboardPage() {
   const [salvandoCategoria, setSalvandoCategoria] = useState(false);
   const [clonandoCategoriaId, setClonandoCategoriaId] = useState<string | null>(null);
   const [excluindoCategoriaId, setExcluindoCategoriaId] = useState<string | null>(null);
+  const [clonandoTorneioId, setClonandoTorneioId] = useState<string | null>(null);
   const [categoriaParaClonar, setCategoriaParaClonar] = useState<Categoria | null>(null);
   const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<Categoria | null>(null);
+  const [torneioParaClonar, setTorneioParaClonar] = useState<Torneio | null>(null);
   const [nomeCloneCategoria, setNomeCloneCategoria] = useState("");
+  const [nomeCloneTorneio, setNomeCloneTorneio] = useState("");
   const [senhaExclusaoCategoria, setSenhaExclusaoCategoria] = useState("");
   const [formCategoria, setFormCategoria] = useState({
     nome: "",
@@ -185,10 +189,23 @@ export default function AdminTorneioDashboardPage() {
     setErroCategorias(null);
   }
 
+  function abrirClonarTorneio() {
+    if (!torneio) return;
+    setTorneioParaClonar(torneio);
+    setNomeCloneTorneio(`${torneio.nome} - Cópia`);
+    setErroCategorias(null);
+  }
+
   function fecharModalClonarCategoria() {
     if (clonandoCategoriaId) return;
     setCategoriaParaClonar(null);
     setNomeCloneCategoria("");
+  }
+
+  function fecharModalClonarTorneio() {
+    if (clonandoTorneioId) return;
+    setTorneioParaClonar(null);
+    setNomeCloneTorneio("");
   }
 
   async function recarregarDashboard() {
@@ -286,6 +303,44 @@ export default function AdminTorneioDashboardPage() {
       setErroCategorias(e?.message || "Erro inesperado");
     } finally {
       setClonandoCategoriaId(null);
+    }
+  }
+
+  async function confirmarClonagemTorneio() {
+    if (!torneioParaClonar) return;
+    setErroCategorias(null);
+
+    const nome = nomeCloneTorneio.trim();
+    if (!nome) {
+      setErroCategorias("Informe o nome do novo torneio.");
+      return;
+    }
+
+    try {
+      setClonandoTorneioId(torneioParaClonar.id);
+      const res = await fetch(`/api/v1/torneios/${slugAtual}/clonar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.json().catch(() => null);
+        throw new Error(msg?.error || "Falha ao clonar torneio");
+      }
+
+      const novo = (await res.json().catch(() => null)) as { slug?: string | null };
+      if (novo?.slug) {
+        router.push(`/admin/torneios/${novo.slug}`);
+        return;
+      }
+
+      await recarregarDashboard();
+      fecharModalClonarTorneio();
+    } catch (e: any) {
+      setErroCategorias(e?.message || "Erro inesperado");
+    } finally {
+      setClonandoTorneioId(null);
     }
   }
 
@@ -528,6 +583,15 @@ export default function AdminTorneioDashboardPage() {
           >
             Editar dados
           </Link>
+          <button
+            type="button"
+            onClick={abrirClonarTorneio}
+            disabled={!torneio || Boolean(clonandoTorneioId)}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Copy className="h-4 w-4" />
+            {clonandoTorneioId === torneio?.id ? "Clonando..." : "Clonar torneio"}
+          </button>
           <Link
             href={`/admin/torneios/${slugAtual}/arenas`}
             className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -1167,6 +1231,94 @@ export default function AdminTorneioDashboardPage() {
                 >
                   <Copy className="h-4 w-4" />
                   {clonandoCategoriaId === categoriaParaClonar.id ? "Clonando categoria..." : "Clonar categoria"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {torneioParaClonar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={fecharModalClonarTorneio}>
+          <div
+            className="w-full max-w-2xl rounded-2xl border border-orange-200 bg-white shadow-2xl"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-orange-100 bg-orange-50 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm font-semibold uppercase tracking-wide text-orange-700">Clonagem de torneio</div>
+                  <h3 className="mt-1 text-xl font-bold text-slate-900">Criar um novo torneio com a mesma estrutura</h3>
+                  <p className="mt-2 text-sm text-slate-700">
+                    O sistema vai copiar dados do torneio, categorias, configurações, arenas, apoiadores e patrocinadores.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fecharModalClonarTorneio}
+                  disabled={Boolean(clonandoTorneioId)}
+                  className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
+                <div className="font-semibold">Torneio de origem: {torneioParaClonar.nome}</div>
+                <div className="mt-2">
+                  A cópia nasce em `RASCUNHO` e ficará oculta até você revisar. Inscrições, pagamentos, equipes, grupos, jogos,
+                  rodadas e comunicações não serão clonados.
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Origem</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{torneioParaClonar.nome}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Categorias</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{categorias.length}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Novo status</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">RASCUNHO / Oculto</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Novo nome do torneio</label>
+                <input
+                  type="text"
+                  value={nomeCloneTorneio}
+                  onChange={(e) => setNomeCloneTorneio(e.target.value)}
+                  placeholder="Ex.: Circuito Verão 2027"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-500/10"
+                />
+                <div className="text-xs text-slate-500">
+                  O slug será gerado automaticamente a partir do novo nome, com ajuste de unicidade quando necessário.
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={fecharModalClonarTorneio}
+                  disabled={Boolean(clonandoTorneioId)}
+                  className="inline-flex w-full items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmarClonagemTorneio()}
+                  disabled={clonandoTorneioId === torneioParaClonar.id}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50 sm:w-auto"
+                >
+                  <Copy className="h-4 w-4" />
+                  {clonandoTorneioId === torneioParaClonar.id ? "Clonando torneio..." : "Clonar torneio"}
                 </button>
               </div>
             </div>
