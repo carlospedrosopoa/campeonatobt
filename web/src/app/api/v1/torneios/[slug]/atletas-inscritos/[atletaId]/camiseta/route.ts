@@ -22,6 +22,34 @@ function normalizeEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeGeneroAtleta(value: unknown): "MASCULINO" | "FEMININO" | null {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return null;
+  if (["m", "masculino", "male", "homem"].includes(normalized)) return "MASCULINO";
+  if (["f", "feminino", "female", "mulher"].includes(normalized)) return "FEMININO";
+  return null;
+}
+
+function extractPlayGenero(payload: any) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  return normalizeGeneroAtleta(
+    source.genero ||
+      source.sexo ||
+      source.gender ||
+      source.atleta?.genero ||
+      source.atleta?.sexo ||
+      source.usuario?.genero ||
+      source.usuario?.sexo ||
+      source.user?.genero ||
+      source.user?.sexo
+  );
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string; atletaId: string }> }
@@ -82,6 +110,7 @@ export async function GET(
         : normalizeOption(prefRows[0]?.camisetaOpcao);
 
     let playDefault: string | null = null;
+    let genero: "MASCULINO" | "FEMININO" | null = null;
     if (playAtletaId) {
       try {
         const token = await getPlayAdminToken();
@@ -89,9 +118,11 @@ export async function GET(
         if (result.res.ok) {
           const camiseta = extractCamisetaFromPlay(result.data);
           playDefault = opcoes.length > 0 ? findMatch(opcoes, camiseta) : normalizeOption(camiseta);
+          genero = extractPlayGenero(result.data);
         }
       } catch {
         playDefault = null;
+        genero = null;
       }
     }
 
@@ -101,6 +132,8 @@ export async function GET(
         opcoes,
         selecionada: selecionada || null,
         playDefault: playDefault || null,
+        genero,
+        generoPreenchido: Boolean(genero),
       },
       { headers: { "Cache-Control": "no-store" } }
     );

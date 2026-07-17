@@ -49,8 +49,24 @@ export async function PATCH(
     const status = body?.status as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA" | undefined;
     const capitaoPosicao = body?.capitaoPosicao === "B" ? "B" : "A";
 
-    const atletaA = body?.atletaA as { nome?: string; email?: string; telefone?: string; playnaquadraAtletaId?: string; fotoUrl?: string; camisetaOpcao?: string | null } | undefined;
-    const atletaB = body?.atletaB as { nome?: string; email?: string; telefone?: string; playnaquadraAtletaId?: string; fotoUrl?: string; camisetaOpcao?: string | null } | undefined;
+    const atletaA = body?.atletaA as {
+      nome?: string;
+      email?: string;
+      telefone?: string;
+      playnaquadraAtletaId?: string;
+      fotoUrl?: string;
+      camisetaOpcao?: string | null;
+      genero?: string | null;
+    } | undefined;
+    const atletaB = body?.atletaB as {
+      nome?: string;
+      email?: string;
+      telefone?: string;
+      playnaquadraAtletaId?: string;
+      fotoUrl?: string;
+      camisetaOpcao?: string | null;
+      genero?: string | null;
+    } | undefined;
 
     if (!atletaA?.nome || !atletaA?.email || !atletaB?.nome || !atletaB?.email) {
       return NextResponse.json({ error: "Dados dos dois atletas sÃ£o obrigatÃ³rios" }, { status: 400 });
@@ -62,8 +78,24 @@ export async function PATCH(
       equipeNome: equipeNome === undefined ? undefined : equipeNome,
       capitaoPosicao,
       status,
-      atletaA: { nome: atletaA.nome, email: atletaA.email, telefone: atletaA.telefone, playnaquadraAtletaId: atletaA.playnaquadraAtletaId, fotoUrl: atletaA.fotoUrl, camisetaOpcao: atletaA.camisetaOpcao ?? null },
-      atletaB: { nome: atletaB.nome, email: atletaB.email, telefone: atletaB.telefone, playnaquadraAtletaId: atletaB.playnaquadraAtletaId, fotoUrl: atletaB.fotoUrl, camisetaOpcao: atletaB.camisetaOpcao ?? null },
+      atletaA: {
+        nome: atletaA.nome,
+        email: atletaA.email,
+        telefone: atletaA.telefone,
+        playnaquadraAtletaId: atletaA.playnaquadraAtletaId,
+        fotoUrl: atletaA.fotoUrl,
+        camisetaOpcao: atletaA.camisetaOpcao ?? null,
+        genero: atletaA.genero ?? null,
+      },
+      atletaB: {
+        nome: atletaB.nome,
+        email: atletaB.email,
+        telefone: atletaB.telefone,
+        playnaquadraAtletaId: atletaB.playnaquadraAtletaId,
+        fotoUrl: atletaB.fotoUrl,
+        camisetaOpcao: atletaB.camisetaOpcao ?? null,
+        genero: atletaB.genero ?? null,
+      },
     });
 
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });

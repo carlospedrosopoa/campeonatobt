@@ -97,3 +97,39 @@ export async function playGetAtletaById(params: { token: string; atletaId: strin
   return { res, data };
 }
 
+export async function playAtualizarGeneroAtleta(params: {
+  token: string;
+  atletaId: string;
+  genero: "MASCULINO" | "FEMININO";
+}) {
+  const atletaId = String(params.atletaId || "").trim();
+  if (!atletaId) {
+    throw new Error("ID do atleta no Play na Quadra é obrigatório para atualizar o gênero");
+  }
+
+  const sexo = params.genero === "MASCULINO" ? "M" : "F";
+  const tentativas = [
+    { method: "PATCH", body: { genero: params.genero } },
+    { method: "PUT", body: { genero: params.genero } },
+    { method: "PATCH", body: { sexo } },
+    { method: "PUT", body: { sexo } },
+  ] as const;
+
+  let ultimo: { res: Response; data: any } | null = null;
+
+  for (const tentativa of tentativas) {
+    const { res, data } = await playFetchSmartJson(`/atleta/${encodeURIComponent(atletaId)}`, {
+      method: tentativa.method,
+      token: params.token,
+      body: JSON.stringify(tentativa.body),
+    });
+
+    ultimo = { res, data };
+    if (res.ok) return { res, data };
+  }
+
+  if (ultimo) return ultimo;
+
+  throw new Error("Não foi possível atualizar o gênero do atleta no Play na Quadra");
+}
+

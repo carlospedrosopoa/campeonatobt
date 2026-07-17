@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
-import { playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
+import { playAtualizarGeneroAtleta, playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
 
 export type CriarInscricaoDTO = {
   torneioId: string;
@@ -99,58 +99,73 @@ function extractPlayAtletaGenero(payload: any) {
 }
 
 async function resolverGeneroAtleta(params: AtletaGeneroInput) {
-  const generoInformado = normalizeGeneroAtleta(params.genero);
-  if (generoInformado) {
-    return {
-      nome: params.nome || normalizeEmail(params.email) || "atleta",
-      genero: generoInformado,
-    };
-  }
-
   const token = await getPlayAdminToken();
   const email = normalizeEmail(params.email);
   const playId = String(params.playnaquadraAtletaId || "").trim();
 
-  if (playId) {
-    const byId = await playGetAtletaById({ token, atletaId: playId });
-    if (!byId.res.ok) {
-      throw new Error(`Falha ao validar o perfil de ${params.nome || email || "atleta"} no Play na Quadra`);
+  async function buscarPerfilPlay() {
+    if (playId) {
+      const byId = await playGetAtletaById({ token, atletaId: playId });
+      if (!byId.res.ok) {
+        throw new Error(`Falha ao validar o perfil de ${params.nome || email || "atleta"} no Play na Quadra`);
+      }
+      return extractPlayAtletaGenero(byId.data);
     }
 
-    const parsed = extractPlayAtletaGenero(byId.data);
+    if (!email) {
+      throw new Error(`Não foi possível validar o gênero de ${params.nome || "um atleta"}: email não informado`);
+    }
+
+    const result = await playBuscarAtletas({ token, q: email, limite: 10 });
+    if (!result.res.ok) {
+      throw new Error(`Falha ao buscar o perfil de ${params.nome || email} no Play na Quadra`);
+    }
+
+    const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+    const exactMatch = rawCandidates
+      .map((item) => extractPlayAtletaGenero(item))
+      .find((item) => item.email && item.email === email);
+
+    if (!exactMatch?.playnaquadraAtletaId) {
+      throw new Error(`Não foi possível localizar o perfil de ${params.nome || email} no Play na Quadra para validar o gênero`);
+    }
+
+    const byId = await playGetAtletaById({ token, atletaId: exactMatch.playnaquadraAtletaId });
+    if (!byId.res.ok) {
+      throw new Error(`Falha ao validar o perfil de ${params.nome || email} no Play na Quadra`);
+    }
+
+    return extractPlayAtletaGenero(byId.data);
+  }
+
+  const generoInformado = normalizeGeneroAtleta(params.genero);
+  const perfil = await buscarPerfilPlay();
+
+  if (generoInformado) {
+    if (!perfil.playnaquadraAtletaId) {
+      throw new Error(`Não foi possível localizar o perfil de ${params.nome || email || "atleta"} no Play na Quadra para atualizar o gênero`);
+    }
+
+    if (perfil.genero !== generoInformado) {
+      const atualizado = await playAtualizarGeneroAtleta({
+        token,
+        atletaId: perfil.playnaquadraAtletaId,
+        genero: generoInformado,
+      });
+      if (!atualizado.res.ok) {
+        throw new Error(`Falha ao atualizar o gênero de ${perfil.nome || params.nome || email || "atleta"} no Play na Quadra`);
+      }
+    }
+
     return {
-      nome: parsed.nome || params.nome || email || "atleta",
-      genero: parsed.genero,
+      nome: perfil.nome || params.nome || email || "atleta",
+      genero: generoInformado,
     };
   }
 
-  if (!email) {
-    throw new Error(`Não foi possível validar o gênero de ${params.nome || "um atleta"}: email não informado`);
-  }
-
-  const result = await playBuscarAtletas({ token, q: email, limite: 10 });
-  if (!result.res.ok) {
-    throw new Error(`Falha ao buscar o perfil de ${params.nome || email} no Play na Quadra`);
-  }
-
-  const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
-  const exactMatch = rawCandidates
-    .map((item) => extractPlayAtletaGenero(item))
-    .find((item) => item.email && item.email === email);
-
-  if (!exactMatch?.playnaquadraAtletaId) {
-    throw new Error(`Não foi possível localizar o perfil de ${params.nome || email} no Play na Quadra para validar o gênero`);
-  }
-
-  const byId = await playGetAtletaById({ token, atletaId: exactMatch.playnaquadraAtletaId });
-  if (!byId.res.ok) {
-    throw new Error(`Falha ao validar o perfil de ${params.nome || email} no Play na Quadra`);
-  }
-
-  const parsed = extractPlayAtletaGenero(byId.data);
   return {
-    nome: parsed.nome || params.nome || email,
-    genero: parsed.genero,
+    nome: perfil.nome || params.nome || email || "atleta",
+    genero: perfil.genero,
   };
 }
 

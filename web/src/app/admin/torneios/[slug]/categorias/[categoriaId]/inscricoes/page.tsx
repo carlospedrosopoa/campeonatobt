@@ -29,6 +29,7 @@ type Inscricao = {
       nome: string;
       email: string;
       telefone: string | null;
+      playnaquadraAtletaId?: string | null;
       fotoUrl?: string | null;
       camisetaOpcao?: string | null;
       pago: boolean;
@@ -45,6 +46,20 @@ type Atleta = {
   telefone: string | null;
   fotoUrl?: string | null;
 };
+
+type GeneroAtletaForm = "" | "MASCULINO" | "FEMININO";
+
+function normalizarGeneroAtleta(value: unknown): GeneroAtletaForm {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (["m", "masculino", "male", "homem"].includes(normalized)) return "MASCULINO";
+  if (["f", "feminino", "female", "mulher"].includes(normalized)) return "FEMININO";
+  return "";
+}
 
 export default function AdminCategoriaInscricoesPage() {
   const params = useParams<{ slug: string; categoriaId: string }>();
@@ -75,6 +90,8 @@ export default function AdminCategoriaInscricoesPage() {
   const [resultadosAtletaB, setResultadosAtletaB] = useState<Atleta[]>([]);
   const [buscandoAtletaB, setBuscandoAtletaB] = useState(false);
   const [carregandoCamisetaAtleta, setCarregandoCamisetaAtleta] = useState<"" | "A" | "B">("");
+  const [atletaAGeneroPreenchido, setAtletaAGeneroPreenchido] = useState(false);
+  const [atletaBGeneroPreenchido, setAtletaBGeneroPreenchido] = useState(false);
 
   const [form, setForm] = useState({
     equipeNome: "",
@@ -84,12 +101,14 @@ export default function AdminCategoriaInscricoesPage() {
     atletaATelefone: "",
     atletaAPlayId: "",
     atletaAFotoUrl: "",
+    atletaAGenero: "" as GeneroAtletaForm,
     atletaACamiseta: "",
     atletaBNome: "",
     atletaBEmail: "",
     atletaBTelefone: "",
     atletaBPlayId: "",
     atletaBFotoUrl: "",
+    atletaBGenero: "" as GeneroAtletaForm,
     atletaBCamiseta: "",
     status: "APROVADA" as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA",
   });
@@ -239,6 +258,8 @@ export default function AdminCategoriaInscricoesPage() {
     setResultadosAtletaA([]);
     setBuscaAtletaB("");
     setResultadosAtletaB([]);
+    setAtletaAGeneroPreenchido(false);
+    setAtletaBGeneroPreenchido(false);
     setForm({
       equipeNome: "",
       capitaoPosicao: "A",
@@ -247,12 +268,14 @@ export default function AdminCategoriaInscricoesPage() {
       atletaATelefone: "",
       atletaAPlayId: "",
       atletaAFotoUrl: "",
+      atletaAGenero: "",
       atletaACamiseta: "",
       atletaBNome: "",
       atletaBEmail: "",
       atletaBTelefone: "",
       atletaBPlayId: "",
       atletaBFotoUrl: "",
+      atletaBGenero: "",
       atletaBCamiseta: "",
       status: "APROVADA",
     });
@@ -265,9 +288,11 @@ export default function AdminCategoriaInscricoesPage() {
     setResultadosAtletaA([]);
     setBuscaAtletaB("");
     setResultadosAtletaB([]);
+    setAtletaAGeneroPreenchido(false);
+    setAtletaBGeneroPreenchido(false);
   }
 
-  async function preencherCamisetaDoPerfil(posicao: "A" | "B", atleta: Atleta) {
+  async function preencherDadosDoPerfil(posicao: "A" | "B", atleta: { id: string; email?: string | null }) {
     if (!slug) return;
 
     try {
@@ -275,7 +300,10 @@ export default function AdminCategoriaInscricoesPage() {
       const email = String(atleta.email || "").trim();
       const qs = new URLSearchParams();
       if (email) qs.set("email", email);
-      const res = await fetch(`/api/v1/torneios/${slug}/atletas-inscritos/${encodeURIComponent(atleta.id)}/camiseta?${qs.toString()}`, {
+      const atletaId = String(atleta.id || "").trim();
+      if (!atletaId) return;
+
+      const res = await fetch(`/api/v1/torneios/${slug}/atletas-inscritos/${encodeURIComponent(atletaId)}/camiseta?${qs.toString()}`, {
         cache: "no-store",
       });
       const payload = (await res.json().catch(() => null)) as any;
@@ -285,13 +313,23 @@ export default function AdminCategoriaInscricoesPage() {
         String(payload?.selecionada || "").trim() ||
         String(payload?.playDefault || "").trim() ||
         "";
-
-      if (!camiseta) return;
+      const genero = normalizarGeneroAtleta(payload?.genero);
+      const generoPreenchido = Boolean(payload?.generoPreenchido) || Boolean(genero);
 
       setForm((prev) => ({
         ...prev,
-        ...(posicao === "A" ? { atletaACamiseta: camiseta } : { atletaBCamiseta: camiseta }),
+        ...(posicao === "A"
+          ? {
+              atletaACamiseta: camiseta || prev.atletaACamiseta,
+              atletaAGenero: genero || prev.atletaAGenero,
+            }
+          : {
+              atletaBCamiseta: camiseta || prev.atletaBCamiseta,
+              atletaBGenero: genero || prev.atletaBGenero,
+            }),
       }));
+      if (posicao === "A") setAtletaAGeneroPreenchido(generoPreenchido);
+      if (posicao === "B") setAtletaBGeneroPreenchido(generoPreenchido);
     } finally {
       setCarregandoCamisetaAtleta((atual) => (atual === posicao ? "" : atual));
     }
@@ -308,23 +346,33 @@ export default function AdminCategoriaInscricoesPage() {
     setResultadosAtletaA([]);
     setBuscaAtletaB("");
     setResultadosAtletaB([]);
+    setAtletaAGeneroPreenchido(false);
+    setAtletaBGeneroPreenchido(false);
     setForm({
       equipeNome: inscricao.equipe.nome || "",
       capitaoPosicao,
       atletaANome: a1?.nome || "",
       atletaAEmail: a1?.email || "",
       atletaATelefone: a1?.telefone || "",
-      atletaAPlayId: "",
+      atletaAPlayId: a1?.playnaquadraAtletaId || "",
       atletaAFotoUrl: a1?.fotoUrl || "",
+      atletaAGenero: "",
       atletaACamiseta: a1?.camisetaOpcao || "",
       atletaBNome: a2?.nome || "",
       atletaBEmail: a2?.email || "",
       atletaBTelefone: a2?.telefone || "",
-      atletaBPlayId: "",
+      atletaBPlayId: a2?.playnaquadraAtletaId || "",
       atletaBFotoUrl: a2?.fotoUrl || "",
+      atletaBGenero: "",
       atletaBCamiseta: a2?.camisetaOpcao || "",
       status: (inscricao.status as any) || "APROVADA",
     });
+    if (a1?.playnaquadraAtletaId || a1?.id) {
+      void preencherDadosDoPerfil("A", { id: a1?.playnaquadraAtletaId || a1.id, email: a1?.email || "" });
+    }
+    if (a2?.playnaquadraAtletaId || a2?.id) {
+      void preencherDadosDoPerfil("B", { id: a2?.playnaquadraAtletaId || a2.id, email: a2?.email || "" });
+    }
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -347,6 +395,7 @@ export default function AdminCategoriaInscricoesPage() {
           telefone: form.atletaATelefone.trim() || undefined,
           playnaquadraAtletaId: form.atletaAPlayId || undefined,
           fotoUrl: form.atletaAFotoUrl || undefined,
+          genero: form.atletaAGenero || null,
           camisetaOpcao: form.atletaACamiseta.trim() || null,
         },
         atletaB: {
@@ -355,6 +404,7 @@ export default function AdminCategoriaInscricoesPage() {
           telefone: form.atletaBTelefone.trim() || undefined,
           playnaquadraAtletaId: form.atletaBPlayId || undefined,
           fotoUrl: form.atletaBFotoUrl || undefined,
+          genero: form.atletaBGenero || null,
           camisetaOpcao: form.atletaBCamiseta.trim() || null,
         },
       };
@@ -623,6 +673,7 @@ export default function AdminCategoriaInscricoesPage() {
                         key={a.id}
                         type="button"
                         onClick={() => {
+                          setAtletaAGeneroPreenchido(false);
                           setForm((p) => ({
                             ...p,
                             atletaANome: a.nome,
@@ -630,10 +681,11 @@ export default function AdminCategoriaInscricoesPage() {
                             atletaATelefone: a.telefone ?? "",
                             atletaAPlayId: a.id,
                             atletaAFotoUrl: a.fotoUrl ?? "",
+                            atletaAGenero: "",
                           }));
                           setBuscaAtletaA("");
                           setResultadosAtletaA([]);
-                          void preencherCamisetaDoPerfil("A", a);
+                          void preencherDadosDoPerfil("A", a);
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-slate-50"
                       >
@@ -659,7 +711,10 @@ export default function AdminCategoriaInscricoesPage() {
                 <label className="text-sm font-medium text-slate-700">Email *</label>
                 <input
                   value={form.atletaAEmail}
-                  onChange={(e) => setForm((p) => ({ ...p, atletaAEmail: e.target.value }))}
+                  onChange={(e) => {
+                    setAtletaAGeneroPreenchido(false);
+                    setForm((p) => ({ ...p, atletaAEmail: e.target.value }));
+                  }}
                   type="email"
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
@@ -672,6 +727,21 @@ export default function AdminCategoriaInscricoesPage() {
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
               </div>
+              {form.atletaAEmail.trim() && !atletaAGeneroPreenchido && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Gênero</label>
+                  <select
+                    value={form.atletaAGenero}
+                    onChange={(e) => setForm((p) => ({ ...p, atletaAGenero: e.target.value as GeneroAtletaForm }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+                  >
+                    <option value="">Selecione se precisar informar</option>
+                    <option value="MASCULINO">Masculino</option>
+                    <option value="FEMININO">Feminino</option>
+                  </select>
+                  <div className="text-xs text-slate-500">Se o perfil no Play não tiver gênero preenchido, informe aqui para salvar junto com a inscrição.</div>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Camiseta</label>
                 {carregandoCamisetaAtleta === "A" ? <div className="text-xs text-slate-500">Buscando camiseta do perfil...</div> : null}
@@ -717,6 +787,7 @@ export default function AdminCategoriaInscricoesPage() {
                         key={a.id}
                         type="button"
                         onClick={() => {
+                          setAtletaBGeneroPreenchido(false);
                           setForm((p) => ({
                             ...p,
                             atletaBNome: a.nome,
@@ -724,10 +795,11 @@ export default function AdminCategoriaInscricoesPage() {
                             atletaBTelefone: a.telefone ?? "",
                             atletaBPlayId: a.id,
                             atletaBFotoUrl: a.fotoUrl ?? "",
+                            atletaBGenero: "",
                           }));
                           setBuscaAtletaB("");
                           setResultadosAtletaB([]);
-                          void preencherCamisetaDoPerfil("B", a);
+                          void preencherDadosDoPerfil("B", a);
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-slate-50"
                       >
@@ -753,7 +825,10 @@ export default function AdminCategoriaInscricoesPage() {
                 <label className="text-sm font-medium text-slate-700">Email *</label>
                 <input
                   value={form.atletaBEmail}
-                  onChange={(e) => setForm((p) => ({ ...p, atletaBEmail: e.target.value }))}
+                  onChange={(e) => {
+                    setAtletaBGeneroPreenchido(false);
+                    setForm((p) => ({ ...p, atletaBEmail: e.target.value }));
+                  }}
                   type="email"
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
@@ -766,6 +841,21 @@ export default function AdminCategoriaInscricoesPage() {
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
               </div>
+              {form.atletaBEmail.trim() && !atletaBGeneroPreenchido && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Gênero</label>
+                  <select
+                    value={form.atletaBGenero}
+                    onChange={(e) => setForm((p) => ({ ...p, atletaBGenero: e.target.value as GeneroAtletaForm }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+                  >
+                    <option value="">Selecione se precisar informar</option>
+                    <option value="MASCULINO">Masculino</option>
+                    <option value="FEMININO">Feminino</option>
+                  </select>
+                  <div className="text-xs text-slate-500">Se o perfil no Play não tiver gênero preenchido, informe aqui para salvar junto com a inscrição.</div>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Camiseta</label>
                 {carregandoCamisetaAtleta === "B" ? <div className="text-xs text-slate-500">Buscando camiseta do perfil...</div> : null}
