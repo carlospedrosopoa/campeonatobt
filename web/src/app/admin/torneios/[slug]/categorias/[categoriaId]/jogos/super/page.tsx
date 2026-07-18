@@ -8,6 +8,7 @@ import { gerarCardPartidaAdmin, gerarCardProgramacaoAdmin } from "@/lib/match-ca
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
 import { isRegrasBeachTennisSets, type RegrasPartidaConfig } from "@/lib/regras-partida";
+import { PartidaHeadToHeadButton } from "@/components/admin/PartidaHeadToHeadButton";
 
 type Categoria = {
   id: string;
@@ -1651,6 +1652,7 @@ export default function AdminCategoriaJogosSuperPage() {
                         </div>
                         
                         <div className="flex items-center gap-2">
+                          <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
                           <button
                             type="button"
                             onClick={() => gerarCardPartida(p)}
@@ -1787,6 +1789,7 @@ export default function AdminCategoriaJogosSuperPage() {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
                       <button
                         type="button"
                         onClick={() => gerarCardPartida(p)}
