@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
+import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Smartphone, Swords, Trophy, Trash2, X } from "lucide-react";
 import { gerarCardPartidaAdmin, gerarCardProgramacaoAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
@@ -1143,6 +1143,13 @@ export default function AdminCategoriaJogosSuperPage() {
             >
               <Network className="h-4 w-4" />
               Chave
+            </Link>
+            <Link
+              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/arbitro`}
+              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Smartphone className="h-4 w-4" />
+              Árbitro
             </Link>
           </div>
         </div>

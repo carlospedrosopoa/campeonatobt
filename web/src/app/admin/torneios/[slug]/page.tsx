@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Calendar, Copy, ExternalLink, FileUp, Gamepad2, Handshake, ImageIcon, List, MapPin, MessageSquare, Pencil, Plus, Save, Ticket, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Calendar, Copy, ExternalLink, FileUp, Gamepad2, Handshake, ImageIcon, List, MapPin, MessageSquare, Pencil, Plus, Save, Smartphone, Ticket, Trash2, Users, X } from "lucide-react";
 import { gerarCardProgramacaoTorneioAdmin } from "@/lib/match-card-client";
 
 type Torneio = {
@@ -915,6 +915,13 @@ export default function AdminTorneioDashboardPage() {
                         <Gamepad2 className="h-4 w-4" />
                         Jogos
                       </Link>
+                      <Link
+                        href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/jogos/arbitro`}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700"
+                      >
+                        <Smartphone className="h-4 w-4" />
+                        Árbitro
+                      </Link>
                       <button
                         type="button"
                         onClick={() => abrirEditarCategoria(cat)}
@@ -1022,6 +1029,13 @@ export default function AdminTorneioDashboardPage() {
                             >
                               <Gamepad2 className="h-4 w-4" />
                               Jogos
+                            </Link>
+                            <Link
+                              href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/jogos/arbitro`}
+                              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              <Smartphone className="h-4 w-4" />
+                              Árbitro
                             </Link>
                             <button
                               type="button"
