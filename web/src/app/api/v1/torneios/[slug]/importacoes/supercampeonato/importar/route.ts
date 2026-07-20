@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { arenas, categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, rodadas, usuarios } from "@/db/schema";
@@ -8,6 +8,7 @@ import { calcularResultadoPartida, obterRegrasPartidaEfetivas } from "@/lib/regr
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
 import { categoriasService } from "@/services/categorias.service";
+import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playGetAtletaById } from "@/services/playnaquadra-client";
 import { parseSuperCampeonatoResultadosXlsx, type SuperImportPreview } from "@/services/supercampeonato-import.service";
@@ -228,6 +229,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       placaresIgnorados: 0,
     };
     const warnings: string[] = [];
+    const cardUrlsParaExcluir = new Set<string>();
 
     const config = await categoriaConfigService.obterOuDefault(categoria.id);
     const regras = obterRegrasPartidaEfetivas({
@@ -423,6 +425,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               placarB: partidas.placarB,
               vencedorId: partidas.vencedorId,
               detalhesPlacar: partidas.detalhesPlacar,
+              fotoUrl: partidas.fotoUrl,
+              arenaId: partidas.arenaId,
+              quadra: partidas.quadra,
+              dataHorario: partidas.dataHorario,
+              equipeAId: partidas.equipeAId,
+              equipeBId: partidas.equipeBId,
             })
             .from(partidas)
             .where(
@@ -459,12 +467,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               (existenteTemDetalhes || Boolean(existente.vencedorId) || Number(existente.placarA ?? 0) !== 0 || Number(existente.placarB ?? 0) !== 0);
 
             const podeAplicarResultado = Object.keys(patchResultado).length > 0 && !existenteTemResultado;
+            const deveInvalidarCard = deveInvalidarCardPartida(existente, {
+              dataHorario,
+              arenaId,
+              quadra: null,
+              equipeAId: existente.equipeAId,
+              equipeBId: existente.equipeBId,
+            });
             const set = {
               ...baseSet,
               ...(podeAplicarResultado ? patchResultado : {}),
+              ...(deveInvalidarCard ? { fotoUrl: null } : {}),
               atualizadoEm: new Date(),
             } as any;
             await tx.update(partidas).set(set).where(eq(partidas.id, existente.id));
+            if (deveInvalidarCard && existente.fotoUrl?.trim()) {
+              cardUrlsParaExcluir.add(existente.fotoUrl);
+            }
             counters.partidasAtualizadas += 1;
           } else {
             const set = {
@@ -480,6 +499,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
       }
     });
+
+    await Promise.all(Array.from(cardUrlsParaExcluir).map((url) => excluirCardPartidaDoGcs(url)));
 
     await classificacaoCategoriaService.recalcularPorCategoria(categoria.id);
 

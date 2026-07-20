@@ -4,6 +4,7 @@ import { obterRegrasPartidaEfetivas, type RegrasPartidaConfig, type RegrasPartid
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { equipesDisplayService } from "@/services/equipes-display.service";
+import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
 
 const ACTIVE_MATCH_STATUSES = ["AGENDADA", "EM_ANDAMENTO"] as const;
 
@@ -475,15 +476,28 @@ export class PainelQuadrasService {
     await this.validarReservaQuadra(params.torneioId, quadraNumero, partida);
     await this.validarQuadraDisponivel(params.torneioId, quadra, params.partidaId);
 
+    const deveInvalidarCard = deveInvalidarCardPartida(partida, {
+      dataHorario: partida.dataHorario,
+      arenaId: params.arenaId ?? null,
+      quadra,
+      equipeAId: partida.equipeAId,
+      equipeBId: partida.equipeBId,
+    });
+
     const [updated] = await db
       .update(partidas)
       .set({
         quadra,
         arenaId: params.arenaId ?? null,
+        ...(deveInvalidarCard ? { fotoUrl: null } : {}),
         atualizadoEm: new Date(),
       })
       .where(eq(partidas.id, params.partidaId))
       .returning();
+
+    if (deveInvalidarCard) {
+      await excluirCardPartidaDoGcs(partida.fotoUrl);
+    }
 
     return updated;
   }
@@ -493,15 +507,28 @@ export class PainelQuadrasService {
     if (!partida) throw new Error("Partida não encontrada");
     if (partida.status !== "AGENDADA") throw new Error("Só é possível retirar da quadra partidas ainda não iniciadas");
 
+    const deveInvalidarCard = deveInvalidarCardPartida(partida, {
+      dataHorario: partida.dataHorario,
+      arenaId: null,
+      quadra: null,
+      equipeAId: partida.equipeAId,
+      equipeBId: partida.equipeBId,
+    });
+
     const [updated] = await db
       .update(partidas)
       .set({
         quadra: null,
         arenaId: null,
+        ...(deveInvalidarCard ? { fotoUrl: null } : {}),
         atualizadoEm: new Date(),
       })
       .where(eq(partidas.id, params.partidaId))
       .returning();
+
+    if (deveInvalidarCard) {
+      await excluirCardPartidaDoGcs(partida.fotoUrl);
+    }
 
     return updated;
   }
@@ -748,8 +775,13 @@ export class PainelQuadrasService {
         categoriaId: partidas.categoriaId,
         fase: partidas.fase,
         grupoId: partidas.grupoId,
+        arenaId: partidas.arenaId,
         quadra: partidas.quadra,
+        dataHorario: partidas.dataHorario,
         status: partidas.status,
+        fotoUrl: partidas.fotoUrl,
+        equipeAId: partidas.equipeAId,
+        equipeBId: partidas.equipeBId,
       })
       .from(partidas)
       .where(and(eq(partidas.id, partidaId), eq(partidas.torneioId, torneioId)))

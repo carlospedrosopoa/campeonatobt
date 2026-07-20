@@ -1,10 +1,11 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { db } from "@/db";
 import { arenas, partidas } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
+import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
 
 export async function PUT(
   request: NextRequest,
@@ -22,11 +23,22 @@ export async function PUT(
     }
 
     const partidaRow = await db
-      .select({ id: partidas.id, torneioId: partidas.torneioId, categoriaId: partidas.categoriaId })
+      .select({
+        id: partidas.id,
+        torneioId: partidas.torneioId,
+        categoriaId: partidas.categoriaId,
+        fotoUrl: partidas.fotoUrl,
+        arenaId: partidas.arenaId,
+        quadra: partidas.quadra,
+        dataHorario: partidas.dataHorario,
+        equipeAId: partidas.equipeAId,
+        equipeBId: partidas.equipeBId,
+      })
       .from(partidas)
       .where(and(eq(partidas.id, partidaId), eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId)))
       .limit(1);
-    if (!partidaRow[0]) return NextResponse.json({ error: "Partida nÃ£o encontrada" }, { status: 404 });
+    const partidaAtual = partidaRow[0];
+    if (!partidaAtual) return NextResponse.json({ error: "Partida nÃ£o encontrada" }, { status: 404 });
 
     const body = await request.json().catch(() => null);
     const arenaId = (body?.arenaId as string | null | undefined) ?? null;
@@ -45,21 +57,35 @@ export async function PUT(
 
     const dataHorario = dataHorarioRaw ? new Date(dataHorarioRaw) : null;
     const dataLimite = dataLimiteRaw ? new Date(dataLimiteRaw) : null;
+    const quadraNormalizada = quadra ? quadra.trim() : null;
     if (dataHorario && Number.isNaN(dataHorario.getTime())) return NextResponse.json({ error: "Data/hora invÃ¡lida" }, { status: 400 });
     if (dataLimite && Number.isNaN(dataLimite.getTime())) return NextResponse.json({ error: "Data limite invÃ¡lida" }, { status: 400 });
     if (dataHorario && !arenaId) return NextResponse.json({ error: "Arena Ã© obrigatÃ³ria para agendar a partida" }, { status: 400 });
+
+    const deveInvalidarCard = deveInvalidarCardPartida(partidaAtual, {
+      dataHorario,
+      arenaId,
+      quadra: quadraNormalizada,
+      equipeAId: partidaAtual.equipeAId,
+      equipeBId: partidaAtual.equipeBId,
+    });
 
     const [updated] = await db
       .update(partidas)
       .set({
         arenaId,
-        quadra: quadra ? quadra.trim() : null,
+        quadra: quadraNormalizada,
         dataHorario,
         dataLimite,
+        ...(deveInvalidarCard ? { fotoUrl: null } : {}),
         atualizadoEm: new Date(),
       })
       .where(eq(partidas.id, partidaId))
       .returning();
+
+    if (deveInvalidarCard) {
+      await excluirCardPartidaDoGcs(partidaAtual.fotoUrl);
+    }
 
     return NextResponse.json({ partida: updated });
   } catch (error: any) {

@@ -3,6 +3,7 @@ import { categorias, equipes, inscricoes, partidas, placarSubmissoes, torneios }
 import { and, eq, inArray, not, or } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
+import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
 
 type Fase = "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL";
 type QualifiedSeed = {
@@ -539,6 +540,10 @@ export class MataMataService {
         id: partidas.id,
         equipeAId: partidas.equipeAId,
         equipeBId: partidas.equipeBId,
+        fotoUrl: partidas.fotoUrl,
+        arenaId: partidas.arenaId,
+        quadra: partidas.quadra,
+        dataHorario: partidas.dataHorario,
       })
       .from(partidas)
       .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, faseAtual)));
@@ -550,22 +555,34 @@ export class MataMataService {
 
     await db.transaction(async (tx) => {
       for (const row of afetadas) {
+        const proximoEquipeAId = row.equipeAId === params.equipeOrigemId ? params.equipeDestinoId : row.equipeAId;
+        const proximoEquipeBId = row.equipeBId === params.equipeOrigemId ? params.equipeDestinoId : row.equipeBId;
+        const deveInvalidarCard = deveInvalidarCardPartida(row, {
+          dataHorario: row.dataHorario,
+          arenaId: row.arenaId,
+          quadra: row.quadra,
+          equipeAId: proximoEquipeAId,
+          equipeBId: proximoEquipeBId,
+        });
         await tx
           .update(partidas)
           .set({
-            equipeAId: row.equipeAId === params.equipeOrigemId ? params.equipeDestinoId : row.equipeAId,
-            equipeBId: row.equipeBId === params.equipeOrigemId ? params.equipeDestinoId : row.equipeBId,
+            equipeAId: proximoEquipeAId,
+            equipeBId: proximoEquipeBId,
             vencedorId: null,
             placarA: 0,
             placarB: 0,
             detalhesPlacar: null as any,
             status: "AGENDADA",
             finalizadoEm: null,
+            ...(deveInvalidarCard ? { fotoUrl: null } : {}),
             atualizadoEm: new Date(),
           })
           .where(eq(partidas.id, row.id));
       }
     });
+
+    await Promise.all(afetadas.map((row) => excluirCardPartidaDoGcs(row.fotoUrl)));
 
     return { fase: faseAtual, partidasAtualizadas: afetadas.length };
   }
@@ -875,7 +892,20 @@ export class MataMataService {
     if (!faseProxima) return { faseCriada: null as any, faseAtualizada: null as any, partidasCriadas: 0, partidasAtualizadas: 0 };
 
     const existentes = await db
-      .select({ id: partidas.id, status: partidas.status, vencedorId: partidas.vencedorId, placarA: partidas.placarA, placarB: partidas.placarB, detalhesPlacar: partidas.detalhesPlacar })
+      .select({
+        id: partidas.id,
+        status: partidas.status,
+        vencedorId: partidas.vencedorId,
+        placarA: partidas.placarA,
+        placarB: partidas.placarB,
+        detalhesPlacar: partidas.detalhesPlacar,
+        fotoUrl: partidas.fotoUrl,
+        arenaId: partidas.arenaId,
+        quadra: partidas.quadra,
+        dataHorario: partidas.dataHorario,
+        equipeAId: partidas.equipeAId,
+        equipeBId: partidas.equipeBId,
+      })
       .from(partidas)
       .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, faseProxima)));
 
@@ -893,6 +923,7 @@ export class MataMataService {
     await this.limparFasesPosteriores({ torneioId: params.torneioId, categoriaId: params.categoriaId, apos: faseProxima });
 
     if (existentes.length !== calc.pairings.length) {
+      const urlsParaExcluir = existentes.map((row) => row.fotoUrl).filter((value): value is string => Boolean(value?.trim()));
       await db.transaction(async (tx) => {
         await tx
           .delete(partidas)
@@ -914,6 +945,8 @@ export class MataMataService {
         }
       });
 
+      await Promise.all(urlsParaExcluir.map((url) => excluirCardPartidaDoGcs(url)));
+
       return {
         faseCriada: null as any,
         faseAtualizada: faseProxima,
@@ -926,6 +959,14 @@ export class MataMataService {
     let partidasAtualizadas = 0;
     for (let i = 0; i < sorted.length; i++) {
       const p = calc.pairings[i];
+      const atual = sorted[i];
+      const deveInvalidarCard = deveInvalidarCardPartida(atual, {
+        dataHorario: atual.dataHorario,
+        arenaId: atual.arenaId,
+        quadra: atual.quadra,
+        equipeAId: p.a,
+        equipeBId: p.b,
+      });
       await db
         .update(partidas)
         .set({
@@ -937,9 +978,13 @@ export class MataMataService {
           detalhesPlacar: null as any,
           status: "AGENDADA",
           finalizadoEm: null,
+          ...(deveInvalidarCard ? { fotoUrl: null } : {}),
           atualizadoEm: new Date(),
         })
-        .where(eq(partidas.id, sorted[i].id));
+        .where(eq(partidas.id, atual.id));
+      if (deveInvalidarCard) {
+        await excluirCardPartidaDoGcs(atual.fotoUrl);
+      }
       partidasAtualizadas += 1;
     }
 

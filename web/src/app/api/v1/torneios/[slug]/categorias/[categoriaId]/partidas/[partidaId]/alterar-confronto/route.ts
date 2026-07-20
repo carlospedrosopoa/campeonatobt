@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { inscricoes, partidas } from "@/db/schema";
 import { and, eq, inArray, not, or } from "drizzle-orm";
 import { MataMataService } from "@/services/mata-mata.service";
+import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
 
 export async function POST(
   request: NextRequest,
@@ -39,6 +40,12 @@ export async function POST(
         placarA: partidas.placarA,
         placarB: partidas.placarB,
         detalhesPlacar: partidas.detalhesPlacar,
+        fotoUrl: partidas.fotoUrl,
+        arenaId: partidas.arenaId,
+        quadra: partidas.quadra,
+        dataHorario: partidas.dataHorario,
+        equipeAId: partidas.equipeAId,
+        equipeBId: partidas.equipeBId,
         rodadaId: partidas.rodadaId,
         grupoId: partidas.grupoId,
       })
@@ -122,6 +129,13 @@ export async function POST(
 
     const ignorarConflito =
       (partida.fase === "GRUPOS" && isSuperCampeonato && force) || (partida.fase !== "GRUPOS" && faseMataMataEmManutencao);
+    const deveInvalidarCard = deveInvalidarCardPartida(partida, {
+      dataHorario: partida.dataHorario,
+      arenaId: partida.arenaId,
+      quadra: partida.quadra,
+      equipeAId,
+      equipeBId,
+    });
     if (ignorarConflito) {
       const updated = await db.transaction(async (tx) => {
         if (started && preservarPlacar) {
@@ -134,6 +148,7 @@ export async function POST(
               equipeAId,
               equipeBId,
               vencedorId,
+              ...(deveInvalidarCard ? { fotoUrl: null } : {}),
               atualizadoEm: new Date(),
             })
             .where(eq(partidas.id, partidaId))
@@ -151,12 +166,17 @@ export async function POST(
             placarB: 0,
             detalhesPlacar: null as any,
             status: "AGENDADA",
+            ...(deveInvalidarCard ? { fotoUrl: null } : {}),
             atualizadoEm: new Date(),
           })
           .where(eq(partidas.id, partidaId))
           .returning();
         return u;
       });
+
+      if (deveInvalidarCard) {
+        await excluirCardPartidaDoGcs(partida.fotoUrl);
+      }
 
       return NextResponse.json({ partida: updated });
     }
@@ -187,6 +207,7 @@ export async function POST(
             equipeAId,
             equipeBId,
             vencedorId,
+          ...(deveInvalidarCard ? { fotoUrl: null } : {}),
             atualizadoEm: new Date(),
           })
           .where(eq(partidas.id, partidaId))
@@ -204,12 +225,17 @@ export async function POST(
           placarB: 0,
           detalhesPlacar: null as any,
           status: "AGENDADA",
+          ...(deveInvalidarCard ? { fotoUrl: null } : {}),
           atualizadoEm: new Date(),
         })
         .where(eq(partidas.id, partidaId))
         .returning();
       return u;
     });
+
+    if (deveInvalidarCard) {
+      await excluirCardPartidaDoGcs(partida.fotoUrl);
+    }
 
     if (partida.fase !== "GRUPOS") {
       const mataMataService = new MataMataService();
@@ -226,4 +252,3 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
-
