@@ -48,7 +48,7 @@ type GrupoClassificacao = {
 
 type Partida = {
   id: string;
-  fase: "GRUPOS" | "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL";
+  fase: "GRUPOS" | "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL" | "TERCEIRO_LUGAR";
   status: string;
   grupoId: string | null;
   grupoNome: string | null;
@@ -91,6 +91,7 @@ const LABEL_FASE: Record<Partida["fase"], string> = {
   QUARTAS: "Quartas",
   SEMI: "Semi",
   FINAL: "Final",
+  TERCEIRO_LUGAR: "3º lugar",
 };
 
 const FORM_PLACAR_VAZIO: FormPlacar = {
@@ -237,12 +238,26 @@ export default function AdminCategoriaJogosArbitroPage() {
     try {
       setCarregandoPartidas(true);
       setErro(null);
-      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=${faseAtual}`, { cache: "no-store" });
-      if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as any;
-        throw new Error(payload?.error || "Não foi possível carregar os jogos");
-      }
-      setPartidas((await res.json()) as Partida[]);
+      const fasesConsulta = faseAtual === "FINAL" ? ["FINAL", "TERCEIRO_LUGAR"] : [faseAtual];
+      const respostas = await Promise.all(
+        fasesConsulta.map(async (faseConsulta) => {
+          const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=${faseConsulta}`, { cache: "no-store" });
+          if (!res.ok) {
+            const payload = (await res.json().catch(() => null)) as any;
+            throw new Error(payload?.error || "Não foi possível carregar os jogos");
+          }
+          return (await res.json()) as Partida[];
+        })
+      );
+      setPartidas(
+        respostas
+          .flat()
+          .sort((a, b) => {
+            const ordemA = a.fase === "FINAL" ? 0 : a.fase === "TERCEIRO_LUGAR" ? 1 : 99;
+            const ordemB = b.fase === "FINAL" ? 0 : b.fase === "TERCEIRO_LUGAR" ? 1 : 99;
+            return ordemA - ordemB || a.id.localeCompare(b.id);
+          })
+      );
     } catch (e: any) {
       setErro(e?.message || "Erro inesperado");
       setPartidas([]);
@@ -312,6 +327,15 @@ export default function AdminCategoriaJogosArbitroPage() {
   }, [partidas, fase, filtroGrupoId, filtroEquipeId]);
 
   const partidasAgrupadas = useMemo(() => {
+    if (fase === "FINAL") {
+      return (["FINAL", "TERCEIRO_LUGAR"] as const)
+        .map((faseAtual) => ({
+          titulo: LABEL_FASE[faseAtual],
+          partidas: partidasFiltradas.filter((partida) => partida.fase === faseAtual),
+        }))
+        .filter((grupo) => grupo.partidas.length > 0);
+    }
+
     if (fase !== "GRUPOS") {
       return [{ titulo: LABEL_FASE[fase], partidas: partidasFiltradas }];
     }

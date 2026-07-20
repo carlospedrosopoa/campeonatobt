@@ -32,6 +32,7 @@ export type CategoriaConfigV1 = {
   fase2?: {
     habilitada: boolean;
     temFinal: boolean;
+    disputaTerceiroLugar?: boolean;
   };
   mataMata?: {
     estrutura: MataMataEstrutura;
@@ -46,7 +47,7 @@ export const defaultCategoriaConfigV1: CategoriaConfigV1 = {
   formato: "GRUPOS",
   grupos: { modo: "AUTO", tamanhoAlvo: 4 },
   classificacao: { porGrupo: 2 },
-  fase2: { habilitada: true, temFinal: true },
+  fase2: { habilitada: true, temFinal: true, disputaTerceiroLugar: false },
   mataMata: { estrutura: "SUPER_CAMPEONATO_6" },
   regrasPartida: { ...DEFAULT_REGRAS_PARTIDA_BT },
   desempate: ["VITORIAS", "SALDO_GAMES", "CONFRONTO_DIRETO", "GAMES_PRO", "SORTEIO"],
@@ -95,6 +96,7 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
 
   const fase2Habilitada = input?.fase2?.habilitada === false ? false : true;
   const temFinal = input?.fase2?.temFinal === false ? false : true;
+  const disputaTerceiroLugar = input?.fase2?.disputaTerceiroLugar === true;
 
   // Normaliza configurações de mata-mata
   const estrutura: MataMataEstrutura =
@@ -164,7 +166,7 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
     formato,
     grupos: formato === "MATA_MATA" ? undefined : { modo, tamanhoAlvo, quantidade: modo === "MANUAL" ? quantidade : undefined },
     classificacao: formato === "GRUPOS" ? { porGrupo, melhoresTerceiros } : undefined,
-    fase2: formato === "GRUPOS" ? { habilitada: fase2Habilitada, temFinal } : undefined,
+    fase2: formato === "GRUPOS" ? { habilitada: fase2Habilitada, temFinal, disputaTerceiroLugar } : undefined,
     mataMata: { estrutura, quantidadeClassificados },
     regrasPartida,
     desempate,

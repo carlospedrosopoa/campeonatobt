@@ -5,7 +5,8 @@ import { categoriaConfigService } from "@/services/categoria-config.service";
 import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
 import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
 
-type Fase = "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL";
+type Fase = "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL" | "TERCEIRO_LUGAR";
+type FaseProgressiva = Exclude<Fase, "TERCEIRO_LUGAR">;
 type QualifiedSeed = {
   equipeId: string;
   grupoId: string;
@@ -30,7 +31,7 @@ function getNextPowerOfTwo(n: number): number {
   return power;
 }
 
-function faseParaQuantidade(n: number): Fase {
+function faseParaQuantidade(n: number): FaseProgressiva {
   if (n === 2) return "FINAL";
   if (n === 6) return "QUARTAS";
   if (n === 4) return "SEMI";
@@ -38,9 +39,10 @@ function faseParaQuantidade(n: number): Fase {
   return "OITAVAS";
 }
 
-const ordemFases: Fase[] = ["OITAVAS", "QUARTAS", "SEMI", "FINAL"];
+const ordemFases: FaseProgressiva[] = ["OITAVAS", "QUARTAS", "SEMI", "FINAL"];
 
-function proximaFase(fase: Fase): Fase | null {
+function proximaFase(fase: Fase): FaseProgressiva | null {
+  if (fase === "TERCEIRO_LUGAR") return null;
   const idx = ordemFases.indexOf(fase);
   if (idx < 0) return null;
   return ordemFases[idx + 1] ?? null;
@@ -63,6 +65,215 @@ export class MataMataService {
       .where(eq(categorias.id, params.categoriaId))
       .limit(1);
     return rows[0]?.superCampeonato ?? false;
+  }
+
+  private fasesPosteriores(apos: Fase): Fase[] {
+    if (apos === "OITAVAS") return ["QUARTAS", "SEMI", "FINAL", "TERCEIRO_LUGAR"];
+    if (apos === "QUARTAS") return ["SEMI", "FINAL", "TERCEIRO_LUGAR"];
+    if (apos === "SEMI") return ["FINAL", "TERCEIRO_LUGAR"];
+    return [];
+  }
+
+  private async obterConfrontosDecisivosSemi(params: { torneioId: string; categoriaId: string }) {
+    const config = await categoriaConfigService.obterOuDefault(params.categoriaId);
+    const disputaTerceiroLugar = config.fase2?.disputaTerceiroLugar === true;
+
+    const jogos = await db
+      .select({
+        id: partidas.id,
+        status: partidas.status,
+        equipeAId: partidas.equipeAId,
+        equipeBId: partidas.equipeBId,
+        vencedorId: partidas.vencedorId,
+      })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "SEMI")));
+
+    const finalizados = jogos
+      .filter((jogo) => (jogo.status === "FINALIZADA" || jogo.status === "WO") && jogo.vencedorId)
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    if (jogos.length === 0 || finalizados.length !== jogos.length) {
+      return {
+        pronto: false,
+        disputaTerceiroLugar,
+        final: null as { a: string; b: string } | null,
+        terceiroLugar: null as { a: string; b: string } | null,
+      };
+    }
+
+    const vencedores = finalizados.map((jogo) => jogo.vencedorId!).filter(Boolean);
+    const perdedores = finalizados
+      .map((jogo) => (jogo.vencedorId === jogo.equipeAId ? jogo.equipeBId : jogo.equipeAId))
+      .filter(Boolean) as string[];
+
+    if (vencedores.length !== 2 || perdedores.length !== 2) {
+      throw new Error("Não foi possível identificar os classificados da semifinal.");
+    }
+
+    return {
+      pronto: true,
+      disputaTerceiroLugar,
+      final: { a: vencedores[0], b: vencedores[1] },
+      terceiroLugar: disputaTerceiroLugar ? { a: perdedores[0], b: perdedores[1] } : null,
+    };
+  }
+
+  private async sincronizarPartidaDecisiva(params: {
+    torneioId: string;
+    categoriaId: string;
+    fase: "FINAL" | "TERCEIRO_LUGAR";
+    confronto: { a: string; b: string } | null;
+  }) {
+    const existentes = await db
+      .select({
+        id: partidas.id,
+        fotoUrl: partidas.fotoUrl,
+        arenaId: partidas.arenaId,
+        quadra: partidas.quadra,
+        dataHorario: partidas.dataHorario,
+        equipeAId: partidas.equipeAId,
+        equipeBId: partidas.equipeBId,
+        status: partidas.status,
+        vencedorId: partidas.vencedorId,
+        placarA: partidas.placarA,
+        placarB: partidas.placarB,
+        detalhesPlacar: partidas.detalhesPlacar,
+      })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, params.fase)));
+
+    if (!params.confronto) {
+      if (existentes.length === 0) return { criou: 0, atualizou: 0, removeu: 0 };
+      await this.garantirSemResultados({ torneioId: params.torneioId, categoriaId: params.categoriaId, fase: params.fase });
+      const urls = existentes.map((row) => row.fotoUrl).filter((value): value is string => Boolean(value?.trim()));
+      await db
+        .delete(partidas)
+        .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, params.fase)));
+      await Promise.all(urls.map((url) => excluirCardPartidaDoGcs(url)));
+      return { criou: 0, atualizou: 0, removeu: existentes.length };
+    }
+
+    if (existentes.length > 1) {
+      await this.garantirSemResultados({ torneioId: params.torneioId, categoriaId: params.categoriaId, fase: params.fase });
+      const urls = existentes.map((row) => row.fotoUrl).filter((value): value is string => Boolean(value?.trim()));
+      await db
+        .delete(partidas)
+        .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, params.fase)));
+      await Promise.all(urls.map((url) => excluirCardPartidaDoGcs(url)));
+      await db.insert(partidas).values({
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        grupoId: null,
+        equipeAId: params.confronto.a,
+        equipeBId: params.confronto.b,
+        fase: params.fase,
+        status: "AGENDADA",
+        placarA: 0,
+        placarB: 0,
+        atualizadoEm: new Date(),
+      });
+      return { criou: 1, atualizou: 0, removeu: existentes.length };
+    }
+
+    const atual = existentes[0];
+    if (!atual) {
+      await db.insert(partidas).values({
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        grupoId: null,
+        equipeAId: params.confronto.a,
+        equipeBId: params.confronto.b,
+        fase: params.fase,
+        status: "AGENDADA",
+        placarA: 0,
+        placarB: 0,
+        atualizadoEm: new Date(),
+      });
+      return { criou: 1, atualizou: 0, removeu: 0 };
+    }
+
+    const deveInvalidarCard = deveInvalidarCardPartida(atual, {
+      dataHorario: atual.dataHorario,
+      arenaId: atual.arenaId,
+      quadra: atual.quadra,
+      equipeAId: params.confronto.a,
+      equipeBId: params.confronto.b,
+    });
+
+    const confrontoMudou = atual.equipeAId !== params.confronto.a || atual.equipeBId !== params.confronto.b;
+    if (!confrontoMudou) {
+      return { criou: 0, atualizou: 0, removeu: 0 };
+    }
+
+    await this.garantirSemResultados({ torneioId: params.torneioId, categoriaId: params.categoriaId, fase: params.fase });
+    await db
+      .update(partidas)
+      .set({
+        equipeAId: params.confronto.a,
+        equipeBId: params.confronto.b,
+        placarA: 0,
+        placarB: 0,
+        vencedorId: null,
+        detalhesPlacar: null as any,
+        status: "AGENDADA",
+        finalizadoEm: null,
+        ...(deveInvalidarCard ? { fotoUrl: null } : {}),
+        atualizadoEm: new Date(),
+      })
+      .where(eq(partidas.id, atual.id));
+
+    if (deveInvalidarCard) {
+      await excluirCardPartidaDoGcs(atual.fotoUrl);
+    }
+
+    return { criou: 0, atualizou: 1, removeu: 0 };
+  }
+
+  private async sincronizarFasesDecisivasDaSemi(params: { torneioId: string; categoriaId: string }) {
+    const confrontos = await this.obterConfrontosDecisivosSemi(params);
+    if (!confrontos.pronto) {
+      return { faseCriada: null as FaseProgressiva | null, faseAtualizada: null as FaseProgressiva | null, partidasCriadas: 0, partidasAtualizadas: 0 };
+    }
+
+    const [finalResultado, terceiroResultado] = await Promise.all([
+      this.sincronizarPartidaDecisiva({
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        fase: "FINAL",
+        confronto: confrontos.final,
+      }),
+      this.sincronizarPartidaDecisiva({
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        fase: "TERCEIRO_LUGAR",
+        confronto: confrontos.terceiroLugar,
+      }),
+    ]);
+
+    const partidasCriadas = finalResultado.criou + terceiroResultado.criou;
+    const partidasAtualizadas =
+      finalResultado.atualizou + terceiroResultado.atualizou + finalResultado.removeu + terceiroResultado.removeu;
+
+    if (partidasCriadas > 0) {
+      return {
+        faseCriada: "FINAL" as FaseProgressiva,
+        faseAtualizada: partidasAtualizadas > 0 ? ("FINAL" as FaseProgressiva) : null,
+        partidasCriadas,
+        partidasAtualizadas,
+      };
+    }
+
+    if (partidasAtualizadas > 0) {
+      return {
+        faseCriada: null as FaseProgressiva | null,
+        faseAtualizada: "FINAL" as FaseProgressiva,
+        partidasCriadas: 0,
+        partidasAtualizadas,
+      };
+    }
+
+    return { faseCriada: null as FaseProgressiva | null, faseAtualizada: null as FaseProgressiva | null, partidasCriadas: 0, partidasAtualizadas: 0 };
   }
 
   private async calcularSeeds(params: { categoriaId: string }) {
@@ -221,6 +432,9 @@ export class MataMataService {
   private async calcularPairingsProximaFase(params: { torneioId: string; categoriaId: string; faseAtual: Fase }) {
     const faseProxima = proximaFase(params.faseAtual);
     if (!faseProxima) return { faseProxima: null as any, pairings: [] as { a: string; b: string }[] };
+    if (params.faseAtual === "TERCEIRO_LUGAR") {
+      return { faseProxima: null as any, pairings: [] as { a: string; b: string }[] };
+    }
 
     const jogos = await db
       .select({ id: partidas.id, status: partidas.status, vencedorId: partidas.vencedorId })
@@ -394,17 +608,26 @@ export class MataMataService {
   }
 
   private async limparFasesPosteriores(params: { torneioId: string; categoriaId: string; apos: Fase }) {
-    const idx = ordemFases.indexOf(params.apos);
-    const fases = idx >= 0 ? ordemFases.slice(idx + 1) : [];
+    const fases = this.fasesPosteriores(params.apos);
     for (const fase of fases) {
-      const existe = await db
-        .select({ id: partidas.id })
+      const existentes = await db
+        .select({ id: partidas.id, fotoUrl: partidas.fotoUrl })
         .from(partidas)
-        .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, fase)))
-        .limit(1);
-      if (existe.length === 0) continue;
+        .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, fase)));
+      if (existentes.length === 0) continue;
       await this.garantirSemResultados({ torneioId: params.torneioId, categoriaId: params.categoriaId, fase });
-      await db.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, fase)));
+
+      const idsParaApagar = existentes.map((row) => row.id);
+      const urlsParaExcluir = existentes.map((row) => row.fotoUrl).filter((value): value is string => Boolean(value?.trim()));
+
+      await db.transaction(async (tx) => {
+        if (idsParaApagar.length > 0) {
+          await tx.delete(placarSubmissoes).where(inArray(placarSubmissoes.partidaId, idsParaApagar));
+        }
+        await tx.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, fase)));
+      });
+
+      await Promise.all(urlsParaExcluir.map((url) => excluirCardPartidaDoGcs(url)));
     }
   }
 
@@ -421,7 +644,7 @@ export class MataMataService {
     limparPosteriores?: boolean;
   }) {
     const fase = params.fase;
-    if (!ordemFases.includes(fase)) {
+    if (fase === "TERCEIRO_LUGAR" || !ordemFases.includes(fase)) {
       throw new Error("Fase inválida para montagem manual");
     }
 
@@ -456,8 +679,7 @@ export class MataMataService {
       }
     }
 
-    const idx = ordemFases.indexOf(fase);
-    const fasesAlvo = params.limparPosteriores === false ? [fase] : ordemFases.slice(Math.max(0, idx));
+    const fasesAlvo = params.limparPosteriores === false ? [fase] : [fase, ...this.fasesPosteriores(fase)];
 
     const existentes = await db
       .select({
@@ -467,6 +689,7 @@ export class MataMataService {
         placarA: partidas.placarA,
         placarB: partidas.placarB,
         detalhesPlacar: partidas.detalhesPlacar,
+        fotoUrl: partidas.fotoUrl,
       })
       .from(partidas)
       .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), inArray(partidas.fase, fasesAlvo as any)));
@@ -476,6 +699,7 @@ export class MataMataService {
     }
 
     const idsParaApagar = existentes.map((r) => r.id);
+    const urlsParaExcluir = existentes.map((r) => r.fotoUrl).filter((value): value is string => Boolean(value?.trim()));
 
     await db.transaction(async (tx) => {
       if (idsParaApagar.length > 0) {
@@ -504,6 +728,8 @@ export class MataMataService {
         });
       }
     });
+
+    await Promise.all(urlsParaExcluir.map((url) => excluirCardPartidaDoGcs(url)));
 
     return { ok: true, fase, partidasCriadas: confrontos.length, fasesAfetadas: fasesAlvo };
   }
@@ -610,10 +836,22 @@ export class MataMataService {
     const faseAtual = partida.fase as Fase;
     const faseProxima = proximaFase(faseAtual);
     const teams = [partida.equipeAId, partida.equipeBId];
+    let jogosPosteriores: Array<{
+      id: string;
+      fase: Fase | "GRUPOS";
+      status: string | null;
+      equipeAId: string | null;
+      equipeBId: string | null;
+      vencedorId: string | null;
+      placarA: number | null;
+      placarB: number | null;
+      detalhesPlacar: unknown;
+      fotoUrl: string | null;
+    }> = [];
 
     if (faseProxima) {
-      const posteriores = ordemFases.slice(ordemFases.indexOf(faseProxima));
-      const jogosPosteriores = await db
+      const posteriores = this.fasesPosteriores(faseAtual);
+      jogosPosteriores = await db
         .select({
           id: partidas.id,
           fase: partidas.fase,
@@ -624,6 +862,7 @@ export class MataMataService {
           placarA: partidas.placarA,
           placarB: partidas.placarB,
           detalhesPlacar: partidas.detalhesPlacar,
+          fotoUrl: partidas.fotoUrl,
         })
         .from(partidas)
         .where(
@@ -641,19 +880,17 @@ export class MataMataService {
       }
     }
 
+    const jogosPosterioresIds = faseProxima
+      ? jogosPosteriores.map((jogo) => jogo.id)
+      : [];
+    const jogosPosterioresUrls = faseProxima
+      ? jogosPosteriores.map((jogo) => jogo.fotoUrl).filter((value): value is string => Boolean(value?.trim()))
+      : [];
+
     const updated = await db.transaction(async (tx) => {
-      if (faseProxima) {
-        const posteriores = ordemFases.slice(ordemFases.indexOf(faseProxima));
-        await tx
-          .delete(partidas)
-          .where(
-            and(
-              eq(partidas.torneioId, params.torneioId),
-              eq(partidas.categoriaId, params.categoriaId),
-              inArray(partidas.fase, posteriores as any),
-              or(inArray(partidas.equipeAId, teams), inArray(partidas.equipeBId, teams))
-            )
-          );
+      if (jogosPosterioresIds.length > 0) {
+        await tx.delete(placarSubmissoes).where(inArray(placarSubmissoes.partidaId, jogosPosterioresIds));
+        await tx.delete(partidas).where(inArray(partidas.id, jogosPosterioresIds));
       }
 
       const [u] = await tx
@@ -671,6 +908,8 @@ export class MataMataService {
         .returning();
       return u;
     });
+
+    await Promise.all(jogosPosterioresUrls.map((url) => excluirCardPartidaDoGcs(url)));
 
     return updated;
   }
@@ -854,6 +1093,11 @@ export class MataMataService {
   }
 
   async gerarProximaFaseSeCompleta(params: { torneioId: string; categoriaId: string; faseAtual: Fase }) {
+    if (params.faseAtual === "SEMI") {
+      const r = await this.sincronizarFasesDecisivasDaSemi({ torneioId: params.torneioId, categoriaId: params.categoriaId });
+      return { faseCriada: r.faseCriada ?? r.faseAtualizada, partidasCriadas: r.partidasCriadas };
+    }
+
     const faseProxima = proximaFase(params.faseAtual);
     if (!faseProxima) return { faseCriada: null as any, partidasCriadas: 0 };
 
@@ -888,6 +1132,10 @@ export class MataMataService {
   }
 
   async sincronizarChaveAposAtualizacaoResultado(params: { torneioId: string; categoriaId: string; faseAtual: Fase }) {
+    if (params.faseAtual === "SEMI") {
+      return this.sincronizarFasesDecisivasDaSemi({ torneioId: params.torneioId, categoriaId: params.categoriaId });
+    }
+
     const faseProxima = proximaFase(params.faseAtual);
     if (!faseProxima) return { faseCriada: null as any, faseAtualizada: null as any, partidasCriadas: 0, partidasAtualizadas: 0 };
 

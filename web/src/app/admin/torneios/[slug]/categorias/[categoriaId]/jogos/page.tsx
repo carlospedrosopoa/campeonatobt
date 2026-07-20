@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Swords, Trophy, Trash2, X } from "lucide-react";
+import { ArrowLeft, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Smartphone, Swords, Trophy, Trash2, X } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
 import { isRegrasBeachTennisSets, isRegrasVoleiSets, type RegrasPartidaConfig } from "@/lib/regras-partida";
+import { PartidaHeadToHeadButton } from "@/components/admin/PartidaHeadToHeadButton";
 
 type Categoria = {
   id: string;
@@ -23,7 +24,7 @@ type CategoriaConfig = {
   formato: "GRUPOS" | "MATA_MATA" | "LIGA";
   grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
-  fase2?: { habilitada: boolean; temFinal: boolean };
+  fase2?: { habilitada: boolean; temFinal: boolean; disputaTerceiroLugar?: boolean };
   mataMata?: {
     estrutura: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
     quantidadeClassificados?: number;
@@ -141,6 +142,21 @@ function normalizarTexto(value?: string | null) {
 function isEsporteVoleiPraia(esporteNome?: string | null) {
   const normalizado = normalizarTexto(esporteNome);
   return normalizado.includes("volei de praia") || normalizado.includes("beach volleyball");
+}
+
+function labelFasePartida(fase?: string | null) {
+  if (fase === "TERCEIRO_LUGAR") return "3º lugar";
+  if (fase === "FINAL") return "Final";
+  if (fase === "SEMI") return "Semifinal";
+  if (fase === "QUARTAS") return "Quartas";
+  if (fase === "OITAVAS") return "Oitavas";
+  return "Grupo";
+}
+
+function ordemFaseDecisiva(fase?: string | null) {
+  if (fase === "FINAL") return 0;
+  if (fase === "TERCEIRO_LUGAR") return 1;
+  return 99;
 }
 
 export default function AdminCategoriaJogosPage() {
@@ -329,9 +345,18 @@ export default function AdminCategoriaJogosPage() {
     try {
       setCarregandoPartidas(true);
       const faseQuery = fase ?? fasePartidas;
-      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=${faseQuery}`, { cache: "no-store" });
-      if (!res.ok) return;
-      setPartidas((await res.json()) as Partida[]);
+      const fasesConsulta = faseQuery === "FINAL" ? ["FINAL", "TERCEIRO_LUGAR"] : [faseQuery];
+      const respostas = await Promise.all(
+        fasesConsulta.map(async (faseAtual) => {
+          const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=${faseAtual}`, { cache: "no-store" });
+          if (!res.ok) return [] as Partida[];
+          return (await res.json()) as Partida[];
+        })
+      );
+      const lista = respostas
+        .flat()
+        .sort((a, b) => ordemFaseDecisiva(a.fase) - ordemFaseDecisiva(b.fase) || a.id.localeCompare(b.id));
+      setPartidas(lista);
     } finally {
       setCarregandoPartidas(false);
     }
@@ -408,6 +433,8 @@ export default function AdminCategoriaJogosPage() {
     const fase = (searchParams.get("fase") || "").trim().toUpperCase();
     if (fase === "GRUPOS" || fase === "OITAVAS" || fase === "QUARTAS" || fase === "SEMI" || fase === "FINAL") {
       setFasePartidas(fase as any);
+    } else if (fase === "TERCEIRO_LUGAR") {
+      setFasePartidas("FINAL");
     }
     setPendingOpenPartidaId(partidaId);
   }, [searchParams]);
@@ -583,6 +610,17 @@ export default function AdminCategoriaJogosPage() {
       }));
   }, [fasePartidas, partidasFiltradas]);
 
+  const partidasAgrupadasDecisivas = useMemo(() => {
+    if (fasePartidas !== "FINAL") return [] as { titulo: string; partidas: Partida[] }[];
+
+    return ["FINAL", "TERCEIRO_LUGAR"]
+      .map((fase) => ({
+        titulo: labelFasePartida(fase),
+        partidas: partidasFiltradas.filter((partida) => partida.fase === fase),
+      }))
+      .filter((grupo) => grupo.partidas.length > 0);
+  }, [fasePartidas, partidasFiltradas]);
+
   function renderPartidaCard(p: Partida) {
     return (
       <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
@@ -590,7 +628,7 @@ export default function AdminCategoriaJogosPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
               <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
-                {p.grupoNome ?? "Grupo"}
+                {p.grupoNome ?? labelFasePartida(p.fase)}
               </span>
               {p.arenaNome ? (
                 <span className="flex items-center gap-1">
@@ -642,6 +680,7 @@ export default function AdminCategoriaJogosPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
             <button
               type="button"
               onClick={() => gerarCardPartida(p)}
@@ -1185,6 +1224,13 @@ export default function AdminCategoriaJogosPage() {
               <Network className="h-4 w-4" />
               Chave
             </Link>
+            <Link
+              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/arbitro`}
+              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Smartphone className="h-4 w-4" />
+              Árbitro
+            </Link>
           </div>
         </div>
       </div>
@@ -1385,6 +1431,32 @@ export default function AdminCategoriaJogosPage() {
               <div className="text-xs text-slate-500">
                 Use a opção de 8 classificados para 4 chaves com cruzamento padrão nas quartas, ou a de 6 classificados quando os 2 melhores líderes precisarem entrar direto na semifinal.
               </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Finais</label>
+              <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                <span>Disputa de 3º lugar</span>
+                <input
+                  type="checkbox"
+                  checked={config.fase2?.disputaTerceiroLugar === true}
+                  onChange={(e) =>
+                    setConfig((p) =>
+                      p
+                        ? {
+                            ...p,
+                            fase2: {
+                              ...(p.fase2 ?? { habilitada: true, temFinal: true, disputaTerceiroLugar: false }),
+                              disputaTerceiroLugar: e.target.checked,
+                            },
+                          }
+                        : p
+                    )
+                  }
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+              </label>
+              <div className="text-xs text-slate-500">Quando ativada, a semifinal gera final e 3º lugar automaticamente.</div>
             </div>
           </div>
         ) : (
@@ -1676,6 +1748,20 @@ export default function AdminCategoriaJogosPage() {
                 <section key={grupo.grupoNome} className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{grupo.grupoNome}</h3>
+                    <span className="text-xs font-medium text-slate-500">{grupo.partidas.length} jogo(s)</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {grupo.partidas.map((p) => renderPartidaCard(p))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : fasePartidas === "FINAL" ? (
+            <div className="mt-4 space-y-6">
+              {partidasAgrupadasDecisivas.map((grupo) => (
+                <section key={grupo.titulo} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{grupo.titulo}</h3>
                     <span className="text-xs font-medium text-slate-500">{grupo.partidas.length} jogo(s)</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

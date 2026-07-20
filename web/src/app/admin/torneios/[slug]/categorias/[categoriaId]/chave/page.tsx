@@ -14,7 +14,8 @@ type Categoria = {
   vagasMaximas: number | null;
 };
 
-type Fase = "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL";
+type FaseColuna = "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL";
+type Fase = FaseColuna | "TERCEIRO_LUGAR";
 
 type GrupoClassificacao = {
   grupoId: string;
@@ -83,10 +84,11 @@ function nomeFase(f: Fase) {
   if (f === "OITAVAS") return "Oitavas";
   if (f === "QUARTAS") return "Quartas";
   if (f === "SEMI") return "Semifinal";
+  if (f === "TERCEIRO_LUGAR") return "3º lugar";
   return "Final";
 }
 
-function placeholderMatch(fase: Fase, index: number): Partida {
+function placeholderMatch(fase: FaseColuna, index: number): Partida {
   return {
     id: `placeholder:${fase}:${index}`,
     fase,
@@ -127,7 +129,7 @@ export default function AdminCategoriaChavePage() {
   const [substituindoEquipe, setSubstituindoEquipe] = useState(false);
   const [modoManutencaoConfronto, setModoManutencaoConfronto] = useState(false);
   const [montagemAberta, setMontagemAberta] = useState(false);
-  const [faseMontagem, setFaseMontagem] = useState<Fase>("OITAVAS");
+  const [faseMontagem, setFaseMontagem] = useState<FaseColuna>("OITAVAS");
   const [limparPosterioresMontagem, setLimparPosterioresMontagem] = useState(true);
   const [qtdConfrontosMontagem, setQtdConfrontosMontagem] = useState(4);
   const [confrontosMontagem, setConfrontosMontagem] = useState<Array<{ equipeAId: string; equipeBId: string }>>([]);
@@ -139,6 +141,7 @@ export default function AdminCategoriaChavePage() {
     QUARTAS: [],
     SEMI: [],
     FINAL: [],
+    TERCEIRO_LUGAR: [],
   });
 
   async function carregarCategoria() {
@@ -152,7 +155,7 @@ export default function AdminCategoriaChavePage() {
   }
 
   async function carregarChave() {
-    const fases: Fase[] = ["OITAVAS", "QUARTAS", "SEMI", "FINAL"];
+    const fases: Fase[] = ["OITAVAS", "QUARTAS", "SEMI", "FINAL", "TERCEIRO_LUGAR"];
     const results = await Promise.all(
       fases.map(async (f): Promise<[Fase, Partida[]]> => {
         const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=${f}`, { cache: "no-store" });
@@ -163,7 +166,7 @@ export default function AdminCategoriaChavePage() {
       })
     );
 
-    const map = { OITAVAS: [], QUARTAS: [], SEMI: [], FINAL: [] } as Record<Fase, Partida[]>;
+    const map = { OITAVAS: [], QUARTAS: [], SEMI: [], FINAL: [], TERCEIRO_LUGAR: [] } as Record<Fase, Partida[]>;
     for (const [f, rows] of results) map[f] = rows;
     setJogosPorFase(map);
   }
@@ -262,7 +265,7 @@ export default function AdminCategoriaChavePage() {
     if (!base) return { OITAVAS: [] as Partida[], QUARTAS: [] as Partida[], SEMI: [] as Partida[], FINAL: [] as Partida[] };
 
     const baseCount = jogosPorFase[base as Fase].length;
-    const expected: Record<Fase, number> = { OITAVAS: 0, QUARTAS: 0, SEMI: 0, FINAL: 0 };
+    const expected: Record<FaseColuna, number> = { OITAVAS: 0, QUARTAS: 0, SEMI: 0, FINAL: 0 };
 
     if (base === "OITAVAS") {
       expected.OITAVAS = baseCount;
@@ -285,8 +288,13 @@ export default function AdminCategoriaChavePage() {
       expected.FINAL = baseCount;
     }
 
-    const out: Record<Fase, Partida[]> = { ...jogosPorFase };
-    const fill = (fase: Fase) => {
+    const out: Record<FaseColuna, Partida[]> = {
+      OITAVAS: jogosPorFase.OITAVAS,
+      QUARTAS: jogosPorFase.QUARTAS,
+      SEMI: jogosPorFase.SEMI,
+      FINAL: jogosPorFase.FINAL,
+    };
+    const fill = (fase: FaseColuna) => {
       const want = expected[fase];
       if (want <= 0) return;
       const cur = out[fase] ?? [];
@@ -326,6 +334,8 @@ export default function AdminCategoriaChavePage() {
 
     return out;
   }, [jogosPorFase, superCampeonato, superTop2, gruposTop2, mataMataEstrutura]);
+
+  const jogosTerceiroLugar = jogosPorFase.TERCEIRO_LUGAR ?? [];
 
   const partidaEditando = useMemo(() => {
     if (!editConfrontoId) return null;
@@ -377,14 +387,14 @@ export default function AdminCategoriaChavePage() {
     }
   }
 
-  function sugestaoQtdConfrontos(fase: Fase) {
+  function sugestaoQtdConfrontos(fase: FaseColuna) {
     if (fase === "OITAVAS") return 4;
     if (fase === "QUARTAS") return 2;
     if (fase === "SEMI") return 2;
     return 1;
   }
 
-  async function abrirMontagemManual(fase: Fase) {
+  async function abrirMontagemManual(fase: FaseColuna) {
     setErroMontagem(null);
     setFaseMontagem(fase);
     setLimparPosterioresMontagem(true);
@@ -537,16 +547,16 @@ export default function AdminCategoriaChavePage() {
       {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
 
       <div className="space-y-4 md:hidden">
-        {(["OITAVAS", "QUARTAS", "SEMI", "FINAL"] as Fase[]).map((fase) => {
+        {(["OITAVAS", "QUARTAS", "SEMI", "FINAL"] as FaseColuna[]).map((fase) => {
           const jogos = fasesView[fase];
-          const visible = jogos.length > 0;
+          const visible = fase === "FINAL" ? jogos.length > 0 || jogosTerceiroLugar.length > 0 : jogos.length > 0;
 
           return (
             <section key={`${fase}:mobile`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-bold uppercase tracking-wide text-slate-700">{nomeFase(fase)}</div>
                 <div className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
-                  {visible ? `${jogos.length} jogo(s)` : "Sem jogos"}
+                  {visible ? `${jogos.length + (fase === "FINAL" ? jogosTerceiroLugar.length : 0)} jogo(s)` : "Sem jogos"}
                 </div>
               </div>
 
@@ -587,6 +597,44 @@ export default function AdminCategoriaChavePage() {
                       </div>
                     );
                   })}
+                  {fase === "FINAL" && jogosTerceiroLugar.length > 0 ? (
+                    <div className="space-y-3 pt-2">
+                      <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{nomeFase("TERCEIRO_LUGAR")}</div>
+                      {jogosTerceiroLugar.map((p) => {
+                        const winnerA = p.vencedorId && p.vencedorId === p.equipeAId;
+                        const winnerB = p.vencedorId && p.vencedorId === p.equipeBId;
+                        return (
+                          <div key={`${p.id}:mobile-terceiro`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className={`truncate text-sm font-semibold ${winnerA ? "text-slate-900" : "text-slate-700"}`}>
+                                  {p.equipeANome || p.equipeAId.slice(0, 8)}
+                                </div>
+                                <div className={`mt-1 truncate text-sm font-semibold ${winnerB ? "text-slate-900" : "text-slate-700"}`}>
+                                  {p.equipeBNome || p.equipeBId.slice(0, 8)}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-semibold text-slate-900">{p.status === "AGUARDANDO" ? "-" : formatPlacar(p.detalhesPlacar)}</div>
+                                <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{p.status}</div>
+                              </div>
+                            </div>
+
+                            {!p.id.startsWith("placeholder:") ? (
+                              <button
+                                type="button"
+                                onClick={() => void abrirAlterarConfronto(p)}
+                                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Alterar confronto
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               )}
             </section>
@@ -596,9 +644,9 @@ export default function AdminCategoriaChavePage() {
 
       <div className="hidden overflow-x-auto md:block">
         <div className="min-w-[960px] grid grid-cols-4 gap-6">
-          {(["OITAVAS", "QUARTAS", "SEMI", "FINAL"] as Fase[]).map((fase) => {
+          {(["OITAVAS", "QUARTAS", "SEMI", "FINAL"] as FaseColuna[]).map((fase) => {
             const jogos = fasesView[fase];
-            const visible = jogos.length > 0;
+            const visible = fase === "FINAL" ? jogos.length > 0 || jogosTerceiroLugar.length > 0 : jogos.length > 0;
             if (!visible) {
               return (
                 <div key={fase} className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
@@ -641,6 +689,41 @@ export default function AdminCategoriaChavePage() {
                       </div>
                     );
                   })}
+                  {fase === "FINAL" && jogosTerceiroLugar.length > 0 ? (
+                    <div className="space-y-4 border-t border-slate-100 pt-4">
+                      <div className="text-xs text-slate-500 uppercase tracking-wider">{nomeFase("TERCEIRO_LUGAR")}</div>
+                      {jogosTerceiroLugar.map((p) => {
+                        const winnerA = p.vencedorId && p.vencedorId === p.equipeAId;
+                        const winnerB = p.vencedorId && p.vencedorId === p.equipeBId;
+                        return (
+                          <div key={`${p.id}:desktop-terceiro`} className="rounded-lg border border-slate-200 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className={`font-semibold truncate ${winnerA ? "text-slate-900" : "text-slate-700"}`}>{p.equipeANome || p.equipeAId.slice(0, 8)}</div>
+                                <div className={`font-semibold truncate ${winnerB ? "text-slate-900" : "text-slate-700"}`}>{p.equipeBNome || p.equipeBId.slice(0, 8)}</div>
+                                <div className="text-xs text-slate-500 mt-1">{p.status}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-semibold text-slate-900">{p.status === "AGUARDANDO" ? "-" : formatPlacar(p.detalhesPlacar)}</div>
+                              </div>
+                            </div>
+                            {!p.id.startsWith("placeholder:") ? (
+                              <div className="mt-3 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => void abrirAlterarConfronto(p)}
+                                  className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  Alterar confronto
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );
@@ -868,7 +951,7 @@ export default function AdminCategoriaChavePage() {
                   <label className="text-sm font-medium text-slate-700">Fase</label>
                   <select
                     value={faseMontagem}
-                    onChange={(e) => void abrirMontagemManual((e.target.value as Fase) || "OITAVAS")}
+                    onChange={(e) => void abrirMontagemManual((e.target.value as FaseColuna) || "OITAVAS")}
                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
                     disabled={salvandoMontagem}
                   >

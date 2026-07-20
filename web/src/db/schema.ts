@@ -4,7 +4,7 @@ import { pgTable, serial, text, timestamp, boolean, uuid, integer, decimal, json
 export const perfilEnum = pgEnum('perfil_usuario', ['ADMIN', 'ORGANIZADOR', 'ATLETA']);
 export const statusTorneioEnum = pgEnum('status_torneio', ['RASCUNHO', 'ABERTO', 'EM_ANDAMENTO', 'FINALIZADO', 'CANCELADO']);
 export const statusPartidaEnum = pgEnum('status_partida', ['AGENDADA', 'EM_ANDAMENTO', 'FINALIZADA', 'WO', 'CANCELADA']);
-export const faseTorneioEnum = pgEnum('fase_torneio', ['GRUPOS', 'OITAVAS', 'QUARTAS', 'SEMI', 'FINAL']);
+export const faseTorneioEnum = pgEnum('fase_torneio', ['GRUPOS', 'OITAVAS', 'QUARTAS', 'SEMI', 'FINAL', 'TERCEIRO_LUGAR']);
 export const statusInscricaoEnum = pgEnum('status_inscricao', ['PENDENTE', 'APROVADA', 'RECUSADA', 'FILA_ESPERA']);
 export const generoCategoriaEnum = pgEnum('genero_categoria', ['MASCULINO', 'FEMININO', 'MISTO']);
 export const statusPlacarSubmissaoEnum = pgEnum('status_placar_submissao', ['PENDENTE', 'CONFIRMADA', 'CANCELADA']);
