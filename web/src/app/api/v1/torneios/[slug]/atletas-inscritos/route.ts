@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, usuarios } from "@/db/schema";
