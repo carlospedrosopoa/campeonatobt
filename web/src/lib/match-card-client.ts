@@ -80,6 +80,21 @@ type GerarCardProgramacaoTorneioParams = {
   categorias: ProgramacaoCategoriaInfo[];
 };
 
+type DivulgacaoDuplaInfo = {
+  id: string;
+  nome: string;
+};
+
+type GerarCardDuplasInscritasParams = {
+  torneioNome: string;
+  categoriaNome: string;
+  templateUrl?: string | null;
+  salvarNoGcs?: boolean;
+  uploadFolder?: string | null;
+  download?: boolean;
+  duplas: DivulgacaoDuplaInfo[];
+};
+
 function nomePrimeiroEUltimo(nome?: string | null) {
   const partes = String(nome || "")
     .trim()
@@ -281,6 +296,19 @@ function drawTextLeft(ctx: CanvasRenderingContext2D, text: string, x: number, y:
   if (current) lines.push(current);
   lines.forEach((line, index) => ctx.fillText(line, x, y + index * lineHeight));
   return lines.length;
+}
+
+function fitTextSingleLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+  const value = text.trim();
+  if (!value) return "";
+  if (ctx.measureText(value).width <= maxWidth) return value;
+
+  let truncated = value;
+  while (truncated.length > 1 && ctx.measureText(`${truncated}...`).width > maxWidth) {
+    truncated = truncated.slice(0, -1).trimEnd();
+  }
+
+  return truncated.length < value.length ? `${truncated}...` : truncated;
 }
 
 export async function gerarCardPartidaAdmin(params: GerarCardParams) {
@@ -941,4 +969,153 @@ export async function gerarCardProgramacaoTorneioAdmin(params: GerarCardPrograma
   }
 
   return { url: uploadedUrl };
+}
+
+export async function gerarCardDuplasInscritasAdmin(params: GerarCardDuplasInscritasParams) {
+  const width = 1080;
+  const height = 1920;
+  const template = params.templateUrl ? await carregarImagem(params.templateUrl) : null;
+  const duplasOrdenadas = (params.duplas ?? [])
+    .slice()
+    .map((dupla) => ({ ...dupla, nome: String(dupla.nome || "").trim() || "Dupla" }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base", numeric: true }));
+
+  if (duplasOrdenadas.length === 0) {
+    throw new Error("Nenhuma dupla inscrita disponível para gerar o card");
+  }
+
+  const rowsPerColumn = 12;
+  const totalColumns = 2;
+  const rowsPerPage = rowsPerColumn * totalColumns;
+  const totalPages = Math.max(1, Math.ceil(duplasOrdenadas.length / rowsPerPage));
+  const uploadedUrls: string[] = [];
+
+  for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Não foi possível inicializar o canvas");
+
+    if (template) {
+      ctx.drawImage(template, 0, 0, width, height);
+    } else {
+      const grad = ctx.createLinearGradient(0, 0, width, height);
+      grad.addColorStop(0, "#0f172a");
+      grad.addColorStop(0.5, "#1e293b");
+      grad.addColorStop(1, "#ea580c");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    const overlay = ctx.createLinearGradient(0, 0, 0, height);
+    overlay.addColorStop(0, "rgba(2,6,23,0.28)");
+    overlay.addColorStop(0.45, "rgba(2,6,23,0.18)");
+    overlay.addColorStop(1, "rgba(2,6,23,0.34)");
+    ctx.fillStyle = overlay;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 50px Inter, Arial, sans-serif";
+    drawTextCenter(ctx, "DUPLAS INSCRITAS", width / 2, 580, 760, 54);
+
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = "800 32px Inter, Arial, sans-serif";
+    drawTextCenter(ctx, params.categoriaNome || "Categoria", width / 2, 650, 760, 36);
+
+    if (totalPages > 1) {
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "700 18px Inter, Arial, sans-serif";
+      ctx.fillText(`Página ${pageIndex + 1} de ${totalPages}`, width / 2, 706);
+    }
+
+    const boxX = 72;
+    const boxY = 760;
+    const boxW = 936;
+    const boxH = 780;
+    const boxPaddingX = 26;
+    const boxPaddingTop = 28;
+    const columnGap = 22;
+    const rowHeight = 62;
+    const colW = (boxW - boxPaddingX * 2 - columnGap) / 2;
+
+    ctx.fillStyle = "rgba(15,23,42,0.68)";
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeStyle = "rgba(255,255,255,0.16)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(boxX + boxW / 2, boxY + 20);
+    ctx.lineTo(boxX + boxW / 2, boxY + boxH - 20);
+    ctx.stroke();
+
+    const pageItems = duplasOrdenadas.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage);
+    pageItems.forEach((dupla, index) => {
+      const columnIndex = Math.floor(index / rowsPerColumn);
+      const rowIndex = index % rowsPerColumn;
+      const x = boxX + boxPaddingX + columnIndex * (colW + columnGap);
+      const y = boxY + boxPaddingTop + rowIndex * rowHeight;
+      const numero = pageIndex * rowsPerPage + index + 1;
+
+      ctx.fillStyle = numero % 2 === 0 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)";
+      ctx.fillRect(x, y, colW, 48);
+
+      ctx.fillStyle = "#fdba74";
+      ctx.font = "800 20px Inter, Arial, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(numero).padStart(2, "0"), x + 16, y + 24);
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.font = "700 22px Inter, Arial, sans-serif";
+      ctx.fillText(fitTextSingleLine(ctx, dupla.nome, colW - 86), x + 70, y + 24);
+    });
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
+    if (!blob) throw new Error("Falha ao gerar imagem do card");
+
+    const fileName =
+      totalPages > 1
+        ? `inscritos-${slugify(params.torneioNome)}-${slugify(params.categoriaNome)}-${pageIndex + 1}.png`
+        : `inscritos-${slugify(params.torneioNome)}-${slugify(params.categoriaNome)}.png`;
+
+    let uploadedUrl: string | null = null;
+    if (params.salvarNoGcs) {
+      const fd = new FormData();
+      fd.set("folder", (params.uploadFolder || "cards/inscritos").trim());
+      try {
+        fd.set("file", new File([blob], fileName, { type: "image/png" }));
+      } catch {
+        fd.set("file", blob, fileName);
+      }
+
+      const res = await fetch("/api/upload/image", { method: "POST", body: fd, cache: "no-store" });
+      const data = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(data?.mensagem || data?.error || "Falha ao salvar imagem no GCS");
+      const url = String(data?.url || "").trim();
+      if (!url) throw new Error("Upload no GCS não retornou URL");
+      uploadedUrl = url;
+      uploadedUrls.push(url);
+    }
+
+    const shouldDownload = params.download !== false;
+    if (shouldDownload) {
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+    }
+  }
+
+  return { urls: uploadedUrls };
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Banknote, Gamepad2, ImageIcon, Pencil, Plus, RefreshCw, Save, Trash2, Users, X } from "lucide-react";
-import { gerarCardInscricaoAdmin } from "@/lib/match-card-client";
+import { gerarCardDuplasInscritasAdmin, gerarCardInscricaoAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
   id: string;
@@ -80,6 +80,7 @@ export default function AdminCategoriaInscricoesPage() {
   const [editandoInscricao, setEditandoInscricao] = useState<Inscricao | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [sincronizandoFotos, setSincronizandoFotos] = useState(false);
+  const [gerandoCardDivulgacao, setGerandoCardDivulgacao] = useState(false);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
   const [pagando, setPagando] = useState<Record<string, boolean>>({});
 
@@ -116,6 +117,15 @@ export default function AdminCategoriaInscricoesPage() {
   const podeSalvar = useMemo(() => {
     return Boolean(form.atletaANome.trim() && form.atletaAEmail.trim() && form.atletaBNome.trim() && form.atletaBEmail.trim());
   }, [form]);
+
+  const inscricoesParaDivulgacao = useMemo(() => {
+    return inscricoes.filter(
+      (inscricao) =>
+        inscricao.status !== "RECUSADA" &&
+        inscricao.status !== "FILA_ESPERA" &&
+        inscricao.status !== "CANCELADA"
+    );
+  }, [inscricoes]);
 
   async function carregar() {
     try {
@@ -198,6 +208,37 @@ export default function AdminCategoriaInscricoesPage() {
       }
     } catch (e: any) {
       setErro(e?.message || "Não foi possível gerar o card da inscrição");
+    }
+  }
+
+  async function gerarCardDivulgacaoInscritos() {
+    try {
+      const duplas = inscricoesParaDivulgacao
+        .map((inscricao) => ({
+          id: inscricao.equipe.id || inscricao.id,
+          nome: (inscricao.equipe.nome || "").trim() || inscricao.equipe.atletas.map((atleta) => atleta.nome.split(" ")[0]).join(" / "),
+        }))
+        .filter((dupla) => dupla.nome);
+
+      if (duplas.length === 0) {
+        throw new Error("Nenhuma dupla disponível para gerar o card de divulgação");
+      }
+
+      setErro(null);
+      setGerandoCardDivulgacao(true);
+      await gerarCardDuplasInscritasAdmin({
+        torneioNome,
+        categoriaNome: categoria?.nome || "Categoria",
+        templateUrl: torneioTemplateInscricaoUrl,
+        salvarNoGcs: false,
+        download: true,
+        uploadFolder: `campeonatos/cards/inscritos/${slug}`,
+        duplas,
+      });
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível gerar o card de divulgação dos inscritos");
+    } finally {
+      setGerandoCardDivulgacao(false);
     }
   }
 
@@ -559,6 +600,17 @@ export default function AdminCategoriaInscricoesPage() {
         </div>
 
         <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto">
+          <button
+            type="button"
+            onClick={() => void gerarCardDivulgacaoInscritos()}
+            disabled={gerandoCardDivulgacao}
+            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+              gerandoCardDivulgacao ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-orange-500 text-white hover:bg-orange-600"
+            }`}
+          >
+            <ImageIcon className="h-4 w-4" />
+            {gerandoCardDivulgacao ? "Gerando card..." : "Card dos inscritos"}
+          </button>
           <button
             type="button"
             onClick={onSincronizarFotos}
