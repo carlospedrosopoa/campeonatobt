@@ -91,9 +91,10 @@ export async function playListarPoints(params: { token: string; apenasAtivos?: b
 }
 
 export async function playGetAtletaById(params: { token: string; atletaId: string }) {
-  const base = getBaseUrl();
-  const res = await playFetchWithBase(base, `/atleta/${encodeURIComponent(params.atletaId)}`, { method: "GET", token: params.token });
-  const data = (await res.json().catch(() => null)) as any;
+  const { res, data } = await playFetchSmartJson(`/atleta/${encodeURIComponent(params.atletaId)}`, {
+    method: "GET",
+    token: params.token,
+  });
   return { res, data };
 }
 

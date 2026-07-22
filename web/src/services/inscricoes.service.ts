@@ -107,9 +107,12 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
     if (playId) {
       const byId = await playGetAtletaById({ token, atletaId: playId });
       if (!byId.res.ok) {
-        throw new Error(`Falha ao validar o perfil de ${params.nome || email || "atleta"} no Play na Quadra`);
+        if (!email) {
+          throw new Error(`Falha ao validar o perfil de ${params.nome || email || "atleta"} no Play na Quadra`);
+        }
+      } else {
+        return extractPlayAtletaGenero(byId.data);
       }
-      return extractPlayAtletaGenero(byId.data);
     }
 
     if (!email) {
@@ -132,6 +135,9 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
 
     const byId = await playGetAtletaById({ token, atletaId: exactMatch.playnaquadraAtletaId });
     if (!byId.res.ok) {
+      if (exactMatch.genero || exactMatch.nome || exactMatch.email) {
+        return exactMatch;
+      }
       throw new Error(`Falha ao validar o perfil de ${params.nome || email} no Play na Quadra`);
     }
 
