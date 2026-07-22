@@ -102,13 +102,14 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   const token = await getPlayAdminToken();
   const email = normalizeEmail(params.email);
   const playId = String(params.playnaquadraAtletaId || "").trim();
+  const debugAtleta = ` [email=${email || "vazio"} id=${playId || "vazio"}]`;
 
   async function buscarPerfilPlay() {
     if (playId) {
       const byId = await playGetAtletaById({ token, atletaId: playId });
       if (!byId.res.ok) {
         if (!email) {
-          throw new Error(`Falha ao validar o perfil de ${params.nome || email || "atleta"} no Play na Quadra`);
+          throw new Error(`Falha ao validar o perfil de ${params.nome || email || "atleta"} no Play na Quadra${debugAtleta}`);
         }
       } else {
         return extractPlayAtletaGenero(byId.data);
@@ -121,7 +122,7 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
 
     const result = await playBuscarAtletas({ token, q: email, limite: 10 });
     if (!result.res.ok) {
-      throw new Error(`Falha ao buscar o perfil de ${params.nome || email} no Play na Quadra`);
+      throw new Error(`Falha ao buscar o perfil de ${params.nome || email} no Play na Quadra${debugAtleta}`);
     }
 
     const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
@@ -130,7 +131,7 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
       .find((item) => item.email && item.email === email);
 
     if (!exactMatch?.playnaquadraAtletaId) {
-      throw new Error(`Não foi possível localizar o perfil de ${params.nome || email} no Play na Quadra para validar o gênero`);
+      throw new Error(`Não foi possível localizar o perfil de ${params.nome || email} no Play na Quadra para validar o gênero${debugAtleta}`);
     }
 
     const byId = await playGetAtletaById({ token, atletaId: exactMatch.playnaquadraAtletaId });
@@ -138,7 +139,7 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
       if (exactMatch.genero || exactMatch.nome || exactMatch.email) {
         return exactMatch;
       }
-      throw new Error(`Falha ao validar o perfil de ${params.nome || email} no Play na Quadra`);
+      throw new Error(`Falha ao validar o perfil de ${params.nome || email} no Play na Quadra${debugAtleta}`);
     }
 
     return extractPlayAtletaGenero(byId.data);
