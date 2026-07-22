@@ -5,6 +5,8 @@ import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { inscricoesService } from "@/services/inscricoes.service";
 import { torneioResultadosService } from "@/services/torneio-resultados.service";
+import { playGetUsuarioLogado } from "@/services/playnaquadra-client";
+import { extractPlayIdentity } from "@/services/playnaquadra-session.service";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
@@ -242,7 +244,32 @@ export async function POST(request: NextRequest) {
   const atletaUser = atleta[0];
   if (!atletaUser) return NextResponse.json({ error: "Usuário atleta não encontrado" }, { status: 404 });
 
-  if (atletaUser.email.trim().toLowerCase() === parceiroEmail) {
+  let atletaLogado = {
+    nome: atletaUser.nome,
+    email: atletaUser.email,
+    telefone: atletaUser.telefone ?? undefined,
+    playnaquadraAtletaId: atletaUser.playnaquadraAtletaId ?? null,
+  };
+
+  const tokenPlay = request.cookies.get("play_token")?.value || "";
+  if (tokenPlay) {
+    try {
+      const meRes = await playGetUsuarioLogado(tokenPlay);
+      if (meRes.res.ok) {
+        const identity = extractPlayIdentity(meRes.data, tokenPlay);
+        atletaLogado = {
+          nome: identity.nome || atletaLogado.nome,
+          email: identity.email || atletaLogado.email,
+          telefone: identity.telefone || atletaLogado.telefone,
+          playnaquadraAtletaId: identity.atletaId || atletaLogado.playnaquadraAtletaId,
+        };
+      }
+    } catch {
+      // Se a sessão do Play não responder, segue com o espelho local.
+    }
+  }
+
+  if (atletaLogado.email.trim().toLowerCase() === parceiroEmail) {
     return NextResponse.json({ error: "O parceiro precisa ser diferente de você" }, { status: 400 });
   }
 
@@ -252,10 +279,10 @@ export async function POST(request: NextRequest) {
       categoriaId: categoria.id,
       equipeNome: equipeNome || undefined,
       atletaA: {
-        nome: atletaUser.nome,
-        email: atletaUser.email,
-        telefone: atletaUser.telefone ?? undefined,
-        playnaquadraAtletaId: atletaUser.playnaquadraAtletaId ?? null,
+        nome: atletaLogado.nome,
+        email: atletaLogado.email,
+        telefone: atletaLogado.telefone,
+        playnaquadraAtletaId: atletaLogado.playnaquadraAtletaId,
         camisetaOpcao: match,
       },
       atletaB: {
