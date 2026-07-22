@@ -28,6 +28,19 @@ function normalizeEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizePhone(value?: string | null) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeSearchName(value?: string | null) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function normalizeOption(value?: string | null) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
@@ -37,6 +50,7 @@ type GeneroAtleta = "MASCULINO" | "FEMININO";
 type AtletaGeneroInput = {
   nome?: string | null;
   email?: string | null;
+  telefone?: string | null;
   playnaquadraAtletaId?: string | null;
   genero?: string | null;
 };
@@ -68,6 +82,12 @@ function extractPlayAtletaGenero(payload: any) {
       nested.map((item: any) => item?.email).find(Boolean) ||
       ""
   );
+  const telefone = String(
+    source.telefone ||
+      nested.map((item: any) => item?.telefone).find(Boolean) ||
+      nested.map((item: any) => item?.whatsapp).find(Boolean) ||
+      ""
+  ).trim() || null;
   const playnaquadraAtletaId =
     String(
       source.id ||
@@ -93,6 +113,7 @@ function extractPlayAtletaGenero(payload: any) {
   return {
     nome: nome || null,
     email: email || null,
+    telefone,
     playnaquadraAtletaId,
     genero,
   };
@@ -101,6 +122,8 @@ function extractPlayAtletaGenero(payload: any) {
 async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   const token = await getPlayAdminToken();
   const email = normalizeEmail(params.email);
+  const phone = normalizePhone(params.telefone);
+  const nome = normalizeSearchName(params.nome);
   const playId = String(params.playnaquadraAtletaId || "").trim();
   const debugAtleta = ` [email=${email || "vazio"} id=${playId || "vazio"}]`;
 
@@ -117,20 +140,57 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
     }
 
     if (!email) {
-      throw new Error(`Não foi possível validar o gênero de ${params.nome || "um atleta"}: email não informado`);
+      if (!phone && !nome) {
+        throw new Error(`Não foi possível validar o gênero de ${params.nome || "um atleta"}: email não informado`);
+      }
     }
 
-    const result = await playBuscarAtletas({ token, q: email, limite: 10 });
-    if (!result.res.ok) {
-      throw new Error(`Falha ao buscar o perfil de ${params.nome || email} no Play na Quadra${debugAtleta}`);
+    const queries = Array.from(
+      new Set(
+        [
+          email,
+          phone,
+          phone.length >= 8 ? phone.slice(-8) : "",
+          nome,
+        ].filter((value) => String(value || "").trim().length >= 2)
+      )
+    );
+
+    const candidatos: Array<ReturnType<typeof extractPlayAtletaGenero>> = [];
+    for (const query of queries) {
+      const result = await playBuscarAtletas({ token, q: query, limite: 10 });
+      if (!result.res.ok) continue;
+
+      const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+      candidatos.push(...rawCandidates.map((item) => extractPlayAtletaGenero(item)));
     }
 
-    const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
-    const exactMatch = rawCandidates
-      .map((item) => extractPlayAtletaGenero(item))
-      .find((item) => item.email && item.email === email);
+    const unique = new Map<string, ReturnType<typeof extractPlayAtletaGenero>>();
+    for (const item of candidatos) {
+      const key = String(item.playnaquadraAtletaId || item.email || item.nome || "").trim();
+      if (!key || unique.has(key)) continue;
+      unique.set(key, item);
+    }
 
-    if (!exactMatch?.playnaquadraAtletaId) {
+    const ranked = Array.from(unique.values())
+      .map((item) => {
+        let score = 0;
+        const candidateEmail = normalizeEmail(item.email);
+        const candidatePhone = normalizePhone(item.telefone);
+        const candidateName = normalizeSearchName(item.nome);
+        if (email && candidateEmail === email) score += 120;
+        if (phone && candidatePhone === phone) score += 120;
+        if (phone && candidatePhone && candidatePhone.endsWith(phone.slice(-8))) score += 40;
+        if (nome && candidateName === nome) score += 80;
+        if (nome && candidateName && (candidateName.includes(nome) || nome.includes(candidateName))) score += 30;
+        if (item.playnaquadraAtletaId) score += 10;
+        return { item, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const exactMatch = ranked[0]?.item ?? null;
+    const exactScore = ranked[0]?.score ?? 0;
+    if (!exactMatch?.playnaquadraAtletaId || exactScore <= 0) {
       throw new Error(`Não foi possível localizar o perfil de ${params.nome || email} no Play na Quadra para validar o gênero${debugAtleta}`);
     }
 
@@ -343,12 +403,14 @@ export class InscricoesService {
       atletaA: {
         nome: dados.atletaA.nome,
         email: atletaAEmail,
+        telefone: dados.atletaA.telefone ?? null,
         playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
         genero: dados.atletaA.genero ?? null,
       },
       atletaB: {
         nome: dados.atletaB.nome,
         email: atletaBEmail,
+        telefone: dados.atletaB.telefone ?? null,
         playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
         genero: dados.atletaB.genero ?? null,
       },
@@ -486,12 +548,14 @@ export class InscricoesService {
       atletaA: {
         nome: dados.atletaA.nome,
         email: atletaAEmail,
+        telefone: dados.atletaA.telefone ?? null,
         playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
         genero: dados.atletaA.genero ?? null,
       },
       atletaB: {
         nome: dados.atletaB.nome,
         email: atletaBEmail,
+        telefone: dados.atletaB.telefone ?? null,
         playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
         genero: dados.atletaB.genero ?? null,
       },

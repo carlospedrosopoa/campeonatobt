@@ -32,6 +32,15 @@ function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function normalizeName(value?: string | null) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function extractPlayCandidate(item: any): PlayCandidate | null {
   const playnaquadraAtletaId = String(item?.id || item?._id || item?.atletaId || item?.usuarioId || "").trim() || null;
   const nome = String(item?.nome || item?.usuario?.nome || item?.atleta?.nome || "").trim();
@@ -60,6 +69,7 @@ async function syncUserFromPlay(user: MeRow): Promise<MeRow> {
           const phone = normalizePhone(user.telefone);
           return phone.length >= 8 ? phone.slice(-8) : "";
         })(),
+        normalizeName(user.nome),
       ].filter((value) => String(value || "").trim().length >= 2)
     )
   );
@@ -97,16 +107,20 @@ async function syncUserFromPlay(user: MeRow): Promise<MeRow> {
 
     const userEmail = normalizeEmail(user.email);
     const userPhone = normalizePhone(user.telefone);
+    const userName = normalizeName(user.nome);
     const ranked = Array.from(unique.values())
       .map((candidate) => {
         let score = 0;
         const candidateEmail = normalizeEmail(candidate.email);
         const candidatePhone = normalizePhone(candidate.telefone);
+        const candidateName = normalizeName(candidate.nome);
 
         if (user.playnaquadraAtletaId && candidate.playnaquadraAtletaId === user.playnaquadraAtletaId) score += 200;
         if (userEmail && candidateEmail === userEmail) score += 120;
         if (userPhone && candidatePhone === userPhone) score += 120;
         if (userPhone && candidatePhone && candidatePhone.endsWith(userPhone.slice(-8))) score += 40;
+        if (userName && candidateName === userName) score += 80;
+        if (userName && candidateName && (candidateName.includes(userName) || userName.includes(candidateName))) score += 30;
         if (candidate.fotoUrl) score += 5;
         if (candidate.playnaquadraAtletaId) score += 10;
 
