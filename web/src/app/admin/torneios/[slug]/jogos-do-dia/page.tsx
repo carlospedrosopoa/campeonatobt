@@ -167,6 +167,26 @@ export default function AdminJogosDoDiaPage() {
     };
   }, [editPartida]);
 
+  function linhasPlacar(p: Partida) {
+    if (p.detalhesPlacar && p.detalhesPlacar.length > 0) {
+      return p.detalhesPlacar
+        .slice()
+        .sort((a, b) => a.set - b.set)
+        .map((s) => {
+          if (s.tiebreak && s.tbA !== undefined && s.tbB !== undefined) {
+            return `${s.a}-${s.b} (${s.tbA}-${s.tbB})`;
+          }
+          return `${s.a}-${s.b}`;
+        });
+    }
+
+    if ((p.placarA ?? 0) > 0 || (p.placarB ?? 0) > 0) {
+      return [`${p.placarA ?? 0} x ${p.placarB ?? 0}`];
+    }
+
+    return [];
+  }
+
   function formatPlacar(detalhes: Partida["detalhesPlacar"]) {
     if (!detalhes || detalhes.length === 0) return "X";
     return detalhes
@@ -182,6 +202,8 @@ export default function AdminJogosDoDiaPage() {
   }
 
   function textoPlacar(p: Partida) {
+    const linhas = linhasPlacar(p);
+    if (linhas.length > 0) return linhas.join(" ");
     if (p.detalhesPlacar && p.detalhesPlacar.length > 0) return formatPlacar(p.detalhesPlacar);
     if ((p.placarA ?? 0) > 0 || (p.placarB ?? 0) > 0) return `${p.placarA ?? 0} x ${p.placarB ?? 0}`;
     return null;
@@ -770,9 +792,15 @@ export default function AdminJogosDoDiaPage() {
                   
                   <div className="flex flex-col items-center justify-center min-w-[2.5rem]">
                     {textoPlacar(p) ? (
-                      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-center">
+                      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-center min-w-[4.5rem]">
                         <span className="block text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Placar</span>
-                        <span className="block text-xs font-bold text-emerald-800">{textoPlacar(p)}</span>
+                        <div className="mt-1 space-y-0.5">
+                          {linhasPlacar(p).map((linha, index) => (
+                            <span key={`${p.id}-placar-${index}`} className="block text-xs font-bold leading-tight text-emerald-800">
+                              {linha}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     ) : (
                       <span className="text-sm font-black text-slate-300 italic">VS</span>
