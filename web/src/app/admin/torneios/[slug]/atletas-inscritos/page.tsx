@@ -105,6 +105,7 @@ export default function AdminAtletasInscritosPage() {
   const [camisetasEditadas, setCamisetasEditadas] = useState<Record<string, string>>({});
   const [salvandoAtletaId, setSalvandoAtletaId] = useState<string | null>(null);
   const [erroCamiseta, setErroCamiseta] = useState<string | null>(null);
+  const [sincronizandoDados, setSincronizandoDados] = useState(false);
 
   async function carregar() {
     try {
@@ -255,6 +256,31 @@ export default function AdminAtletasInscritosPage() {
     }
   }
 
+  async function sincronizarDadosFaltantes() {
+    try {
+      setErroCamiseta(null);
+      setSincronizandoDados(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/atletas-inscritos/sincronizar-dados`, {
+        method: "POST",
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao sincronizar dados dos atletas");
+
+      await carregar();
+
+      const totalAnalisados = Number(payload?.totalAnalisados || 0);
+      const telefonesAtualizados = Number(payload?.telefonesAtualizados || 0);
+      const camisetasAtualizadas = Number(payload?.camisetasAtualizadas || 0);
+      window.alert(
+        `Atualização concluída.\n\nAtletas analisados: ${totalAnalisados}\nTelefones atualizados: ${telefonesAtualizados}\nCamisetas atualizadas: ${camisetasAtualizadas}`
+      );
+    } catch (e: any) {
+      setErroCamiseta(e?.message || "Falha ao sincronizar dados dos atletas");
+    } finally {
+      setSincronizandoDados(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -269,6 +295,14 @@ export default function AdminAtletasInscritosPage() {
           </p>
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto">
+          <button
+            onClick={sincronizarDadosFaltantes}
+            disabled={!data || carregando || sincronizandoDados}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${sincronizandoDados ? "animate-spin" : ""}`} />
+            {sincronizandoDados ? "Atualizando dados..." : "Atualizar dados faltantes"}
+          </button>
           <button
             onClick={exportarExcel}
             disabled={!data || carregando || totalAtletas === 0}
