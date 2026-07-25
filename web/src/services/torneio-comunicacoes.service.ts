@@ -11,13 +11,17 @@ import {
   usuarios,
 } from "@/db/schema";
 import { enviarMensagemGzappy } from "@/services/gzappy.service";
+import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
+import { playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
 
 const STATUS_INSCRICOES_ATIVAS = ["APROVADA", "PENDENTE", "FILA_ESPERA"] as const;
 
 type DestinatarioComunicacao = {
   usuarioId: string;
   usuarioNome: string;
+  email: string | null;
   telefone: string | null;
+  playnaquadraAtletaId: string | null;
 };
 
 type ResultadoEnvioWhatsapp = {
@@ -28,6 +32,135 @@ type ResultadoEnvioWhatsapp = {
 
 function normalizarTexto(value?: string | null) {
   return String(value || "").trim();
+}
+
+function normalizarEmail(value?: string | null) {
+  return normalizarTexto(value).toLowerCase();
+}
+
+function normalizarNome(value?: string | null) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+type PlayCandidate = {
+  playnaquadraAtletaId: string | null;
+  nome: string;
+  email: string;
+  telefone: string | null;
+};
+
+function extrairPlayCandidate(item: any): PlayCandidate | null {
+  const playnaquadraAtletaId = String(item?.id || item?._id || item?.atletaId || item?.usuarioId || "").trim() || null;
+  const nome = String(item?.nome || item?.usuario?.nome || item?.atleta?.nome || "").trim();
+  const email = normalizarEmail(item?.email || item?.usuario?.email || item?.atleta?.email || "");
+  const telefone = String(item?.telefone || item?.usuario?.telefone || item?.atleta?.telefone || "").trim() || null;
+
+  if (!playnaquadraAtletaId && !nome && !email) return null;
+
+  return {
+    playnaquadraAtletaId,
+    nome: nome || email || "Atleta",
+    email,
+    telefone,
+  };
+}
+
+async function enriquecerDestinatariosComTelefonePlay(destinatarios: DestinatarioComunicacao[]) {
+  const pendentes = destinatarios.filter((item) => !normalizarTexto(item.telefone));
+  if (pendentes.length === 0) return destinatarios;
+
+  try {
+    const token = await getPlayAdminToken();
+
+    const atualizados = await Promise.all(
+      destinatarios.map(async (destinatario) => {
+        if (normalizarTexto(destinatario.telefone)) return destinatario;
+
+        const queries = Array.from(
+          new Set(
+            [
+              normalizarEmail(destinatario.email),
+              normalizarNome(destinatario.usuarioNome),
+            ].filter((value) => String(value || "").trim().length >= 2)
+          )
+        );
+
+        const candidates: PlayCandidate[] = [];
+
+        if (destinatario.playnaquadraAtletaId?.trim()) {
+          const byId = await playGetAtletaById({ token, atletaId: destinatario.playnaquadraAtletaId.trim() });
+          const parsedById = byId.res.ok ? extrairPlayCandidate(byId.data) : null;
+          if (parsedById) candidates.push(parsedById);
+        }
+
+        for (const query of queries) {
+          const result = await playBuscarAtletas({ token, q: query, limite: 10 });
+          if (!result.res.ok || !result.data) continue;
+
+          const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+          const parsed = rawCandidates
+            .map<PlayCandidate | null>((item: any) => extrairPlayCandidate(item))
+            .filter((item): item is PlayCandidate => Boolean(item));
+
+          candidates.push(...parsed);
+        }
+
+        const unique = new Map<string, PlayCandidate>();
+        for (const candidate of candidates) {
+          const key = String(candidate.playnaquadraAtletaId || candidate.email || candidate.nome || "").trim();
+          if (!key || unique.has(key)) continue;
+          unique.set(key, candidate);
+        }
+
+        const email = normalizarEmail(destinatario.email);
+        const nome = normalizarNome(destinatario.usuarioNome);
+        const ranked = Array.from(unique.values())
+          .map((candidate) => {
+            let score = 0;
+            const candidateEmail = normalizarEmail(candidate.email);
+            const candidateName = normalizarNome(candidate.nome);
+
+            if (destinatario.playnaquadraAtletaId && candidate.playnaquadraAtletaId === destinatario.playnaquadraAtletaId) score += 200;
+            if (email && candidateEmail === email) score += 120;
+            if (nome && candidateName === nome) score += 80;
+            if (nome && candidateName && (candidateName.includes(nome) || nome.includes(candidateName))) score += 30;
+            if (candidate.telefone) score += 20;
+
+            return { candidate, score };
+          })
+          .sort((a, b) => b.score - a.score);
+
+        const best = ranked[0]?.candidate ?? null;
+        const bestScore = ranked[0]?.score ?? 0;
+        const telefone = normalizarTexto(best?.telefone) || null;
+        if (!best || bestScore <= 0 || !telefone) return destinatario;
+
+        await db
+          .update(usuarios)
+          .set({
+            telefone,
+            playnaquadraAtletaId: best.playnaquadraAtletaId || destinatario.playnaquadraAtletaId || null,
+            atualizadoEm: new Date(),
+          })
+          .where(eq(usuarios.id, destinatario.usuarioId));
+
+        return {
+          ...destinatario,
+          telefone,
+          playnaquadraAtletaId: best.playnaquadraAtletaId || destinatario.playnaquadraAtletaId || null,
+        };
+      })
+    );
+
+    return atualizados;
+  } catch {
+    return destinatarios;
+  }
 }
 
 function montarMensagemWhatsapp(params: { torneioNome: string; titulo?: string | null; mensagem: string }) {
@@ -145,7 +278,9 @@ async function listarDestinatariosBase(params: { torneioId: string; categoriaId?
     .select({
       usuarioId: usuarios.id,
       usuarioNome: usuarios.nome,
+      email: usuarios.email,
       telefone: usuarios.telefone,
+      playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
     })
     .from(inscricoes)
     .innerJoin(equipes, eq(inscricoes.equipeId, equipes.id))
@@ -160,11 +295,13 @@ async function listarDestinatariosBase(params: { torneioId: string; categoriaId?
     destinatarios.set(row.usuarioId, {
       usuarioId: row.usuarioId,
       usuarioNome: row.usuarioNome,
+      email: row.email,
       telefone: row.telefone ?? null,
+      playnaquadraAtletaId: row.playnaquadraAtletaId ?? null,
     });
   }
 
-  return Array.from(destinatarios.values());
+  return enriquecerDestinatariosComTelefonePlay(Array.from(destinatarios.values()));
 }
 
 export const torneioComunicacoesService = {
@@ -397,8 +534,11 @@ export const torneioComunicacoesService = {
     const falhas = await db
       .select({
         usuarioId: torneioComunicacaoDestinatarios.usuarioId,
+        usuarioNome: usuarios.nome,
+        email: usuarios.email,
         telefoneRegistro: torneioComunicacaoDestinatarios.telefone,
         telefoneAtual: usuarios.telefone,
+        playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
       })
       .from(torneioComunicacaoDestinatarios)
       .leftJoin(usuarios, eq(torneioComunicacaoDestinatarios.usuarioId, usuarios.id))
@@ -406,7 +546,7 @@ export const torneioComunicacoesService = {
         and(
           eq(torneioComunicacaoDestinatarios.comunicacaoId, params.comunicacaoId),
           eq(torneioComunicacaoDestinatarios.torneioId, params.torneioId),
-          eq(torneioComunicacaoDestinatarios.whatsappStatus, "FALHA")
+          inArray(torneioComunicacaoDestinatarios.whatsappStatus, ["FALHA", "SEM_TELEFONE"])
         )
       );
 
@@ -414,10 +554,33 @@ export const torneioComunicacoesService = {
       throw new Error("Não há falhas pendentes para reenviar nesta comunicação.");
     }
 
-    const destinatarios = falhas.map((item) => ({
-      usuarioId: item.usuarioId,
-      telefone: normalizarTexto(item.telefoneAtual) || normalizarTexto(item.telefoneRegistro) || null,
-    }));
+    const destinatarios = await enriquecerDestinatariosComTelefonePlay(
+      falhas.map((item) => ({
+        usuarioId: item.usuarioId,
+        usuarioNome: item.usuarioNome ?? "Atleta",
+        email: item.email,
+        telefone: normalizarTexto(item.telefoneAtual) || normalizarTexto(item.telefoneRegistro) || null,
+        playnaquadraAtletaId: item.playnaquadraAtletaId ?? null,
+      }))
+    );
+
+    for (const destinatario of destinatarios) {
+      await db
+        .update(torneioComunicacaoDestinatarios)
+        .set({
+          telefone: destinatario.telefone,
+          whatsappStatus: normalizarTexto(destinatario.telefone) ? "PENDENTE" : "SEM_TELEFONE",
+          whatsappErro: null,
+          atualizadoEm: new Date(),
+        })
+        .where(
+          and(
+            eq(torneioComunicacaoDestinatarios.comunicacaoId, params.comunicacaoId),
+            eq(torneioComunicacaoDestinatarios.torneioId, params.torneioId),
+            eq(torneioComunicacaoDestinatarios.usuarioId, destinatario.usuarioId)
+          )
+        );
+    }
 
     const mensagemWhatsapp = montarMensagemWhatsapp({
       torneioNome: comunicacao.torneioNome,
