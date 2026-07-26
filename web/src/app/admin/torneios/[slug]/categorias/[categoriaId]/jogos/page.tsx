@@ -22,6 +22,7 @@ type Categoria = {
 type CategoriaConfig = {
   versao: 1;
   formato: "GRUPOS" | "MATA_MATA" | "LIGA";
+  tipoParticipacao?: "DUPLAS" | "SIMPLES";
   grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean; disputaTerceiroLugar?: boolean };
@@ -85,6 +86,8 @@ type Inscricao = {
     atletas?: { id: string; nome: string }[];
   };
 };
+
+type Arena = { id: string; nome: string; logoUrl?: string | null };
 
 type ResultadoFinal = { campeao: string; vice: string } | null;
 
@@ -192,8 +195,16 @@ export default function AdminCategoriaJogosPage() {
   const [salvandoPartida, setSalvandoPartida] = useState(false);
   const [editConfrontoId, setEditConfrontoId] = useState<string | null>(null);
   const [salvandoConfronto, setSalvandoConfronto] = useState(false);
+  const [editAgendamentoId, setEditAgendamentoId] = useState<string | null>(null);
+  const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
   const [equipes, setEquipes] = useState<{ id: string; nome: string }[]>([]);
   const [carregandoEquipes, setCarregandoEquipes] = useState(false);
+  const [arenas, setArenas] = useState<Arena[]>([]);
+  const [carregandoArenas, setCarregandoArenas] = useState(false);
+  const [agendaArenaId, setAgendaArenaId] = useState("");
+  const [agendaQuadra, setAgendaQuadra] = useState("");
+  const [agendaDataHorario, setAgendaDataHorario] = useState("");
+  const [agendaDataLimite, setAgendaDataLimite] = useState("");
   const [confrontoEquipeAId, setConfrontoEquipeAId] = useState("");
   const [confrontoEquipeBId, setConfrontoEquipeBId] = useState("");
   const [modoManutencaoConfronto, setModoManutencaoConfronto] = useState(false);
@@ -483,6 +494,20 @@ export default function AdminCategoriaJogosPage() {
   }, [editConfrontoId]);
 
   useEffect(() => {
+    if (!editAgendamentoId) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEditAgendamentoId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [editAgendamentoId]);
+
+  useEffect(() => {
     if (!trocaGruposOpen) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -691,6 +716,14 @@ export default function AdminCategoriaJogosPage() {
             </button>
             <button
               type="button"
+              onClick={() => abrirAgendamento(p)}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+              title="Agendar"
+            >
+              <Calendar className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
               onClick={() => startEditPartida(p)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
             >
@@ -805,6 +838,45 @@ export default function AdminCategoriaJogosPage() {
       s5a: det[4]?.a?.toString?.() ?? "",
       s5b: det[4]?.b?.toString?.() ?? "",
     });
+  }
+
+  function toLocalDateInput(value: string | null | undefined) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  }
+
+  function toLocalDateTimeInput(value: string | null | undefined) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  async function abrirAgendamento(p: Partida) {
+    setEditAgendamentoId(p.id);
+    setAgendaArenaId(p.arenaId ?? "");
+    setAgendaQuadra((p.quadra ?? "").toString());
+    setAgendaDataHorario(toLocalDateTimeInput(p.dataHorario ?? null));
+    setAgendaDataLimite(toLocalDateInput(p.dataLimite ?? null));
+
+    if (arenas.length > 0) return;
+    try {
+      setCarregandoArenas(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/arenas`, { cache: "no-store" });
+      if (!res.ok) return;
+      const rows = (await res.json()) as any[];
+      const lista = rows
+        .map((a) => ({ id: a.id as string, nome: (a.nome as string) ?? "", logoUrl: (a.logoUrl as string | null | undefined) ?? null }))
+        .filter((a) => a.id && a.nome)
+        .sort((a, b) => a.nome.localeCompare(b.nome));
+      setArenas(lista);
+    } finally {
+      setCarregandoArenas(false);
+    }
   }
 
   async function gerarCardPartida(p: Partida) {
@@ -1434,6 +1506,28 @@ export default function AdminCategoriaJogosPage() {
             </div>
 
             <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Tipo de participação</label>
+              <select
+                value={config.tipoParticipacao ?? "DUPLAS"}
+                onChange={(e) =>
+                  setConfig((p) =>
+                    p
+                      ? {
+                          ...p,
+                          tipoParticipacao: e.target.value === "SIMPLES" ? "SIMPLES" : "DUPLAS",
+                        }
+                      : p
+                  )
+                }
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="DUPLAS">Duplas</option>
+                <option value="SIMPLES">Simples</option>
+              </select>
+              <div className="text-xs text-slate-500">Define se a categoria aceita 2 atletas por equipe ou apenas 1.</div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-medium text-slate-700">Finais</label>
               <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                 <span>Disputa de 3º lugar</span>
@@ -1956,6 +2050,147 @@ export default function AdminCategoriaJogosPage() {
                     >
                       <Save className="h-4 w-4" />
                       {salvandoPartida ? "Salvando…" : "Salvar placar"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+      {editAgendamentoId &&
+        (() => {
+          const partida = partidas.find((p) => p.id === editAgendamentoId);
+          if (!partida) return null;
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditAgendamentoId(null)}>
+              <div
+                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="p-6 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-xs text-slate-500 uppercase tracking-wider">Agendamento</div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {partida.equipeANome || partida.equipeAId.slice(0, 8)} <span className="text-slate-400">vs</span>{" "}
+                        {partida.equipeBNome || partida.equipeBId.slice(0, 8)}
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setEditAgendamentoId(null)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
+                      <X className="h-4 w-4" />
+                      Fechar
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Arena</label>
+                      <select
+                        value={agendaArenaId}
+                        onChange={(e) => setAgendaArenaId(e.target.value)}
+                        disabled={carregandoArenas}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white disabled:opacity-50"
+                      >
+                        <option value="">{arenas.length === 0 ? "Nenhuma arena disponível" : "Selecione uma arena"}</option>
+                        {arenas.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.nome}
+                          </option>
+                        ))}
+                      </select>
+                      {agendaArenaId && arenas.find((a) => a.id === agendaArenaId)?.logoUrl ? (
+                        <div className="flex items-center gap-2 text-xs text-slate-600">
+                          <img
+                            src={arenas.find((a) => a.id === agendaArenaId)?.logoUrl || ""}
+                            alt={arenas.find((a) => a.id === agendaArenaId)?.nome || "Arena"}
+                            className="h-5 w-5 rounded-full object-cover"
+                          />
+                          {arenas.find((a) => a.id === agendaArenaId)?.nome}
+                        </div>
+                      ) : null}
+                      <div className="text-xs text-slate-500">
+                        Cadastre arenas em <Link href={`/admin/torneios/${slug}/arenas`} className="underline">Arenas</Link>.
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Quadra (opcional)</label>
+                      <input
+                        value={agendaQuadra}
+                        onChange={(e) => setAgendaQuadra(e.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                        placeholder="Ex: Quadra 1"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Data e horário agendados</label>
+                      <input
+                        value={agendaDataHorario}
+                        onChange={(e) => setAgendaDataHorario(e.target.value)}
+                        type="datetime-local"
+                        step={60}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Data limite</label>
+                      <input
+                        value={agendaDataLimite}
+                        onChange={(e) => setAgendaDataLimite(e.target.value)}
+                        type="date"
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditAgendamentoId(null)}
+                      className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          setSalvandoAgendamento(true);
+                          setErro(null);
+                          if (agendaDataHorario.trim() && !agendaArenaId) throw new Error("Selecione uma arena para agendar a partida");
+                          const toIsoDateTime = (v: string) => (v.trim() ? new Date(v).toISOString() : null);
+                          const toIsoDate = (v: string) => (v.trim() ? new Date(`${v}T00:00:00`).toISOString() : null);
+                          const res = await fetch(
+                            `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partida.id}/agendamento`,
+                            {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                arenaId: agendaArenaId || null,
+                                quadra: agendaQuadra.trim() || null,
+                                dataHorario: toIsoDateTime(agendaDataHorario),
+                                dataLimite: toIsoDate(agendaDataLimite),
+                              }),
+                            }
+                          );
+                          const payload = (await res.json().catch(() => null)) as any;
+                          if (!res.ok) throw new Error(payload?.error || "Falha ao salvar agendamento");
+                          await carregarPartidas();
+                          setEditAgendamentoId(null);
+                        } catch (e: any) {
+                          setErro(e?.message || "Erro inesperado");
+                        } finally {
+                          setSalvandoAgendamento(false);
+                        }
+                      }}
+                      disabled={salvandoAgendamento}
+                      className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      <Save className="h-4 w-4" />
+                      {salvandoAgendamento ? "Salvando…" : "Salvar"}
                     </button>
                   </div>
                 </div>

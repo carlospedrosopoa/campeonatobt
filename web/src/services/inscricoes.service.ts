@@ -1,16 +1,27 @@
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { categoriaConfigService } from "@/services/categoria-config.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playAtualizarGeneroAtleta, playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
+
+type AtletaInscricaoDTO = {
+  nome: string;
+  email: string;
+  telefone?: string;
+  playnaquadraAtletaId?: string | null;
+  fotoUrl?: string | null;
+  camisetaOpcao?: string | null;
+  genero?: string | null;
+};
 
 export type CriarInscricaoDTO = {
   torneioId: string;
   categoriaId: string;
   equipeNome?: string;
   capitaoPosicao?: "A" | "B";
-  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null; genero?: string | null };
-  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null; genero?: string | null };
+  atletaA: AtletaInscricaoDTO;
+  atletaB?: AtletaInscricaoDTO | null;
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
 };
 
@@ -19,8 +30,8 @@ export type AtualizarInscricaoDTO = {
   categoriaId: string;
   equipeNome?: string | null;
   capitaoPosicao?: "A" | "B";
-  atletaA: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null; genero?: string | null };
-  atletaB: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null; camisetaOpcao?: string | null; genero?: string | null };
+  atletaA: AtletaInscricaoDTO;
+  atletaB?: AtletaInscricaoDTO | null;
   status?: "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA";
 };
 
@@ -239,18 +250,29 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
 export async function validarGeneroInscricao(params: {
   categoriaGenero: string | null | undefined;
   atletaA: AtletaGeneroInput;
-  atletaB: AtletaGeneroInput;
+  atletaB?: AtletaGeneroInput | null;
 }) {
   const categoriaGenero = String(params.categoriaGenero || "").trim().toUpperCase() as GeneroCategoria;
   if (!["MASCULINO", "FEMININO", "MISTO"].includes(categoriaGenero)) return;
 
-  const [atletaA, atletaB] = await Promise.all([
-    resolverGeneroAtleta(params.atletaA),
-    resolverGeneroAtleta(params.atletaB),
-  ]);
+  const atletaA = await resolverGeneroAtleta(params.atletaA);
+  const atletaB = params.atletaB ? await resolverGeneroAtleta(params.atletaB) : null;
 
   if (!atletaA.genero) {
     throw new Error(`Não foi possível validar o gênero de ${atletaA.nome}. Atualize o perfil no Play na Quadra.`);
+  }
+
+  if (!atletaB) {
+    if (categoriaGenero === "MISTO") {
+      throw new Error("A categoria mista exige dois atletas de gêneros diferentes.");
+    }
+    if (categoriaGenero === "MASCULINO" && atletaA.genero !== "MASCULINO") {
+      throw new Error("A categoria masculina aceita apenas atletas do gênero masculino.");
+    }
+    if (categoriaGenero === "FEMININO" && atletaA.genero !== "FEMININO") {
+      throw new Error("A categoria feminina aceita apenas atletas do gênero feminino.");
+    }
+    return;
   }
 
   if (!atletaB.genero) {
@@ -258,11 +280,11 @@ export async function validarGeneroInscricao(params: {
   }
 
   if (categoriaGenero === "MASCULINO" && (atletaA.genero !== "MASCULINO" || atletaB.genero !== "MASCULINO")) {
-    throw new Error("A categoria masculina aceita apenas duplas com dois atletas do gênero masculino.");
+    throw new Error("A categoria masculina aceita apenas atletas do gênero masculino.");
   }
 
   if (categoriaGenero === "FEMININO" && (atletaA.genero !== "FEMININO" || atletaB.genero !== "FEMININO")) {
-    throw new Error("A categoria feminina aceita apenas duplas com duas atletas do gênero feminino.");
+    throw new Error("A categoria feminina aceita apenas atletas do gênero feminino.");
   }
 
   if (categoriaGenero === "MISTO" && atletaA.genero === atletaB.genero) {
@@ -271,6 +293,18 @@ export async function validarGeneroInscricao(params: {
 }
 
 export class InscricoesService {
+  private async obterContextoCategoria(categoriaId: string, torneioId: string) {
+    const cat = await db.select().from(categorias).where(eq(categorias.id, categoriaId)).limit(1);
+    const categoria = cat[0];
+    if (!categoria || categoria.torneioId !== torneioId) {
+      throw new Error("Categoria inválida para o torneio");
+    }
+
+    const config = await categoriaConfigService.obterOuDefault(categoriaId);
+    const tipoParticipacao = config.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
+    return { categoria, tipoParticipacao };
+  }
+
   async listarPorCategoria(categoriaId: string) {
     const rows = await db
       .select({
@@ -378,7 +412,7 @@ export class InscricoesService {
           .map((a) => (a.nome || "").trim().split(/\s+/)[0])
           .filter(Boolean)
           .sort((a, b) => a.localeCompare(b));
-        item.equipe.nome = nomes.length > 0 ? nomes.join("/") : "Dupla";
+        item.equipe.nome = nomes.length > 0 ? nomes.join("/") : "Equipe";
       }
     }
 
@@ -386,17 +420,18 @@ export class InscricoesService {
   }
 
   async criar(dados: CriarInscricaoDTO) {
-    const cat = await db.select().from(categorias).where(eq(categorias.id, dados.categoriaId)).limit(1);
-    const categoria = cat[0];
-    if (!categoria || categoria.torneioId !== dados.torneioId) {
-      throw new Error("Categoria inválida para o torneio");
-    }
+    const { categoria, tipoParticipacao } = await this.obterContextoCategoria(dados.categoriaId, dados.torneioId);
 
     const atletaAEmail = dados.atletaA.email.trim().toLowerCase();
-    const atletaBEmail = dados.atletaB.email.trim().toLowerCase();
+    const atletaBEmail = dados.atletaB?.email?.trim().toLowerCase() || "";
+    const exigeDupla = tipoParticipacao === "DUPLAS";
 
-    if (!atletaAEmail || !atletaBEmail) throw new Error("Emails dos atletas são obrigatórios");
-    if (atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
+    if (!atletaAEmail) throw new Error("Email do atleta é obrigatório");
+    if (exigeDupla && !atletaBEmail) throw new Error("Dados dos dois atletas são obrigatórios");
+    if (!exigeDupla && dados.atletaB?.email && atletaAEmail === atletaBEmail) {
+      throw new Error("Atletas precisam ser diferentes");
+    }
+    if (exigeDupla && atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
 
     await validarGeneroInscricao({
       categoriaGenero: categoria.genero,
@@ -407,13 +442,15 @@ export class InscricoesService {
         playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
         genero: dados.atletaA.genero ?? null,
       },
-      atletaB: {
-        nome: dados.atletaB.nome,
-        email: atletaBEmail,
-        telefone: dados.atletaB.telefone ?? null,
-        playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
-        genero: dados.atletaB.genero ?? null,
-      },
+      atletaB: exigeDupla && dados.atletaB
+        ? {
+            nome: dados.atletaB.nome,
+            email: atletaBEmail,
+            telefone: dados.atletaB.telefone ?? null,
+            playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
+            genero: dados.atletaB.genero ?? null,
+          }
+        : null,
     });
 
     const atletaAId = await this.upsertAtleta({
@@ -424,30 +461,34 @@ export class InscricoesService {
       fotoUrl: dados.atletaA.fotoUrl ?? null,
     });
 
-    const atletaBId = await this.upsertAtleta({
-      nome: dados.atletaB.nome.trim(),
-      email: atletaBEmail,
-      telefone: dados.atletaB.telefone?.trim(),
-      playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
-      fotoUrl: dados.atletaB.fotoUrl ?? null,
-    });
+    const atletaBId =
+      exigeDupla && dados.atletaB
+        ? await this.upsertAtleta({
+            nome: dados.atletaB.nome.trim(),
+            email: atletaBEmail,
+            telefone: dados.atletaB.telefone?.trim(),
+            playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
+            fotoUrl: dados.atletaB.fotoUrl ?? null,
+          })
+        : null;
 
-    if (atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
-    const capitaoUsuarioId = dados.capitaoPosicao === "B" ? atletaBId : atletaAId;
+    if (atletaBId && atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
+    const capitaoUsuarioId = dados.capitaoPosicao === "B" && atletaBId ? atletaBId : atletaAId;
 
     const conflito = await db
       .select({ inscricaoId: inscricoes.id })
       .from(inscricoes)
       .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, inscricoes.equipeId))
-      .where(and(eq(inscricoes.categoriaId, dados.categoriaId), inArray(equipeIntegrantes.usuarioId, [atletaAId, atletaBId])))
+      .where(and(eq(inscricoes.categoriaId, dados.categoriaId), inArray(equipeIntegrantes.usuarioId, [atletaAId, ...(atletaBId ? [atletaBId] : [])])))
       .limit(1);
 
     if (conflito.length > 0) {
       throw new Error("Um dos atletas já está inscrito nesta categoria");
     }
 
-    const equipeIdExistente = await this.buscarEquipePorDupla(dados.torneioId, atletaAId, atletaBId);
-    const equipeId = equipeIdExistente ?? (await this.criarEquipeComIntegrantes(dados.torneioId, dados.equipeNome?.trim(), atletaAId, atletaBId));
+    const integranteIds = [atletaAId, ...(atletaBId ? [atletaBId] : [])];
+    const equipeIdExistente = await this.buscarEquipePorIntegrantes(dados.torneioId, integranteIds);
+    const equipeId = equipeIdExistente ?? (await this.criarEquipeComIntegrantes(dados.torneioId, dados.equipeNome?.trim(), integranteIds));
     await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, equipeId));
 
     const [torneioRow] = await db
@@ -461,7 +502,7 @@ export class InscricoesService {
       .limit(1);
 
     const camisetaAtletaA = this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaA.camisetaOpcao);
-    const camisetaAtletaB = this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaB.camisetaOpcao);
+    const camisetaAtletaB = atletaBId ? this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaB?.camisetaOpcao) : null;
 
     const pagamentosPrevios = await db
       .select({
@@ -470,7 +511,7 @@ export class InscricoesService {
       })
       .from(inscricaoPagamentos)
       .innerJoin(inscricoes, eq(inscricaoPagamentos.inscricaoId, inscricoes.id))
-      .where(and(eq(inscricoes.torneioId, dados.torneioId), inArray(inscricaoPagamentos.usuarioId, [atletaAId, atletaBId])))
+      .where(and(eq(inscricoes.torneioId, dados.torneioId), inArray(inscricaoPagamentos.usuarioId, integranteIds)))
       .groupBy(inscricaoPagamentos.usuarioId);
 
     const prevMap = new Map<string, number>(pagamentosPrevios.map((p) => [p.usuarioId, Number(p.total || 0)]));
@@ -496,14 +537,20 @@ export class InscricoesService {
 
     await db
       .insert(inscricaoPagamentos)
-      .values([
-        { inscricaoId: novaInscricao.id, usuarioId: atletaAId, pago: false, valorDevido: valorPara(atletaAId) },
-        { inscricaoId: novaInscricao.id, usuarioId: atletaBId, pago: false, valorDevido: valorPara(atletaBId) },
-      ])
+      .values(
+        integranteIds.map((usuarioId) => ({
+          inscricaoId: novaInscricao.id,
+          usuarioId,
+          pago: false,
+          valorDevido: valorPara(usuarioId),
+        }))
+      )
       .onConflictDoNothing();
 
     await this.salvarPreferenciaCamiseta(dados.torneioId, atletaAId, camisetaAtletaA);
-    await this.salvarPreferenciaCamiseta(dados.torneioId, atletaBId, camisetaAtletaB);
+    if (atletaBId) {
+      await this.salvarPreferenciaCamiseta(dados.torneioId, atletaBId, camisetaAtletaB);
+    }
 
     return novaInscricao;
   }
@@ -531,17 +578,13 @@ export class InscricoesService {
       throw new Error("Inscrição inválida para a categoria/torneio");
     }
 
+    const { categoria, tipoParticipacao } = await this.obterContextoCategoria(dados.categoriaId, dados.torneioId);
     const atletaAEmail = dados.atletaA.email.trim().toLowerCase();
-    const atletaBEmail = dados.atletaB.email.trim().toLowerCase();
-    if (!atletaAEmail || !atletaBEmail) throw new Error("Emails dos atletas são obrigatórios");
-    if (atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
-
-    const categoriaRows = await db
-      .select({ genero: categorias.genero })
-      .from(categorias)
-      .where(eq(categorias.id, dados.categoriaId))
-      .limit(1);
-    const categoria = categoriaRows[0];
+    const atletaBEmail = dados.atletaB?.email?.trim().toLowerCase() || "";
+    const exigeDupla = tipoParticipacao === "DUPLAS";
+    if (!atletaAEmail) throw new Error("Email do atleta é obrigatório");
+    if (exigeDupla && !atletaBEmail) throw new Error("Dados dos dois atletas são obrigatórios");
+    if (exigeDupla && atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
 
     await validarGeneroInscricao({
       categoriaGenero: categoria?.genero,
@@ -552,13 +595,15 @@ export class InscricoesService {
         playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
         genero: dados.atletaA.genero ?? null,
       },
-      atletaB: {
-        nome: dados.atletaB.nome,
-        email: atletaBEmail,
-        telefone: dados.atletaB.telefone ?? null,
-        playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
-        genero: dados.atletaB.genero ?? null,
-      },
+      atletaB: exigeDupla && dados.atletaB
+        ? {
+            nome: dados.atletaB.nome,
+            email: atletaBEmail,
+            telefone: dados.atletaB.telefone ?? null,
+            playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
+            genero: dados.atletaB.genero ?? null,
+          }
+        : null,
     });
 
     const atletaAId = await this.upsertAtleta({
@@ -569,16 +614,19 @@ export class InscricoesService {
       fotoUrl: dados.atletaA.fotoUrl ?? null,
     });
 
-    const atletaBId = await this.upsertAtleta({
-      nome: dados.atletaB.nome.trim(),
-      email: atletaBEmail,
-      telefone: dados.atletaB.telefone?.trim(),
-      playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
-      fotoUrl: dados.atletaB.fotoUrl ?? null,
-    });
+    const atletaBId =
+      exigeDupla && dados.atletaB
+        ? await this.upsertAtleta({
+            nome: dados.atletaB.nome.trim(),
+            email: atletaBEmail,
+            telefone: dados.atletaB.telefone?.trim(),
+            playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
+            fotoUrl: dados.atletaB.fotoUrl ?? null,
+          })
+        : null;
 
-    if (atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
-    const capitaoUsuarioId = dados.capitaoPosicao === "B" ? atletaBId : atletaAId;
+    if (atletaBId && atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
+    const capitaoUsuarioId = dados.capitaoPosicao === "B" && atletaBId ? atletaBId : atletaAId;
 
     const [torneioRow] = await db
       .select({ camisetaOpcoes: torneios.camisetaOpcoes })
@@ -587,7 +635,8 @@ export class InscricoesService {
       .limit(1);
 
     const camisetaAtletaA = this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaA.camisetaOpcao);
-    const camisetaAtletaB = this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaB.camisetaOpcao);
+    const camisetaAtletaB = atletaBId ? this.normalizeCamisetaOpcao(torneioRow?.camisetaOpcoes, dados.atletaB?.camisetaOpcao) : null;
+    const integranteIds = [atletaAId, ...(atletaBId ? [atletaBId] : [])];
 
     const conflito = await db
       .select({ inscricaoId: inscricoes.id })
@@ -597,7 +646,7 @@ export class InscricoesService {
         and(
           eq(inscricoes.categoriaId, dados.categoriaId),
           sql`${inscricoes.id} <> ${inscricaoId}`,
-          inArray(equipeIntegrantes.usuarioId, [atletaAId, atletaBId])
+          inArray(equipeIntegrantes.usuarioId, integranteIds)
         )
       )
       .limit(1);
@@ -618,25 +667,21 @@ export class InscricoesService {
     }
 
     await db.delete(equipeIntegrantes).where(eq(equipeIntegrantes.equipeId, ins.equipeId));
-    await db.insert(equipeIntegrantes).values([
-      { equipeId: ins.equipeId, usuarioId: atletaAId },
-      { equipeId: ins.equipeId, usuarioId: atletaBId },
-    ]);
+    await db.insert(equipeIntegrantes).values(integranteIds.map((usuarioId) => ({ equipeId: ins.equipeId, usuarioId })));
 
     await db
       .delete(inscricaoPagamentos)
-      .where(and(eq(inscricaoPagamentos.inscricaoId, inscricaoId), sql`${inscricaoPagamentos.usuarioId} not in (${atletaAId}, ${atletaBId})`));
+      .where(and(eq(inscricaoPagamentos.inscricaoId, inscricaoId), sql`${inscricaoPagamentos.usuarioId} not in (${sql.join(integranteIds.map((id) => sql`${id}`), sql`, `)})`));
 
     await db
       .insert(inscricaoPagamentos)
-      .values([
-        { inscricaoId, usuarioId: atletaAId, pago: false },
-        { inscricaoId, usuarioId: atletaBId, pago: false },
-      ])
+      .values(integranteIds.map((usuarioId) => ({ inscricaoId, usuarioId, pago: false })))
       .onConflictDoNothing();
 
     await this.salvarPreferenciaCamiseta(dados.torneioId, atletaAId, camisetaAtletaA);
-    await this.salvarPreferenciaCamiseta(dados.torneioId, atletaBId, camisetaAtletaB);
+    if (atletaBId) {
+      await this.salvarPreferenciaCamiseta(dados.torneioId, atletaBId, camisetaAtletaB);
+    }
 
     return { ok: true };
   }
@@ -783,7 +828,7 @@ export class InscricoesService {
     return novo.id;
   }
 
-  private async buscarEquipePorDupla(torneioId: string, atletaAId: string, atletaBId: string) {
+  private async buscarEquipePorIntegrantes(torneioId: string, integranteIds: string[]) {
     const candidatos = await db
       .select({
         equipeId: equipeIntegrantes.equipeId,
@@ -791,9 +836,9 @@ export class InscricoesService {
       })
       .from(equipeIntegrantes)
       .innerJoin(equipes, eq(equipeIntegrantes.equipeId, equipes.id))
-      .where(and(eq(equipes.torneioId, torneioId), inArray(equipeIntegrantes.usuarioId, [atletaAId, atletaBId])))
+      .where(and(eq(equipes.torneioId, torneioId), inArray(equipeIntegrantes.usuarioId, integranteIds)))
       .groupBy(equipeIntegrantes.equipeId)
-      .having(sql`count(*) = 2`)
+      .having(sql`count(*) = ${integranteIds.length}`)
       .limit(1);
 
     return candidatos[0]?.equipeId ?? null;
@@ -837,20 +882,17 @@ export class InscricoesService {
       });
   }
 
-  private async criarEquipeComIntegrantes(torneioId: string, nome: string | undefined, atletaAId: string, atletaBId: string) {
+  private async criarEquipeComIntegrantes(torneioId: string, nome: string | undefined, integranteIds: string[]) {
     const [equipe] = await db
       .insert(equipes)
       .values({
         torneioId,
         nome: nome || null,
-        capitaoUsuarioId: atletaAId,
+        capitaoUsuarioId: integranteIds[0],
       })
       .returning();
 
-    await db.insert(equipeIntegrantes).values([
-      { equipeId: equipe.id, usuarioId: atletaAId },
-      { equipeId: equipe.id, usuarioId: atletaBId },
-    ]);
+    await db.insert(equipeIntegrantes).values(integranteIds.map((usuarioId) => ({ equipeId: equipe.id, usuarioId })));
 
     return equipe.id;
   }

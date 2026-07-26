@@ -182,6 +182,21 @@ function desenharAvatarImagem(ctx: CanvasRenderingContext2D, image: HTMLImageEle
   ctx.stroke();
 }
 
+function desenharTextoSimples(ctx: CanvasRenderingContext2D, x: number, y: number, tamanho: number) {
+  const centerX = x + tamanho / 2;
+  const centerY = y + tamanho / 2;
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#facc15";
+  ctx.strokeStyle = "rgba(15, 23, 42, 0.9)";
+  ctx.lineWidth = 8;
+  ctx.font = "900 56px Inter, Arial, sans-serif";
+  ctx.strokeText("SIMPLES", centerX, centerY);
+  ctx.fillText("SIMPLES", centerX, centerY);
+  ctx.restore();
+}
+
 function formatarDataHora(value?: string | null) {
   if (!value) return "Data a definir";
   const d = new Date(value);
@@ -356,13 +371,25 @@ export async function gerarCardPartidaAdmin(params: GerarCardParams) {
   const tamanhoAvatar = 255;
   const ajusteNomesY = 50;
   const larguraNome = 250;
-  const posicoes = [
-    { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0] },
-    { x: 510, y: 635, atleta: atletasA[1], imagem: fotosA[1] },
-    { x: 90, y: 1320, atleta: atletasB[0], imagem: fotosB[0] },
-    { x: 550, y: 1200, atleta: atletasB[1], imagem: fotosB[1] },
-  ];
+  const categoriaEhSimples = atletasA.length <= 1 && atletasB.length <= 1;
+  const posicoes = categoriaEhSimples
+    ? [
+        { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 510, y: 635, tipo: "simples" as const },
+        { x: 90, y: 1320, tipo: "simples" as const },
+        { x: 550, y: 1200, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+      ]
+    : [
+        { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 510, y: 635, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
+        { x: 90, y: 1320, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 550, y: 1200, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
+      ];
   for (const p of posicoes) {
+    if (p.tipo === "simples") {
+      desenharTextoSimples(ctx, p.x, p.y, tamanhoAvatar);
+      continue;
+    }
     const nome = p.atleta?.nome || "Atleta";
     if (p.imagem) {
       desenharAvatarImagem(ctx, p.imagem, p.x, p.y, tamanhoAvatar);
@@ -419,6 +446,7 @@ export async function gerarCardPartidaAdmin(params: GerarCardParams) {
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 22px Inter, Arial, sans-serif";
   for (const p of posicoes) {
+    if (p.tipo === "simples") continue;
     const nome = p.atleta?.nome || "Atleta";
     drawTextCenter(ctx, nome, p.x + tamanhoAvatar / 2, p.y + tamanhoAvatar + ajusteNomesY, larguraNome, 28);
   }
@@ -524,13 +552,25 @@ export async function gerarCardProgramacaoAdmin(params: GerarCardProgramacaoPara
   const tamanhoAvatar = 255;
   const ajusteNomesY = 50;
   const larguraNome = 250;
-  const posicoes = [
-    { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0] },
-    { x: 510, y: 635, atleta: atletasA[1], imagem: fotosA[1] },
-    { x: 90, y: 1320, atleta: atletasB[0], imagem: fotosB[0] },
-    { x: 550, y: 1200, atleta: atletasB[1], imagem: fotosB[1] },
-  ];
+  const categoriaEhSimples = atletasA.length <= 1 && atletasB.length <= 1;
+  const posicoes = categoriaEhSimples
+    ? [
+        { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 510, y: 635, tipo: "simples" as const },
+        { x: 90, y: 1320, tipo: "simples" as const },
+        { x: 550, y: 1200, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+      ]
+    : [
+        { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 510, y: 635, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
+        { x: 90, y: 1320, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 550, y: 1200, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
+      ];
   for (const p of posicoes) {
+    if (p.tipo === "simples") {
+      desenharTextoSimples(ctx, p.x, p.y, tamanhoAvatar);
+      continue;
+    }
     const nome = p.atleta?.nome || "Atleta";
     if (p.imagem) {
       desenharAvatarImagem(ctx, p.imagem, p.x, p.y, tamanhoAvatar);
@@ -589,6 +629,7 @@ export async function gerarCardProgramacaoAdmin(params: GerarCardProgramacaoPara
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 22px Inter, Arial, sans-serif";
   for (const p of posicoes) {
+    if (p.tipo === "simples") continue;
     const nome = p.atleta?.nome || "Atleta";
     drawTextCenter(ctx, nome, p.x + tamanhoAvatar / 2, p.y + tamanhoAvatar + ajusteNomesY, larguraNome, 28);
   }

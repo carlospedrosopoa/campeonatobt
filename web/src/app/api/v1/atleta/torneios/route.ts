@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
 import { categorias, esportes, inscricoes, partidas, torneios } from "@/db/schema";
 import { desc, eq, inArray, sql } from "drizzle-orm";
+import { categoriaConfigService } from "@/services/categoria-config.service";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
         id: string;
         nome: string;
         genero: string;
+        tipoParticipacao?: "DUPLAS" | "SIMPLES";
         valorInscricao: string | null;
         vagasMaximas: number | null;
         dataHorario: any;
@@ -115,7 +117,18 @@ export async function GET(request: NextRequest) {
   }
 
   const torneiosResult = Array.from(map.values());
+  const categoriaIds = torneiosResult.flatMap((torneio) => torneio.categorias.map((categoria) => categoria.id));
+  const tipoPorCategoria = new Map<string, "DUPLAS" | "SIMPLES">();
+  await Promise.all(
+    categoriaIds.map(async (categoriaId) => {
+      const config = await categoriaConfigService.obterOuDefault(categoriaId);
+      tipoPorCategoria.set(categoriaId, config.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS");
+    })
+  );
   for (const t of torneiosResult) {
+    for (const categoria of t.categorias) {
+      categoria.tipoParticipacao = tipoPorCategoria.get(categoria.id) ?? "DUPLAS";
+    }
     t.categorias.sort((a, b) => {
       const ta = a.dataHorario ? new Date(a.dataHorario).getTime() : Number.POSITIVE_INFINITY;
       const tb = b.dataHorario ? new Date(b.dataHorario).getTime() : Number.POSITIVE_INFINITY;

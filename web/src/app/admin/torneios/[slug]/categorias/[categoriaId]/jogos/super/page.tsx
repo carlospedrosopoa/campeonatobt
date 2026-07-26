@@ -23,6 +23,7 @@ type Categoria = {
 type CategoriaConfig = {
   versao: 1;
   formato: "GRUPOS" | "MATA_MATA" | "LIGA";
+  tipoParticipacao?: "DUPLAS" | "SIMPLES";
   grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean; disputaTerceiroLugar?: boolean };
@@ -1305,6 +1306,28 @@ export default function AdminCategoriaJogosSuperPage() {
                 }}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Tipo de participação</label>
+              <select
+                value={config.tipoParticipacao ?? "DUPLAS"}
+                onChange={(e) =>
+                  setConfig((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          tipoParticipacao: e.target.value === "SIMPLES" ? "SIMPLES" : "DUPLAS",
+                        }
+                      : prev
+                  )
+                }
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="DUPLAS">Duplas</option>
+                <option value="SIMPLES">Simples</option>
+              </select>
+              <div className="text-xs text-slate-500">Define se a categoria aceita 2 atletas por equipe ou apenas 1.</div>
             </div>
 
             <div className="space-y-2">

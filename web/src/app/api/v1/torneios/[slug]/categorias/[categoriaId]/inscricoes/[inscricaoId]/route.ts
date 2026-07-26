@@ -3,6 +3,7 @@ import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { inscricoesService } from "@/services/inscricoes.service";
+import { categoriaConfigService } from "@/services/categoria-config.service";
 
 export async function DELETE(
   request: NextRequest,
@@ -45,6 +46,8 @@ export async function PATCH(
     }
 
     const body = await request.json().catch(() => null);
+    const categoriaConfig = await categoriaConfigService.obterOuDefault(categoriaId);
+    const exigeDupla = (categoriaConfig.tipoParticipacao ?? "DUPLAS") === "DUPLAS";
     const equipeNome = body?.equipeNome as string | null | undefined;
     const status = body?.status as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA" | undefined;
     const capitaoPosicao = body?.capitaoPosicao === "B" ? "B" : "A";
@@ -68,8 +71,11 @@ export async function PATCH(
       genero?: string | null;
     } | undefined;
 
-    if (!atletaA?.nome || !atletaA?.email || !atletaB?.nome || !atletaB?.email) {
-      return NextResponse.json({ error: "Dados dos dois atletas sÃ£o obrigatÃ³rios" }, { status: 400 });
+    if (!atletaA?.nome || !atletaA?.email) {
+      return NextResponse.json({ error: "Dados do atleta são obrigatórios" }, { status: 400 });
+    }
+    if (exigeDupla && (!atletaB?.nome || !atletaB?.email)) {
+      return NextResponse.json({ error: "Dados dos dois atletas são obrigatórios" }, { status: 400 });
     }
 
     await inscricoesService.atualizar(inscricaoId, {
@@ -87,15 +93,18 @@ export async function PATCH(
         camisetaOpcao: atletaA.camisetaOpcao ?? null,
         genero: atletaA.genero ?? null,
       },
-      atletaB: {
-        nome: atletaB.nome,
-        email: atletaB.email,
-        telefone: atletaB.telefone,
-        playnaquadraAtletaId: atletaB.playnaquadraAtletaId,
-        fotoUrl: atletaB.fotoUrl,
-        camisetaOpcao: atletaB.camisetaOpcao ?? null,
-        genero: atletaB.genero ?? null,
-      },
+      atletaB:
+        exigeDupla && atletaB
+          ? {
+              nome: atletaB.nome || "",
+              email: atletaB.email || "",
+              telefone: atletaB.telefone,
+              playnaquadraAtletaId: atletaB.playnaquadraAtletaId,
+              fotoUrl: atletaB.fotoUrl,
+              camisetaOpcao: atletaB.camisetaOpcao ?? null,
+              genero: atletaB.genero ?? null,
+            }
+          : null,
     });
 
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });

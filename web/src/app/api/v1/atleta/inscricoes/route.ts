@@ -7,6 +7,7 @@ import { inscricoesService } from "@/services/inscricoes.service";
 import { torneioResultadosService } from "@/services/torneio-resultados.service";
 import { playGetUsuarioLogado } from "@/services/playnaquadra-client";
 import { extractPlayIdentity } from "@/services/playnaquadra-session.service";
+import { categoriaConfigService } from "@/services/categoria-config.service";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
@@ -146,7 +147,7 @@ export async function GET(request: NextRequest) {
         .map((a) => (a.nome || "").trim().split(/\s+/)[0])
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b));
-      item.equipe.nome = nomes.length > 0 ? nomes.join("/") : "Dupla";
+      item.equipe.nome = nomes.length > 0 ? nomes.join("/") : "Equipe";
     }
   }
 
@@ -174,8 +175,6 @@ export async function POST(request: NextRequest) {
     null;
 
   if (!categoriaId) return NextResponse.json({ error: "categoriaId é obrigatório" }, { status: 400 });
-  if (!parceiroNome || !parceiroEmail || !parceiroPlayAtletaId)
-    return NextResponse.json({ error: "Selecione um parceiro com perfil no Play na Quadra" }, { status: 400 });
 
   const cat = await db
     .select({
@@ -188,6 +187,12 @@ export async function POST(request: NextRequest) {
     .limit(1);
   const categoria = cat[0];
   if (!categoria) return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
+  const categoriaConfig = await categoriaConfigService.obterOuDefault(categoriaId);
+  const tipoParticipacao = categoriaConfig.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
+  const exigeDupla = tipoParticipacao === "DUPLAS";
+  if (exigeDupla && (!parceiroNome || !parceiroEmail || !parceiroPlayAtletaId)) {
+    return NextResponse.json({ error: "Selecione um parceiro com perfil no Play na Quadra" }, { status: 400 });
+  }
 
   const t = await db
     .select({ id: torneios.id, status: torneios.status, camisetaOpcoes: torneios.camisetaOpcoes })
@@ -220,7 +225,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Selecione o tamanho/modelo de camiseta para este torneio" }, { status: 400 });
     }
   }
-  if (opcoes.length > 0 && !parceiroMatch) {
+  if (exigeDupla && opcoes.length > 0 && !parceiroMatch) {
     return NextResponse.json({ error: "Selecione o tamanho/modelo de camiseta do parceiro para este torneio" }, { status: 400 });
   }
 
@@ -269,7 +274,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  if (atletaLogado.email.trim().toLowerCase() === parceiroEmail) {
+  if (exigeDupla && atletaLogado.email.trim().toLowerCase() === parceiroEmail) {
     return NextResponse.json({ error: "O parceiro precisa ser diferente de você" }, { status: 400 });
   }
 
@@ -285,14 +290,16 @@ export async function POST(request: NextRequest) {
         playnaquadraAtletaId: atletaLogado.playnaquadraAtletaId,
         camisetaOpcao: match,
       },
-      atletaB: {
-        nome: parceiroNome,
-        email: parceiroEmail,
-        telefone: parceiroTelefone || undefined,
-        playnaquadraAtletaId: parceiroPlayAtletaId,
-        genero: parceiroGenero,
-        camisetaOpcao: parceiroMatch,
-      },
+      atletaB: exigeDupla
+        ? {
+            nome: parceiroNome || "",
+            email: parceiroEmail || "",
+            telefone: parceiroTelefone || undefined,
+            playnaquadraAtletaId: parceiroPlayAtletaId,
+            genero: parceiroGenero,
+            camisetaOpcao: parceiroMatch,
+          }
+        : null,
       status: "PENDENTE",
     });
 
