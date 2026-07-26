@@ -85,6 +85,10 @@ function faseParaQuantidade(quantidade: number) {
   return "Mata-mata";
 }
 
+function formatarPosicaoClassificacao(posicao: number) {
+  return `${posicao}º`;
+}
+
 function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
   const config = params.config;
   const grupos = (params.classificacao ?? [])
@@ -136,17 +140,22 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
   } else if (totalClassificados === 6) {
     rounds.push({
       titulo: "Quartas de final",
-      jogos: ["J1: S3 x S6", "J2: S4 x S5"],
+      jogos: [
+        `J1: ${formatarPosicaoClassificacao(3)} x ${formatarPosicaoClassificacao(6)}`,
+        `J2: ${formatarPosicaoClassificacao(4)} x ${formatarPosicaoClassificacao(5)}`,
+      ],
     });
     rounds.push({
       titulo: "Semifinais",
-      jogos: ["SF1: S1 x vencedor do J2", "SF2: S2 x vencedor do J1"],
+      jogos: [
+        `SF1: ${formatarPosicaoClassificacao(1)} x Vencedor do J2`,
+        `SF2: ${formatarPosicaoClassificacao(2)} x Vencedor do J1`,
+      ],
     });
     rounds.push({
       titulo: "Final",
-      jogos: ["F: vencedor da SF1 x vencedor da SF2"],
+      jogos: ["F: Vencedor da SF1 x Vencedor da SF2"],
     });
-    observacoes.push("S1 a S6 representam as sementes pela melhor campanha entre os classificados.");
   } else if (grupos.length === 2 && porGrupo >= 2 && totalClassificados === 4) {
     const g0 = grupos[0]?.grupoNome || "Grupo A";
     const g1 = grupos[1]?.grupoNome || "Grupo B";
@@ -184,25 +193,29 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
     const primeiraFase = faseParaQuantidade(totalClassificados);
     const jogosPrimeiraFase: string[] = [];
     for (let i = 1; i <= totalClassificados / 2; i += 1) {
-      jogosPrimeiraFase.push(`J${i}: S${i} x S${totalClassificados + 1 - i}`);
+      jogosPrimeiraFase.push(
+        `J${i}: ${formatarPosicaoClassificacao(i)} x ${formatarPosicaoClassificacao(totalClassificados + 1 - i)}`
+      );
     }
     rounds.push({ titulo: primeiraFase, jogos: jogosPrimeiraFase });
     if (totalClassificados >= 8) {
       rounds.push({
         titulo: "Semifinais",
-        jogos: ["SF1: vencedor do J1 x vencedor do J2", `SF2: vencedor do J${totalClassificados / 2 - 1} x vencedor do J${totalClassificados / 2}`],
+        jogos: [
+          "SF1: Vencedor do J1 x Vencedor do J2",
+          `SF2: Vencedor do J${totalClassificados / 2 - 1} x Vencedor do J${totalClassificados / 2}`,
+        ],
       });
       rounds.push({
         titulo: "Final",
-        jogos: ["F: vencedor da SF1 x vencedor da SF2"],
+        jogos: ["F: Vencedor da SF1 x Vencedor da SF2"],
       });
     } else if (totalClassificados === 4) {
       rounds.push({
         titulo: "Final",
-        jogos: ["F: vencedor do J1 x vencedor do J2"],
+        jogos: ["F: Vencedor do J1 x Vencedor do J2"],
       });
     }
-    observacoes.push("S1, S2, S3... representam as sementes pela melhor campanha entre os classificados.");
   } else {
     observacoes.push("Os cruzamentos do mata-mata dependem da quantidade final de classificados desta categoria.");
   }
