@@ -120,10 +120,19 @@ export default function AdminCategoriaInscricoesPage() {
   });
 
   const categoriaEhSimples = tipoParticipacao === "SIMPLES";
+  const labelCapitaoAtletaA = form.atletaANome.trim() || "Atleta 1";
+  const labelCapitaoAtletaB = form.atletaBNome.trim() || "Atleta 2";
   const podeSalvar = useMemo(() => {
     if (categoriaEhSimples) return Boolean(form.atletaANome.trim() && form.atletaAEmail.trim());
     return Boolean(form.atletaANome.trim() && form.atletaAEmail.trim() && form.atletaBNome.trim() && form.atletaBEmail.trim());
   }, [categoriaEhSimples, form]);
+
+  function atletaEhCapitao(inscricao: Inscricao, atletaId: string, indice: number) {
+    if (inscricao.equipe.capitaoUsuarioId) {
+      return inscricao.equipe.capitaoUsuarioId === atletaId;
+    }
+    return indice === 0;
+  }
 
   const inscricoesParaDivulgacao = useMemo(() => {
     return inscricoes.filter(
@@ -722,10 +731,10 @@ export default function AdminCategoriaInscricoesPage() {
                 onChange={(e) => setForm((p) => ({ ...p, capitaoPosicao: e.target.value === "B" ? "B" : "A" }))}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
               >
-                <option value="A">Atleta 1</option>
-                <option value="B">Atleta 2</option>
+                <option value="A">{labelCapitaoAtletaA}</option>
+                <option value="B">{labelCapitaoAtletaB}</option>
               </select>
-              <div className="text-xs text-slate-500">No fluxo do admin, você pode escolher qual atleta será o capitão da dupla.</div>
+              <div className="text-xs text-slate-500">Selecione qual atleta da dupla será o capitão desta inscrição.</div>
             </div>
             ) : null}
           </div>
@@ -1013,6 +1022,22 @@ export default function AdminCategoriaInscricoesPage() {
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-slate-900">{i.equipe.nome || "Equipe"}</div>
                   <div className="text-xs text-slate-500">{i.equipe.atletas.map((a) => a.nome.split(" ")[0]).join(" & ")}</div>
+                  {!categoriaEhSimples ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {i.equipe.atletas.map((a, indice) => {
+                        const ehCapitao = atletaEhCapitao(i, a.id, indice);
+                        return (
+                          <span
+                            key={`${i.id}:${a.id}:capitao-mobile`}
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${ehCapitao ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}
+                          >
+                            {a.nome.split(" ")[0]}
+                            {ehCapitao ? " • Capitão" : ""}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   <div className="mt-2 inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase text-slate-700">
                     {i.status}
                   </div>
@@ -1145,6 +1170,22 @@ export default function AdminCategoriaInscricoesPage() {
                         <div className="text-xs text-slate-500">
                           {i.equipe.atletas.map((a) => a.nome.split(" ")[0]).join(" & ")}
                         </div>
+                        {!categoriaEhSimples ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {i.equipe.atletas.map((a, indice) => {
+                              const ehCapitao = atletaEhCapitao(i, a.id, indice);
+                              return (
+                                <span
+                                  key={`${i.id}:${a.id}:capitao-desktop`}
+                                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${ehCapitao ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}
+                                >
+                                  {a.nome.split(" ")[0]}
+                                  {ehCapitao ? " • Capitão" : ""}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </td>
