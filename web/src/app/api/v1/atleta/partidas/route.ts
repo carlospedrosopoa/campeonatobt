@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, partidas, placarSubmissoes, torneios } from "@/db/schema";
+import { arenas, categorias, equipeIntegrantes, equipes, partidas, placarSubmissoes, torneios } from "@/db/schema";
 import { obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
       superCampeonatoFormato: torneios.superCampeonatoFormato,
       fase: partidas.fase,
       status: partidas.status,
+      arenaId: partidas.arenaId,
+      arenaNome: arenas.nome,
       equipeAId: partidas.equipeAId,
       equipeBId: partidas.equipeBId,
       placarA: partidas.placarA,
@@ -42,6 +44,7 @@ export async function GET(request: NextRequest) {
     .from(partidas)
     .innerJoin(torneios, eq(partidas.torneioId, torneios.id))
     .innerJoin(categorias, eq(partidas.categoriaId, categorias.id))
+    .leftJoin(arenas, eq(partidas.arenaId, arenas.id))
     .where(or(inArray(partidas.equipeAId, equipeIds), inArray(partidas.equipeBId, equipeIds)))
     .orderBy(desc(partidas.dataHorario), asc(partidas.criadoEm))
     .limit(50);
@@ -112,6 +115,8 @@ export async function GET(request: NextRequest) {
       categoria: { id: r.categoriaId, nome: r.categoriaNome },
       fase: r.fase,
       status: r.status,
+      arenaId: r.arenaId,
+      arenaNome: r.arenaNome,
       equipeA: { id: r.equipeAId, nome: mapNomes.get(r.equipeAId) ?? null },
       equipeB: { id: r.equipeBId, nome: mapNomes.get(r.equipeBId) ?? null },
       placarA: r.placarA,
