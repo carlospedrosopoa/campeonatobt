@@ -38,6 +38,7 @@ export type ClonarCategoriaDTO = {
   torneioId: string;
   categoriaOrigemId: string;
   nome: string;
+  manterInscricoes?: boolean;
 };
 
 export class CategoriasService {
@@ -86,7 +87,7 @@ export class CategoriasService {
     return nova;
   }
 
-  async clonarComInscricoes(dados: ClonarCategoriaDTO) {
+  async clonar(dados: ClonarCategoriaDTO) {
     const origem = await this.buscarPorId(dados.categoriaOrigemId);
     if (!origem || origem.torneioId !== dados.torneioId) {
       throw new Error("Categoria de origem inválida para o torneio");
@@ -95,7 +96,8 @@ export class CategoriasService {
     const nome = dados.nome.trim();
     if (!nome) throw new Error("Informe o nome da nova categoria");
 
-    const inscricoesOrigem = await inscricoesService.listarPorCategoria(origem.id);
+    const manterInscricoes = dados.manterInscricoes === true;
+    const inscricoesOrigem = manterInscricoes ? await inscricoesService.listarPorCategoria(origem.id) : [];
     const configOrigem = await categoriaConfigService.obterOuDefault(origem.id);
 
     return await db.transaction(async (tx) => {
@@ -120,7 +122,7 @@ export class CategoriasService {
 
       for (const inscricao of inscricoesOrigem) {
         const atletas = inscricao.equipe.atletas.slice(0, 2);
-        if (atletas.length < 2) continue;
+        if (atletas.length < 1) continue;
 
         const [novaInscricao] = await tx
           .insert(inscricoes)

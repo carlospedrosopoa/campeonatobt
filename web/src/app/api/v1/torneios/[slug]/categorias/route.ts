@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
@@ -33,6 +33,7 @@ export async function POST(
     const body = await request.json().catch(() => null);
     const nome = (body?.nome as string | undefined)?.trim();
     const categoriaOrigemId = (body?.categoriaOrigemId as string | undefined)?.trim();
+    const manterInscricoes = body?.manterInscricoes === true;
     const genero = body?.genero as "MASCULINO" | "FEMININO" | "MISTO" | undefined;
     const valorInscricao = body?.valorInscricao as string | number | undefined;
     const vagasMaximas = body?.vagasMaximas as number | null | undefined;
@@ -47,10 +48,11 @@ export async function POST(
     }
 
     if (categoriaOrigemId) {
-      const nova = await categoriasService.clonarComInscricoes({
+      const nova = await categoriasService.clonar({
         torneioId: torneio.id,
         categoriaOrigemId,
         nome,
+        manterInscricoes,
       });
 
       return NextResponse.json(nova, { status: 201 });

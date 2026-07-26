@@ -72,6 +72,7 @@ export default function AdminTorneioDashboardPage() {
   const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<Categoria | null>(null);
   const [torneioParaClonar, setTorneioParaClonar] = useState<Torneio | null>(null);
   const [nomeCloneCategoria, setNomeCloneCategoria] = useState("");
+  const [manterInscricoesCloneCategoria, setManterInscricoesCloneCategoria] = useState(true);
   const [nomeCloneTorneio, setNomeCloneTorneio] = useState("");
   const [senhaExclusaoCategoria, setSenhaExclusaoCategoria] = useState("");
   const [formCategoria, setFormCategoria] = useState({
@@ -186,6 +187,7 @@ export default function AdminTorneioDashboardPage() {
   function abrirClonarCategoria(cat: Categoria) {
     setCategoriaParaClonar(cat);
     setNomeCloneCategoria(`${cat.nome} - Cópia`);
+    setManterInscricoesCloneCategoria(true);
     setErroCategorias(null);
   }
 
@@ -200,6 +202,7 @@ export default function AdminTorneioDashboardPage() {
     if (clonandoCategoriaId) return;
     setCategoriaParaClonar(null);
     setNomeCloneCategoria("");
+    setManterInscricoesCloneCategoria(true);
   }
 
   function fecharModalClonarTorneio() {
@@ -288,6 +291,7 @@ export default function AdminTorneioDashboardPage() {
         body: JSON.stringify({
           nome,
           categoriaOrigemId: categoriaParaClonar.id,
+          manterInscricoes: manterInscricoesCloneCategoria,
         }),
       });
 
@@ -299,6 +303,7 @@ export default function AdminTorneioDashboardPage() {
       await recarregarDashboard();
       setCategoriaParaClonar(null);
       setNomeCloneCategoria("");
+      setManterInscricoesCloneCategoria(true);
     } catch (e: any) {
       setErroCategorias(e?.message || "Erro inesperado");
     } finally {
@@ -1174,9 +1179,9 @@ export default function AdminTorneioDashboardPage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-semibold uppercase tracking-wide text-orange-700">Clonagem de categoria</div>
-                  <h3 className="mt-1 text-xl font-bold text-slate-900">Criar nova categoria com as mesmas inscrições</h3>
+                  <h3 className="mt-1 text-xl font-bold text-slate-900">Criar nova categoria a partir da original</h3>
                   <p className="mt-2 text-sm text-slate-700">
-                    A nova categoria copiará configuração e duplas inscritas da categoria original. Aqui você altera apenas o nome.
+                    Você escolhe se quer manter as inscrições da categoria original. Aqui você altera o nome e decide o que copiar.
                   </p>
                 </div>
                 <button
@@ -1194,7 +1199,7 @@ export default function AdminTorneioDashboardPage() {
               <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
                 <div className="font-semibold">Categoria de origem: {categoriaParaClonar.nome}</div>
                 <div className="mt-2">
-                  Serão clonados o gênero, taxa, vagas, data/hora, configuração da modalidade e as inscrições com os mesmos atletas.
+                  Serão clonados o gênero, taxa, vagas, data/hora e a configuração da modalidade.
                   Jogos, grupos e chave não serão copiados.
                 </div>
               </div>
@@ -1225,6 +1230,40 @@ export default function AdminTorneioDashboardPage() {
                 />
                 <div className="text-xs text-slate-500">
                   A rotina de clonagem permite alterar somente o nome da nova categoria. Os demais dados vêm da categoria original.
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-slate-700">Manter inscrições da categoria original?</div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setManterInscricoesCloneCategoria(true)}
+                    className={`rounded-xl border px-4 py-3 text-left transition ${
+                      manterInscricoesCloneCategoria
+                        ? "border-orange-300 bg-orange-50 text-orange-900 ring-2 ring-orange-500/10"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">Sim, manter inscrições</div>
+                    <div className="mt-1 text-xs">
+                      Copia as inscrições e pagamentos dos atletas para a nova categoria.
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setManterInscricoesCloneCategoria(false)}
+                    className={`rounded-xl border px-4 py-3 text-left transition ${
+                      !manterInscricoesCloneCategoria
+                        ? "border-orange-300 bg-orange-50 text-orange-900 ring-2 ring-orange-500/10"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">Não, começar vazia</div>
+                    <div className="mt-1 text-xs">
+                      Cria só a categoria com a mesma configuração, sem copiar nenhuma inscrição.
+                    </div>
+                  </button>
                 </div>
               </div>
 
