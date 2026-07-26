@@ -5,8 +5,7 @@ import { apoiadoresService } from "@/services/apoiadores.service";
 import { torneioResultadosService } from "@/services/torneio-resultados.service";
 import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket, Smartphone, Tv } from "lucide-react";
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
-import TournamentRegistrationChat from "@/components/public/TournamentRegistrationChat";
+import { getAppAtletaUrl } from "@/lib/app-atleta-url";
 
 export const dynamic = 'force-dynamic';
 
@@ -25,12 +24,7 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
   const categorias = await categoriasService.listarPorTorneio(torneio.id);
   const podiosCategorias = await torneioResultadosService.listarPodioPorTorneio(torneio.id);
   const apoiadores = await apoiadoresService.listarPorTorneio(torneio.id);
-  const session = await getSession();
-  const isAtleta = session?.user?.perfil === "ATLETA";
-  const nextInscricao = `/atleta/torneios?torneioSlug=${encodeURIComponent(torneio.slug)}`;
-  const hrefInscricao = isAtleta ? nextInscricao : `/atleta/sso/iniciar?next=${encodeURIComponent(nextInscricao)}`;
-  const inscricaoComIaHabilitada = torneio.inscricaoComIa;
-  const mostrarInscricaoWhatsapp = false;
+  const hrefInscricao = getAppAtletaUrl();
 
   function formatarDataHoraCategoria(value: any) {
     if (!value) return null;
@@ -247,8 +241,13 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
                   className="w-full mt-4 bg-orange-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-orange-600"
                 >
                   <Ticket className="h-5 w-5" />
-                  {isAtleta ? "Inscrever" : "Entrar/Criar perfil e inscrever"}
+                  Inscrições pelo App do Atleta
                 </Link>
+
+                <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3 text-sm text-orange-900">
+                  As inscrições dos atletas são feitas exclusivamente pelo App do Atleta em{" "}
+                  <span className="font-semibold">atleta.playnaquadra.com.br</span>.
+                </div>
 
                 <Link
                   href={`/torneios/${torneio.slug}/atletas`}
@@ -282,21 +281,17 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
 
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
         <div className="container mx-auto px-4 py-3">
-          <div className={`grid gap-3 ${inscricaoComIaHabilitada && mostrarInscricaoWhatsapp ? "grid-cols-2" : "grid-cols-1"}`}>
+          <div className="grid gap-3 grid-cols-1">
             <Link
               href={hrefInscricao}
               className="bg-orange-500 text-white font-extrabold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-orange-600"
             >
               <Smartphone className="h-5 w-5" />
-              {isAtleta ? "App" : "1 toque"}
+              Abrir App do Atleta
             </Link>
           </div>
         </div>
       </div>
-
-      {inscricaoComIaHabilitada ? (
-        <TournamentRegistrationChat tournamentId={torneio.id} tournamentSlug={torneio.slug} tournamentName={torneio.nome} />
-      ) : null}
     </div>
   );
 }

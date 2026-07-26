@@ -4,7 +4,6 @@ import { categoriasService } from "@/services/categorias.service";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import CategoriaDetalhesContent from "./CategoriaDetalhesContent";
-import TournamentRegistrationChat from "@/components/public/TournamentRegistrationChat";
 
 export const dynamic = 'force-dynamic';
 
@@ -25,8 +24,6 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
   if (!categoria) {
     notFound();
   }
-
-  const inscricaoComIaHabilitada = torneio.inscricaoComIa;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -81,17 +78,6 @@ export default async function CategoriaDetalhesPage({ params }: PageProps) {
           }}
         />
       </div>
-
-      {inscricaoComIaHabilitada ? (
-        <TournamentRegistrationChat
-          tournamentId={torneio.id}
-          tournamentSlug={torneio.slug}
-          tournamentName={torneio.nome}
-          categoryId={categoria.id}
-          categorySlug={categoria.slug}
-          categoryName={categoria.nome}
-        />
-      ) : null}
     </div>
   );
 }

@@ -1,11 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getSession } from "@/lib/auth";
+import { getAppAtletaUrl } from "@/lib/app-atleta-url";
 
 export async function Navbar() {
   const session = await getSession();
   const perfil = session?.user?.perfil as string | undefined;
   const isAdmin = perfil === "ADMIN" || perfil === "ORGANIZADOR";
+  const appAtletaUrl = getAppAtletaUrl();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -27,7 +29,7 @@ export async function Navbar() {
         </nav>
 
         <div className="flex items-center gap-4">
-          {session ? (
+          {isAdmin ? (
             <form action="/api/v1/auth/logout" method="post">
               <button type="submit" className="text-sm font-medium hover:underline underline-offset-4">
                 Sair
@@ -36,16 +38,10 @@ export async function Navbar() {
           ) : (
             <>
               <Link
-                href="/atleta/login"
+                href={appAtletaUrl}
                 className="hidden md:inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
               >
-                Sou Atleta
-              </Link>
-              <Link 
-                href="https://atleta.playnaquadra.com.br" 
-                className="hidden md:inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-              >
-                Criar Perfil
+                App do Atleta
               </Link>
             </>
           )}
