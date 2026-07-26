@@ -300,7 +300,7 @@ export async function POST(request: NextRequest) {
             camisetaOpcao: parceiroMatch,
           }
         : null,
-      status: "PENDENTE",
+      status: "APROVADA",
     });
 
     if (match) {

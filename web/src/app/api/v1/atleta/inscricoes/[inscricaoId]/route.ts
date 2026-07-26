@@ -301,8 +301,8 @@ export async function DELETE(
     .limit(1);
   const ins = insRows[0];
   if (!ins) return NextResponse.json({ error: "Inscrição não encontrada" }, { status: 404 });
-  if (ins.status !== "PENDENTE") {
-    return NextResponse.json({ error: "Só é possível cancelar inscrições pendentes" }, { status: 400 });
+  if (ins.status !== "PENDENTE" && ins.status !== "APROVADA") {
+    return NextResponse.json({ error: "Só é possível cancelar inscrições pendentes ou aprovadas" }, { status: 400 });
   }
 
   const torneioComJogosEmAndamento = await db
