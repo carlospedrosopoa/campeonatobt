@@ -36,3 +36,22 @@ export async function PATCH(request: NextRequest) {
     headers: { "Cache-Control": "no-store", Vary: "Authorization" },
   });
 }
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireUser(request);
+  if (auth instanceof NextResponse) return auth;
+
+  const body = await request.json().catch(() => null);
+  const ids = Array.isArray(body?.ids) ? body.ids.map((item: any) => String(item || "").trim()).filter(Boolean) : [];
+  const all = body?.all === true;
+
+  const result = await torneioComunicacoesService.excluirNotificacoesAtleta({
+    usuarioId: auth.user.id,
+    ids,
+    all,
+  });
+
+  return NextResponse.json(result, {
+    headers: { "Cache-Control": "no-store", Vary: "Authorization" },
+  });
+}

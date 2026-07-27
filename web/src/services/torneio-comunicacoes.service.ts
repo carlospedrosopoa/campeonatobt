@@ -706,4 +706,23 @@ export const torneioComunicacoesService = {
 
     return { totalAtualizadas: updated.length };
   },
+
+  async excluirNotificacoesAtleta(params: { usuarioId: string; ids?: string[]; all?: boolean }) {
+    const ids = Array.from(new Set((params.ids || []).map((item) => String(item || "").trim()).filter(Boolean)));
+
+    const filtros = [eq(torneioComunicacaoDestinatarios.usuarioId, params.usuarioId)];
+    if (params.all !== true && ids.length > 0) {
+      filtros.push(inArray(torneioComunicacaoDestinatarios.id, ids));
+    }
+    if (params.all !== true && ids.length === 0) {
+      return { totalExcluidas: 0 };
+    }
+
+    const deleted = await db
+      .delete(torneioComunicacaoDestinatarios)
+      .where(and(...filtros))
+      .returning({ id: torneioComunicacaoDestinatarios.id });
+
+    return { totalExcluidas: deleted.length };
+  },
 };

@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
       torneioCamisetaOpcoes: string[] | null;
       minhaCamisetaOpcao: string | null;
       categoria: { id: string; nome: string; slug: string; valorInscricao: string | null };
+      categoriaConcluida: boolean;
       torneioPix: { chave: string | null; nome: string | null; cidade: string | null };
       meuPagamento: { pago: boolean; status: string; valorDevido: string | null };
       medalha: "OURO" | "PRATA" | null;
@@ -99,6 +100,7 @@ export async function GET(request: NextRequest) {
         torneioCamisetaOpcoes: (r.torneioCamisetaOpcoes as string[] | null) ?? null,
         minhaCamisetaOpcao: r.minhaCamisetaOpcao ?? null,
         categoria: { id: r.categoriaId, nome: r.categoriaNome, slug: r.categoriaSlug, valorInscricao: r.categoriaValorInscricao ?? null },
+        categoriaConcluida: false,
         torneioPix: { chave: r.torneioPixChave ?? null, nome: r.torneioPixNome ?? null, cidade: r.torneioPixCidade ?? null },
         meuPagamento: {
           pago: Boolean(r.meuPago) || r.meuPagamentoStatus === "PAGO",
@@ -134,6 +136,7 @@ export async function GET(request: NextRequest) {
   for (const item of result) {
     const podios = podiosPorTorneio.get(item.torneio.id) ?? [];
     const podioCategoria = podios.find((p) => p.categoriaId === item.categoria.id);
+    item.categoriaConcluida = Boolean(podioCategoria?.campeaoEquipeId);
     item.medalha = !podioCategoria
       ? null
       : item.equipe.id === podioCategoria.campeaoEquipeId
