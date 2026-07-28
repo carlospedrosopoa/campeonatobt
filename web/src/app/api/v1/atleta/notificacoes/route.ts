@@ -41,9 +41,15 @@ export async function DELETE(request: NextRequest) {
   const auth = await requireUser(request);
   if (auth instanceof NextResponse) return auth;
 
+  const { searchParams } = new URL(request.url);
   const body = await request.json().catch(() => null);
-  const ids = Array.isArray(body?.ids) ? body.ids.map((item: any) => String(item || "").trim()).filter(Boolean) : [];
-  const all = body?.all === true;
+  const idsBody = Array.isArray(body?.ids) ? body.ids.map((item: any) => String(item || "").trim()).filter(Boolean) : [];
+  const idsQuery = (searchParams.get("ids") || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const ids = Array.from(new Set([...idsBody, ...idsQuery]));
+  const all = body?.all === true || searchParams.get("all") === "1" || searchParams.get("all") === "true";
 
   const result = await torneioComunicacoesService.excluirNotificacoesAtleta({
     usuarioId: auth.user.id,

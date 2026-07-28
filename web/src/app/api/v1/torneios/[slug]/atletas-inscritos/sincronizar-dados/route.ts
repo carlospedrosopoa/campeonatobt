@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { equipeIntegrantes, equipes, inscricoes, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
@@ -214,17 +214,37 @@ export async function POST(
       const playId = match?.playnaquadraAtletaId || atleta.atletaPlaynaquadraId || null;
       const telefone = normalizeOption(match?.telefone) || null;
 
-      if ((telefone && !normalizeOption(atleta.atletaTelefone)) || (match?.playnaquadraAtletaId && match.playnaquadraAtletaId !== atleta.atletaPlaynaquadraId)) {
-        await db
-          .update(usuarios)
-          .set({
-            telefone: telefone ?? atleta.atletaTelefone ?? null,
-            playnaquadraAtletaId: match?.playnaquadraAtletaId || atleta.atletaPlaynaquadraId || null,
-            atualizadoEm: new Date(),
-          })
-          .where(eq(usuarios.id, atleta.atletaId));
+      const deveAtualizarTelefone = Boolean(telefone && !normalizeOption(atleta.atletaTelefone));
+      let deveAtualizarPlayId = Boolean(!normalizeOption(atleta.atletaPlaynaquadraId) && normalizeOption(match?.playnaquadraAtletaId));
 
-        if (telefone && !normalizeOption(atleta.atletaTelefone)) {
+      if (deveAtualizarPlayId && match?.playnaquadraAtletaId) {
+        const existing = await db
+          .select({ id: usuarios.id })
+          .from(usuarios)
+          .where(and(eq(usuarios.playnaquadraAtletaId, match.playnaquadraAtletaId), ne(usuarios.id, atleta.atletaId)))
+          .limit(1);
+
+        if (existing.length > 0) {
+          deveAtualizarPlayId = false;
+        }
+      }
+
+      if (deveAtualizarTelefone || deveAtualizarPlayId) {
+        const setData: Partial<typeof usuarios.$inferInsert> = {
+          atualizadoEm: new Date(),
+        };
+
+        if (deveAtualizarTelefone) {
+          setData.telefone = telefone;
+        }
+
+        if (deveAtualizarPlayId) {
+          setData.playnaquadraAtletaId = match?.playnaquadraAtletaId || null;
+        }
+
+        await db.update(usuarios).set(setData).where(eq(usuarios.id, atleta.atletaId));
+
+        if (deveAtualizarTelefone) {
           telefonesAtualizados += 1;
         }
       }
