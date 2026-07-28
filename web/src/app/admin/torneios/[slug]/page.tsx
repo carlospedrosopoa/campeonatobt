@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Calendar, Copy, ExternalLink, FileUp, Gamepad2, Handshake, ImageIcon, List, MapPin, MessageSquare, Pencil, Plus, Save, Smartphone, Ticket, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Calendar, Copy, DollarSign, ExternalLink, FileUp, Gamepad2, Handshake, ImageIcon, List, MapPin, MessageSquare, Pencil, Plus, Save, Smartphone, Ticket, Trash2, Users, X } from "lucide-react";
 import { gerarCardProgramacaoTorneioAdmin } from "@/lib/match-card-client";
 
 type Torneio = {
@@ -619,6 +619,13 @@ export default function AdminTorneioDashboardPage() {
               >
                 <Users className="h-4 w-4" />
                 Atletas
+              </Link>
+              <Link
+                href={`/admin/torneios/${slugAtual}/cobranca`}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <DollarSign className="h-4 w-4" />
+                Cobrança
               </Link>
               <Link
                 href={`/admin/torneios/${slugAtual}/comunicacoes`}

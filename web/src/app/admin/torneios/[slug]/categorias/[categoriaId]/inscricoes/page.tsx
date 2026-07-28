@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Banknote, Gamepad2, ImageIcon, Pencil, Plus, RefreshCw, Save, Trash2, Users, X } from "lucide-react";
 import { gerarCardDuplasInscritasAdmin, gerarCardInscricaoAdmin } from "@/lib/match-card-client";
 
@@ -67,8 +67,10 @@ function normalizarGeneroAtleta(value: unknown): GeneroAtletaForm {
 
 export default function AdminCategoriaInscricoesPage() {
   const params = useParams<{ slug: string; categoriaId: string }>();
+  const searchParams = useSearchParams();
   const slug = params.slug;
   const categoriaId = params.categoriaId;
+  const deepLinkEditHandledRef = useRef(false);
 
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [categoriasTorneio, setCategoriasTorneio] = useState<Categoria[]>([]);
@@ -109,6 +111,7 @@ export default function AdminCategoriaInscricoesPage() {
     atletaAFotoUrl: "",
     atletaAGenero: "" as GeneroAtletaForm,
     atletaACamiseta: "",
+    atletaAValorDevido: "",
     atletaBNome: "",
     atletaBEmail: "",
     atletaBTelefone: "",
@@ -116,6 +119,7 @@ export default function AdminCategoriaInscricoesPage() {
     atletaBFotoUrl: "",
     atletaBGenero: "" as GeneroAtletaForm,
     atletaBCamiseta: "",
+    atletaBValorDevido: "",
     status: "APROVADA" as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA",
   });
 
@@ -271,6 +275,17 @@ export default function AdminCategoriaInscricoesPage() {
   }, [slug, categoriaId]);
 
   useEffect(() => {
+    if (deepLinkEditHandledRef.current) return;
+    if (carregando) return;
+    const editarId = (searchParams.get("editar") || "").trim();
+    if (!editarId) return;
+    const alvo = inscricoes.find((i) => i.id === editarId) ?? null;
+    if (!alvo) return;
+    deepLinkEditHandledRef.current = true;
+    abrirEditar(alvo);
+  }, [carregando, inscricoes, searchParams]);
+
+  useEffect(() => {
     if (!mostraForm) return;
     const q = buscaAtletaA.trim();
     if (q.length < 2) {
@@ -335,6 +350,7 @@ export default function AdminCategoriaInscricoesPage() {
       atletaAFotoUrl: "",
       atletaAGenero: "",
       atletaACamiseta: "",
+      atletaAValorDevido: "",
       atletaBNome: "",
       atletaBEmail: "",
       atletaBTelefone: "",
@@ -342,6 +358,7 @@ export default function AdminCategoriaInscricoesPage() {
       atletaBFotoUrl: "",
       atletaBGenero: "",
       atletaBCamiseta: "",
+      atletaBValorDevido: "",
       status: "APROVADA",
     });
   }
@@ -423,6 +440,7 @@ export default function AdminCategoriaInscricoesPage() {
       atletaAFotoUrl: a1?.fotoUrl || "",
       atletaAGenero: "",
       atletaACamiseta: a1?.camisetaOpcao || "",
+      atletaAValorDevido: a1?.valorDevido || "",
       atletaBNome: a2?.nome || "",
       atletaBEmail: a2?.email || "",
       atletaBTelefone: a2?.telefone || "",
@@ -430,6 +448,7 @@ export default function AdminCategoriaInscricoesPage() {
       atletaBFotoUrl: a2?.fotoUrl || "",
       atletaBGenero: "",
       atletaBCamiseta: a2?.camisetaOpcao || "",
+      atletaBValorDevido: a2?.valorDevido || "",
       status: (inscricao.status as any) || "APROVADA",
     });
     if (a1?.playnaquadraAtletaId || a1?.id) {
@@ -450,6 +469,8 @@ export default function AdminCategoriaInscricoesPage() {
 
     try {
       setSalvando(true);
+      const valorAtletaAOriginal = String(editandoInscricao?.equipe.atletas[0]?.valorDevido || "").trim();
+      const valorAtletaBOriginal = String(editandoInscricao?.equipe.atletas[1]?.valorDevido || "").trim();
       const payload = {
         equipeNome: form.equipeNome.trim() || undefined,
         capitaoPosicao: categoriaEhSimples ? "A" : form.capitaoPosicao,
@@ -487,9 +508,63 @@ export default function AdminCategoriaInscricoesPage() {
         body: JSON.stringify(payload),
       });
 
+      const payloadResposta = (await res.json().catch(() => null)) as any;
       if (!res.ok) {
-        const msg = await res.json().catch(() => null);
-        throw new Error(msg?.error || (editandoInscricao ? "Falha ao atualizar inscrição" : "Falha ao criar inscrição"));
+        throw new Error(payloadResposta?.error || (editandoInscricao ? "Falha ao atualizar inscrição" : "Falha ao criar inscrição"));
+      }
+
+      const inscricaoSalvaId =
+        editandoInscricao?.id ||
+        (typeof payloadResposta?.id === "string" ? payloadResposta.id.trim() : "") ||
+        (typeof payloadResposta?.inscricaoId === "string" ? payloadResposta.inscricaoId.trim() : "");
+
+      if (inscricaoSalvaId) {
+        const resInscricoes = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes`, { cache: "no-store" });
+        const listaAtualizada = (await resInscricoes.json().catch(() => null)) as Inscricao[] | { error?: string } | null;
+        if (!resInscricoes.ok || !Array.isArray(listaAtualizada)) {
+          throw new Error(
+            (listaAtualizada as { error?: string } | null)?.error || "Inscrição salva, mas não foi possível atualizar os valores da cobrança"
+          );
+        }
+
+        const inscricaoAtualizada = listaAtualizada.find((item) => item.id === inscricaoSalvaId) ?? null;
+        if (!inscricaoAtualizada) {
+          throw new Error("Inscrição salva, mas não foi possível localizar os atletas para ajustar a cobrança");
+        }
+
+        const atualizacoesValor = [
+          {
+            atletaId: inscricaoAtualizada.equipe.atletas[0]?.id || "",
+            valorDevido: form.atletaAValorDevido.trim(),
+            valorOriginal: valorAtletaAOriginal,
+          },
+          ...(categoriaEhSimples
+            ? []
+            : [
+                {
+                  atletaId: inscricaoAtualizada.equipe.atletas[1]?.id || "",
+                  valorDevido: form.atletaBValorDevido.trim(),
+                  valorOriginal: valorAtletaBOriginal,
+                },
+              ]),
+        ].filter((item) => item.atletaId && (item.valorDevido || item.valorOriginal));
+
+        for (const item of atualizacoesValor) {
+          if (item.valorDevido === item.valorOriginal) continue;
+
+          const resPagamento = await fetch(`/api/v1/torneios/${slug}/inscricoes/${inscricaoSalvaId}/pagamentos`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              atletaId: item.atletaId,
+              valorDevido: item.valorDevido,
+            }),
+          });
+          const payloadPagamento = (await resPagamento.json().catch(() => null)) as any;
+          if (!resPagamento.ok) {
+            throw new Error(payloadPagamento?.error || "Falha ao atualizar valor da cobrança");
+          }
+        }
       }
 
       await carregar();
@@ -852,6 +927,16 @@ export default function AdminCategoriaInscricoesPage() {
                   />
                 )}
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Valor da inscrição</label>
+                <input
+                  value={form.atletaAValorDevido}
+                  onChange={(e) => setForm((p) => ({ ...p, atletaAValorDevido: e.target.value }))}
+                  placeholder={categoria?.valorInscricao ? `Padrão: ${Number(categoria.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : "Ex: 75,00"}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                />
+                <div className="text-xs text-slate-500">Deixe vazio para usar o valor padrão da categoria.</div>
+              </div>
             </div>
 
             {!categoriaEhSimples ? (
@@ -967,6 +1052,16 @@ export default function AdminCategoriaInscricoesPage() {
                   />
                 )}
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Valor da inscrição</label>
+                <input
+                  value={form.atletaBValorDevido}
+                  onChange={(e) => setForm((p) => ({ ...p, atletaBValorDevido: e.target.value }))}
+                  placeholder={categoria?.valorInscricao ? `Padrão: ${Number(categoria.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : "Ex: 75,00"}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                />
+                <div className="text-xs text-slate-500">Deixe vazio para usar o valor padrão da categoria.</div>
+              </div>
             </div>
             ) : null}
           </div>
@@ -1060,7 +1155,7 @@ export default function AdminCategoriaInscricoesPage() {
                     const statusLabel = pago ? "Pago" : processando ? "Processando" : "Pendente";
                     const statusClass = pago ? "text-emerald-700" : processando ? "text-blue-700" : "text-amber-800";
                     return (
-                      <label key={a.id} className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+                      <div key={a.id} className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-700">
                         <input
                           type="checkbox"
                           checked={pago}
@@ -1072,7 +1167,7 @@ export default function AdminCategoriaInscricoesPage() {
                           {firstName}: {statusLabel}
                           {valorLabel}
                         </span>
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
@@ -1207,7 +1302,7 @@ export default function AdminCategoriaInscricoesPage() {
                         const statusLabel = pago ? "Pago" : processando ? "Processando" : "Pendente";
                         const statusClass = pago ? "text-emerald-700" : processando ? "text-blue-700" : "text-amber-800";
                         return (
-                          <label key={a.id} className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+                          <div key={a.id} className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-700">
                             <input
                               type="checkbox"
                               checked={pago}
@@ -1219,7 +1314,7 @@ export default function AdminCategoriaInscricoesPage() {
                               {firstName}: {statusLabel}
                               {valorLabel}
                             </span>
-                          </label>
+                          </div>
                         );
                       })}
                     </div>
