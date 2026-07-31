@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, MessageSquare, RefreshCw, SendHorizontal } from "lucide-react";
+import { ArrowLeft, MessageCircle, MessageSquare, RefreshCw, SendHorizontal } from "lucide-react";
 
 type CategoriaResumo = {
   id: string;
@@ -61,6 +61,20 @@ function formatarDataHora(value?: string | null) {
 function formatarTelefone(value?: string | null) {
   const telefone = String(value || "").trim();
   return telefone || "Telefone não informado";
+}
+
+function formatarNumeroWhatsapp(value?: string | null) {
+  const apenasNumeros = String(value || "").replace(/\D/g, "");
+  if (!apenasNumeros) return "";
+  if (apenasNumeros.startsWith("0")) return apenasNumeros.substring(1);
+  if (apenasNumeros.length >= 12) return apenasNumeros;
+  return `55${apenasNumeros}`;
+}
+
+function montarLinkWhatsapp(value?: string | null) {
+  const numero = formatarNumeroWhatsapp(value);
+  if (!numero) return null;
+  return `https://wa.me/${numero}`;
 }
 
 export default function AdminTorneioComunicacoesPage() {
@@ -340,15 +354,43 @@ export default function AdminTorneioComunicacoesPage() {
                           Ver falhas detalhadas ({item.falhasDestinatarios.length})
                         </summary>
                         <div className="mt-3 space-y-2">
-                          {item.falhasDestinatarios.map((falha) => (
+                          {item.falhasDestinatarios.map((falha) => {
+                            const whatsappLink = montarLinkWhatsapp(falha.telefone);
+                            return (
                             <div key={falha.usuarioId} className="rounded-lg border border-red-100 bg-white px-3 py-3 text-sm">
                               <div className="font-medium text-slate-900">{falha.usuarioNome || "Atleta sem nome"}</div>
-                              <div className="mt-1 text-xs text-slate-600">{formatarTelefone(falha.telefone)}</div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                {whatsappLink ? (
+                                  <>
+                                    <a
+                                      href={whatsappLink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-medium text-green-700 hover:text-green-800 hover:underline"
+                                      title="Abrir conversa no WhatsApp"
+                                    >
+                                      {formatarTelefone(falha.telefone)}
+                                    </a>
+                                    <a
+                                      href={whatsappLink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-1 font-semibold text-green-700 hover:bg-green-100"
+                                      title="Abrir conversa no WhatsApp"
+                                    >
+                                      <MessageCircle className="h-3.5 w-3.5" />
+                                      WhatsApp
+                                    </a>
+                                  </>
+                                ) : (
+                                  <span>{formatarTelefone(falha.telefone)}</span>
+                                )}
+                              </div>
                               <div className="mt-2 text-xs text-red-700">
                                 {falha.whatsappErro || "Falha sem detalhe retornado pela integração."}
                               </div>
                             </div>
-                          ))}
+                          )})}
                         </div>
                       </details>
                     ) : null}
