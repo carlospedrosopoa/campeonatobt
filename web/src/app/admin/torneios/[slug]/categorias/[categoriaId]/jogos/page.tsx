@@ -1303,6 +1303,13 @@ export default function AdminCategoriaJogosPage() {
               <Smartphone className="h-4 w-4" />
               Árbitro
             </Link>
+            <Link
+              href={`/admin/torneios/${slug}/categorias/${categoriaId}/sorteio`}
+              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Crown className="h-4 w-4" />
+              Sorteio live
+            </Link>
           </div>
         </div>
       </div>
