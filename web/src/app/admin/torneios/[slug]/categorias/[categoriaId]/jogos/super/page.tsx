@@ -7,7 +7,7 @@ import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageI
 import { gerarCardPartidaAdmin, gerarCardProgramacaoAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
-import { isRegrasBeachTennisSets, obterRegrasPartidaEfetivas, type RegrasPartidaConfig } from "@/lib/regras-partida";
+import { isRegrasBeachTennisSets, obterRegrasPartidaEfetivas, type RegrasPartidaConfig, type RegrasPartidaPorFase } from "@/lib/regras-partida";
 import { PartidaHeadToHeadButton } from "@/components/admin/PartidaHeadToHeadButton";
 
 type Categoria = {
@@ -32,6 +32,7 @@ type CategoriaConfig = {
     quantidadeClassificados?: number;
   };
   regrasPartida?: RegrasPartidaConfig;
+  regrasPartidaPorFase?: RegrasPartidaPorFase;
 };
 
 type GrupoClassificacao = {

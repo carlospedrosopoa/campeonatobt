@@ -5,10 +5,8 @@ import {
   DEFAULT_REGRAS_PARTIDA_BT,
   DEFAULT_REGRAS_PARTIDA_VOLEI,
   type FasePartida,
-  type RegrasPartidaBTSets,
   type RegrasPartidaConfig,
   type RegrasPartidaPorFase,
-  type RegrasPartidaVoleiSets,
 } from "@/lib/regras-partida";
 
 export type CategoriaFormato = "GRUPOS" | "MATA_MATA" | "LIGA";
@@ -120,11 +118,13 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
       : undefined;
 
   function normalizarRegrasEntrada(value: unknown): RegrasPartidaConfig | null {
-    const regrasInput = value;
-    if (regrasInput?.tipo === "VOLEI_SETS") {
-      const melhorDe: 3 | 5 = regrasInput?.melhorDe === 5 ? 5 : 3;
-      const pontosPorSet: 21 | 25 = regrasInput?.pontosPorSet === 21 ? 21 : 25;
-      const tieBreakHabilitado = regrasInput?.tieBreakDecisivo?.habilitado !== false;
+    if (typeof value !== "object" || value === null) return null;
+    const regrasInput = value as Record<string, unknown>;
+    if (regrasInput["tipo"] === "VOLEI_SETS") {
+      const melhorDe: 3 | 5 = (regrasInput["melhorDe"] as number) === 5 ? 5 : 3;
+      const pontosPorSet: 21 | 25 = (regrasInput["pontosPorSet"] as number) === 21 ? 21 : 25;
+      const tieBreakDecisivoRaw = regrasInput["tieBreakDecisivo"] as Record<string, unknown> | undefined;
+      const tieBreakHabilitado = tieBreakDecisivoRaw?.["habilitado"] !== false;
       const tieBreakAte: 15 = 15;
       const tieBreakDiff: 2 = 2;
       const diffMin: 2 = 2;
@@ -141,17 +141,19 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
       };
     }
 
-    const melhorDe: 1 | 3 = regrasInput?.melhorDe === 3 ? 3 : 1;
-    const gamesPorSet: 4 | 5 | 6 =
-      regrasInput?.gamesPorSet === 4 ? 4 : regrasInput?.gamesPorSet === 5 ? 5 : 6;
-    const tbHabilitado = regrasInput?.tiebreak?.habilitado === false ? false : true;
-    const tbEm = typeof regrasInput?.tiebreak?.em === "number" ? regrasInput.tiebreak.em : gamesPorSet;
-    const tbAte = typeof regrasInput?.tiebreak?.ate === "number" ? regrasInput.tiebreak.ate : gamesPorSet + 1;
-    const tbDiff = typeof regrasInput?.tiebreak?.diffMin === "number" ? regrasInput.tiebreak.diffMin : 2;
-    const stHabilitado = regrasInput?.superTiebreakDecisivo?.habilitado === true;
-    const stAte = typeof regrasInput?.superTiebreakDecisivo?.ate === "number" ? regrasInput.superTiebreakDecisivo.ate : 10;
-    const stDiff = typeof regrasInput?.superTiebreakDecisivo?.diffMin === "number" ? regrasInput.superTiebreakDecisivo.diffMin : 2;
-    const incluirSuperTieEmGames = regrasInput?.incluirSuperTieEmGames === true;
+    const melhorDe: 1 | 3 = (regrasInput["melhorDe"] as number) === 3 ? 3 : 1;
+    const gamesRaw = regrasInput["gamesPorSet"] as number | undefined;
+    const gamesPorSet: 4 | 5 | 6 = gamesRaw === 4 ? 4 : gamesRaw === 5 ? 5 : 6;
+    const tiebreakRaw = regrasInput["tiebreak"] as Record<string, unknown> | undefined;
+    const tbHabilitado = tiebreakRaw?.["habilitado"] === false ? false : true;
+    const tbEm = typeof tiebreakRaw?.["em"] === "number" ? (tiebreakRaw.em as number) : gamesPorSet;
+    const tbAte = typeof tiebreakRaw?.["ate"] === "number" ? (tiebreakRaw.ate as number) : gamesPorSet + 1;
+    const tbDiff = typeof tiebreakRaw?.["diffMin"] === "number" ? (tiebreakRaw.diffMin as number) : 2;
+    const superTieRaw = regrasInput["superTiebreakDecisivo"] as Record<string, unknown> | undefined;
+    const stHabilitado = superTieRaw?.["habilitado"] === true;
+    const stAte = typeof superTieRaw?.["ate"] === "number" ? (superTieRaw.ate as number) : 10;
+    const stDiff = typeof superTieRaw?.["diffMin"] === "number" ? (superTieRaw.diffMin as number) : 2;
+    const incluirSuperTieEmGames = regrasInput["incluirSuperTieEmGames"] === true;
 
     return {
       tipo: "BT_SETS",

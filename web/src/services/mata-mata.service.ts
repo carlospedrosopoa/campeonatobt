@@ -485,6 +485,8 @@ export class MataMataService {
     const qualificados: {
       equipeId: string;
       grupoId: string;
+      grupoNome?: string;
+      equipeNome?: string;
       rankGrupo: number;
       pontos: number;
       saldoGames: number;

@@ -9,6 +9,7 @@ import {
   isRegrasVoleiSets,
   obterRegrasPartidaEfetivas,
   type RegrasPartidaConfig,
+  type RegrasPartidaPorFase,
   type SuperCampeonatoFormato,
 } from "@/lib/regras-partida";
 
@@ -28,6 +29,7 @@ type CategoriaConfig = {
   versao: 1;
   formato: "GRUPOS" | "MATA_MATA" | "LIGA";
   regrasPartida?: RegrasPartidaConfig;
+  regrasPartidaPorFase?: RegrasPartidaPorFase;
 };
 
 type GrupoClassificacao = {
@@ -184,18 +186,6 @@ export default function AdminCategoriaJogosArbitroPage() {
   const [editPartidaFase, setEditPartidaFase] = useState<string | null>(null);
   const [salvandoPartida, setSalvandoPartida] = useState(false);
   const [formPlacar, setFormPlacar] = useState<FormPlacar>(FORM_PLACAR_VAZIO);
-
-  const regrasParaListagem = useMemo(
-    () =>
-      obterRegrasPartidaEfetivas({
-        regrasBase: config?.regrasPartida,
-        regrasPorFase: config?.regrasPartidaPorFase ?? null,
-        fase: fase ?? null,
-        superCampeonato: torneio?.superCampeonato,
-        superCampeonatoFormato: torneio?.superCampeonatoFormato,
-      }),
-    [config?.regrasPartida, config?.regrasPartidaPorFase, fase, torneio?.superCampeonato, torneio?.superCampeonatoFormato]
-  );
 
   const partidaEditandoInterno = partidas.find((partida) => partida.id === editPartidaId) ?? null;
   const regrasEfetivas = useMemo(() => {
