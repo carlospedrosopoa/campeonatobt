@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { arenas, categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, rodadas, usuarios } from "@/db/schema";
@@ -234,6 +234,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const config = await categoriaConfigService.obterOuDefault(categoria.id);
     const regras = obterRegrasPartidaEfetivas({
       regrasBase: config.regrasPartida,
+      regrasPorFase: config.regrasPartidaPorFase ?? null,
+      fase: "GRUPOS",
       superCampeonato: torneio.superCampeonato,
       superCampeonatoFormato: torneio.superCampeonatoFormato,
     });

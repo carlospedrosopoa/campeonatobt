@@ -40,6 +40,16 @@ export type RegrasPartidaVoleiSets = {
 export type RegrasPartidaConfig = RegrasPartidaBTSets | RegrasPartidaVoleiSets;
 export type SuperCampeonatoFormato = "2_SET_SUPER_TIE" | "1_SET";
 
+export type FasePartida =
+  | "GRUPOS"
+  | "OITAVAS"
+  | "QUARTAS"
+  | "SEMI"
+  | "FINAL"
+  | "TERCEIRO_LUGAR"
+  | "LIGA"
+  | "MATA_MATA";
+
 export type SetScore = { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number };
 
 export const DEFAULT_REGRAS_PARTIDA_BT: RegrasPartidaBTSets = {
@@ -104,12 +114,70 @@ export function normalizarRegrasBeachTennis(regras: RegrasPartidaBTSets | Regras
   };
 }
 
+export type RegrasPartidaPorFase = Partial<Record<FasePartida, RegrasPartidaConfig | RegrasPartidaSets | null>>;
+
+function obterFaseCanonica(fase?: FasePartida | string | null): FasePartida | null {
+  const normalized = String(fase || "").trim().toUpperCase();
+  if (!normalized) return null;
+  switch (normalized) {
+    case "GRUPOS":
+    case "OITAVAS":
+    case "QUARTAS":
+    case "SEMI":
+    case "FINAL":
+    case "TERCEIRO_LUGAR":
+    case "LIGA":
+    case "MATA_MATA":
+      return normalized as FasePartida;
+    default:
+      return null;
+  }
+}
+
+function obterRegrasPorFase(params: {
+  regrasBase?: RegrasPartidaConfig | RegrasPartidaSets | null;
+  regrasPorFase?: RegrasPartidaPorFase | null;
+  fase?: FasePartida | string | null;
+}) {
+  const base = params.regrasBase ?? DEFAULT_REGRAS_PARTIDA_BT;
+  if (!params.regrasPorFase) return base;
+
+  const faseCanonica = obterFaseCanonica(params.fase);
+  if (faseCanonica) {
+    const porFase = params.regrasPorFase[faseCanonica];
+    if (porFase) return porFase;
+  }
+
+  if (faseCanonica && (faseCanonica === "OITAVAS" || faseCanonica === "QUARTAS" || faseCanonica === "SEMI" || faseCanonica === "FINAL" || faseCanonica === "TERCEIRO_LUGAR" || faseCanonica === "MATA_MATA")) {
+    const porFase = params.regrasPorFase.MATA_MATA;
+    if (porFase) return porFase;
+  }
+
+  if (faseCanonica && faseCanonica === "GRUPOS") {
+    const porFase = params.regrasPorFase.GRUPOS;
+    if (porFase) return porFase;
+  }
+
+  if (faseCanonica && faseCanonica === "LIGA") {
+    const porFase = params.regrasPorFase.LIGA;
+    if (porFase) return porFase;
+  }
+
+  return base;
+}
+
 export function obterRegrasPartidaEfetivas(params: {
   regrasBase?: RegrasPartidaConfig | RegrasPartidaSets | null;
+  regrasPorFase?: RegrasPartidaPorFase | null;
+  fase?: FasePartida | string | null;
   superCampeonato?: boolean | null;
   superCampeonatoFormato?: SuperCampeonatoFormato | null;
 }): RegrasPartidaConfig | RegrasPartidaSets {
-  const regrasBase = params.regrasBase ?? DEFAULT_REGRAS_PARTIDA_BT;
+  const regrasBase = obterRegrasPorFase({
+    regrasBase: params.regrasBase ?? DEFAULT_REGRAS_PARTIDA_BT,
+    regrasPorFase: params.regrasPorFase ?? null,
+    fase: params.fase ?? null,
+  });
 
   if (!params.superCampeonato) {
     return regrasBase;

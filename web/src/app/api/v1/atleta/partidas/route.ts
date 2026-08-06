@@ -143,6 +143,8 @@ export async function GET(request: NextRequest) {
         : null,
       regrasPartida: obterRegrasPartidaEfetivas({
         regrasBase: config?.regrasPartida,
+        regrasPorFase: config?.regrasPartidaPorFase ?? null,
+        fase: r.fase,
         superCampeonato: r.superCampeonato,
         superCampeonatoFormato: r.superCampeonatoFormato,
       }),

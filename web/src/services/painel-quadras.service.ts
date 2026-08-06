@@ -201,6 +201,8 @@ export class PainelQuadrasService {
         detalhesPlacar: (row.detalhesPlacar as PainelQuadrasPartida["detalhesPlacar"]) ?? null,
         regrasPartida: obterRegrasPartidaEfetivas({
           regrasBase: config?.regrasPartida,
+          regrasPorFase: config?.regrasPartidaPorFase ?? null,
+          fase: row.fase,
           superCampeonato: torneio.superCampeonato,
           superCampeonatoFormato: torneio.superCampeonatoFormato,
         }),

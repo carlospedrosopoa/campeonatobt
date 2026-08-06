@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { categoriasService } from "@/services/categorias.service";
 import { categoriaConfigService } from "@/services/categoria-config.service";
@@ -45,6 +45,8 @@ export async function PUT(
     const config = await categoriaConfigService.obterOuDefault(categoriaId);
     const regras = obterRegrasPartidaEfetivas({
       regrasBase: config.regrasPartida,
+      regrasPorFase: config.regrasPartidaPorFase ?? null,
+      fase: partida.fase,
       superCampeonato: torneio.superCampeonato,
       superCampeonatoFormato: torneio.superCampeonatoFormato,
     });

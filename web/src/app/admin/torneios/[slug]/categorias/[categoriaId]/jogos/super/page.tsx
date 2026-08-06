@@ -7,7 +7,7 @@ import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageI
 import { gerarCardPartidaAdmin, gerarCardProgramacaoAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
-import { isRegrasBeachTennisSets, type RegrasPartidaConfig } from "@/lib/regras-partida";
+import { isRegrasBeachTennisSets, obterRegrasPartidaEfetivas, type RegrasPartidaConfig } from "@/lib/regras-partida";
 import { PartidaHeadToHeadButton } from "@/components/admin/PartidaHeadToHeadButton";
 
 type Categoria = {
@@ -158,6 +158,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [resultadoFinal, setResultadoFinal] = useState<ResultadoFinal>(null);
 
   const [editPartidaId, setEditPartidaId] = useState<string | null>(null);
+  const [editPartidaFase, setEditPartidaFase] = useState<string | null>(null);
   const [pendingOpenPartidaId, setPendingOpenPartidaId] = useState<string | null>(null);
   const [salvandoPartida, setSalvandoPartida] = useState(false);
   const [editConfrontoId, setEditConfrontoId] = useState<string | null>(null);
@@ -741,6 +742,7 @@ export default function AdminCategoriaJogosSuperPage() {
   function startEditPartida(p: Partida) {
     const det = (p.detalhesPlacar ?? []).slice().sort((a, b) => a.set - b.set);
     setEditPartidaId(p.id);
+    setEditPartidaFase(p.fase || null);
     setFormPlacar({
       s1a: det[0]?.a?.toString?.() ?? "",
       s1b: det[0]?.b?.toString?.() ?? "",
@@ -931,7 +933,13 @@ export default function AdminCategoriaJogosSuperPage() {
         return;
       }
 
-      const regras = config?.regrasPartida;
+      const regras = obterRegrasPartidaEfetivas({
+        regrasBase: config?.regrasPartida ?? null,
+        regrasPorFase: config?.regrasPartidaPorFase ?? null,
+        fase: editPartidaFase ?? null,
+        superCampeonato: true,
+        superCampeonatoFormato: torneioSuperCampeonatoFormato ?? null,
+      });
       const regrasBT = isRegrasBeachTennisSets(regras) ? regras : null;
       const melhorDe = 3;
       const superTie = true;
@@ -1128,9 +1136,16 @@ export default function AdminCategoriaJogosSuperPage() {
     return false;
   }, [classificacao, temResultadoGrupos]);
 
+  const regrasModal = obterRegrasPartidaEfetivas({
+    regrasBase: config?.regrasPartida ?? null,
+    regrasPorFase: config?.regrasPartidaPorFase ?? null,
+    fase: editPartidaId ? (editPartidaFase ?? null) : (fase ?? null),
+    superCampeonato: true,
+    superCampeonatoFormato: torneioSuperCampeonatoFormato ?? null,
+  });
   const melhorDe = 3;
   const superTie = true;
-  const regrasBT = isRegrasBeachTennisSets(config?.regrasPartida) ? config?.regrasPartida : null;
+  const regrasBT = isRegrasBeachTennisSets(regrasModal) ? regrasModal : null;
   const tbHabilitado = regrasBT?.tiebreak?.habilitado ?? true;
   const tbEm = regrasBT?.tiebreak?.em ?? (regrasBT?.gamesPorSet ?? 6);
   const isTbScore = (a: number, b: number) =>

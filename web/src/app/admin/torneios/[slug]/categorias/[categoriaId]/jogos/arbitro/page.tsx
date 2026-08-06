@@ -181,18 +181,42 @@ export default function AdminCategoriaJogosArbitroPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [editPartidaId, setEditPartidaId] = useState<string | null>(null);
+  const [editPartidaFase, setEditPartidaFase] = useState<string | null>(null);
   const [salvandoPartida, setSalvandoPartida] = useState(false);
   const [formPlacar, setFormPlacar] = useState<FormPlacar>(FORM_PLACAR_VAZIO);
 
-  const regrasEfetivas = useMemo(
+  const regrasParaListagem = useMemo(
     () =>
       obterRegrasPartidaEfetivas({
         regrasBase: config?.regrasPartida,
+        regrasPorFase: config?.regrasPartidaPorFase ?? null,
+        fase: fase ?? null,
         superCampeonato: torneio?.superCampeonato,
         superCampeonatoFormato: torneio?.superCampeonatoFormato,
       }),
-    [config?.regrasPartida, torneio?.superCampeonato, torneio?.superCampeonatoFormato]
+    [config?.regrasPartida, config?.regrasPartidaPorFase, fase, torneio?.superCampeonato, torneio?.superCampeonatoFormato]
   );
+
+  const partidaEditandoInterno = partidas.find((partida) => partida.id === editPartidaId) ?? null;
+  const regrasEfetivas = useMemo(() => {
+    const faseAlvo = editPartidaId ? (editPartidaFase ?? partidaEditandoInterno?.fase ?? null) : (fase ?? null);
+    return obterRegrasPartidaEfetivas({
+      regrasBase: config?.regrasPartida,
+      regrasPorFase: config?.regrasPartidaPorFase ?? null,
+      fase: faseAlvo,
+      superCampeonato: torneio?.superCampeonato,
+      superCampeonatoFormato: torneio?.superCampeonatoFormato,
+    });
+  }, [
+    editPartidaId,
+    editPartidaFase,
+    partidaEditandoInterno?.fase,
+    fase,
+    config?.regrasPartida,
+    config?.regrasPartidaPorFase,
+    torneio?.superCampeonato,
+    torneio?.superCampeonatoFormato,
+  ]);
 
   async function carregarBase() {
     try {
@@ -361,6 +385,7 @@ export default function AdminCategoriaJogosArbitroPage() {
   function startEditPartida(partida: Partida) {
     const detalhes = (partida.detalhesPlacar ?? []).slice().sort((a, b) => a.set - b.set);
     setEditPartidaId(partida.id);
+    setEditPartidaFase(partida.fase || null);
     setFormPlacar({
       s1a: detalhes[0]?.a?.toString?.() ?? "",
       s1b: detalhes[0]?.b?.toString?.() ?? "",
@@ -382,6 +407,7 @@ export default function AdminCategoriaJogosArbitroPage() {
 
   function fecharModal() {
     setEditPartidaId(null);
+    setEditPartidaFase(null);
     setFormPlacar(FORM_PLACAR_VAZIO);
   }
 
@@ -551,7 +577,7 @@ export default function AdminCategoriaJogosArbitroPage() {
     }
   }
 
-  const partidaEditando = partidas.find((partida) => partida.id === editPartidaId) ?? null;
+  const partidaEditando = partidaEditandoInterno ?? partidas.find((partida) => partida.id === editPartidaId) ?? null;
   const regrasBT = isRegrasBeachTennisSets(regrasEfetivas) ? regrasEfetivas : null;
   const regrasVolei = isRegrasVoleiSets(regrasEfetivas) ? regrasEfetivas : null;
   const melhorDe = regrasVolei?.melhorDe ?? regrasBT?.melhorDe ?? 1;

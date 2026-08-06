@@ -111,6 +111,8 @@ export async function POST(
   const config = await categoriaConfigService.obterOuDefault(partida.categoriaId);
   const regras = obterRegrasPartidaEfetivas({
     regrasBase: config.regrasPartida,
+    regrasPorFase: config.regrasPartidaPorFase ?? null,
+    fase: partida.fase,
     superCampeonato: partida.superCampeonato,
     superCampeonatoFormato: partida.superCampeonatoFormato,
   });

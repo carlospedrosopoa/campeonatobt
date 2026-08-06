@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Smartphone, Swords, Trophy, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Smartphone, Swords, Trophy, Trash2, X } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
-import { isRegrasBeachTennisSets, isRegrasVoleiSets, type RegrasPartidaConfig } from "@/lib/regras-partida";
+import { isRegrasBeachTennisSets, isRegrasVoleiSets, obterRegrasPartidaEfetivas, type FasePartida, type RegrasPartidaConfig, type RegrasPartidaPorFase } from "@/lib/regras-partida";
 import { PartidaHeadToHeadButton } from "@/components/admin/PartidaHeadToHeadButton";
 
 type Categoria = {
@@ -31,6 +31,7 @@ type CategoriaConfig = {
     quantidadeClassificados?: number;
   };
   regrasPartida?: RegrasPartidaConfig;
+  regrasPartidaPorFase?: RegrasPartidaPorFase;
   desempate?: string[];
 };
 
@@ -90,6 +91,26 @@ type Inscricao = {
 type Arena = { id: string; nome: string; logoUrl?: string | null };
 
 type ResultadoFinal = { campeao: string; vice: string } | null;
+
+type ManualTieBreakGroupItem = {
+  equipeId: string;
+  equipeNome: string;
+  grupoId: string;
+  grupoNome: string;
+  rankGrupo: number;
+  pontos: number;
+  saldoGames: number;
+  gamesPro: number;
+  setsPro: number;
+  vitorias: number;
+};
+
+type ManualTieBreakGroup = {
+  key: string;
+  label: string;
+  rankGrupo: number;
+  items: ManualTieBreakGroupItem[];
+};
 
 const getStatusBadge = (status: string, dataHorario?: string | null) => {
   if (status === "AGENDADA" && !dataHorario) {
@@ -181,6 +202,11 @@ export default function AdminCategoriaJogosPage() {
   const [gerandoProximaFase, setGerandoProximaFase] = useState(false);
   const [resetando, setResetando] = useState(false);
 
+  const [manualTieBreakOpen, setManualTieBreakOpen] = useState(false);
+  const [manualTieBreakGroups, setManualTieBreakGroups] = useState<ManualTieBreakGroup[]>([]);
+  const [manualTieBreakOrder, setManualTieBreakOrder] = useState<Record<string, string[]>>({});
+  const [confirmandoManualTieBreak, setConfirmandoManualTieBreak] = useState(false);
+
   const [classificacao, setClassificacao] = useState<GrupoClassificacao[]>([]);
 
   const [fasePartidas, setFasePartidas] = useState<"GRUPOS" | "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL">("GRUPOS");
@@ -191,6 +217,7 @@ export default function AdminCategoriaJogosPage() {
   const [resultadoFinal, setResultadoFinal] = useState<ResultadoFinal>(null);
 
   const [editPartidaId, setEditPartidaId] = useState<string | null>(null);
+  const [editPartidaFase, setEditPartidaFase] = useState<string | null>(null);
   const [pendingOpenPartidaId, setPendingOpenPartidaId] = useState<string | null>(null);
   const [salvandoPartida, setSalvandoPartida] = useState(false);
   const [editConfrontoId, setEditConfrontoId] = useState<string | null>(null);
@@ -244,6 +271,21 @@ export default function AdminCategoriaJogosPage() {
   const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
   const [gerandoPlanilhaContingencia, setGerandoPlanilhaContingencia] = useState(false);
 
+  function moverEquipeManualTieBreak(params: { groupKey: string; equipeId: string; delta: number }) {
+    setManualTieBreakOrder((prev) => {
+      const atual = prev[params.groupKey] ? [...prev[params.groupKey]] : [];
+      const idx = atual.indexOf(params.equipeId);
+      if (idx < 0) return prev;
+      const next = idx + params.delta;
+      if (next < 0 || next >= atual.length) return prev;
+      const copy = [...atual];
+      const temp = copy[next];
+      copy[next] = copy[idx];
+      copy[idx] = temp;
+      return { ...prev, [params.groupKey]: copy };
+    });
+  }
+
   function getRegraJogoValue(regras?: CategoriaConfig["regrasPartida"]) {
     if (isRegrasVoleiSets(regras)) {
       if (regras.melhorDe === 5) return "VOLEI_5_25";
@@ -251,7 +293,10 @@ export default function AdminCategoriaJogosPage() {
       return "VOLEI_3_25";
     }
 
-    if (regras?.melhorDe === 3 && regras?.superTiebreakDecisivo?.habilitado) return "2SETS_SUPER10";
+    if (regras?.melhorDe === 3 && regras?.superTiebreakDecisivo?.habilitado) {
+      if (regras?.gamesPorSet === 4 && regras?.tiebreak?.habilitado && regras?.tiebreak?.em === 3) return "2SETS_4_TB3x3_SUPER10";
+      return "2SETS_SUPER10";
+    }
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 6 && regras?.tiebreak?.habilitado === false) return "1SET_6_SEM_TB";
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 5 && regras?.tiebreak?.habilitado === false) return "1SET_5_SEM_TB";
     return "1SET_6_TB";
@@ -283,6 +328,16 @@ export default function AdminCategoriaJogosPage() {
         pontosPorSet: 25,
         tieBreakDecisivo: { habilitado: true, ate: 15, diffMin: 2 },
         diffMin: 2,
+      };
+    }
+    if (valor === "2SETS_4_TB3x3_SUPER10") {
+      return {
+        tipo: "BT_SETS",
+        melhorDe: 3,
+        gamesPorSet: 4,
+        tiebreak: { habilitado: true, em: 3, ate: 5, diffMin: 2 },
+        superTiebreakDecisivo: { habilitado: true, ate: 10, diffMin: 2 },
+        incluirSuperTieEmGames: false,
       };
     }
     if (valor === "2SETS_SUPER10") {
@@ -822,6 +877,7 @@ export default function AdminCategoriaJogosPage() {
     setEditPartidaId(p.id);
     setFotoUrl((p as any).fotoUrl || "");
     setTransmissaoUrl((p as any).transmissaoUrl || "");
+    setEditPartidaFase(p.fase || null);
     setFormPlacar({
       s1a: det[0]?.a?.toString?.() ?? "",
       s1b: det[0]?.b?.toString?.() ?? "",
@@ -987,7 +1043,11 @@ export default function AdminCategoriaJogosPage() {
         return;
       }
 
-      const regras = config?.regrasPartida;
+      const regras = obterRegrasPartidaEfetivas({
+        regrasBase: config?.regrasPartida ?? null,
+        regrasPorFase: config?.regrasPartidaPorFase ?? null,
+        fase: editPartidaFase ?? null,
+      });
       const detalhes: any[] = [];
 
       if (isRegrasVoleiSets(regras)) {
@@ -1385,6 +1445,7 @@ export default function AdminCategoriaJogosPage() {
                     <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
                     <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
                     <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
+                    <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie até 10</option>
                     <option value="VOLEI_3_21">Vôlei melhor de 3 até 21</option>
                     <option value="VOLEI_3_25">Vôlei melhor de 3 até 25</option>
                     <option value="VOLEI_5_25">Vôlei melhor de 5 até 25</option>
@@ -1559,6 +1620,71 @@ export default function AdminCategoriaJogosPage() {
               </label>
               <div className="text-xs text-slate-500">Quando ativada, a semifinal gera final e 3º lugar automaticamente.</div>
             </div>
+
+            <div className="space-y-3 md:col-span-6 pt-2 border-t border-slate-100">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">Regras por fase</div>
+                  <div className="text-xs text-slate-500">
+                    Deixe em "Padrão" para usar a regra do jogo acima. Quando configurada, a regra específica da fase (ou a de mata-mata para oitavas/quartas/semi/final) prevalece.
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {([
+                  { key: "GRUPOS", label: "Grupos", hint: "Fase de grupos / liga" },
+                  { key: "MATA_MATA", label: "Mata-mata (genérico)", hint: "Oitavas, quartas, semi, final, 3º lugar" },
+                  { key: "SEMI", label: "Semifinal", hint: "Apenas semi" },
+                  { key: "FINAL", label: "Final", hint: "Apenas a grande final" },
+                ] as Array<{ key: FasePartida; label: string; hint: string }>).map((item) => {
+                  const regraAtual = config?.regrasPartidaPorFase?.[item.key] ?? null;
+                  const presetAtual = regraAtual ? getRegraJogoValue(regraAtual as any) : "PADRAO";
+                  return (
+                    <div key={item.key} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-700">{item.label}</div>
+                        <div className="text-[11px] leading-tight text-slate-500">{item.hint}</div>
+                      </div>
+                      <select
+                        value={presetAtual}
+                        onChange={(e) => {
+                          const valor = e.target.value;
+                          setConfig((p) => {
+                            if (!p) return p;
+                            const atual: RegrasPartidaPorFase = { ...(p.regrasPartidaPorFase ?? {}) };
+                            if (valor === "PADRAO") {
+                              delete atual[item.key];
+                            } else {
+                              atual[item.key] = buildRegrasPartidaPreset(valor);
+                            }
+                            const temChaves = Object.keys(atual).length > 0;
+                            return {
+                              ...p,
+                              regrasPartidaPorFase: temChaves ? atual : undefined,
+                            };
+                          });
+                        }}
+                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                      >
+                        <option value="PADRAO">Padrão (usa regra do jogo)</option>
+                        {!ehVoleiPraia && (
+                          <>
+                            <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
+                            <option value="1SET_6_SEM_TB">1 set até 6 sem tie</option>
+                            <option value="1SET_5_SEM_TB">1 set até 5 sem tie</option>
+                            <option value="2SETS_SUPER10">2 sets até 6 + super tie 10</option>
+                            <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie 10</option>
+                          </>
+                        )}
+                        <option value="VOLEI_3_21">Vôlei md3 até 21</option>
+                        <option value="VOLEI_3_25">Vôlei md3 até 25</option>
+                        {!ehVoleiPraia && <option value="VOLEI_5_25">Vôlei md5 até 25</option>}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="text-sm text-slate-600">Carregando configuração…</div>
@@ -1700,7 +1826,18 @@ export default function AdminCategoriaJogosPage() {
                   setGerandoMataMata(true);
                   const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-mata-mata`, { method: "POST" });
                   const payload = (await res.json().catch(() => null)) as any;
-                  if (!res.ok) throw new Error(payload?.error || "Falha ao gerar mata-mata");
+                  if (!res.ok) {
+                    if (payload?.code === "TIE_BREAK_REQUIRED" && Array.isArray(payload?.tieGroups)) {
+                      const groups = payload.tieGroups as ManualTieBreakGroup[];
+                      setManualTieBreakGroups(groups);
+                      setManualTieBreakOrder(
+                        Object.fromEntries(groups.map((g) => [g.key, g.items.map((i) => i.equipeId)]))
+                      );
+                      setManualTieBreakOpen(true);
+                      return;
+                    }
+                    throw new Error(payload?.error || "Falha ao gerar mata-mata");
+                  }
                   if (payload?.fase) {
                     setFasePartidas(payload.fase);
                     await carregarPartidas(payload.fase);
@@ -1882,7 +2019,11 @@ export default function AdminCategoriaJogosPage() {
         (() => {
           const partida = partidas.find((p) => p.id === editPartidaId);
           if (!partida) return null;
-          const regras = config?.regrasPartida;
+          const regras = obterRegrasPartidaEfetivas({
+            regrasBase: config?.regrasPartida ?? null,
+            regrasPorFase: config?.regrasPartidaPorFase ?? null,
+            fase: editPartidaFase ?? null,
+          });
           const regrasBT = isRegrasBeachTennisSets(regras) ? regras : null;
           const regrasVolei = isRegrasVoleiSets(regras) ? regras : null;
           const melhorDe = regrasVolei?.melhorDe ?? regrasBT?.melhorDe ?? 1;
@@ -2429,6 +2570,149 @@ export default function AdminCategoriaJogosPage() {
                 >
                   <Save className="h-4 w-4" />
                   {salvandoTrocaGrupos ? "Salvando..." : "Trocar e regerar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {manualTieBreakOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setManualTieBreakOpen(false)}>
+          <div
+            className="w-full max-w-4xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 space-y-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs text-slate-500 uppercase tracking-wider">Empate técnico</div>
+                  <div className="text-lg font-bold text-slate-900">Definir ordem manual para gerar a chave</div>
+                  <div className="text-sm text-slate-600 mt-1">
+                    O sistema detectou campanha empatada. Ajuste a ordem abaixo para decidir quem fica na melhor colocação.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={confirmandoManualTieBreak}
+                  onClick={() => setManualTieBreakOpen(false)}
+                  className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 disabled:opacity-50"
+                >
+                  <X className="h-4 w-4" />
+                  Fechar
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Depois que você confirmar, o mata-mata será gerado usando a ordem manual escolhida aqui.
+              </div>
+
+              <div className="space-y-4">
+                {manualTieBreakGroups.map((grupo) => {
+                  const order = manualTieBreakOrder[grupo.key] ?? grupo.items.map((item) => item.equipeId);
+                  const map = new Map(grupo.items.map((item) => [item.equipeId, item] as const));
+                  return (
+                    <div key={grupo.key} className="rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+                        <div className="text-sm font-semibold text-slate-900">{grupo.label}</div>
+                        <div className="text-xs text-slate-600 mt-0.5">Use as setas para ordenar os empatados.</div>
+                      </div>
+                      <div className="p-4 space-y-2">
+                        {order.map((equipeId, index) => {
+                          const item = map.get(equipeId);
+                          if (!item) return null;
+                          const podeSubir = index > 0;
+                          const podeDescer = index < order.length - 1;
+                          return (
+                            <div key={equipeId} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-slate-900 truncate">
+                                  {index + 1}º - {item.equipeNome}
+                                </div>
+                                <div className="text-xs text-slate-600 truncate">
+                                  {item.grupoNome} • V {item.vitorias} • SG {item.saldoGames} • GP {item.gamesPro}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={!podeSubir || confirmandoManualTieBreak}
+                                  onClick={() => moverEquipeManualTieBreak({ groupKey: grupo.key, equipeId, delta: -1 })}
+                                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-2 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                                  title="Mover para cima"
+                                >
+                                  <ArrowUp className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={!podeDescer || confirmandoManualTieBreak}
+                                  onClick={() => moverEquipeManualTieBreak({ groupKey: grupo.key, equipeId, delta: 1 })}
+                                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-2 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                                  title="Mover para baixo"
+                                >
+                                  <ArrowDown className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={confirmandoManualTieBreak}
+                  onClick={() => setManualTieBreakOpen(false)}
+                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={confirmandoManualTieBreak || manualTieBreakGroups.length === 0}
+                  onClick={async () => {
+                    try {
+                      setConfirmandoManualTieBreak(true);
+                      setErro(null);
+                      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-mata-mata`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ manualTieBreaks: manualTieBreakOrder }),
+                      });
+                      const payload = (await res.json().catch(() => null)) as any;
+                      if (!res.ok) {
+                        if (payload?.code === "TIE_BREAK_REQUIRED" && Array.isArray(payload?.tieGroups)) {
+                          const groups = payload.tieGroups as ManualTieBreakGroup[];
+                          setManualTieBreakGroups(groups);
+                          setManualTieBreakOrder(
+                            Object.fromEntries(groups.map((g) => [g.key, g.items.map((i) => i.equipeId)]))
+                          );
+                          return;
+                        }
+                        throw new Error(payload?.error || "Falha ao gerar mata-mata");
+                      }
+
+                      if (payload?.fase) {
+                        setFasePartidas(payload.fase);
+                        await carregarPartidas(payload.fase);
+                      } else {
+                        await carregarPartidas();
+                      }
+                      setManualTieBreakOpen(false);
+                    } catch (e: any) {
+                      setErro(e?.message || "Erro inesperado");
+                    } finally {
+                      setConfirmandoManualTieBreak(false);
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  {confirmandoManualTieBreak ? "Confirmando…" : "Confirmar ordem e gerar"}
                 </button>
               </div>
             </div>

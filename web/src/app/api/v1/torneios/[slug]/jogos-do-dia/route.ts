@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
@@ -564,6 +564,8 @@ export async function GET(
         equipeBAtletas: r.equipeBId ? mapAtletas.get(r.equipeBId) ?? [] : [],
         regrasPartida: obterRegrasPartidaEfetivas({
           regrasBase: config?.regrasPartida,
+          regrasPorFase: config?.regrasPartidaPorFase ?? null,
+          fase: r.fase,
           superCampeonato: torneio.superCampeonato,
           superCampeonatoFormato: torneio.superCampeonatoFormato,
         }),

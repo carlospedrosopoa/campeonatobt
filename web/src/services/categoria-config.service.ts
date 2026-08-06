@@ -4,8 +4,10 @@ import { eq } from "drizzle-orm";
 import {
   DEFAULT_REGRAS_PARTIDA_BT,
   DEFAULT_REGRAS_PARTIDA_VOLEI,
+  type FasePartida,
   type RegrasPartidaBTSets,
   type RegrasPartidaConfig,
+  type RegrasPartidaPorFase,
   type RegrasPartidaVoleiSets,
 } from "@/lib/regras-partida";
 
@@ -41,6 +43,7 @@ export type CategoriaConfigV1 = {
     quantidadeClassificados?: number;
   };
   regrasPartida?: RegrasPartidaConfig;
+  regrasPartidaPorFase?: RegrasPartidaPorFase;
   desempate?: ("PONTOS" | "CONFRONTO_DIRETO" | "SALDO_GAMES" | "GAMES_PRO" | "VITORIAS" | "SORTEIO")[];
 };
 
@@ -116,8 +119,8 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
       ? Math.floor(input.mataMata.quantidadeClassificados)
       : undefined;
 
-  const regrasInput = input?.regrasPartida;
-  const regrasPartida: RegrasPartidaConfig = (() => {
+  function normalizarRegrasEntrada(value: unknown): RegrasPartidaConfig | null {
+    const regrasInput = value;
     if (regrasInput?.tipo === "VOLEI_SETS") {
       const melhorDe: 3 | 5 = regrasInput?.melhorDe === 5 ? 5 : 3;
       const pontosPorSet: 21 | 25 = regrasInput?.pontosPorSet === 21 ? 21 : 25;
@@ -125,7 +128,7 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
       const tieBreakAte: 15 = 15;
       const tieBreakDiff: 2 = 2;
       const diffMin: 2 = 2;
-      const normalizado: RegrasPartidaVoleiSets = {
+      return {
         tipo: "VOLEI_SETS",
         melhorDe,
         pontosPorSet,
@@ -136,7 +139,6 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
         },
         diffMin,
       };
-      return normalizado;
     }
 
     const melhorDe: 1 | 3 = regrasInput?.melhorDe === 3 ? 3 : 1;
@@ -151,7 +153,7 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
     const stDiff = typeof regrasInput?.superTiebreakDecisivo?.diffMin === "number" ? regrasInput.superTiebreakDecisivo.diffMin : 2;
     const incluirSuperTieEmGames = regrasInput?.incluirSuperTieEmGames === true;
 
-    const normalizado: RegrasPartidaBTSets = {
+    return {
       tipo: "BT_SETS",
       melhorDe,
       gamesPorSet,
@@ -159,8 +161,45 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
       superTiebreakDecisivo: { habilitado: melhorDe === 3 ? stHabilitado : false, ate: stAte, diffMin: stDiff },
       incluirSuperTieEmGames,
     };
-    return normalizado;
-  })();
+  }
+
+  const regrasPorFaseInput = input?.regrasPartidaPorFase && typeof input?.regrasPartidaPorFase === "object" ? input.regrasPartidaPorFase : null;
+  const regrasPartidaPorFase: RegrasPartidaPorFase = {};
+  if (regrasPorFaseInput) {
+    const chaves = Object.keys(regrasPorFaseInput as any) as (keyof RegrasPartidaPorFase)[];
+    for (const chave of chaves) {
+      const valor = (regrasPorFaseInput as any)[chave];
+      if (!valor) continue;
+      const faseKey = String(chave).toUpperCase() as FasePartida;
+      switch (faseKey) {
+        case "GRUPOS":
+        case "OITAVAS":
+        case "QUARTAS":
+        case "SEMI":
+        case "FINAL":
+        case "TERCEIRO_LUGAR":
+        case "LIGA":
+        case "MATA_MATA": {
+          const norm = normalizarRegrasEntrada(valor);
+          if (norm) regrasPartidaPorFase[faseKey] = norm;
+          break;
+        }
+        default:
+          break;
+      }
+    }
+  }
+
+  const regrasInput = input?.regrasPartida;
+  const regrasPartida: RegrasPartidaConfig = normalizarRegrasEntrada(regrasInput) ??
+    (isEsporteVolei({
+      slug:
+        (input as any)?.esporte?.slug ?? (input as any)?.esporteSlug ?? null,
+      nome:
+        (input as any)?.esporte?.nome ?? (input as any)?.esporteNome ?? null,
+    })
+      ? { ...DEFAULT_REGRAS_PARTIDA_VOLEI }
+      : { ...DEFAULT_REGRAS_PARTIDA_BT });
 
   const desempateBase = Array.isArray(input?.desempate) ? input.desempate : defaultCategoriaConfigV1.desempate;
   const desempate = (desempateBase as any[]).filter(Boolean);
@@ -174,6 +213,8 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
     fase2: formato === "GRUPOS" ? { habilitada: fase2Habilitada, temFinal, disputaTerceiroLugar } : undefined,
     mataMata: { estrutura, quantidadeClassificados },
     regrasPartida,
+    regrasPartidaPorFase:
+      Object.keys(regrasPartidaPorFase).length > 0 ? regrasPartidaPorFase : undefined,
     desempate,
   };
 }

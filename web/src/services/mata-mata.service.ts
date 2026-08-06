@@ -10,6 +10,8 @@ type FaseProgressiva = Exclude<Fase, "TERCEIRO_LUGAR">;
 type QualifiedSeed = {
   equipeId: string;
   grupoId: string;
+  grupoNome?: string;
+  equipeNome?: string;
   rankGrupo: number;
   pontos: number;
   saldoGames: number;
@@ -17,6 +19,36 @@ type QualifiedSeed = {
   setsPro: number;
   vitorias: number;
 };
+
+type ManualTieBreakGroupItem = {
+  equipeId: string;
+  equipeNome: string;
+  grupoId: string;
+  grupoNome: string;
+  rankGrupo: number;
+  pontos: number;
+  saldoGames: number;
+  gamesPro: number;
+  setsPro: number;
+  vitorias: number;
+};
+
+type ManualTieBreakGroup = {
+  key: string;
+  label: string;
+  rankGrupo: number;
+  items: ManualTieBreakGroupItem[];
+};
+
+class ManualTieBreakRequiredError extends Error {
+  code = "TIE_BREAK_REQUIRED" as const;
+  tieGroups: ManualTieBreakGroup[];
+
+  constructor(tieGroups: ManualTieBreakGroup[]) {
+    super("Existe empate tecnico entre campanhas de grupos. Defina a ordem manual para gerar o mata-mata.");
+    this.tieGroups = tieGroups;
+  }
+}
 
 function isPowerOfTwo(n: number) {
   return n > 0 && (n & (n - 1)) === 0;
@@ -57,6 +89,152 @@ function partidaIniciada(p: { status?: any; vencedorId?: any; placarA?: any; pla
 }
 
 export class MataMataService {
+  private mesmaCampanha(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean) {
+    if (superCampeonato) {
+      return (
+        a.pontos === b.pontos &&
+        a.vitorias === b.vitorias &&
+        a.setsPro === b.setsPro &&
+        a.saldoGames === b.saldoGames
+      );
+    }
+
+    return a.vitorias === b.vitorias && a.saldoGames === b.saldoGames && a.gamesPro === b.gamesPro;
+  }
+
+  private labelRankGrupo(rankGrupo: number) {
+    if (rankGrupo === 1) return "1ºs colocados";
+    if (rankGrupo === 2) return "2ºs colocados";
+    if (rankGrupo === 3) return "3ºs colocados";
+    if (rankGrupo === 999) return "melhores terceiros";
+    return `${rankGrupo}ºs colocados`;
+  }
+
+  private normalizarKeyDesempateManual(label: string, ids: string[]) {
+    return `${label}::${[...ids].sort((a, b) => a.localeCompare(b)).join("|")}`;
+  }
+
+  private ordenarCandidatosComDesempateManual(params: {
+    items: QualifiedSeed[];
+    label: string;
+    superCampeonato: boolean;
+    manualTieBreaks?: Record<string, string[]>;
+  }) {
+    const sorted = [...params.items].sort((a, b) => {
+      const cmp = this.compararQualificadosPorCampanha(a, b, params.superCampeonato);
+      if (cmp !== 0) return cmp;
+      return a.equipeId.localeCompare(b.equipeId);
+    });
+    const unresolved: ManualTieBreakGroup[] = [];
+    const ordered: QualifiedSeed[] = [];
+
+    let index = 0;
+    while (index < sorted.length) {
+      let nextIndex = index + 1;
+      while (
+        nextIndex < sorted.length &&
+        this.mesmaCampanha(sorted[index], sorted[nextIndex], params.superCampeonato)
+      ) {
+        nextIndex += 1;
+      }
+
+      const bloco = sorted.slice(index, nextIndex);
+      if (bloco.length === 1) {
+        ordered.push(bloco[0]);
+        index = nextIndex;
+        continue;
+      }
+
+      const key = this.normalizarKeyDesempateManual(params.label, bloco.map((item) => item.equipeId));
+      const manualOrder = params.manualTieBreaks?.[key];
+      const idsEsperados = new Set(bloco.map((item) => item.equipeId));
+      const manualValido =
+        Array.isArray(manualOrder) &&
+        manualOrder.length === bloco.length &&
+        manualOrder.every((id) => idsEsperados.has(id)) &&
+        new Set(manualOrder).size === bloco.length;
+
+      if (!manualValido) {
+        unresolved.push({
+          key,
+          label: params.label,
+          rankGrupo: bloco[0]?.rankGrupo ?? 0,
+          items: bloco.map((item) => ({
+            equipeId: item.equipeId,
+            equipeNome: item.equipeNome || item.equipeId,
+            grupoId: item.grupoId,
+            grupoNome: item.grupoNome || item.grupoId,
+            rankGrupo: item.rankGrupo,
+            pontos: item.pontos,
+            saldoGames: item.saldoGames,
+            gamesPro: item.gamesPro,
+            setsPro: item.setsPro,
+            vitorias: item.vitorias,
+          })),
+        });
+        ordered.push(...bloco);
+        index = nextIndex;
+        continue;
+      }
+
+      const blocoMap = new Map(bloco.map((item) => [item.equipeId, item]));
+      ordered.push(...manualOrder.map((id) => blocoMap.get(id)).filter((item): item is QualifiedSeed => Boolean(item)));
+      index = nextIndex;
+    }
+
+    return { ordered, unresolved };
+  }
+
+  private resolverOrdenacaoManual(params: {
+    qualificados: QualifiedSeed[];
+    superCampeonato: boolean;
+    manualTieBreaks?: Record<string, string[]>;
+  }) {
+    const qualificadosPorRank = new Map<number, QualifiedSeed[]>();
+    for (const item of params.qualificados) {
+      const atuais = qualificadosPorRank.get(item.rankGrupo) ?? [];
+      atuais.push(item);
+      qualificadosPorRank.set(item.rankGrupo, atuais);
+    }
+
+    const orderedByRank = new Map<number, QualifiedSeed[]>();
+    const unresolved: ManualTieBreakGroup[] = [];
+
+    for (const [rankGrupo, items] of qualificadosPorRank.entries()) {
+      const label = `Ordem manual dos ${this.labelRankGrupo(rankGrupo)} empatados`;
+      const result = this.ordenarCandidatosComDesempateManual({
+        items,
+        label,
+        superCampeonato: params.superCampeonato,
+        manualTieBreaks: params.manualTieBreaks,
+      });
+      orderedByRank.set(rankGrupo, result.ordered);
+      unresolved.push(...result.unresolved);
+    }
+
+    if (unresolved.length > 0) {
+      throw new ManualTieBreakRequiredError(unresolved);
+    }
+
+    const orderIndex = new Map<string, number>();
+    for (const items of orderedByRank.values()) {
+      items.forEach((item, index) => {
+        orderIndex.set(item.equipeId, index);
+      });
+    }
+
+    const orderedSeeds = [...params.qualificados].sort((a, b) => {
+      const cmp = this.compararQualificadosPorCampanha(a, b, params.superCampeonato);
+      if (cmp !== 0) return cmp;
+      if (a.rankGrupo !== b.rankGrupo) return a.rankGrupo - b.rankGrupo;
+      const orderCmp = (orderIndex.get(a.equipeId) ?? 0) - (orderIndex.get(b.equipeId) ?? 0);
+      if (orderCmp !== 0) return orderCmp;
+      return a.equipeId.localeCompare(b.equipeId);
+    });
+
+    return { orderedByRank, orderedSeeds };
+  }
+
   private async isSuperCampeonato(params: { categoriaId: string }) {
     const rows = await db
       .select({ superCampeonato: torneios.superCampeonato })
@@ -276,7 +454,7 @@ export class MataMataService {
     return { faseCriada: null as FaseProgressiva | null, faseAtualizada: null as FaseProgressiva | null, partidasCriadas: 0, partidasAtualizadas: 0 };
   }
 
-  private async calcularSeeds(params: { categoriaId: string }) {
+  private async calcularSeeds(params: { categoriaId: string; manualTieBreaks?: Record<string, string[]> }) {
     const config = await categoriaConfigService.obterOuDefault(params.categoriaId);
     if (config.formato !== "GRUPOS") throw new Error("Formato da categoria não é GRUPOS");
     if (config.fase2?.habilitada === false) throw new Error("Fase 2 desabilitada");
@@ -322,6 +500,8 @@ export class MataMataService {
         qualificados.push({
           equipeId: e.equipeId,
           grupoId: g.grupoId,
+          grupoNome: g.grupoNome,
+          equipeNome: e.equipeNome,
           rankGrupo: i + 1,
           pontos: e.pontos ?? 0,
           saldoGames: e.saldoGames ?? 0,
@@ -340,6 +520,8 @@ export class MataMataService {
           restantes.push({
             equipeId: e.equipeId,
             grupoId: g.grupoId,
+            grupoNome: g.grupoNome,
+            equipeNome: e.equipeNome,
             rankGrupo: 999,
             pontos: e.pontos ?? 0,
             saldoGames: e.saldoGames ?? 0,
@@ -349,38 +531,32 @@ export class MataMataService {
           });
         }
       }
-      restantes.sort((a, b) => {
-        if (superCampeonato) {
-          if (b.pontos !== a.pontos) return b.pontos - a.pontos;
-          if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
-          if (b.setsPro !== a.setsPro) return b.setsPro - a.setsPro;
-          if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
-        } else {
-          if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
-          if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
-          if (b.gamesPro !== a.gamesPro) return b.gamesPro - a.gamesPro;
-        }
-        return a.equipeId.localeCompare(b.equipeId);
+      const terceirosOrdenados = this.ordenarCandidatosComDesempateManual({
+        items: restantes,
+        label: "Ordem manual dos melhores terceiros empatados",
+        superCampeonato,
+        manualTieBreaks: params.manualTieBreaks,
       });
-      for (const e of restantes.slice(0, melhoresTerceiros)) qualificados.push(e);
+      if (terceirosOrdenados.unresolved.length > 0) {
+        throw new ManualTieBreakRequiredError(terceirosOrdenados.unresolved);
+      }
+      for (const e of terceirosOrdenados.ordered.slice(0, melhoresTerceiros)) qualificados.push(e);
     }
 
-    const seeds = [...qualificados].sort((a, b) => {
-      if (superCampeonato) {
-        if (b.pontos !== a.pontos) return b.pontos - a.pontos;
-        if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
-        if (b.setsPro !== a.setsPro) return b.setsPro - a.setsPro;
-        if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
-      } else {
-        if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
-        if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
-        if (b.gamesPro !== a.gamesPro) return b.gamesPro - a.gamesPro;
-      }
-      if (a.rankGrupo !== b.rankGrupo) return a.rankGrupo - b.rankGrupo;
-      return a.equipeId.localeCompare(b.equipeId);
+    const resolvido = this.resolverOrdenacaoManual({
+      qualificados,
+      superCampeonato,
+      manualTieBreaks: params.manualTieBreaks,
     });
 
-    return { config, grupos, qualificados, superCampeonato, seeds: seeds.map((s) => s.equipeId) };
+    return {
+      config,
+      grupos,
+      qualificados,
+      superCampeonato,
+      seeds: resolvido.orderedSeeds.map((s) => s.equipeId),
+      orderedByRank: resolvido.orderedByRank,
+    };
   }
 
   private compararQualificados(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean) {
@@ -397,16 +573,39 @@ export class MataMataService {
     return a.equipeId.localeCompare(b.equipeId);
   }
 
+  private compararQualificadosPorCampanha(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean) {
+    if (superCampeonato) {
+      if (b.pontos !== a.pontos) return b.pontos - a.pontos;
+      if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
+      if (b.setsPro !== a.setsPro) return b.setsPro - a.setsPro;
+      if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+      return 0;
+    }
+
+    if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
+    if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+    if (b.gamesPro !== a.gamesPro) return b.gamesPro - a.gamesPro;
+    return 0;
+  }
+
   private montarEstruturaGrupos6MelhoresPrimeirosBye(params: {
     qualificados: QualifiedSeed[];
     superCampeonato: boolean;
+    primeirosOrdenados?: QualifiedSeed[];
+    segundosOrdenados?: QualifiedSeed[];
   }) {
-    const primeiros = params.qualificados
-      .filter((item) => item.rankGrupo === 1)
-      .sort((a, b) => this.compararQualificados(a, b, params.superCampeonato));
-    const segundos = params.qualificados
-      .filter((item) => item.rankGrupo === 2)
-      .sort((a, b) => this.compararQualificados(a, b, params.superCampeonato));
+    const primeiros =
+      params.primeirosOrdenados && params.primeirosOrdenados.length > 0
+        ? params.primeirosOrdenados
+        : params.qualificados
+            .filter((item) => item.rankGrupo === 1)
+            .sort((a, b) => this.compararQualificados(a, b, params.superCampeonato));
+    const segundos =
+      params.segundosOrdenados && params.segundosOrdenados.length > 0
+        ? params.segundosOrdenados
+        : params.qualificados
+            .filter((item) => item.rankGrupo === 2)
+            .sort((a, b) => this.compararQualificados(a, b, params.superCampeonato));
 
     if (primeiros.length < 3 || segundos.length < 3) {
       throw new Error("Esta estrutura exige 3 grupos com 2 classificados por grupo, para gerar 3 primeiros e 3 segundos colocados.");
@@ -914,8 +1113,11 @@ export class MataMataService {
     return updated;
   }
 
-  async gerarPrimeiraFase(params: { torneioId: string; categoriaId: string }) {
-    const { config, grupos, qualificados, seeds: seedIds, superCampeonato } = await this.calcularSeeds({ categoriaId: params.categoriaId });
+  async gerarPrimeiraFase(params: { torneioId: string; categoriaId: string; manualTieBreaks?: Record<string, string[]> }) {
+    const { config, grupos, qualificados, seeds: seedIds, superCampeonato, orderedByRank } = await this.calcularSeeds({
+      categoriaId: params.categoriaId,
+      manualTieBreaks: params.manualTieBreaks,
+    });
     const total = qualificados.length;
     
     // Regra específica para Super Campeonato
@@ -1017,7 +1219,12 @@ export class MataMataService {
 
     if (total === 6) {
       if (config.mataMata?.estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") {
-        const estruturaByes = this.montarEstruturaGrupos6MelhoresPrimeirosBye({ qualificados, superCampeonato });
+        const estruturaByes = this.montarEstruturaGrupos6MelhoresPrimeirosBye({
+          qualificados,
+          superCampeonato,
+          primeirosOrdenados: orderedByRank.get(1) ?? [],
+          segundosOrdenados: orderedByRank.get(2) ?? [],
+        });
         pairings.push(...estruturaByes.quartas);
       } else {
         const s3 = seedIds[2];
