@@ -158,6 +158,76 @@ export default function AdminCobrancaInscricoesPage() {
     return sum.toFixed(2);
   }, [data]);
 
+  type ResumoValor = {
+    valor: string;
+    quantidadeAtletas: number;
+    quantidadeInscricoes: number;
+    quantidadeInscricoesPagas: number;
+    quantidadeInscricoesPendentes: number;
+    total: string;
+    totalPendente: string;
+  };
+
+  function calcularResumoPorValor(lista: CobrancaAtleta[]): ResumoValor[] {
+    const porValor = new Map<
+      string,
+      {
+        atletas: Set<string>;
+        qtdInscricoes: number;
+        qtdPagas: number;
+        qtdPendentes: number;
+        total: number;
+        totalPendente: number;
+      }
+    >();
+
+    for (const atleta of lista) {
+      for (const item of atleta.itens) {
+        const v = Number(item.valor || 0);
+        const chave = v.toFixed(2);
+        const bucket =
+          porValor.get(chave) ??
+          {
+            atletas: new Set<string>(),
+            qtdInscricoes: 0,
+            qtdPagas: 0,
+            qtdPendentes: 0,
+            total: 0,
+            totalPendente: 0,
+          };
+        bucket.atletas.add(atleta.atletaId);
+        bucket.qtdInscricoes += 1;
+        bucket.total += v;
+        if (item.pago) {
+          bucket.qtdPagas += 1;
+        } else {
+          bucket.qtdPendentes += 1;
+          bucket.totalPendente += v;
+        }
+        porValor.set(chave, bucket);
+      }
+    }
+
+    return Array.from(porValor.entries())
+      .sort((a, b) => Number(b[0]) - Number(a[0]))
+      .map(([valor, b]) => ({
+        valor,
+        quantidadeAtletas: b.atletas.size,
+        quantidadeInscricoes: b.qtdInscricoes,
+        quantidadeInscricoesPagas: b.qtdPagas,
+        quantidadeInscricoesPendentes: b.qtdPendentes,
+        total: b.total.toFixed(2),
+        totalPendente: b.totalPendente.toFixed(2),
+      }));
+  }
+
+  const resumoPorValorGeral = useMemo(() => calcularResumoPorValor(data?.atletas || []), [data]);
+  const resumoPorValorFiltrado = useMemo(() => calcularResumoPorValor(atletasFiltrados), [atletasFiltrados]);
+
+  const temFiltroAtivo = Boolean(
+    busca.trim() || valorMinimoPendente.trim() || somenteMultiplasInscricoes
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -189,6 +259,138 @@ export default function AdminCobrancaInscricoesPage() {
       </div>
 
       {erro ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{erro}</div> : null}
+
+      {!carregando && data && resumoPorValorGeral.length > 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <DollarSign className="h-4 w-4 text-blue-600" />
+              Resumo por valor de inscrição
+              {temFiltroAtivo ? (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                  Abaixo, visão Geral
+                </span>
+              ) : null}
+            </div>
+            <div className="text-xs text-slate-500">
+              Ordenado do maior valor para o menor
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {resumoPorValorGeral.map((r) => (
+              <div
+                key={r.valor}
+                className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Valor
+                  </div>
+                  <div className="text-lg font-bold text-blue-700">
+                    {formatCurrency(r.valor)}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Atletas</div>
+                    <div className="font-semibold text-slate-900">
+                      {r.quantidadeAtletas}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Inscrições</div>
+                    <div className="font-semibold text-slate-900">
+                      {r.quantidadeInscricoes}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Pagas</div>
+                    <div className="font-semibold text-emerald-700">
+                      {r.quantidadeInscricoesPagas}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Pendentes</div>
+                    <div className="font-semibold text-amber-700">
+                      {r.quantidadeInscricoesPendentes}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-1 border-t border-slate-100 pt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Total geral</div>
+                    <div className="font-semibold text-slate-900">
+                      {formatCurrency(r.total)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-500">Total pendente</div>
+                    <div className="font-semibold text-amber-700">
+                      {formatCurrency(r.totalPendente)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {temFiltroAtivo && resumoPorValorFiltrado.length > 0 ? (
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-slate-800">
+                  Visão do resultado filtrado
+                </div>
+                <div className="text-xs text-slate-500">
+                  Apenas os atletas/itens abaixo dos filtros
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {resumoPorValorFiltrado.map((r) => (
+                  <div
+                    key={r.valor}
+                    className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 text-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Valor
+                      </div>
+                      <div className="font-bold text-blue-700">
+                        {formatCurrency(r.valor)}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-xs text-slate-500">Atletas</div>
+                        <div className="font-semibold text-slate-900">
+                          {r.quantidadeAtletas}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500">Inscrições</div>
+                        <div className="font-semibold text-slate-900">
+                          {r.quantidadeInscricoes}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500">Total</div>
+                        <div className="font-semibold text-slate-900">
+                          {formatCurrency(r.total)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500">Pendente</div>
+                        <div className="font-semibold text-amber-700">
+                          {formatCurrency(r.totalPendente)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3">
