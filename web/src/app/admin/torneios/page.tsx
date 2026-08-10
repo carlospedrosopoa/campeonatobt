@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Calendar, ExternalLink, Plus, Search, Settings2 } from "lucide-react";
+import { formatarDataOnly } from "@/lib/utils";
 
 type TorneioListItem = {
   id: string;
@@ -140,8 +141,8 @@ export default function AdminTorneiosPage() {
                       <div className="inline-flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-orange-500" />
                         <span>
-                          {new Date(t.dataInicio).toLocaleDateString("pt-BR")}{" "}
-                          {t.dataFim ? `até ${new Date(t.dataFim).toLocaleDateString("pt-BR")}` : ""}
+                          {formatarDataOnly(t.dataInicio)}{" "}
+                          {t.dataFim ? `até ${formatarDataOnly(t.dataFim)}` : ""}
                         </span>
                       </div>
                     </td>

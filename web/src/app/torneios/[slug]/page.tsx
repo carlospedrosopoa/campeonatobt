@@ -6,6 +6,7 @@ import { torneioResultadosService } from "@/services/torneio-resultados.service"
 import { BarChart3, Calendar, Clock, MapPin, Trophy, Users, Info, Ticket, Smartphone, Tv } from "lucide-react";
 import Link from "next/link";
 import { getAppAtletaUrl } from "@/lib/app-atleta-url";
+import { formatarDataOnly } from "@/lib/utils";
 
 export const dynamic = 'force-dynamic';
 
@@ -68,8 +69,8 @@ export default async function TorneioDetalhesPage({ params }: PageProps) {
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-orange-400" />
                 <span>
-                  {new Date(torneio.dataInicio).toLocaleDateString('pt-BR')} 
-                  {torneio.dataFim ? ` até ${new Date(torneio.dataFim).toLocaleDateString('pt-BR')}` : ''}
+                  {formatarDataOnly(torneio.dataInicio)} 
+                  {torneio.dataFim ? ` até ${formatarDataOnly(torneio.dataFim)}` : ''}
                 </span>
               </div>
               <div className="flex items-center gap-2">

@@ -5,6 +5,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function formatarDataOnly(dataStr: string | null | undefined): string {
+  if (!dataStr) return "-";
+  const s = String(dataStr).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return `${Number(m[3]).toString().padStart(2, "0")}/${Number(m[2]).toString().padStart(2, "0")}/${m[1]}`;
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleDateString("pt-BR");
+  }
+  return s;
+}
+
 export function slugify(text: string): string {
   return text
     .toString()

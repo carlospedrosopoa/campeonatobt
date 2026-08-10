@@ -2,6 +2,7 @@ import Link from "next/link";
 import { torneiosService } from "@/services/torneios.service";
 import { torneioResultadosService } from "@/services/torneio-resultados.service";
 import { Calendar, MapPin, Search, Trophy } from "lucide-react";
+import { formatarDataOnly } from "@/lib/utils";
 
 export const dynamic = 'force-dynamic';
 
@@ -66,7 +67,7 @@ export default async function TorneiosPage({
                   <div className="space-y-2 text-sm text-gray-500">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-orange-500" />
-                      <span>{new Date(torneio.dataInicio).toLocaleDateString('pt-BR')}</span>
+                      <span>{formatarDataOnly(torneio.dataInicio)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-orange-500" />
