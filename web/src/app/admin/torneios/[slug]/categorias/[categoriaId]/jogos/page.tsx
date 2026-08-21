@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Smartphone, Swords, Trophy, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Smartphone, Swords, TrendingUp, Trophy, Trash2, X } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
@@ -104,6 +104,11 @@ type ManualTieBreakGroupItem = {
   gamesPro: number;
   setsPro: number;
   vitorias: number;
+  jogosJogados?: number;
+  apPercent?: number;
+  vitoriasPercent?: number;
+  saldoGamesPorJogo?: number;
+  gamesProPorJogo?: number;
 };
 
 type ManualTieBreakGroup = {
@@ -2860,8 +2865,18 @@ export default function AdminCategoriaJogosPage() {
                   return (
                     <div key={grupo.key} className="rounded-xl border border-slate-200 overflow-hidden">
                       <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
-                        <div className="text-sm font-semibold text-slate-900">{grupo.label}</div>
-                        <div className="text-xs text-slate-600 mt-0.5">Use as setas para ordenar os empatados.</div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">{grupo.label}</div>
+                            <div className="text-xs text-slate-600 mt-0.5">Use as setas para ordenar os empatados.</div>
+                          </div>
+                          {grupo.rankGrupo === 999 && (
+                            <div className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-800">
+                              <TrendingUp className="h-3.5 w-3.5" />
+                              Classificação por aproveitamento (grupos com tamanhos diferentes)
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="p-4 space-y-2">
                         {order.map((equipeId, index) => {
@@ -2869,35 +2884,68 @@ export default function AdminCategoriaJogosPage() {
                           if (!item) return null;
                           const podeSubir = index > 0;
                           const podeDescer = index < order.length - 1;
+                          const usarNormalizado = grupo.rankGrupo === 999 && typeof item.jogosJogados === "number" && Number(item.jogosJogados) > 0;
+                          const ap = Number(item.apPercent ?? 0);
+                          const vp = Number(item.vitoriasPercent ?? 0);
+                          const sgPorJogo = Number(item.saldoGamesPorJogo ?? 0);
+                          const gpPorJogo = Number(item.gamesProPorJogo ?? 0);
                           return (
-                            <div key={equipeId} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                              <div className="min-w-0">
-                                <div className="text-sm font-semibold text-slate-900 truncate">
-                                  {index + 1}º - {item.equipeNome}
+                            <div key={equipeId} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-semibold text-slate-900 truncate">
+                                    {index + 1}º - {item.equipeNome}
+                                  </div>
+                                  <div className="text-xs text-slate-600 truncate">
+                                    {item.grupoNome} • V {item.vitorias} • SG {item.saldoGames} • GP {item.gamesPro}
+                                  </div>
+                                  {usarNormalizado ? (
+                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-700">
+                                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium">
+                                        <span className="text-slate-500">J</span>
+                                        <span className="font-mono tabular-nums">{Number(item.jogosJogados ?? 0)}</span>
+                                      </span>
+                                      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-900">
+                                        <span className="text-amber-700">AP%</span>
+                                        <span className="font-mono tabular-nums">{ap.toFixed(1)}</span>
+                                      </span>
+                                      <span className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-900">
+                                        <span className="text-indigo-700">VIT%</span>
+                                        <span className="font-mono tabular-nums">{vp.toFixed(1)}</span>
+                                      </span>
+                                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium">
+                                        <span className="text-slate-500">SG/J</span>
+                                        <span className={`font-mono tabular-nums ${sgPorJogo >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                          {sgPorJogo > 0 ? `+${sgPorJogo.toFixed(2)}` : sgPorJogo.toFixed(2)}
+                                        </span>
+                                      </span>
+                                      <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium">
+                                        <span className="text-slate-500">GP/J</span>
+                                        <span className="font-mono tabular-nums">{gpPorJogo.toFixed(2)}</span>
+                                      </span>
+                                    </div>
+                                  ) : null}
                                 </div>
-                                <div className="text-xs text-slate-600 truncate">
-                                  {item.grupoNome} • V {item.vitorias} • SG {item.saldoGames} • GP {item.gamesPro}
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={!podeSubir || confirmandoManualTieBreak}
+                                    onClick={() => moverEquipeManualTieBreak({ groupKey: grupo.key, equipeId, delta: -1 })}
+                                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-2 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                                    title="Mover para cima"
+                                  >
+                                    <ArrowUp className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={!podeDescer || confirmandoManualTieBreak}
+                                    onClick={() => moverEquipeManualTieBreak({ groupKey: grupo.key, equipeId, delta: 1 })}
+                                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-2 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                                    title="Mover para baixo"
+                                  >
+                                    <ArrowDown className="h-4 w-4" />
+                                  </button>
                                 </div>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  disabled={!podeSubir || confirmandoManualTieBreak}
-                                  onClick={() => moverEquipeManualTieBreak({ groupKey: grupo.key, equipeId, delta: -1 })}
-                                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-2 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-                                  title="Mover para cima"
-                                >
-                                  <ArrowUp className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={!podeDescer || confirmandoManualTieBreak}
-                                  onClick={() => moverEquipeManualTieBreak({ groupKey: grupo.key, equipeId, delta: 1 })}
-                                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-2 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-                                  title="Mover para baixo"
-                                >
-                                  <ArrowDown className="h-4 w-4" />
-                                </button>
                               </div>
                             </div>
                           );

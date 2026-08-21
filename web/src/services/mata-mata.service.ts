@@ -18,6 +18,11 @@ type QualifiedSeed = {
   gamesPro: number;
   setsPro: number;
   vitorias: number;
+  jogosJogados?: number;
+  apPercent?: number;
+  vitoriasPercent?: number;
+  saldoGamesPorJogo?: number;
+  gamesProPorJogo?: number;
 };
 
 type ManualTieBreakGroupItem = {
@@ -31,6 +36,11 @@ type ManualTieBreakGroupItem = {
   gamesPro: number;
   setsPro: number;
   vitorias: number;
+  jogosJogados?: number;
+  apPercent?: number;
+  vitoriasPercent?: number;
+  saldoGamesPorJogo?: number;
+  gamesProPorJogo?: number;
 };
 
 type ManualTieBreakGroup = {
@@ -89,7 +99,47 @@ function partidaIniciada(p: { status?: any; vencedorId?: any; placarA?: any; pla
 }
 
 export class MataMataService {
-  private mesmaCampanha(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean) {
+  private calcularMetricasNormalizadas(e: QualifiedSeed) {
+    const jogosJogados = Number(e.jogosJogados ?? 0);
+    if (jogosJogados <= 0) {
+      return { jogosJogados: 0, apPercent: 0, vitoriasPercent: 0, saldoGamesPorJogo: 0, gamesProPorJogo: 0 };
+    }
+    return {
+      jogosJogados,
+      apPercent: (Number(e.pontos ?? 0) / (jogosJogados * 3)) * 100,
+      vitoriasPercent: (Number(e.vitorias ?? 0) / jogosJogados) * 100,
+      saldoGamesPorJogo: Number(e.saldoGames ?? 0) / jogosJogados,
+      gamesProPorJogo: Number(e.gamesPro ?? 0) / jogosJogados,
+    };
+  }
+
+  private mesmaCampanha(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean, normalizarPorAproveitamento = false) {
+    if (normalizarPorAproveitamento) {
+      const na = this.calcularMetricasNormalizadas(a);
+      const nb = this.calcularMetricasNormalizadas(b);
+      const mesmaQtdJogos = na.jogosJogados === nb.jogosJogados;
+      const cmpAp = Math.abs(na.apPercent - nb.apPercent) < 0.0001;
+      const cmpVp = Math.abs(na.vitoriasPercent - nb.vitoriasPercent) < 0.0001;
+      const cmpSg = Math.abs(na.saldoGamesPorJogo - nb.saldoGamesPorJogo) < 0.0001;
+      const cmpGp = Math.abs(na.gamesProPorJogo - nb.gamesProPorJogo) < 0.0001;
+      const cmpSets = a.setsPro === b.setsPro;
+      if (superCampeonato) {
+        if (mesmaQtdJogos) {
+          return (
+            a.pontos === b.pontos &&
+            a.vitorias === b.vitorias &&
+            a.setsPro === b.setsPro &&
+            a.saldoGames === b.saldoGames
+          );
+        }
+        return cmpAp && cmpVp && cmpSets && cmpSg;
+      }
+      if (mesmaQtdJogos) {
+        return a.vitorias === b.vitorias && a.saldoGames === b.saldoGames && a.gamesPro === b.gamesPro;
+      }
+      return cmpVp && cmpSg && cmpGp;
+    }
+
     if (superCampeonato) {
       return (
         a.pontos === b.pontos &&
@@ -119,9 +169,25 @@ export class MataMataService {
     label: string;
     superCampeonato: boolean;
     manualTieBreaks?: Record<string, string[]>;
+    normalizarPorAproveitamento?: boolean;
   }) {
-    const sorted = [...params.items].sort((a, b) => {
-      const cmp = this.compararQualificadosPorCampanha(a, b, params.superCampeonato);
+    const normalizar = params.normalizarPorAproveitamento ?? false;
+    const itemsComMetricas = params.items.map((item) => {
+      if (normalizar) {
+        const m = this.calcularMetricasNormalizadas(item);
+        return {
+          ...item,
+          jogosJogados: m.jogosJogados,
+          apPercent: m.apPercent,
+          vitoriasPercent: m.vitoriasPercent,
+          saldoGamesPorJogo: m.saldoGamesPorJogo,
+          gamesProPorJogo: m.gamesProPorJogo,
+        } satisfies QualifiedSeed;
+      }
+      return item;
+    });
+    const sorted = [...itemsComMetricas].sort((a, b) => {
+      const cmp = this.compararQualificadosPorCampanha(a, b, params.superCampeonato, normalizar);
       if (cmp !== 0) return cmp;
       return a.equipeId.localeCompare(b.equipeId);
     });
@@ -133,7 +199,7 @@ export class MataMataService {
       let nextIndex = index + 1;
       while (
         nextIndex < sorted.length &&
-        this.mesmaCampanha(sorted[index], sorted[nextIndex], params.superCampeonato)
+        this.mesmaCampanha(sorted[index], sorted[nextIndex], params.superCampeonato, normalizar)
       ) {
         nextIndex += 1;
       }
@@ -170,6 +236,11 @@ export class MataMataService {
             gamesPro: item.gamesPro,
             setsPro: item.setsPro,
             vitorias: item.vitorias,
+            jogosJogados: item.jogosJogados,
+            apPercent: item.apPercent,
+            vitoriasPercent: item.vitoriasPercent,
+            saldoGamesPorJogo: item.saldoGamesPorJogo,
+            gamesProPorJogo: item.gamesProPorJogo,
           })),
         });
         ordered.push(...bloco);
@@ -510,6 +581,7 @@ export class MataMataService {
           gamesPro: e.gamesPro ?? 0,
           setsPro: (e as any).setsPro ?? 0,
           vitorias: e.jogosVencidos ?? 0,
+          jogosJogados: (e as any).jogosJogados ?? 0,
         });
       }
     }
@@ -530,6 +602,7 @@ export class MataMataService {
             gamesPro: e.gamesPro ?? 0,
             setsPro: (e as any).setsPro ?? 0,
             vitorias: e.jogosVencidos ?? 0,
+            jogosJogados: (e as any).jogosJogados ?? 0,
           });
         }
       }
@@ -538,6 +611,7 @@ export class MataMataService {
         label: "Ordem manual dos melhores terceiros empatados",
         superCampeonato,
         manualTieBreaks: params.manualTieBreaks,
+        normalizarPorAproveitamento: true,
       });
       if (terceirosOrdenados.unresolved.length > 0) {
         throw new ManualTieBreakRequiredError(terceirosOrdenados.unresolved);
@@ -561,7 +635,38 @@ export class MataMataService {
     };
   }
 
-  private compararQualificados(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean) {
+  private compararQualificados(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean, normalizarPorAproveitamento = false) {
+    if (normalizarPorAproveitamento) {
+      const na = this.calcularMetricasNormalizadas(a);
+      const nb = this.calcularMetricasNormalizadas(b);
+      if (na.jogosJogados === nb.jogosJogados && na.jogosJogados > 0) {
+        if (superCampeonato) {
+          if (b.pontos !== a.pontos) return b.pontos - a.pontos;
+          if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
+          if (b.setsPro !== a.setsPro) return b.setsPro - a.setsPro;
+          if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+        } else {
+          if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
+          if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+          if (b.gamesPro !== a.gamesPro) return b.gamesPro - a.gamesPro;
+        }
+        return a.equipeId.localeCompare(b.equipeId);
+      }
+
+      if (Math.abs(nb.apPercent - na.apPercent) > 0.0001) return nb.apPercent - na.apPercent;
+      if (Math.abs(nb.vitoriasPercent - na.vitoriasPercent) > 0.0001) return nb.vitoriasPercent - na.vitoriasPercent;
+      if (superCampeonato) {
+        if (b.setsPro !== a.setsPro) return b.setsPro - a.setsPro;
+      }
+      if (Math.abs(nb.saldoGamesPorJogo - na.saldoGamesPorJogo) > 0.0001) {
+        return nb.saldoGamesPorJogo - na.saldoGamesPorJogo;
+      }
+      if (Math.abs(nb.gamesProPorJogo - na.gamesProPorJogo) > 0.0001) {
+        return nb.gamesProPorJogo - na.gamesProPorJogo;
+      }
+      return a.equipeId.localeCompare(b.equipeId);
+    }
+
     if (superCampeonato) {
       if (b.pontos !== a.pontos) return b.pontos - a.pontos;
       if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
@@ -575,7 +680,38 @@ export class MataMataService {
     return a.equipeId.localeCompare(b.equipeId);
   }
 
-  private compararQualificadosPorCampanha(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean) {
+  private compararQualificadosPorCampanha(a: QualifiedSeed, b: QualifiedSeed, superCampeonato: boolean, normalizarPorAproveitamento = false) {
+    if (normalizarPorAproveitamento) {
+      const na = this.calcularMetricasNormalizadas(a);
+      const nb = this.calcularMetricasNormalizadas(b);
+      if (na.jogosJogados === nb.jogosJogados && na.jogosJogados > 0) {
+        if (superCampeonato) {
+          if (b.pontos !== a.pontos) return b.pontos - a.pontos;
+          if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
+          if (b.setsPro !== a.setsPro) return b.setsPro - a.setsPro;
+          if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+          return 0;
+        }
+        if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
+        if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+        if (b.gamesPro !== a.gamesPro) return b.gamesPro - a.gamesPro;
+        return 0;
+      }
+
+      if (Math.abs(nb.apPercent - na.apPercent) > 0.0001) return nb.apPercent - na.apPercent;
+      if (Math.abs(nb.vitoriasPercent - na.vitoriasPercent) > 0.0001) return nb.vitoriasPercent - na.vitoriasPercent;
+      if (superCampeonato) {
+        if (b.setsPro !== a.setsPro) return b.setsPro - a.setsPro;
+      }
+      if (Math.abs(nb.saldoGamesPorJogo - na.saldoGamesPorJogo) > 0.0001) {
+        return nb.saldoGamesPorJogo - na.saldoGamesPorJogo;
+      }
+      if (Math.abs(nb.gamesProPorJogo - na.gamesProPorJogo) > 0.0001) {
+        return nb.gamesProPorJogo - na.gamesProPorJogo;
+      }
+      return 0;
+    }
+
     if (superCampeonato) {
       if (b.pontos !== a.pontos) return b.pontos - a.pontos;
       if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
