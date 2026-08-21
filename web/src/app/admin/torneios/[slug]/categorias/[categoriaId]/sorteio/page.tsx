@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Play, RefreshCcw, Save, SkipForward, Sparkles, Tv, Users } from "lucide-react";
+import { ArrowLeft, Crown, Play, RefreshCcw, Save, SkipForward, Sparkles, Tv, Users } from "lucide-react";
 
 type Categoria = {
   id: string;
@@ -55,6 +55,7 @@ type EquipeAprovada = {
 type SorteioItem = EquipeAprovada & {
   grupoNome: string;
   ordem: number;
+  cabecaChave?: boolean;
 };
 
 type SorteioPlanejado = {
@@ -91,19 +92,28 @@ function shuffleArray<T>(items: T[]) {
   return next;
 }
 
-function criarSequenciaDeGrupos(grupos: { nome: string; esperado: number }[]) {
-  const rounds = Math.max(...grupos.map((grupo) => grupo.esperado), 0);
+function criarSequenciaDeGrupos(grupos: { nome: string; esperado: number }[], cabecasAlocadas = 0) {
+  const slotsReservadosPorGrupo = new Map<string, number>();
+  for (let i = 0; i < Math.min(cabecasAlocadas, grupos.length); i += 1) {
+    slotsReservadosPorGrupo.set(grupos[i].nome, 1);
+  }
+
+  const rounds = Math.max(...grupos.map((grupo) => grupo.esperado - (slotsReservadosPorGrupo.get(grupo.nome) ?? 0)), 0);
   const sequencia: string[] = [];
 
   for (let round = 0; round < rounds; round += 1) {
-    const ativos = shuffleArray(grupos.filter((grupo) => grupo.esperado > round).map((grupo) => grupo.nome));
+    const ativos = shuffleArray(
+      grupos
+        .filter((grupo) => grupo.esperado - round - (slotsReservadosPorGrupo.get(grupo.nome) ?? 0) > 0)
+        .map((grupo) => grupo.nome),
+    );
     sequencia.push(...ativos);
   }
 
   return sequencia;
 }
 
-function montarSorteio(equipes: EquipeAprovada[], config: CategoriaConfig | null) {
+function montarSorteio(equipes: EquipeAprovada[], config: CategoriaConfig | null, cabecasChaveIds: string[] = []) {
   if (equipes.length < 2) {
     throw new Error("Necessário pelo menos 2 equipes aprovadas para montar o sorteio.");
   }
@@ -118,16 +128,69 @@ function montarSorteio(equipes: EquipeAprovada[], config: CategoriaConfig | null
     nome: nomeGrupoPorIndice(index),
     esperado: tamanhosEsperados[index] ?? 0,
   }));
-  const gruposNaSequencia = criarSequenciaDeGrupos(grupos);
-  const equipesEmbaralhadas = shuffleArray(equipes);
+
+  const cabecasSet = new Set(cabecasChaveIds);
+  const equipesCabecas = shuffleArray(equipes.filter((e) => cabecasSet.has(e.equipeId))).slice(0, qtdGrupos);
+  const cabecasPorGrupo = new Map<string, EquipeAprovada>();
+  for (let i = 0; i < Math.min(equipesCabecas.length, grupos.length); i += 1) {
+    cabecasPorGrupo.set(grupos[i].nome, equipesCabecas[i]);
+  }
+
+  const slotsRestantesPorGrupo = grupos.map((grupo) => ({
+    nome: grupo.nome,
+    esperado: Math.max(0, grupo.esperado - (cabecasPorGrupo.has(grupo.nome) ? 1 : 0)),
+  }));
+  const rounds = Math.max(...slotsRestantesPorGrupo.map((g) => g.esperado), 0);
+  const sequenciaSlotsRestantes: string[] = [];
+  for (let round = 0; round < rounds; round += 1) {
+    const ativos = shuffleArray(
+      slotsRestantesPorGrupo.filter((g) => g.esperado - round > 0).map((g) => g.nome),
+    );
+    sequenciaSlotsRestantes.push(...ativos);
+  }
+
+  const restantes = shuffleArray(equipes.filter((e) => !cabecasSet.has(e.equipeId)));
+  const itens: SorteioItem[] = [];
+
+  for (let i = 0; i < grupos.length; i += 1) {
+    const grupo = grupos[i];
+    const cabeca = cabecasPorGrupo.get(grupo.nome);
+    if (cabeca) {
+      itens.push({
+        ...cabeca,
+        cabecaChave: true,
+        grupoNome: grupo.nome,
+        ordem: itens.length + 1,
+      });
+    }
+  }
+
+  const ordemFinalReveal: SorteioItem[] = [...itens];
+  const restantesAlocados: SorteioItem[] = [];
+  const slotsPorGrupo = new Map<string, number>();
+  grupos.forEach((g) => slotsPorGrupo.set(g.nome, cabecasPorGrupo.has(g.nome) ? 1 : 0));
+
+  for (let r = 0; r < restantes.length; r += 1) {
+    const equipe = restantes[r];
+    const grupoNome = sequenciaSlotsRestantes[r] ?? grupos[slotsPorGrupo.size - 1]?.nome ?? grupos[0].nome;
+    const slotsUsados = slotsPorGrupo.get(grupoNome) ?? 0;
+    slotsPorGrupo.set(grupoNome, slotsUsados + 1);
+    restantesAlocados.push({
+      ...equipe,
+      cabecaChave: false,
+      grupoNome,
+      ordem: ordemFinalReveal.length + restantesAlocados.length + 1,
+    });
+  }
+
+  const todosItens = [...ordemFinalReveal, ...restantesAlocados].map((item, index) => ({
+    ...item,
+    ordem: index + 1,
+  }));
 
   return {
     grupos,
-    itens: equipesEmbaralhadas.map((equipe, index) => ({
-      ...equipe,
-      grupoNome: gruposNaSequencia[index] || grupos[0]?.nome || "Grupo A",
-      ordem: index + 1,
-    })),
+    itens: todosItens,
   } satisfies SorteioPlanejado;
 }
 
@@ -149,6 +212,8 @@ export default function AdminCategoriaSorteioPage() {
   const [ultimoRevealId, setUltimoRevealId] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [fullscreenAtivo, setFullscreenAtivo] = useState(false);
+  const [cabecasChaveIds, setCabecasChaveIds] = useState<string[]>([]);
+  const [mostrarSelecaoCabecas, setMostrarSelecaoCabecas] = useState(false);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -195,6 +260,11 @@ export default function AdminCategoriaSorteioPage() {
   const sorteioCompleto = Boolean(sorteio && revelados >= sorteio.itens.length);
   const totalRestante = Math.max((sorteio?.itens.length ?? 0) - revelados, 0);
   const gruposJaGerados = classificacao.length > 0;
+  const qtdGruposEsperada = useMemo(
+    () => (equipesAprovadas.length > 0 ? calcularQuantidadeGruposEsperada(equipesAprovadas.length, config) : 0),
+    [config, equipesAprovadas.length],
+  );
+  const maxCabecas = qtdGruposEsperada;
 
   async function carregar() {
     try {
@@ -255,14 +325,27 @@ export default function AdminCategoriaSorteioPage() {
   function prepararSorteio() {
     try {
       setErro(null);
-      const proximo = montarSorteio(equipesAprovadas, config);
+      if (cabecasChaveIds.length > maxCabecas) {
+        throw new Error(`Permitido no máximo ${maxCabecas} cabeça(s) de chave (uma por grupo).`);
+      }
+      const proximo = montarSorteio(equipesAprovadas, config, cabecasChaveIds);
       setSorteio(proximo);
       setRevelados(0);
       setUltimoRevealId(null);
       setModo("SORTEANDO");
+      setMostrarSelecaoCabecas(false);
     } catch (e: any) {
       setErro(e?.message || "Não foi possível preparar o sorteio.");
     }
+  }
+
+  function toggleCabecaChave(equipeId: string) {
+    setCabecasChaveIds((current) => {
+      const jaSelecionada = current.includes(equipeId);
+      if (jaSelecionada) return current.filter((id) => id !== equipeId);
+      if (current.length >= maxCabecas) return current;
+      return [...current, equipeId];
+    });
   }
 
   function revelarProxima() {
@@ -387,6 +470,20 @@ export default function AdminCategoriaSorteioPage() {
               </button>
               <button
                 type="button"
+                onClick={() => setMostrarSelecaoCabecas((prev) => !prev)}
+                disabled={carregando || equipesAprovadas.length < 2 || gruposJaGerados}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Crown className="h-4 w-4" />
+                Cabeças de chave
+                {cabecasChaveIds.length > 0 && (
+                  <span className="rounded-full bg-amber-300/25 px-2 py-0.5 text-[11px] font-bold text-amber-200">
+                    {cabecasChaveIds.length}/{maxCabecas}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
                 onClick={prepararSorteio}
                 disabled={carregando || equipesAprovadas.length < 2}
                 className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/20 px-4 py-2 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/30 disabled:cursor-not-allowed disabled:opacity-50"
@@ -457,7 +554,87 @@ export default function AdminCategoriaSorteioPage() {
             Ainda nao ha equipes aprovadas suficientes para fazer o sorteio ao vivo.
           </div>
         ) : (
-          <div className="grid gap-5 xl:grid-cols-[1.42fr_0.58fr]">
+          <div className="space-y-5">
+            {mostrarSelecaoCabecas && (
+              <section className="rounded-[28px] border border-amber-300/20 bg-amber-400/5 p-5 shadow-xl backdrop-blur">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-amber-200/80">
+                      <Crown className="h-3.5 w-3.5 text-amber-300" />
+                      Cabeças de chave
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-white">
+                      Defina até <span className="text-amber-300">{maxCabecas}</span> cabeça(s) de chave (uma por grupo)
+                    </div>
+                    <p className="mt-1 text-sm text-slate-300">
+                      Cada cabeça de chave é automaticamente alocada em um grupo diferente. O restante das duplas é sorteado normalmente.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm font-semibold text-slate-100">
+                      {cabecasChaveIds.length} / {maxCabecas}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCabecasChaveIds([])}
+                      disabled={cabecasChaveIds.length === 0}
+                      className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-50"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {equipesAprovadas.map((equipe) => {
+                    const selecionada = cabecasChaveIds.includes(equipe.equipeId);
+                    const bloqueada = !selecionada && cabecasChaveIds.length >= maxCabecas;
+                    return (
+                      <button
+                        key={equipe.equipeId}
+                        type="button"
+                        onClick={() => toggleCabecaChave(equipe.equipeId)}
+                        disabled={bloqueada}
+                        className={`flex items-start justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                          selecionada
+                            ? "border-amber-300/50 bg-amber-400/15 shadow-[0_0_0_1px_rgba(251,191,36,0.25)]"
+                            : bloqueada
+                              ? "border-white/10 bg-white/5 opacity-50 cursor-not-allowed"
+                              : "border-white/10 bg-white/5 hover:bg-white/10"
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-sm font-bold ${selecionada ? "text-white" : "text-slate-100"}`}>
+                            {equipe.equipeNome}
+                          </div>
+                          {equipe.atletas.length > 0 && (
+                            <div className="mt-1 text-xs text-slate-300 truncate">{equipe.atletas.join(" / ")}</div>
+                          )}
+                        </div>
+                        <div
+                          className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                            selecionada ? "bg-amber-300/25 text-amber-200" : "bg-white/10 text-slate-400"
+                          }`}
+                        >
+                          {selecionada ? (
+                            <>
+                              <Crown className="h-3 w-3" />
+                              Selecionada
+                            </>
+                          ) : bloqueada ? (
+                            "Limite atingido"
+                          ) : (
+                            "Selecionar"
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            <div className="grid gap-5 xl:grid-cols-[1.42fr_0.58fr]">
             <section className="space-y-6">
               <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -486,7 +663,15 @@ export default function AdminCategoriaSorteioPage() {
                     <div className={`mt-4 rounded-[24px] border border-white/10 bg-white/5 p-6 ${ultimaEquipe ? "animate-draw-card" : ""}`}>
                       {ultimaEquipe ? (
                         <>
-                          <div className="text-sm font-semibold uppercase tracking-[0.22em] text-fuchsia-200">{ultimaEquipe.grupoNome}</div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-semibold uppercase tracking-[0.22em] text-fuchsia-200">{ultimaEquipe.grupoNome}</div>
+                            {ultimaEquipe.cabecaChave && (
+                              <div className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-400/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">
+                                <Crown className="h-3 w-3" />
+                                Cabeça de chave
+                              </div>
+                            )}
+                          </div>
                           <div className="mt-3 text-3xl font-black leading-tight text-white sm:text-4xl">{ultimaEquipe.equipeNome}</div>
                           {ultimaEquipe.atletas.length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -538,9 +723,16 @@ export default function AdminCategoriaSorteioPage() {
                           }`}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <div className="font-semibold">{item.equipeNome}</div>
+                            <div className="flex min-w-0 items-center gap-2">
+                              {item.cabecaChave && (
+                                <span className="inline-flex shrink-0 items-center rounded-full border border-amber-300/40 bg-amber-400/15 p-0.5 text-amber-200">
+                                  <Crown className="h-3 w-3" />
+                                </span>
+                              )}
+                              <div className="font-semibold truncate">{item.equipeNome}</div>
+                            </div>
                             <div
-                              className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                              className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
                                 index === 0 ? "bg-white/15 text-cyan-100" : "bg-white/10 text-slate-400"
                               }`}
                             >
@@ -587,10 +779,19 @@ export default function AdminCategoriaSorteioPage() {
                             className={`rounded-2xl border px-3 py-2.5 transition ${
                               ultimoRevealId === equipe.equipeId
                                 ? "animate-slot-glow border-cyan-300/50 bg-cyan-400/15"
-                                : "border-white/10 bg-slate-950/40"
+                                : (equipe as any).cabecaChave
+                                  ? "border-amber-300/35 bg-amber-400/10"
+                                  : "border-white/10 bg-slate-950/40"
                             }`}
                           >
-                            <div className="text-sm font-bold text-white">{equipe.equipeNome}</div>
+                            <div className="flex items-center gap-2">
+                              {(equipe as any).cabecaChave && (
+                                <span className="inline-flex shrink-0 items-center rounded-full border border-amber-300/40 bg-amber-300/20 p-0.5 text-amber-200">
+                                  <Crown className="h-3 w-3" />
+                                </span>
+                              )}
+                              <div className="text-sm font-bold text-white truncate">{equipe.equipeNome}</div>
+                            </div>
                           </div>
                         ))
                       )}
@@ -607,15 +808,29 @@ export default function AdminCategoriaSorteioPage() {
                 <div className="mt-3 max-h-[520px] space-y-1.5 overflow-y-auto pr-1">
                   {equipesAprovadas.map((equipe) => {
                     const foiRevelada = Boolean(sorteio?.itens.find((item) => item.equipeId === equipe.equipeId && item.ordem <= revelados));
+                    const ehCabeca = cabecasChaveIds.includes(equipe.equipeId) || Boolean(sorteio?.itens.find((item) => item.equipeId === equipe.equipeId && item.cabecaChave));
                     return (
                       <div
                         key={equipe.equipeId}
                         className={`rounded-xl border px-3 py-2 transition ${
-                          foiRevelada ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-white/10 bg-slate-950/40 text-slate-200"
+                          foiRevelada
+                            ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+                            : ehCabeca
+                              ? "border-amber-300/35 bg-amber-400/10 text-amber-50"
+                              : "border-white/10 bg-slate-950/40 text-slate-200"
                         }`}
                       >
-                        <div className="text-sm font-semibold leading-tight">{equipe.equipeNome}</div>
-                        {equipe.atletas.length > 0 && <div className="mt-0.5 text-[11px] leading-snug text-slate-400">{equipe.atletas.join(" • ")}</div>}
+                        <div className="flex items-center gap-2">
+                          {ehCabeca && (
+                            <span className="inline-flex shrink-0 items-center rounded-full border border-amber-300/40 bg-amber-300/20 p-0.5 text-amber-200">
+                              <Crown className="h-3 w-3" />
+                            </span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold leading-tight truncate">{equipe.equipeNome}</div>
+                            {equipe.atletas.length > 0 && <div className="mt-0.5 text-[11px] leading-snug text-slate-400 truncate">{equipe.atletas.join(" • ")}</div>}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -631,6 +846,7 @@ export default function AdminCategoriaSorteioPage() {
                 </ul>
               </div>
             </aside>
+          </div>
           </div>
         )}
       </div>

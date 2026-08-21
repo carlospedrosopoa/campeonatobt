@@ -242,7 +242,7 @@ export default function AdminCategoriaJogosPage() {
   const [salvandoTrocaGrupos, setSalvandoTrocaGrupos] = useState(false);
   const [montagemGruposOpen, setMontagemGruposOpen] = useState(false);
   const [montagemGruposLinhas, setMontagemGruposLinhas] = useState<
-    { equipeId: string; equipeNome: string; atletas: string[]; grupoNome: string }[]
+    { equipeId: string; equipeNome: string; atletas: string[]; grupoNome: string; cabecaChave?: boolean }[]
   >([]);
   const [carregandoMontagemGrupos, setCarregandoMontagemGrupos] = useState(false);
   const [salvandoMontagemGrupos, setSalvandoMontagemGrupos] = useState(false);
@@ -1426,17 +1426,27 @@ export default function AdminCategoriaJogosPage() {
       const temTodosNosGruposAtuais =
         equipesDosGrupos.length === aprovadas.length && aprovadas.every((item) => gruposAtuaisMap.has(item.equipeId));
 
-      let linhas = aprovadas.map((item) => ({ ...item, grupoNome: "" }));
+      let linhas = aprovadas.map((item) => ({ ...item, grupoNome: "", cabecaChave: false }));
       if (temTodosNosGruposAtuais) {
         linhas = aprovadas.map((item) => ({
           ...item,
           grupoNome: gruposAtuaisMap.get(item.equipeId) || nomesGrupos[0] || "",
+          cabecaChave: false,
         }));
       } else {
-        const atribuicoesPadrao = nomesGrupos.flatMap((nome, index) => Array.from({ length: tamanhosEsperados[index] ?? 0 }, () => nome));
-        linhas = aprovadas.map((item, index) => ({
+        const embaralhadas = [...aprovadas];
+        for (let i = embaralhadas.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [embaralhadas[i], embaralhadas[j]] = [embaralhadas[j], embaralhadas[i]];
+        }
+        const grupoPorEquipe = new Map<string, string>();
+        embaralhadas.forEach((item, index) => {
+          grupoPorEquipe.set(item.equipeId, nomesGrupos[index % qtdGrupos] ?? nomesGrupos[0]);
+        });
+        linhas = aprovadas.map((item) => ({
           ...item,
-          grupoNome: atribuicoesPadrao[index] || nomesGrupos[0] || "",
+          grupoNome: grupoPorEquipe.get(item.equipeId) || nomesGrupos[0] || "",
+          cabecaChave: false,
         }));
       }
 
@@ -2143,7 +2153,16 @@ export default function AdminCategoriaJogosPage() {
                                 {idx + 1}
                               </span>
                             </td>
-                            <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
+                            <td className="py-2 pr-3">
+                              <div className="flex items-center gap-2">
+                                {idx === 0 && (
+                                  <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 p-0.5 text-amber-600" title="Líder / cabeça do grupo">
+                                    <Crown className="h-3.5 w-3.5" />
+                                  </span>
+                                )}
+                                <span className="font-medium text-slate-900 truncate">{e.equipeNome || e.equipeId.slice(0, 8)}</span>
+                              </div>
+                            </td>
                             <td className="py-2 pr-3 font-semibold text-slate-900">{e.pontos}</td>
                             <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
                             <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
@@ -2957,9 +2976,9 @@ export default function AdminCategoriaJogosPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-xs text-slate-500 uppercase tracking-wider">Montagem manual</div>
-                  <div className="text-lg font-bold text-slate-900">Definir grupo de cada dupla</div>
+                  <div className="text-lg font-bold text-slate-900">Definir grupo e cabeças de chave</div>
                   <div className="text-sm text-slate-600 mt-1">
-                    Preencha o grupo ao lado de cada dupla e confirme para recriar grupos e jogos sem sorteio.
+                    Preencha o grupo de cada dupla e marque até <span className="font-semibold text-amber-700">1 cabeça de chave por grupo</span>.
                   </div>
                 </div>
                 <button type="button" onClick={() => setMontagemGruposOpen(false)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
@@ -2991,33 +3010,104 @@ export default function AdminCategoriaJogosPage() {
                       <th className="px-4 py-3 font-semibold text-slate-700">Dupla</th>
                       <th className="px-4 py-3 font-semibold text-slate-700">Atletas</th>
                       <th className="px-4 py-3 font-semibold text-slate-700">Grupo</th>
+                      <th className="px-4 py-3 font-semibold text-amber-700">
+                        <span className="inline-flex items-center gap-1">
+                          <Crown className="h-4 w-4" />
+                          Cabeça
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {montagemGruposLinhas.map((linha) => (
-                      <tr key={linha.equipeId} className="border-b border-slate-100 last:border-b-0">
-                        <td className="px-4 py-3 font-medium text-slate-900">{linha.equipeNome}</td>
-                        <td className="px-4 py-3 text-slate-600">{linha.atletas.length > 0 ? linha.atletas.join(" / ") : "-"}</td>
-                        <td className="px-4 py-3">
-                          <select
-                            value={linha.grupoNome}
-                            onChange={(e) =>
-                              setMontagemGruposLinhas((prev) =>
-                                prev.map((item) => (item.equipeId === linha.equipeId ? { ...item, grupoNome: e.target.value } : item))
-                              )
-                            }
-                            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                          >
-                            <option value="">Selecione</option>
-                            {gruposEsperadosMontagem.map((grupo) => (
-                              <option key={grupo.nome} value={grupo.nome}>
-                                {grupo.nome}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
+                    {montagemGruposLinhas.map((linha) => {
+                      const mesmaGrupoCabeca = linha.grupoNome
+                        ? montagemGruposLinhas.find(
+                            (outra) => outra.grupoNome === linha.grupoNome && outra.cabecaChave && outra.equipeId !== linha.equipeId,
+                          )
+                        : undefined;
+                      const podeMarcarCabeca = Boolean(linha.grupoNome) && !mesmaGrupoCabeca;
+                      return (
+                        <tr
+                          key={linha.equipeId}
+                          className={`border-b border-slate-100 last:border-b-0 ${linha.cabecaChave ? "bg-amber-50/60" : ""}`}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {linha.cabecaChave && (
+                                <span className="inline-flex shrink-0 items-center rounded-full border border-amber-300 bg-amber-100 p-0.5 text-amber-600">
+                                  <Crown className="h-3.5 w-3.5" />
+                                </span>
+                              )}
+                              <span className="font-medium text-slate-900">{linha.equipeNome}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">{linha.atletas.length > 0 ? linha.atletas.join(" / ") : "-"}</td>
+                          <td className="px-4 py-3 w-48">
+                            <select
+                              value={linha.grupoNome}
+                              onChange={(e) =>
+                                setMontagemGruposLinhas((prev) =>
+                                  prev.map((item) =>
+                                    item.equipeId === linha.equipeId
+                                      ? {
+                                          ...item,
+                                          grupoNome: e.target.value,
+                                          cabecaChave:
+                                            e.target.value &&
+                                            Boolean(
+                                              prev.find(
+                                                (outra) =>
+                                                  outra.equipeId !== linha.equipeId && outra.grupoNome === e.target.value && outra.cabecaChave,
+                                              ),
+                                            )
+                                              ? false
+                                              : item.cabecaChave,
+                                        }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                            >
+                              <option value="">Selecione</option>
+                              {gruposEsperadosMontagem.map((grupo) => (
+                                <option key={grupo.nome} value={grupo.nome}>
+                                  {grupo.nome}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3 w-28">
+                            <button
+                              type="button"
+                              disabled={!podeMarcarCabeca && !linha.cabecaChave}
+                              onClick={() =>
+                                setMontagemGruposLinhas((prev) =>
+                                  prev.map((item) =>
+                                    item.equipeId === linha.equipeId ? { ...item, cabecaChave: !item.cabecaChave } : item,
+                                  ),
+                                )
+                              }
+                              className={`inline-flex w-full items-center justify-center gap-1 rounded-md border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                linha.cabecaChave
+                                  ? "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              {linha.cabecaChave ? (
+                                <>
+                                  <Crown className="h-3.5 w-3.5" /> Selecionada
+                                </>
+                              ) : mesmaGrupoCabeca ? (
+                                "Já há uma"
+                              ) : (
+                                "Selecionar"
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
