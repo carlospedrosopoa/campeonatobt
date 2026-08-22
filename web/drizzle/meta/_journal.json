@@ -71,6 +71,13 @@
       "when": 1782990204927,
       "tag": "0009_low_blob",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787352459991,
+      "tag": "0010_parched_maria_hill",
+      "breakpoints": true
     }
   ]
 }

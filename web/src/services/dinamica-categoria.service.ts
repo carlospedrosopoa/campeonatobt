@@ -182,8 +182,13 @@ async function resetarEstruturaDosGrupos(tx: any, params: { torneioId: string; c
 
 async function criarGruposComEquipes(
   tx: any,
-  params: { categoriaId: string; gruposPlanejados: { nome: string; equipes: string[] }[] }
+  params: {
+    categoriaId: string;
+    gruposPlanejados: { nome: string; equipes: string[] }[];
+    cabecasChaveIds?: Set<string>;
+  }
 ) {
+  const cabecas = params.cabecasChaveIds ?? new Set<string>();
   const gruposCriados: { id: string; nome: string; equipes: string[] }[] = [];
 
   for (const grupo of params.gruposPlanejados) {
@@ -202,6 +207,7 @@ async function criarGruposComEquipes(
         jogosVencidos: 0,
         jogosPerdidos: 0,
         saldoGames: 0,
+        cabecaChave: cabecas.has(equipeId),
       }))
     );
   }
@@ -347,6 +353,7 @@ export class DinamicaCategoriaService {
     torneioId: string;
     categoriaId: string;
     grupos: { nome: string; equipes: string[] }[];
+    cabecasChaveIds?: string[];
   }) {
     const config = await categoriaConfigService.obterOuDefault(params.categoriaId);
     if (config.formato !== "GRUPOS") {
@@ -423,11 +430,27 @@ export class DinamicaCategoriaService {
       throw new Error(`Distribuição inválida. Esperado: ${tamanhosEsperadosOrdenados.join(", ")} duplas por grupo.`);
     }
 
+    const cabecasChaveIdsRaw = Array.isArray(params.cabecasChaveIds) ? params.cabecasChaveIds.filter(Boolean).map((id) => String(id)) : [];
+    const cabecasChaveSet = new Set<string>();
+    const qtdCabecasPorGrupo = new Map<string, number>();
+    for (const cabecaId of cabecasChaveIdsRaw) {
+      if (!equipesAprovadasSet.has(cabecaId)) continue;
+      const grupoDestaCabeca = gruposNormalizados.find((g) => g.equipes.includes(cabecaId));
+      if (!grupoDestaCabeca) continue;
+      const atual = qtdCabecasPorGrupo.get(grupoDestaCabeca.nome) ?? 0;
+      if (atual >= 1) {
+        throw new Error(`Só é permitido 1 cabeça de chave por grupo. O ${grupoDestaCabeca.nome} tem mais de uma.`);
+      }
+      qtdCabecasPorGrupo.set(grupoDestaCabeca.nome, atual + 1);
+      cabecasChaveSet.add(cabecaId);
+    }
+
     const resultado = await db.transaction(async (tx) => {
       await resetarEstruturaDosGrupos(tx, { torneioId: params.torneioId, categoriaId: params.categoriaId });
       const gruposCriados = await criarGruposComEquipes(tx, {
         categoriaId: params.categoriaId,
         gruposPlanejados: gruposNormalizados,
+        cabecasChaveIds: cabecasChaveSet,
       });
       const partidasCriadas = await recriarRodadasEPartidasDosGrupos(tx, {
         torneioId: params.torneioId,
@@ -499,6 +522,7 @@ export class DinamicaCategoriaService {
         grupoId: grupos.id,
         grupoNome: grupos.nome,
         equipeId: grupoEquipes.equipeId,
+        cabecaChave: grupoEquipes.cabecaChave,
       })
       .from(grupos)
       .innerJoin(grupoEquipes, eq(grupoEquipes.grupoId, grupos.id))
@@ -508,8 +532,10 @@ export class DinamicaCategoriaService {
       throw new Error("Nenhum grupo encontrado para esta categoria");
     }
 
+    const cabecaChavePorEquipe = new Map<string, boolean>();
     const gruposMap = new Map<string, { id: string; nome: string; equipes: string[] }>();
     for (const row of gruposRows) {
+      cabecaChavePorEquipe.set(row.equipeId, Boolean(row.cabecaChave));
       const atual = gruposMap.get(row.grupoId) ?? { id: row.grupoId, nome: row.grupoNome, equipes: [] };
       atual.equipes.push(row.equipeId);
       gruposMap.set(row.grupoId, atual);
@@ -539,6 +565,15 @@ export class DinamicaCategoriaService {
       });
     }
 
+    const cabecasAposTroca = new Set<string>();
+    for (const grupo of gruposCriados) {
+      const idsCabecas = grupo.equipes.filter((id) => cabecaChavePorEquipe.get(id));
+      if (idsCabecas.length > 1) {
+        throw new Error(`Troca inválida: ${grupo.nome} terminaria com mais de uma cabeça de chave.`);
+      }
+      idsCabecas.forEach((id) => cabecasAposTroca.add(id));
+    }
+
     const grupoIds = gruposCriados.map((g) => g.id);
     const partidasCriadas = await db.transaction(async (tx) => {
       await tx.delete(grupoEquipes).where(inArray(grupoEquipes.grupoId, grupoIds));
@@ -553,6 +588,7 @@ export class DinamicaCategoriaService {
             jogosVencidos: 0,
             jogosPerdidos: 0,
             saldoGames: 0,
+            cabecaChave: cabecasAposTroca.has(equipeId),
           }))
         );
       }

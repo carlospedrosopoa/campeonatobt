@@ -301,6 +301,7 @@ export class ClassificacaoCategoriaService {
         jogosVencidos: grupoEquipes.jogosVencidos,
         jogosPerdidos: grupoEquipes.jogosPerdidos,
         saldoGames: grupoEquipes.saldoGames,
+        cabecaChave: grupoEquipes.cabecaChave,
       })
       .from(grupoEquipes)
       .where(inArray(grupoEquipes.grupoId, grupoIds));
@@ -371,6 +372,7 @@ export class ClassificacaoCategoriaService {
         gamesPro: games.pro,
         gamesContra: games.contra,
         setsPro: games.setsPro,
+        cabecaChave: Boolean(e.cabecaChave),
       });
     }
 

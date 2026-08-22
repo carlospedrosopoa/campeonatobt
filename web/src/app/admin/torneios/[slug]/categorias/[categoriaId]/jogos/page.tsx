@@ -48,6 +48,7 @@ type GrupoClassificacao = {
     saldoGames: number;
     gamesPro?: number;
     setsPro?: number;
+    cabecaChave?: boolean;
   }[];
 };
 
@@ -936,13 +937,16 @@ export default function AdminCategoriaJogosPage() {
               return `
                 <div class="flex items-center justify-between gap-4 rounded-xl border ${destaque} px-4 py-3">
                   <div class="flex items-center gap-3 min-w-0">
-                    <div class="flex items-center justify-center h-8 w-8 rounded-lg bg-slate-900 text-white text-sm font-black">${idx + 1}</div>
+                    <div class="relative flex shrink-0 items-center justify-center h-8 w-8 rounded-lg bg-slate-900 text-white text-sm font-black">
+                      ${idx + 1}
+                      ${(e as any).cabecaChave ? `<span class="absolute -top-2 -right-2 inline-flex items-center justify-center h-5 w-5 rounded-full bg-amber-400 text-white shadow" title="Cabeça de chave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"></path><path d="M2 20h20"></path></svg></span>` : ``}
+                    </div>
                     <div class="flex items-center -space-x-2">
                       <img src="${foto1}" class="h-10 w-10 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='${avatarPlaceholder}'" crossOrigin="anonymous" />
                       <img src="${foto2}" class="h-10 w-10 rounded-full border-2 border-white bg-slate-100 object-cover shadow-sm" onerror="this.src='${avatarPlaceholder}'" crossOrigin="anonymous" />
                     </div>
                     <div class="min-w-0">
-                      <div class="font-bold text-slate-900 truncate">${equipeNome}</div>
+                      <div class="font-bold text-slate-900 truncate">${(e as any).cabecaChave ? `<span class="text-amber-600">👑 </span>${equipeNome}` : equipeNome}</div>
                       <div class="text-xs text-slate-500 truncate">${[nome1, nome2].filter(Boolean).join(" / ")}</div>
                     </div>
                   </div>
@@ -1481,6 +1485,7 @@ export default function AdminCategoriaJogosPage() {
         nome: grupo.nome,
         equipes: montagemGruposLinhas.filter((linha) => linha.grupoNome === grupo.nome).map((linha) => linha.equipeId),
       }));
+      const cabecasChaveIds = montagemGruposLinhas.filter((l) => Boolean(l.cabecaChave)).map((l) => l.equipeId);
 
       const grupoComQuantidadeInvalida = gruposEsperadosMontagem.find((grupo) => grupo.atual !== grupo.esperado);
       if (grupoComQuantidadeInvalida) {
@@ -1490,7 +1495,7 @@ export default function AdminCategoriaJogosPage() {
       const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/montar-grupos-manual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config, grupos: gruposPayload }),
+        body: JSON.stringify({ config, grupos: gruposPayload, cabecasChaveIds }),
       });
       const payload = (await res.json().catch(() => null)) as any;
       if (!res.ok) throw new Error(payload?.error || "Falha ao montar grupos manualmente");
@@ -2160,8 +2165,8 @@ export default function AdminCategoriaJogosPage() {
                             </td>
                             <td className="py-2 pr-3">
                               <div className="flex items-center gap-2">
-                                {idx === 0 && (
-                                  <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 p-0.5 text-amber-600" title="Líder / cabeça do grupo">
+                                {Boolean(e.cabecaChave) && (
+                                  <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 p-0.5 text-amber-600" title="Cabeça de chave do grupo">
                                     <Crown className="h-3.5 w-3.5" />
                                   </span>
                                 )}

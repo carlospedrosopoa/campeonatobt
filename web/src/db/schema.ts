@@ -407,6 +407,7 @@ export const grupoEquipes = pgTable('grupo_equipes', {
   jogosVencidos: integer('jogos_vencidos').default(0),
   jogosPerdidos: integer('jogos_perdidos').default(0),
   saldoGames: integer('saldo_games').default(0),
+  cabecaChave: boolean('cabeca_chave').default(false),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
 });
 

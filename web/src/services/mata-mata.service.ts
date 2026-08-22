@@ -553,18 +553,7 @@ export class MataMataService {
       return { config, grupos, qualificados, superCampeonato, seeds: qualificados.map((s) => s.equipeId) };
     }
 
-    const qualificados: {
-      equipeId: string;
-      grupoId: string;
-      grupoNome?: string;
-      equipeNome?: string;
-      rankGrupo: number;
-      pontos: number;
-      saldoGames: number;
-      gamesPro: number;
-      setsPro: number;
-      vitorias: number;
-    }[] = [];
+    const qualificados: (QualifiedSeed & { equipeNome?: string; grupoNome?: string })[] = [];
 
     for (const g of grupos) {
       const top = g.equipes.slice(0, porGrupo);

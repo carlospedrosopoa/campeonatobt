@@ -381,6 +381,7 @@ export default function AdminCategoriaSorteioPage() {
           nome: grupo.nome,
           equipes: sorteio.itens.filter((item) => item.grupoNome === grupo.nome).map((item) => item.equipeId),
         })),
+        cabecasChaveIds: cabecasChaveIds.length > 0 ? cabecasChaveIds : sorteio.itens.filter((i) => Boolean(i.cabecaChave)).map((i) => i.equipeId),
       };
 
       const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/montar-grupos-manual`, {

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
@@ -60,6 +60,10 @@ export async function POST(
       await categoriaConfigService.salvar(categoriaId, body.config);
     }
 
+    const cabecasChaveIds: string[] = Array.isArray(body?.cabecasChaveIds)
+      ? body.cabecasChaveIds.filter((id: any) => typeof id === "string" && id.length > 0)
+      : [];
+
     const resultado = await dinamicaCategoriaService.montarGruposManualmente({
       torneioId: torneio.id,
       categoriaId,
@@ -67,6 +71,7 @@ export async function POST(
         nome: typeof grupo?.nome === "string" ? grupo.nome : `Grupo ${index + 1}`,
         equipes: Array.isArray(grupo?.equipes) ? grupo.equipes.map((id: any) => String(id)) : [],
       })),
+      cabecasChaveIds,
     });
 
     return NextResponse.json(resultado);
