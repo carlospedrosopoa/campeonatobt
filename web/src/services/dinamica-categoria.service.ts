@@ -1,7 +1,52 @@
 import { db } from "@/db";
 import { categorias, grupoEquipes, grupos, inscricoes, partidas, rodadas, torneios } from "@/db/schema";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
+
+let _cacheTemCabecaChave: boolean | null = null;
+async function temColunaCabecaChave(): Promise<boolean> {
+  if (_cacheTemCabecaChave !== null) return _cacheTemCabecaChave;
+  try {
+    const rows = await db.execute(sql`
+      SELECT 1 AS existe
+      FROM information_schema.columns
+      WHERE table_name = 'grupo_equipes'
+        AND column_name = 'cabeca_chave'
+      LIMIT 1
+    `);
+    const arr = rows as unknown as { existe: number }[];
+    _cacheTemCabecaChave = Array.isArray(arr) && arr.length > 0;
+  } catch {
+    _cacheTemCabecaChave = false;
+  }
+  return _cacheTemCabecaChave as boolean;
+}
+
+function grupoEquipesInsertPayload(
+  dados: {
+    grupoId: string;
+    equipeId: string;
+    pontos?: number;
+    jogosJogados?: number;
+    jogosVencidos?: number;
+    jogosPerdidos?: number;
+    saldoGames?: number;
+    cabecaChave?: boolean;
+  },
+  incluirCabeca: boolean
+) {
+  const base = {
+    grupoId: dados.grupoId,
+    equipeId: dados.equipeId,
+    pontos: dados.pontos ?? 0,
+    jogosJogados: dados.jogosJogados ?? 0,
+    jogosVencidos: dados.jogosVencidos ?? 0,
+    jogosPerdidos: dados.jogosPerdidos ?? 0,
+    saldoGames: dados.saldoGames ?? 0,
+  };
+  if (incluirCabeca) return { ...base, cabecaChave: dados.cabecaChave ?? false };
+  return base;
+}
 
 function groupName(index: number) {
   const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -186,9 +231,11 @@ async function criarGruposComEquipes(
     categoriaId: string;
     gruposPlanejados: { nome: string; equipes: string[] }[];
     cabecasChaveIds?: Set<string>;
+    incluirCabecaChave?: boolean;
   }
 ) {
   const cabecas = params.cabecasChaveIds ?? new Set<string>();
+  const incluirCabeca = params.incluirCabecaChave ?? true;
   const gruposCriados: { id: string; nome: string; equipes: string[] }[] = [];
 
   for (const grupo of params.gruposPlanejados) {
@@ -199,16 +246,21 @@ async function criarGruposComEquipes(
   for (const grupo of gruposCriados) {
     if (grupo.equipes.length < 2) continue;
     await tx.insert(grupoEquipes).values(
-      grupo.equipes.map((equipeId) => ({
-        grupoId: grupo.id,
-        equipeId,
-        pontos: 0,
-        jogosJogados: 0,
-        jogosVencidos: 0,
-        jogosPerdidos: 0,
-        saldoGames: 0,
-        cabecaChave: cabecas.has(equipeId),
-      }))
+      grupo.equipes.map((equipeId) =>
+        grupoEquipesInsertPayload(
+          {
+            grupoId: grupo.id,
+            equipeId,
+            pontos: 0,
+            jogosJogados: 0,
+            jogosVencidos: 0,
+            jogosPerdidos: 0,
+            saldoGames: 0,
+            cabecaChave: cabecas.has(equipeId),
+          },
+          incluirCabeca
+        )
+      )
     );
   }
 
@@ -301,6 +353,8 @@ export class DinamicaCategoriaService {
     const torneioRow = await db.select({ superCampeonato: torneios.superCampeonato }).from(torneios).where(eq(torneios.id, categoriaRow[0].torneioId)).limit(1);
     const isSuperCampeonato = torneioRow[0]?.superCampeonato ?? false;
 
+    const incluirCabecaChave = await temColunaCabecaChave();
+
     const resultado = await db.transaction(async (tx) => {
       await resetarEstruturaDosGrupos(tx, { torneioId: params.torneioId, categoriaId: params.categoriaId });
 
@@ -331,6 +385,7 @@ export class DinamicaCategoriaService {
       const gruposCriados = await criarGruposComEquipes(tx, {
         categoriaId: params.categoriaId,
         gruposPlanejados,
+        incluirCabecaChave,
       });
 
       const partidasCriadas = await recriarRodadasEPartidasDosGrupos(tx, {
@@ -445,12 +500,15 @@ export class DinamicaCategoriaService {
       cabecasChaveSet.add(cabecaId);
     }
 
+    const incluirCabecaChave = await temColunaCabecaChave();
+
     const resultado = await db.transaction(async (tx) => {
       await resetarEstruturaDosGrupos(tx, { torneioId: params.torneioId, categoriaId: params.categoriaId });
       const gruposCriados = await criarGruposComEquipes(tx, {
         categoriaId: params.categoriaId,
         gruposPlanejados: gruposNormalizados,
         cabecasChaveIds: cabecasChaveSet,
+        incluirCabecaChave,
       });
       const partidasCriadas = await recriarRodadasEPartidasDosGrupos(tx, {
         torneioId: params.torneioId,
@@ -517,16 +575,40 @@ export class DinamicaCategoriaService {
       throw new Error("Não é possível trocar duplas entre grupos depois que a fase de grupos começou");
     }
 
-    const gruposRows = await db
-      .select({
-        grupoId: grupos.id,
-        grupoNome: grupos.nome,
-        equipeId: grupoEquipes.equipeId,
-        cabecaChave: grupoEquipes.cabecaChave,
-      })
-      .from(grupos)
-      .innerJoin(grupoEquipes, eq(grupoEquipes.grupoId, grupos.id))
-      .where(eq(grupos.categoriaId, params.categoriaId));
+    const incluirCabecaChave = await temColunaCabecaChave();
+    type GrupoRowTroca = {
+      grupoId: string;
+      grupoNome: string;
+      equipeId: string;
+      cabecaChave: boolean | null;
+    };
+    let gruposRows: GrupoRowTroca[];
+    try {
+      const rows = await db
+        .select({
+          grupoId: grupos.id,
+          grupoNome: grupos.nome,
+          equipeId: grupoEquipes.equipeId,
+          cabecaChave: grupoEquipes.cabecaChave,
+        })
+        .from(grupos)
+        .innerJoin(grupoEquipes, eq(grupoEquipes.grupoId, grupos.id))
+        .where(eq(grupos.categoriaId, params.categoriaId));
+      gruposRows = rows as GrupoRowTroca[];
+    } catch (e: any) {
+      const msg = String(e?.message ?? e ?? "");
+      if (!/cabeca_chave/i.test(msg)) throw e;
+      const rows = await db
+        .select({
+          grupoId: grupos.id,
+          grupoNome: grupos.nome,
+          equipeId: grupoEquipes.equipeId,
+        })
+        .from(grupos)
+        .innerJoin(grupoEquipes, eq(grupoEquipes.grupoId, grupos.id))
+        .where(eq(grupos.categoriaId, params.categoriaId));
+      gruposRows = rows.map((r) => ({ ...r, cabecaChave: false })) as GrupoRowTroca[];
+    }
 
     if (gruposRows.length === 0) {
       throw new Error("Nenhum grupo encontrado para esta categoria");
@@ -580,16 +662,21 @@ export class DinamicaCategoriaService {
 
       for (const grupo of gruposCriados) {
         await tx.insert(grupoEquipes).values(
-          grupo.equipes.map((equipeId) => ({
-            grupoId: grupo.id,
-            equipeId,
-            pontos: 0,
-            jogosJogados: 0,
-            jogosVencidos: 0,
-            jogosPerdidos: 0,
-            saldoGames: 0,
-            cabecaChave: cabecasAposTroca.has(equipeId),
-          }))
+          grupo.equipes.map((equipeId) =>
+            grupoEquipesInsertPayload(
+              {
+                grupoId: grupo.id,
+                equipeId,
+                pontos: 0,
+                jogosJogados: 0,
+                jogosVencidos: 0,
+                jogosPerdidos: 0,
+                saldoGames: 0,
+                cabecaChave: cabecasAposTroca.has(equipeId),
+              },
+              incluirCabecaChave
+            )
+          )
         );
       }
 

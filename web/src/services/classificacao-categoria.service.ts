@@ -292,19 +292,48 @@ export class ClassificacaoCategoriaService {
     const grupoIds = gruposRows.map((g) => g.id);
     if (grupoIds.length === 0) return [];
 
-    const equipesRows = await db
-      .select({
-        grupoId: grupoEquipes.grupoId,
-        equipeId: grupoEquipes.equipeId,
-        pontos: grupoEquipes.pontos,
-        jogosJogados: grupoEquipes.jogosJogados,
-        jogosVencidos: grupoEquipes.jogosVencidos,
-        jogosPerdidos: grupoEquipes.jogosPerdidos,
-        saldoGames: grupoEquipes.saldoGames,
-        cabecaChave: grupoEquipes.cabecaChave,
-      })
-      .from(grupoEquipes)
-      .where(inArray(grupoEquipes.grupoId, grupoIds));
+    type EquipeRowComCabeca = {
+      grupoId: string;
+      equipeId: string;
+      pontos: number | null;
+      jogosJogados: number | null;
+      jogosVencidos: number | null;
+      jogosPerdidos: number | null;
+      saldoGames: number | null;
+      cabecaChave: boolean | null;
+    };
+    let equipesRows: EquipeRowComCabeca[];
+    try {
+      equipesRows = (await db
+        .select({
+          grupoId: grupoEquipes.grupoId,
+          equipeId: grupoEquipes.equipeId,
+          pontos: grupoEquipes.pontos,
+          jogosJogados: grupoEquipes.jogosJogados,
+          jogosVencidos: grupoEquipes.jogosVencidos,
+          jogosPerdidos: grupoEquipes.jogosPerdidos,
+          saldoGames: grupoEquipes.saldoGames,
+          cabecaChave: grupoEquipes.cabecaChave,
+        })
+        .from(grupoEquipes)
+        .where(inArray(grupoEquipes.grupoId, grupoIds))) as EquipeRowComCabeca[];
+    } catch (e: any) {
+      const msg = String(e?.message ?? e ?? "");
+      if (!/cabeca_chave/i.test(msg)) throw e;
+      const rows = (await db
+        .select({
+          grupoId: grupoEquipes.grupoId,
+          equipeId: grupoEquipes.equipeId,
+          pontos: grupoEquipes.pontos,
+          jogosJogados: grupoEquipes.jogosJogados,
+          jogosVencidos: grupoEquipes.jogosVencidos,
+          jogosPerdidos: grupoEquipes.jogosPerdidos,
+          saldoGames: grupoEquipes.saldoGames,
+        })
+        .from(grupoEquipes)
+        .where(inArray(grupoEquipes.grupoId, grupoIds))) as Omit<EquipeRowComCabeca, "cabecaChave">[];
+      equipesRows = rows.map((r) => ({ ...r, cabecaChave: false }));
+    }
 
     const jogos = (await db
       .select({
