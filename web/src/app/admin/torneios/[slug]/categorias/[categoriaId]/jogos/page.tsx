@@ -1794,16 +1794,22 @@ export default function AdminCategoriaJogosPage() {
                   const val = e.target.value;
                   setConfig((p) =>
                     p
-                      ? {
+                      ? ({
                           ...p,
                           mataMata: {
+                            estrutura: (p.mataMata?.estrutura ?? "PADRAO") as
+                              | "PADRAO"
+                              | "SUPER_CAMPEONATO_6"
+                              | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
+                              | "GRUPOS_8_CRUZAMENTO_PADRAO",
+                            quantidadeClassificados: p.mataMata?.quantidadeClassificados,
                             ...(p.mataMata ?? {}),
                             habilitarReseed:
                               val === "true" ? true :
                               val === "false" ? false :
                               undefined,
                           },
-                        }
+                        } satisfies CategoriaConfig)
                       : p
                   );
                 }}
