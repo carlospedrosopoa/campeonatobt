@@ -10,7 +10,9 @@ async function temColunaCabecaChave(): Promise<boolean> {
     const rows = await db.execute(sql`
       SELECT 1 AS existe
       FROM information_schema.columns
-      WHERE table_name = 'grupo_equipes'
+      WHERE table_catalog = current_database()
+        AND table_schema = current_schema()
+        AND table_name = 'grupo_equipes'
         AND column_name = 'cabeca_chave'
       LIMIT 1
     `);
@@ -20,6 +22,40 @@ async function temColunaCabecaChave(): Promise<boolean> {
     _cacheTemCabecaChave = false;
   }
   return _cacheTemCabecaChave as boolean;
+}
+
+function errorMissingColumn(err: any, columnName: string) {
+  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  if (!msg) return false;
+  return (
+    msg.includes(columnName.toLowerCase()) &&
+    (msg.includes("column") || msg.includes("coluna") || msg.includes("does not exist") || msg.includes("não existe"))
+  );
+}
+
+async function inserirGrupoEquipes(tx: any, inserts: any[], incluirCabecaChaveOriginal: boolean) {
+  try {
+    const incluir = Boolean(incluirCabecaChaveOriginal) && _cacheTemCabecaChave !== false;
+    const list = incluir
+      ? inserts
+      : inserts.map((r) => {
+          const copy = { ...r };
+          delete copy.cabecaChave;
+          return copy;
+        });
+    return await tx.insert(grupoEquipes).values(list);
+  } catch (e: any) {
+    if (errorMissingColumn(e, "cabeca_chave")) {
+      _cacheTemCabecaChave = false;
+      const list = inserts.map((r) => {
+        const copy = { ...r };
+        delete copy.cabecaChave;
+        return copy;
+      });
+      return await tx.insert(grupoEquipes).values(list);
+    }
+    throw e;
+  }
 }
 
 function grupoEquipesInsertPayload(
@@ -321,7 +357,8 @@ async function criarGruposComEquipes(
 
   for (const grupo of gruposCriados) {
     if (grupo.equipes.length < 2) continue;
-    await tx.insert(grupoEquipes).values(
+    await inserirGrupoEquipes(
+      tx,
       grupo.equipes.map((equipeId) =>
         grupoEquipesInsertPayload(
           {
@@ -336,7 +373,8 @@ async function criarGruposComEquipes(
           },
           incluirCabeca
         )
-      )
+      ),
+      incluirCabeca
     );
   }
 
@@ -737,7 +775,8 @@ export class DinamicaCategoriaService {
       await tx.delete(grupoEquipes).where(inArray(grupoEquipes.grupoId, grupoIds));
 
       for (const grupo of gruposCriados) {
-        await tx.insert(grupoEquipes).values(
+        await inserirGrupoEquipes(
+          tx,
           grupo.equipes.map((equipeId) =>
             grupoEquipesInsertPayload(
               {
@@ -752,7 +791,8 @@ export class DinamicaCategoriaService {
               },
               incluirCabecaChave
             )
-          )
+          ),
+          incluirCabecaChave
         );
       }
 
