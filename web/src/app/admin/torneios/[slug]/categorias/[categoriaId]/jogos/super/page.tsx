@@ -1480,45 +1480,54 @@ export default function AdminCategoriaJogosSuperPage() {
               {gerandoPlanilhaContingencia ? "Gerando…" : "Excel contingência"}
             </button>
 
-            <button
-              type="button"
-              disabled={gerandoGrupos || temResultadoNaCategoria || !config}
-              onClick={async () => {
-                if (!config) return;
-                try {
-                  setGerandoGrupos(true);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-grupos`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(config),
-                  });
-                  if (!res.ok) {
-                    const msg = await res.json().catch(() => null);
-                    throw new Error(msg?.error || "Falha ao gerar rodadas/jogos");
+            <div className="flex flex-col gap-2 w-full md:w-auto md:max-w-sm">
+              <button
+                type="button"
+                disabled={gerandoGrupos || temResultadoNaCategoria || !config}
+                onClick={async () => {
+                  if (!config) return;
+                  const ok = confirm(
+                    "ATENÇÃO: isso apaga TODAS as rodadas/partidas da fase GRUPOS atuais e recria TUDO do zero.\n\nSe você quer manter as rodadas 1..N que ajustou manualmente, cancele e use o outro botão 'Gerar rodadas restantes'.\n\nDeseja continuar?"
+                  );
+                  if (!ok) return;
+                  try {
+                    setGerandoGrupos(true);
+                    const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-grupos`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(config),
+                    });
+                    if (!res.ok) {
+                      const msg = await res.json().catch(() => null);
+                      throw new Error(msg?.error || "Falha ao gerar rodadas/jogos");
+                    }
+                    const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+                    if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+                    setFase("GRUPOS");
+                    await carregarPartidas("GRUPOS");
+                  } catch (e: any) {
+                    setErro(e?.message || "Erro inesperado");
+                  } finally {
+                    setGerandoGrupos(false);
                   }
-                  const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
-                  if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
-                  setFase("GRUPOS");
-                  await carregarPartidas("GRUPOS");
-                } catch (e: any) {
-                  setErro(e?.message || "Erro inesperado");
-                } finally {
-                  setGerandoGrupos(false);
-                }
-              }}
-              title={temResultadoNaCategoria ? "Não é possível gerar jogos: já existe partida com resultado ou em andamento." : undefined}
-              className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-            >
-              {gerandoGrupos ? "Gerando…" : "Gerar rodadas/jogos"}
-            </button>
+                }}
+                title={temResultadoNaCategoria ? "Não é possível gerar jogos: já existe partida com resultado ou em andamento." : "Apaga todas as rodadas/partidas atuais da fase GRUPOS e recria do zero (Round Robin padrão)."}
+                className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                {gerandoGrupos ? "Gerando…" : "🔄 Gerar tudo (zerar rodadas)"}
+              </button>
+              <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700">
+                Usar apenas na primeira configuração. Se você já editou confrontos manualmente, NÃO use este — use o botão "Gerar rodadas restantes" abaixo.
+              </div>
+            </div>
 
-            <div className="flex flex-wrap items-start gap-3">
+            <div className="flex flex-wrap items-start gap-3 w-full md:w-auto">
               <div className="space-y-1">
                 <label className="block text-xs font-medium text-slate-600">A partir da rodada</label>
                 <input
                   type="number"
                   min={minAPartirDaRodada}
-                  max={maxAPartirDaRodada}
+                  max={Math.max(minAPartirDaRodada, maxAPartirDaRodada + 10)}
                   value={aPartirDaRodada}
                   onChange={(e) => {
                     const v = parseInt(e.target.value);
@@ -1526,41 +1535,57 @@ export default function AdminCategoriaJogosSuperPage() {
                   }}
                   className="w-32 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
-                <div className="text-xs text-slate-500">
-                  Exemplo: 5 = monta manualmente 1 a 4, gerar 5+ automaticamente.
+                <div className="text-xs text-slate-500 max-w-[260px]">
+                  Como usar: (1) clique em "Gerar tudo" ou crie rodadas 1 a {aPartirDaRodada - 1} manualmente,
+                  (2) edite os confrontos de 1 a {aPartirDaRodada - 1} nos jogos,
+                  (3) clique em "Gerar rodadas restantes" — as rodadas 1 a {aPartirDaRodada - 1} <strong className="text-emerald-700">não são alteradas</strong>,
+                  só são geradas/recradas da {aPartirDaRodada}ª em diante.
                 </div>
               </div>
 
-              <button
-                type="button"
-                disabled={gerandoRodadasRestantes || !temResultadoGrupos || ultimaRodadaExistente < aPartirDaRodada - 1 || aPartirDaRodada < 2}
-                onClick={async () => {
-                  try {
-                    setGerandoRodadasRestantes(true);
-                    setErro(null);
-                    const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-rodadas-restantes`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ aPartirDaRodada: aPartirDaRodada }),
-                    });
-                    const payload = (await res.json().catch(() => null)) as any;
-                    if (!res.ok) throw new Error(payload?.error || "Falha ao gerar rodadas restantes");
-                    const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
-                    if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
-                    setFase("GRUPOS");
-                    await carregarPartidas("GRUPOS");
-                    alert(`Rodadas restantes geradas.\n\nRodadas: ${payload?.maxRodadas ?? "-"}\nPartidas criadas: ${payload?.partidasCriadas ?? 0}`);
-                  } catch (e: any) {
-                    setErro(e?.message || "Erro inesperado");
-                  } finally {
-                    setGerandoRodadasRestantes(false);
-                  }
-                }}
-                title={`Monta as rodadas 1 a ${aPartirDaRodada - 1} manualmente e gera automaticamente da ${aPartirDaRodada}ª em diante com Round Robin válido.`}
-                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 mt-[22px]"
-              >
-                {gerandoRodadasRestantes ? "Gerando…" : "Gerar rodadas restantes"}
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  disabled={gerandoRodadasRestantes || ultimaRodadaExistente < aPartirDaRodada - 1 || aPartirDaRodada < 2}
+                  onClick={async () => {
+                    try {
+                      setGerandoRodadasRestantes(true);
+                      setErro(null);
+                      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-rodadas-restantes`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ aPartirDaRodada: aPartirDaRodada }),
+                      });
+                      const payload = (await res.json().catch(() => null)) as any;
+                      if (!res.ok) throw new Error(payload?.error || "Falha ao gerar rodadas restantes");
+                      const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+                      if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+                      setFase("GRUPOS");
+                      await carregarPartidas("GRUPOS");
+                      alert(`Rodadas restantes geradas.\n\nMantidas as rodadas 1 a ${aPartirDaRodada - 1} intactas.\nRodadas totais: ${payload?.maxRodadas ?? "-"}\nPartidas (re)criadas da ${aPartirDaRodada}ª em diante: ${payload?.partidasCriadas ?? 0}`);
+                    } catch (e: any) {
+                      setErro(e?.message || "Erro inesperado");
+                    } finally {
+                      setGerandoRodadasRestantes(false);
+                    }
+                  }}
+                  title={`MANTÉM as rodadas 1 a ${aPartirDaRodada - 1} do jeito que estão. Apaga e recria SOMENTE as rodadas da ${aPartirDaRodada}ª em diante com Round Robin compatível.`}
+                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 mt-[22px]"
+                >
+                  {gerandoRodadasRestantes ? "Gerando…" : `➕ Gerar rodadas restantes (${aPartirDaRodada}+)`}
+                </button>
+                <div className={`rounded-md border px-3 py-2 text-xs ${
+                  ultimaRodadaExistente >= aPartirDaRodada - 1 && aPartirDaRodada >= 2
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-slate-50 text-slate-500"
+                }`}>
+                  {aPartirDaRodada < 2
+                    ? "Use 2 ou maior."
+                    : ultimaRodadaExistente >= aPartirDaRodada - 1
+                      ? `✅ Rodadas 1 a ${aPartirDaRodada - 1} existem. Clique em "Gerar rodadas restantes" para manter 1..${aPartirDaRodada - 1} e criar de ${aPartirDaRodada} em diante.`
+                      : `⚠️ Crie primeiro as rodadas 1 a ${aPartirDaRodada - 1} (use "Gerar tudo" e edite, ou crie manualmente). Até agora só temos até a rodada ${ultimaRodadaExistente}.`}
+                </div>
+              </div>
             </div>
 
             <button
