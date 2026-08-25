@@ -814,7 +814,7 @@ export class DinamicaCategoriaService {
     const isSuperCampeonato = torneioRow[0]?.superCampeonato ?? false;
     if (!isSuperCampeonato) throw new Error("Recurso disponível apenas para torneios Super Campeonato");
 
-    const aPartirDaRodada = params.aPartirDaRodada ?? 2;
+    const aPartirDaRodada = Math.max(1, params.aPartirDaRodada ?? 2);
 
     const gruposRows = await db.select({ id: grupos.id }).from(grupos).where(eq(grupos.categoriaId, params.categoriaId));
     const grupoId = gruposRows[0]?.id;
@@ -872,7 +872,7 @@ export class DinamicaCategoriaService {
       throw new Error("Não é possível gerar rodadas restantes: já existem partidas com resultado nas rodadas seguintes.");
     }
 
-    const rodadasAnteriores = Math.max(1, aPartirDaRodada - 1);
+    const rodadasAnteriores = Math.max(0, aPartirDaRodada - 1);
     const firstRoundPairsList: [string, string][][] = [];
     let allPreviousRoundsOk = true;
     for (let n = 1; n <= rodadasAnteriores; n++) {
@@ -883,6 +883,7 @@ export class DinamicaCategoriaService {
       if (pairs.length === 0) {
         if (n === 1) {
           allPreviousRoundsOk = false;
+          if (rodadasAnteriores === 0) break;
           throw new Error("Nenhum confronto encontrado na Rodada 1. Ajuste os confrontos da 1ª rodada antes de gerar as demais.");
         }
         allPreviousRoundsOk = false;
@@ -894,7 +895,14 @@ export class DinamicaCategoriaService {
     let initialOrder: string[] | null = null;
     let rounds: { pairs: [string, string][] }[] = [];
 
-    if (rodadasAnteriores === 1 || !allPreviousRoundsOk) {
+    if (rodadasAnteriores === 0) {
+      const shuffled = [...teamIds];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      rounds = gerarRodadasRoundRobin(shuffled);
+    } else if (rodadasAnteriores === 1 || !allPreviousRoundsOk) {
       initialOrder = buildInitialOrderFromRound1Pairs({ teamIds, round1Pairs: firstRoundPairsList[0] ?? [] });
       rounds = gerarRodadasRoundRobinFromOrder(initialOrder);
     } else {

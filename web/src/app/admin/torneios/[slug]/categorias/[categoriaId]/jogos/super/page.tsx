@@ -1125,8 +1125,18 @@ export default function AdminCategoriaJogosSuperPage() {
   }, [partidasFiltradas, fase]);
 
   const ultimaRodadaExistente = rodadasView.length > 0 ? Math.max(...rodadasView.map((r) => r.numero)) : 0;
-  const minAPartirDaRodada = Math.min(2, Math.max(2, ultimaRodadaExistente + 1));
-  const maxAPartirDaRodada = Math.max(minAPartirDaRodada, ultimaRodadaExistente + 1);
+  const minAPartirDaRodada = 1;
+  const maxAPartirDaRodada = Math.max(minAPartirDaRodada, ultimaRodadaExistente + 10);
+  useEffect(() => {
+    setAPartirDaRodada((prev) => {
+      if (prev === 2 && ultimaRodadaExistente === 0) return 1;
+      if (prev - 1 > ultimaRodadaExistente) {
+        return Math.max(1, ultimaRodadaExistente + 1);
+      }
+      if (prev < 1) return 1;
+      return prev;
+    });
+  }, [ultimaRodadaExistente]);
 
   const temResultadoNaCategoria = useMemo(() => {
     if (temResultadoGrupos) return true;
@@ -1536,17 +1546,16 @@ export default function AdminCategoriaJogosSuperPage() {
                   className="w-32 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
                 <div className="text-xs text-slate-500 max-w-[260px]">
-                  Como usar: (1) clique em "Gerar tudo" ou crie rodadas 1 a {aPartirDaRodada - 1} manualmente,
-                  (2) edite os confrontos de 1 a {aPartirDaRodada - 1} nos jogos,
-                  (3) clique em "Gerar rodadas restantes" — as rodadas 1 a {aPartirDaRodada - 1} <strong className="text-emerald-700">não são alteradas</strong>,
-                  só são geradas/recradas da {aPartirDaRodada}ª em diante.
+                  {aPartirDaRodada === 1
+                    ? "Quando = 1: cria TODAS as rodadas do grupo (Round Robin aleatório padrão)."
+                    : `Como usar: (1) crie ou edite as rodadas 1 a ${aPartirDaRodada - 1}, (2) clique em "Gerar rodadas restantes" — 1 a ${aPartirDaRodada - 1} permanecem <strong className="text-emerald-700">inalteradas</strong>, só ${aPartirDaRodada}+ são recriadas.`}
                 </div>
               </div>
 
               <div className="flex flex-col gap-2">
                 <button
                   type="button"
-                  disabled={gerandoRodadasRestantes || ultimaRodadaExistente < aPartirDaRodada - 1 || aPartirDaRodada < 2}
+                  disabled={gerandoRodadasRestantes || aPartirDaRodada < 1 || ultimaRodadaExistente < aPartirDaRodada - 1}
                   onClick={async () => {
                     try {
                       setGerandoRodadasRestantes(true);
@@ -1562,7 +1571,11 @@ export default function AdminCategoriaJogosSuperPage() {
                       if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
                       setFase("GRUPOS");
                       await carregarPartidas("GRUPOS");
-                      alert(`Rodadas restantes geradas.\n\nMantidas as rodadas 1 a ${aPartirDaRodada - 1} intactas.\nRodadas totais: ${payload?.maxRodadas ?? "-"}\nPartidas (re)criadas da ${aPartirDaRodada}ª em diante: ${payload?.partidasCriadas ?? 0}`);
+                      alert(
+                        aPartirDaRodada === 1
+                          ? `Todas as rodadas geradas.\n\nRodadas totais: ${payload?.maxRodadas ?? "-"}\nPartidas criadas: ${payload?.partidasCriadas ?? 0}`
+                          : `Rodadas restantes geradas.\n\nMantidas as rodadas 1 a ${aPartirDaRodada - 1} intactas.\nRodadas totais: ${payload?.maxRodadas ?? "-"}\nPartidas (re)criadas da ${aPartirDaRodada}ª em diante: ${payload?.partidasCriadas ?? 0}`
+                      );
                     } catch (e: any) {
                       setErro(e?.message || "Erro inesperado");
                     } finally {
@@ -1575,15 +1588,21 @@ export default function AdminCategoriaJogosSuperPage() {
                   {gerandoRodadasRestantes ? "Gerando…" : `➕ Gerar rodadas restantes (${aPartirDaRodada}+)`}
                 </button>
                 <div className={`rounded-md border px-3 py-2 text-xs ${
-                  ultimaRodadaExistente >= aPartirDaRodada - 1 && aPartirDaRodada >= 2
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-slate-200 bg-slate-50 text-slate-500"
-                }`}>
-                  {aPartirDaRodada < 2
-                    ? "Use 2 ou maior."
+                  aPartirDaRodada < 1
+                    ? "border-rose-200 bg-rose-50 text-rose-700"
                     : ultimaRodadaExistente >= aPartirDaRodada - 1
-                      ? `✅ Rodadas 1 a ${aPartirDaRodada - 1} existem. Clique em "Gerar rodadas restantes" para manter 1..${aPartirDaRodada - 1} e criar de ${aPartirDaRodada} em diante.`
-                      : `⚠️ Crie primeiro as rodadas 1 a ${aPartirDaRodada - 1} (use "Gerar tudo" e edite, ou crie manualmente). Até agora só temos até a rodada ${ultimaRodadaExistente}.`}
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-amber-200 bg-amber-50 text-amber-700"
+                }`}>
+                  {aPartirDaRodada < 1
+                    ? "Use 1 ou maior."
+                    : aPartirDaRodada === 1
+                      ? ultimaRodadaExistente >= 0
+                        ? "✅ Nenhuma rodada exigida ainda. Clique para gerar TODAS as rodadas do grupo (Round Robin padrão)."
+                        : ""
+                      : ultimaRodadaExistente >= aPartirDaRodada - 1
+                        ? `✅ Rodadas 1 a ${aPartirDaRodada - 1} existem (até a rodada ${ultimaRodadaExistente}). Clique em "Gerar rodadas restantes" para manter 1..${aPartirDaRodada - 1} intactas e (re)criar de ${aPartirDaRodada} em diante.`
+                        : `⚠️ Para gerar a partir da rodada ${aPartirDaRodada}, primeiro crie as rodadas 1 a ${aPartirDaRodada - 1}. Até agora temos até a rodada ${ultimaRodadaExistente}. Dica: reduza o número para ${Math.max(1, ultimaRodadaExistente + 1)} ou clique em "Gerar tudo".`}
                 </div>
               </div>
             </div>
