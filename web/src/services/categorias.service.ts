@@ -24,6 +24,7 @@ export type CriarCategoriaDTO = {
   valorInscricao?: string | number | null;
   vagasMaximas?: number | null;
   dataHorario?: Date | null;
+  tipoCardInscricao?: "TIPO_1" | "TIPO_2" | null;
 };
 
 export type AtualizarCategoriaDTO = {
@@ -32,6 +33,7 @@ export type AtualizarCategoriaDTO = {
   valorInscricao?: string | number | null;
   vagasMaximas?: number | null;
   dataHorario?: Date | null;
+  tipoCardInscricao?: "TIPO_1" | "TIPO_2" | null;
 };
 
 export type ClonarCategoriaDTO = {
@@ -82,6 +84,7 @@ export class CategoriasService {
             : String(dados.valorInscricao),
         vagasMaximas: dados.vagasMaximas ?? undefined,
         dataHorario: dados.dataHorario === undefined ? undefined : dados.dataHorario,
+        tipoCardInscricao: dados.tipoCardInscricao ?? undefined,
       })
       .returning();
     return nova;
@@ -111,6 +114,7 @@ export class CategoriasService {
           valorInscricao: origem.valorInscricao,
           vagasMaximas: origem.vagasMaximas,
           dataHorario: origem.dataHorario,
+          tipoCardInscricao: origem.tipoCardInscricao,
         })
         .returning();
 
@@ -189,6 +193,12 @@ export class CategoriasService {
             : String(dados.valorInscricao),
       vagasMaximas: dados.vagasMaximas === undefined ? undefined : dados.vagasMaximas,
       dataHorario: dados.dataHorario === undefined ? undefined : dados.dataHorario,
+      tipoCardInscricao:
+        dados.tipoCardInscricao === undefined
+          ? undefined
+          : dados.tipoCardInscricao === null
+            ? undefined
+            : dados.tipoCardInscricao,
     };
 
     if (dados.nome) {

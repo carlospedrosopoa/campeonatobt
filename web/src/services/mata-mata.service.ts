@@ -801,19 +801,18 @@ export class MataMataService {
           }
         }
       } else {
-        // Estrutura PADRAO: re-seeding em TODAS as fases + byes automáticos
-        // 1. Calcula o tamanho original da chave (próxima potência de 2)
+        // Estrutura PADRAO: por padrão, re-seeding SOMENTE se houve byes;
+        // se habilitarReseed=true -> sempre re-seed; se habilitarReseed=false -> nunca re-seed.
+        // Quando não há re-seed, usa avanço normal de bracket tradicional (vencedor por ordem de jogos).
         const total = seeds.length;
         const tamanhoChaveOriginal = getNextPowerOfTwo(total);
-        
-        // 2. Calcula quantas equipes deveriam estar na fase atual (tamanho da chave / 2^fase)
+
         let tamanhoFaseAtual = tamanhoChaveOriginal;
         const idxFaseAtual = ordemFases.indexOf(params.faseAtual);
         for (let i = 0; i < idxFaseAtual; i++) {
           tamanhoFaseAtual /= 2;
         }
-        
-        // 3. Calcula quantos byes havia na fase anterior (equipes que passaram direto)
+
         const idxFaseAnterior = idxFaseAtual - 1;
         let tamanhoFaseAnterior = tamanhoChaveOriginal;
         for (let i = 0; i < idxFaseAnterior; i++) {
@@ -821,21 +820,26 @@ export class MataMataService {
         }
         const byesFaseAnterior = tamanhoFaseAnterior - jogos.length;
 
-        // 4. Identifica as equipes que passaram por bye na fase anterior (top seeds)
         const byesEquipes: string[] = [];
         for (let i = 0; i < byesFaseAnterior; i++) {
           byesEquipes.push(seeds[i]);
         }
 
-        // 5. Junta byes + vencedores, formando a lista completa da fase atual
-        const equipesFaseAtual = [...byesEquipes, ...winners].filter(Boolean);
-        
-        // 6. RE-SEEDING: ordena todas as equipes pelo seu rank ORIGINAL da fase de grupos
-        equipesFaseAtual.sort((a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999));
+        const habilitarReseed = config.mataMata?.habilitarReseed;
+        const usarReseed =
+          habilitarReseed === true || (habilitarReseed === undefined && byesFaseAnterior > 0);
 
-        // 7. Monta cruzamentos: melhor vs pior, segundo melhor vs segundo pior, etc.
-        for (let i = 0; i < equipesFaseAtual.length / 2; i++) {
-          pairings.push({ a: equipesFaseAtual[i], b: equipesFaseAtual[equipesFaseAtual.length - 1 - i] });
+        const equipesFaseAtual = [...byesEquipes, ...winners].filter(Boolean);
+
+        if (usarReseed) {
+          equipesFaseAtual.sort((a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999));
+          for (let i = 0; i < equipesFaseAtual.length / 2; i++) {
+            pairings.push({ a: equipesFaseAtual[i], b: equipesFaseAtual[equipesFaseAtual.length - 1 - i] });
+          }
+        } else {
+          for (let i = 0; i < equipesFaseAtual.length; i += 2) {
+            pairings.push({ a: equipesFaseAtual[i], b: equipesFaseAtual[i + 1] });
+          }
         }
         return { faseProxima, pairings };
       }

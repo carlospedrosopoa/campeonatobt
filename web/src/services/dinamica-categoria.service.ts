@@ -184,6 +184,82 @@ function buildInitialOrderFromRound1Pairs(params: { teamIds: string[]; round1Pai
   return order;
 }
 
+function findRoundRobinOrderMatchingFirstRounds(params: {
+  teamIds: string[];
+  firstRoundPairs: [string, string][][];
+}): string[] | null {
+  const teamsBase = [...params.teamIds];
+  if (teamsBase.length < 2) throw new Error("Necessário pelo menos 2 equipes");
+  const teams = [...teamsBase];
+  const hasBye = teams.length % 2 !== 0;
+  if (hasBye) teams.push("__BYE__");
+  const n = teams.length;
+  const expectedRounds = n - 1;
+  const K = Math.min(params.firstRoundPairs.length, expectedRounds);
+
+  const pairKey = (a: string, b: string) => (a < b ? `${a}||${b}` : `${b}||${a}`);
+  const firstRoundPairSets = params.firstRoundPairs
+    .slice(0, K)
+    .map((round) => new Set(round.map(([a, b]) => pairKey(String(a), String(b)))));
+
+  function normalizarRoundRobin(arr: string[]) {
+    const rounds: Set<string>[] = [];
+    const totalRounds = arr.length - 1;
+    let current = [...arr];
+    for (let r = 0; r < totalRounds; r++) {
+      const pairs = new Set<string>();
+      const half = current.length / 2;
+      for (let i = 0; i < half; i++) {
+        const a = current[i];
+        const b = current[current.length - 1 - i];
+        if (a === "__BYE__" || b === "__BYE__") continue;
+        pairs.add(pairKey(a, b));
+      }
+      rounds.push(pairs);
+      const fixed = current[0];
+      const rest = current.slice(1);
+      rest.unshift(rest.pop() as string);
+      current = [fixed, ...rest];
+    }
+    return rounds;
+  }
+
+  const used = new Set<string>();
+  const positions: string[] = Array.from({ length: n }, () => "");
+
+  function matchesFirstRounds(arr: string[]) {
+    const generated = normalizarRoundRobin(arr);
+    for (let r = 0; r < K; r++) {
+      const expected = firstRoundPairSets[r];
+      const got = generated[r];
+      if (!expected || !got) continue;
+      if (expected.size !== got.size) return false;
+      for (const p of expected) {
+        if (!got.has(p)) return false;
+      }
+    }
+    return true;
+  }
+
+  function backtrack(pos: number): boolean {
+    if (pos === n) {
+      return matchesFirstRounds(positions);
+    }
+    for (const t of teams) {
+      if (used.has(t)) continue;
+      positions[pos] = t;
+      used.add(t);
+      if (backtrack(pos + 1)) return true;
+      used.delete(t);
+    }
+    return false;
+  }
+
+  const ok = backtrack(0);
+  if (!ok) return null;
+  return [...positions];
+}
+
 function partidaIniciada(p: { status?: any; vencedorId?: any; placarA?: any; placarB?: any; detalhesPlacar?: any }) {
   if (p.status && p.status !== "AGENDADA") return true;
   if (p.vencedorId) return true;
@@ -756,17 +832,43 @@ export class DinamicaCategoriaService {
       throw new Error("Não é possível gerar rodadas restantes: já existem partidas com resultado nas rodadas seguintes.");
     }
 
-    const rodada1Pairs = partidasRows
-      .filter((p) => getNumero(p.rodadaId) === 1)
-      .map((p) => [p.equipeAId, p.equipeBId] as [string, string])
-      .filter((p) => Boolean(p[0]) && Boolean(p[1]));
-
-    if (rodada1Pairs.length === 0) {
-      throw new Error("Nenhum confronto encontrado na Rodada 1. Ajuste os confrontos da 1ª rodada antes de gerar as demais.");
+    const rodadasAnteriores = Math.max(1, aPartirDaRodada - 1);
+    const firstRoundPairsList: [string, string][][] = [];
+    let allPreviousRoundsOk = true;
+    for (let n = 1; n <= rodadasAnteriores; n++) {
+      const pairs = partidasRows
+        .filter((p) => getNumero(p.rodadaId) === n)
+        .map((p) => [p.equipeAId, p.equipeBId] as [string, string])
+        .filter((p) => Boolean(p[0]) && Boolean(p[1]));
+      if (pairs.length === 0) {
+        if (n === 1) {
+          allPreviousRoundsOk = false;
+          throw new Error("Nenhum confronto encontrado na Rodada 1. Ajuste os confrontos da 1ª rodada antes de gerar as demais.");
+        }
+        allPreviousRoundsOk = false;
+        break;
+      }
+      firstRoundPairsList.push(pairs);
     }
 
-    const initialOrder = buildInitialOrderFromRound1Pairs({ teamIds, round1Pairs: rodada1Pairs });
-    const rounds = gerarRodadasRoundRobinFromOrder(initialOrder);
+    let initialOrder: string[] | null = null;
+    let rounds: { pairs: [string, string][] }[] = [];
+
+    if (rodadasAnteriores === 1 || !allPreviousRoundsOk) {
+      initialOrder = buildInitialOrderFromRound1Pairs({ teamIds, round1Pairs: firstRoundPairsList[0] ?? [] });
+      rounds = gerarRodadasRoundRobinFromOrder(initialOrder);
+    } else {
+      initialOrder = findRoundRobinOrderMatchingFirstRounds({ teamIds, firstRoundPairs: firstRoundPairsList });
+      if (!initialOrder) {
+        const qts = rodadasAnteriores;
+        throw new Error(
+          `Não foi possível encontrar uma tabela Round Robin compatível com as rodadas 1 a ${qts}. ` +
+          `Verifique se não há dupla repetida (duas equipes se enfrentando mais de uma vez) e se todas as equipes aparecem em cada rodada.`
+        );
+      }
+      rounds = gerarRodadasRoundRobinFromOrder(initialOrder);
+    }
+
     const maxRodadas = rounds.length;
 
     const resultado = await db.transaction(async (tx) => {

@@ -10,6 +10,7 @@ export type CategoriaResumoAdmin = {
   valorInscricao: string | null;
   vagasMaximas: number | null;
   dataHorario: Date | null;
+  tipoCardInscricao: "TIPO_1" | "TIPO_2";
   criadoEm: Date;
   inscricoesTotal: number;
   inscricoesPendentes: number;
@@ -29,6 +30,7 @@ export class DashboardAdminService {
         valorInscricao: categorias.valorInscricao,
         vagasMaximas: categorias.vagasMaximas,
         dataHorario: categorias.dataHorario,
+        tipoCardInscricao: categorias.tipoCardInscricao,
         criadoEm: categorias.criadoEm,
         inscricoesTotal: sql<number>`coalesce(count(${inscricoes.id}), 0)::int`,
         inscricoesPendentes: sql<number>`coalesce(sum(case when ${inscricoes.status} = 'PENDENTE' then 1 else 0 end), 0)::int`,

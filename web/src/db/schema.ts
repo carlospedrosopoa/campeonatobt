@@ -19,6 +19,7 @@ export const statusPanelinhaPlayJogoEnum = pgEnum('status_panelinha_play_jogo', 
 export const statusPanelinhaTemporadaEnum = pgEnum('status_panelinha_temporada', ['ABERTA', 'ENCERRADA']);
 export const statusComunicacaoWhatsappEnum = pgEnum('status_comunicacao_whatsapp', ['PENDENTE', 'ENVIADO', 'FALHA', 'SEM_TELEFONE', 'NAO_ENVIADO']);
 export const modeloTorneioEnum = pgEnum('modelo_torneio', ['NORMAL', 'SUPERCAMPEONATO']);
+export const tipoCardInscricaoEnum = pgEnum('tipo_card_inscricao', ['TIPO_1', 'TIPO_2']);
 
 // Tabelas
 
@@ -284,6 +285,7 @@ export const categorias = pgTable('categorias', {
   valorInscricao: decimal('valor_inscricao', { precision: 10, scale: 2 }).default('0'), // Valor por atleta
   vagasMaximas: integer('vagas_maximas'),
   dataHorario: timestamp('data_horario'),
+  tipoCardInscricao: tipoCardInscricaoEnum('tipo_card_inscricao').default('TIPO_1').notNull(),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
 }, (t) => ({
   unq: unique().on(t.torneioId, t.slug),

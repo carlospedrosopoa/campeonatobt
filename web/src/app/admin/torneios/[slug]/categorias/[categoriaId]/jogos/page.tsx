@@ -29,6 +29,7 @@ type CategoriaConfig = {
   mataMata?: {
     estrutura: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
     quantidadeClassificados?: number;
+    habilitarReseed?: boolean;
   };
   regrasPartida?: RegrasPartidaConfig;
   regrasPartidaPorFase?: RegrasPartidaPorFase;
@@ -1777,6 +1778,44 @@ export default function AdminCategoriaJogosPage() {
               <div className="text-xs text-slate-500">
                 Use a opção de 8 classificados para 4 chaves com cruzamento padrão nas quartas, ou a de 6 classificados quando os 2 melhores líderes precisarem entrar direto na semifinal.
               </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Re-seed entre fases do mata-mata</label>
+              <select
+                value={
+                  config.mataMata?.habilitarReseed === true
+                    ? "true"
+                    : config.mataMata?.habilitarReseed === false
+                      ? "false"
+                      : "auto"
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setConfig((p) =>
+                    p
+                      ? {
+                          ...p,
+                          mataMata: {
+                            ...(p.mataMata ?? {}),
+                            habilitarReseed:
+                              val === "true" ? true :
+                              val === "false" ? false :
+                              undefined,
+                          },
+                        }
+                      : p
+                  );
+                }}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="auto">Automático (re-seed só se houver byes)</option>
+                <option value="true">Sempre usar re-seed por rank</option>
+                <option value="false">Nunca usar re-seed (bracket tradicional)</option>
+              </select>
+              <p className="text-xs text-slate-500">
+                Automático: com chave cheia (ex: 8 classificados) não faz re-seed e usa avanço normal de bracket. Com byes (ex: 6 classificados) faz re-seed por rank.
+              </p>
             </div>
 
             <div className="space-y-2 md:col-span-2">

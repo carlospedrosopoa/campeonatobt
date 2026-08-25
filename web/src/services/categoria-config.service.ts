@@ -39,6 +39,7 @@ export type CategoriaConfigV1 = {
   mataMata?: {
     estrutura: MataMataEstrutura;
     quantidadeClassificados?: number;
+    habilitarReseed?: boolean;
   };
   regrasPartida?: RegrasPartidaConfig;
   regrasPartidaPorFase?: RegrasPartidaPorFase;
@@ -116,6 +117,12 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
     typeof input?.mataMata?.quantidadeClassificados === "number" && input.mataMata.quantidadeClassificados > 0
       ? Math.floor(input.mataMata.quantidadeClassificados)
       : undefined;
+  const habilitarReseed =
+    input?.mataMata?.habilitarReseed === true
+      ? true
+      : input?.mataMata?.habilitarReseed === false
+        ? false
+        : undefined;
 
   function normalizarRegrasEntrada(value: unknown): RegrasPartidaConfig | null {
     if (typeof value !== "object" || value === null) return null;
@@ -213,7 +220,7 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
     grupos: formato === "MATA_MATA" ? undefined : { modo, tamanhoAlvo, quantidade: modo === "MANUAL" ? quantidade : undefined },
     classificacao: formato === "GRUPOS" ? { porGrupo, melhoresTerceiros } : undefined,
     fase2: formato === "GRUPOS" ? { habilitada: fase2Habilitada, temFinal, disputaTerceiroLugar } : undefined,
-    mataMata: { estrutura, quantidadeClassificados },
+    mataMata: { estrutura, quantidadeClassificados, habilitarReseed },
     regrasPartida,
     regrasPartidaPorFase:
       Object.keys(regrasPartidaPorFase).length > 0 ? regrasPartidaPorFase : undefined,

@@ -30,6 +30,7 @@ type CategoriaConfig = {
   mataMata?: {
     estrutura: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
     quantidadeClassificados?: number;
+    habilitarReseed?: boolean;
   };
   regrasPartida?: RegrasPartidaConfig;
   regrasPartidaPorFase?: RegrasPartidaPorFase;
@@ -143,6 +144,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [gerandoGrupos, setGerandoGrupos] = useState(false);
   const [gerandoRodadasRestantes, setGerandoRodadasRestantes] = useState(false);
+  const [aPartirDaRodada, setAPartirDaRodada] = useState<number>(2);
   const [recalculando, setRecalculando] = useState(false);
   const [gerandoMataMata, setGerandoMataMata] = useState(false);
   const [gerandoProximaFase, setGerandoProximaFase] = useState(false);
@@ -1122,6 +1124,10 @@ export default function AdminCategoriaJogosSuperPage() {
       }));
   }, [partidasFiltradas, fase]);
 
+  const ultimaRodadaExistente = rodadasView.length > 0 ? Math.max(...rodadasView.map((r) => r.numero)) : 0;
+  const minAPartirDaRodada = Math.min(2, Math.max(2, ultimaRodadaExistente + 1));
+  const maxAPartirDaRodada = Math.max(minAPartirDaRodada, ultimaRodadaExistente + 1);
+
   const temResultadoNaCategoria = useMemo(() => {
     if (temResultadoGrupos) return true;
     for (const g of classificacao) {
@@ -1315,6 +1321,7 @@ export default function AdminCategoriaJogosSuperPage() {
                   setConfig((prev) => prev ? {
                     ...prev,
                     mataMata: {
+                      ...prev.mataMata,
                       estrutura: prev.mataMata?.estrutura ?? "SUPER_CAMPEONATO_6",
                       quantidadeClassificados: isNaN(val) ? undefined : val
                     }
@@ -1322,6 +1329,41 @@ export default function AdminCategoriaJogosSuperPage() {
                 }}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Re-seed entre fases do mata-mata</label>
+              <select
+                value={
+                  config.mataMata?.habilitarReseed === true
+                    ? "true"
+                    : config.mataMata?.habilitarReseed === false
+                      ? "false"
+                      : "auto"
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setConfig((prev) => prev ? {
+                    ...prev,
+                    mataMata: {
+                      ...prev.mataMata,
+                      estrutura: prev.mataMata?.estrutura ?? "SUPER_CAMPEONATO_6",
+                      habilitarReseed:
+                        val === "true" ? true :
+                        val === "false" ? false :
+                        undefined
+                    }
+                  } : prev);
+                }}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="auto">Automático (re-seed só se houver byes)</option>
+                <option value="true">Sempre usar re-seed por rank</option>
+                <option value="false">Nunca usar re-seed (bracket tradicional)</option>
+              </select>
+              <p className="text-xs text-slate-500">
+                Automático: com 8 classificados (chave cheia) não faz re-seed. Com 6 classificados faz re-seed por causa dos byes.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -1470,40 +1512,56 @@ export default function AdminCategoriaJogosSuperPage() {
               {gerandoGrupos ? "Gerando…" : "Gerar rodadas/jogos"}
             </button>
 
-            <button
-              type="button"
-              disabled={gerandoRodadasRestantes || !temResultadoGrupos}
-              onClick={async () => {
-                try {
-                  setGerandoRodadasRestantes(true);
-                  setErro(null);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-rodadas-restantes`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ aPartirDaRodada: 2 }),
-                  });
-                  const payload = (await res.json().catch(() => null)) as any;
-                  if (!res.ok) throw new Error(payload?.error || "Falha ao gerar rodadas restantes");
-                  const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
-                  if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
-                  setFase("GRUPOS");
-                  await carregarPartidas("GRUPOS");
-                  alert(`Rodadas restantes geradas.\n\nRodadas: ${payload?.maxRodadas ?? "-"}\nPartidas criadas: ${payload?.partidasCriadas ?? 0}`);
-                } catch (e: any) {
-                  setErro(e?.message || "Erro inesperado");
-                } finally {
-                  setGerandoRodadasRestantes(false);
-                }
-              }}
-              title={
-                !temResultadoGrupos
-                  ? "Use quando já existe resultado na 1ª rodada e você precisa gerar as rodadas seguintes mantendo a 1ª."
-                  : undefined
-              }
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              {gerandoRodadasRestantes ? "Gerando…" : "Gerar rodadas restantes"}
-            </button>
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-600">A partir da rodada</label>
+                <input
+                  type="number"
+                  min={minAPartirDaRodada}
+                  max={maxAPartirDaRodada}
+                  value={aPartirDaRodada}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value);
+                    if (Number.isFinite(v)) setAPartirDaRodada(v);
+                  }}
+                  className="w-32 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                />
+                <div className="text-xs text-slate-500">
+                  Exemplo: 5 = monta manualmente 1 a 4, gerar 5+ automaticamente.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={gerandoRodadasRestantes || !temResultadoGrupos || ultimaRodadaExistente < aPartirDaRodada - 1 || aPartirDaRodada < 2}
+                onClick={async () => {
+                  try {
+                    setGerandoRodadasRestantes(true);
+                    setErro(null);
+                    const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-rodadas-restantes`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ aPartirDaRodada: aPartirDaRodada }),
+                    });
+                    const payload = (await res.json().catch(() => null)) as any;
+                    if (!res.ok) throw new Error(payload?.error || "Falha ao gerar rodadas restantes");
+                    const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+                    if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+                    setFase("GRUPOS");
+                    await carregarPartidas("GRUPOS");
+                    alert(`Rodadas restantes geradas.\n\nRodadas: ${payload?.maxRodadas ?? "-"}\nPartidas criadas: ${payload?.partidasCriadas ?? 0}`);
+                  } catch (e: any) {
+                    setErro(e?.message || "Erro inesperado");
+                  } finally {
+                    setGerandoRodadasRestantes(false);
+                  }
+                }}
+                title={`Monta as rodadas 1 a ${aPartirDaRodada - 1} manualmente e gera automaticamente da ${aPartirDaRodada}ª em diante com Round Robin válido.`}
+                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 mt-[22px]"
+              >
+                {gerandoRodadasRestantes ? "Gerando…" : "Gerar rodadas restantes"}
+              </button>
+            </div>
 
             <button
               type="button"

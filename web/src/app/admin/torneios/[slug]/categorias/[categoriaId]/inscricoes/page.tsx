@@ -14,6 +14,7 @@ type Categoria = {
   valorInscricao: string | null;
   vagasMaximas: number | null;
   dataHorario?: string | null;
+  tipoCardInscricao?: "TIPO_1" | "TIPO_2" | null;
 };
 
 type CategoriaConfig = {
@@ -211,6 +212,7 @@ export default function AdminCategoriaInscricoesPage() {
         salvarNoGcs: true,
         uploadFolder: `campeonatos/cards/inscricoes/${slug}`,
         ocultarProgramacao: torneioSuperCampeonato,
+        tipoCardInscricao: categoria?.tipoCardInscricao ?? "TIPO_1",
         inscricao: {
           id: i.id,
           status: i.status,

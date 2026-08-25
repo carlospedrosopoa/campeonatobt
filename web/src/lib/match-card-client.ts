@@ -50,6 +50,7 @@ type GerarCardInscricaoParams = {
   download?: boolean;
   ocultarProgramacao?: boolean;
   categoriasProgramacao?: ProgramacaoCategoriaInfo[];
+  tipoCardInscricao?: "TIPO_1" | "TIPO_2" | null;
   inscricao: InscricaoCardInfo;
 };
 
@@ -710,8 +711,10 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
     })
   );
 
+  const ehTipo2 = params.tipoCardInscricao === "TIPO_2";
+
   const categoriaAtualNormalizada = normalizeCardText(params.categoriaNome);
-  const categoriasProgramacaoOrdenadas = params.ocultarProgramacao
+  const categoriasProgramacaoOrdenadas = params.ocultarProgramacao || ehTipo2
     ? []
     : (params.categoriasProgramacao ?? [])
         .slice()
@@ -731,12 +734,28 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
     indiceCategoriaAtual >= maxRows && maxRows > 0 ? Math.max(0, indiceCategoriaAtual - (maxRows - 1)) : 0;
   const categoriasProgramacao = categoriasProgramacaoOrdenadas.slice(programacaoInicio, programacaoInicio + maxRows);
 
-  const tamanhoAvatar = 330;
-  const larguraNome = 360;
-  const ajusteNomesY = 42;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#dcfce7";
+  ctx.font = ehTipo2 ? "900 56px Inter, Arial, sans-serif" : "900 48px Inter, Arial, sans-serif";
+  ctx.fillText("DUPLA CONFIRMADA", width / 2, ehTipo2 ? 560 : 520);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = ehTipo2 ? "800 44px Inter, Arial, sans-serif" : "800 38px Inter, Arial, sans-serif";
+  drawTextCenter(ctx, params.categoriaNome || "Categoria", width / 2, ehTipo2 ? 635 : 580, 840, ehTipo2 ? 50 : 44);
+
+  const tamanhoAvatar = ehTipo2 ? 440 : 330;
+  const larguraNome = ehTipo2 ? 470 : 360;
+  const tamanhoFonteNome = ehTipo2 ? 30 : 24;
+  const espacamentoEntreFotos = ehTipo2 ? 60 : 160;
+  const xTotal = tamanhoAvatar * 2 + espacamentoEntreFotos;
+  const xInicio = (width - xTotal) / 2;
+  const yFotos = ehTipo2 ? 830 : 710;
+  const distanciaNomeFoto = ehTipo2 ? 70 : 50;
+
   const posicoes = [
-    { x: 130, y: 710, atleta: atletas[0], imagem: fotos[0] },
-    { x: 620, y: 710, atleta: atletas[1], imagem: fotos[1] },
+    { x: xInicio, y: yFotos, atleta: atletas[0], imagem: fotos[0] },
+    { x: xInicio + tamanhoAvatar + espacamentoEntreFotos, y: yFotos, atleta: atletas[1], imagem: fotos[1] },
   ];
   for (const p of posicoes) {
     const nome = p.atleta?.nome || "Atleta";
@@ -747,33 +766,23 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
     }
   }
 
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#dcfce7";
-  ctx.font = "900 48px Inter, Arial, sans-serif";
-  ctx.fillText("DUPLA CONFIRMADA", width / 2, 520);
+  if (!ehTipo2 && categoriasProgramacao.length > 0) {
+    const programacaoBoxX = 90;
+    const programacaoBoxY = 1110;
+    const programacaoBoxW = 900;
+    const columnGap = 18;
+    const boxPaddingX = 18;
+    const rowHeight = 58;
+    const titleHeight = 52;
+    const contentTopPadding = 10;
+    const boxPaddingBottom = 16;
+    const usarColunaUnica = categoriasProgramacao.length === 1;
+    const rowsPerColumn = usarColunaUnica ? categoriasProgramacao.length : Math.ceil(categoriasProgramacao.length / 2);
+    const columnWidth = usarColunaUnica
+      ? programacaoBoxW - boxPaddingX * 2
+      : (programacaoBoxW - boxPaddingX * 2 - columnGap) / 2;
+    const programacaoBoxH = titleHeight + contentTopPadding + rowsPerColumn * rowHeight + boxPaddingBottom;
 
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "800 38px Inter, Arial, sans-serif";
-  drawTextCenter(ctx, params.categoriaNome || "Categoria", width / 2, 580, 840, 44);
-
-  const programacaoBoxX = 90;
-  const programacaoBoxY = 1110;
-  const programacaoBoxW = 900;
-  const columnGap = 18;
-  const boxPaddingX = 18;
-  const rowHeight = 58;
-  const titleHeight = 52;
-  const contentTopPadding = 10;
-  const boxPaddingBottom = 16;
-  const usarColunaUnica = categoriasProgramacao.length === 1;
-  const rowsPerColumn = usarColunaUnica ? categoriasProgramacao.length : Math.ceil(categoriasProgramacao.length / 2);
-  const columnWidth = usarColunaUnica
-    ? programacaoBoxW - boxPaddingX * 2
-    : (programacaoBoxW - boxPaddingX * 2 - columnGap) / 2;
-  const programacaoBoxH = titleHeight + contentTopPadding + rowsPerColumn * rowHeight + boxPaddingBottom;
-
-  if (categoriasProgramacao.length > 0) {
     ctx.fillStyle = "rgba(15,23,42,0.62)";
     ctx.fillRect(programacaoBoxX, programacaoBoxY, programacaoBoxW, programacaoBoxH);
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
@@ -841,10 +850,10 @@ export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) 
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.fillStyle = "#ffffff";
-  ctx.font = "700 24px Inter, Arial, sans-serif";
+  ctx.font = `700 ${tamanhoFonteNome}px Inter, Arial, sans-serif`;
   for (const p of posicoes) {
     const nome = nomePrimeiroEUltimo(p.atleta?.nome);
-    drawTextCenter(ctx, nome, p.x + tamanhoAvatar / 2, p.y - 50, larguraNome, 28);
+    drawTextCenter(ctx, nome, p.x + tamanhoAvatar / 2, p.y - distanciaNomeFoto, larguraNome, ehTipo2 ? 36 : 28);
   }
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));

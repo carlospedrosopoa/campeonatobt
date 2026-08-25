@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
@@ -38,6 +38,7 @@ export async function POST(
     const valorInscricao = body?.valorInscricao as string | number | undefined;
     const vagasMaximas = body?.vagasMaximas as number | null | undefined;
     const dataHorarioRaw = body?.dataHorario as string | null | undefined;
+    const tipoCardInscricao = body?.tipoCardInscricao as "TIPO_1" | "TIPO_2" | undefined;
     const dataHorario = dataHorarioRaw ? new Date(dataHorarioRaw) : dataHorarioRaw === null ? null : undefined;
     if (dataHorario instanceof Date && Number.isNaN(dataHorario.getTime())) {
       return NextResponse.json({ error: "Data/hora invÃ¡lida" }, { status: 400 });
@@ -69,6 +70,7 @@ export async function POST(
       valorInscricao,
       vagasMaximas,
       dataHorario: dataHorario as any,
+      tipoCardInscricao,
     });
 
     return NextResponse.json(nova, { status: 201 });

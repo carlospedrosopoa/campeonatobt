@@ -31,6 +31,7 @@ type Categoria = {
   valorInscricao: string | null;
   vagasMaximas: number | null;
   dataHorario: string | null;
+  tipoCardInscricao?: "TIPO_1" | "TIPO_2" | null;
   criadoEm: string | Date;
   inscricoesTotal: number;
   inscricoesPendentes: number;
@@ -81,6 +82,7 @@ export default function AdminTorneioDashboardPage() {
     valorInscricao: "",
     vagasMaximas: "",
     dataHorario: "",
+    tipoCardInscricao: "TIPO_1" as "TIPO_1" | "TIPO_2",
   });
 
   function formatDataHora(value?: string | null) {
@@ -160,7 +162,7 @@ export default function AdminTorneioDashboardPage() {
   function abrirNovaCategoria() {
     setMostraFormCategoria(true);
     setEditandoCategoriaId(null);
-    setFormCategoria({ nome: "", genero: "MISTO", valorInscricao: "", vagasMaximas: "", dataHorario: "" });
+    setFormCategoria({ nome: "", genero: "MISTO", valorInscricao: "", vagasMaximas: "", dataHorario: "", tipoCardInscricao: "TIPO_1" });
     setErroCategorias(null);
   }
 
@@ -173,6 +175,7 @@ export default function AdminTorneioDashboardPage() {
       valorInscricao: cat.valorInscricao ?? "",
       vagasMaximas: cat.vagasMaximas === null ? "" : String(cat.vagasMaximas),
       dataHorario: toLocalDateTimeInput(cat.dataHorario),
+      tipoCardInscricao: cat.tipoCardInscricao === "TIPO_2" ? "TIPO_2" : "TIPO_1",
     });
     setErroCategorias(null);
   }
@@ -180,7 +183,7 @@ export default function AdminTorneioDashboardPage() {
   function cancelarCategoria() {
     setMostraFormCategoria(false);
     setEditandoCategoriaId(null);
-    setFormCategoria({ nome: "", genero: "MISTO", valorInscricao: "", vagasMaximas: "", dataHorario: "" });
+    setFormCategoria({ nome: "", genero: "MISTO", valorInscricao: "", vagasMaximas: "", dataHorario: "", tipoCardInscricao: "TIPO_1" });
     setErroCategorias(null);
   }
 
@@ -239,6 +242,7 @@ export default function AdminTorneioDashboardPage() {
       if (formCategoria.valorInscricao.trim()) payload.valorInscricao = Number(formCategoria.valorInscricao);
       if (formCategoria.vagasMaximas.trim()) payload.vagasMaximas = Number(formCategoria.vagasMaximas);
       payload.dataHorario = formCategoria.dataHorario.trim() ? new Date(formCategoria.dataHorario).toISOString() : null;
+      payload.tipoCardInscricao = formCategoria.tipoCardInscricao;
 
       const url = editandoCategoriaId
         ? `/api/v1/torneios/${slugAtual}/categorias/${editandoCategoriaId}`
@@ -833,6 +837,21 @@ export default function AdminTorneioDashboardPage() {
                       type="datetime-local"
                       className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Modelo do card de inscrição</label>
+                    <select
+                      value={formCategoria.tipoCardInscricao}
+                      onChange={(e) => setFormCategoria((p) => ({ ...p, tipoCardInscricao: e.target.value as "TIPO_1" | "TIPO_2" }))}
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+                    >
+                      <option value="TIPO_1">Tipo 1 — Padrão (com programação)</option>
+                      <option value="TIPO_2">Tipo 2 — Fotos maiores e centralizadas</option>
+                    </select>
+                    <div className="text-xs text-slate-500">
+                      Tipo 1 exibe a programação das categorias abaixo. Tipo 2 prioriza fotos maiores e mais centralizadas.
+                    </div>
                   </div>
                 </div>
 
