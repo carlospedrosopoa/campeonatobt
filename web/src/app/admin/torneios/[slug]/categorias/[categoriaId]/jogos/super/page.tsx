@@ -1138,6 +1138,58 @@ export default function AdminCategoriaJogosSuperPage() {
     });
   }, [ultimaRodadaExistente]);
 
+  const resumoJogosPorGrupo = useMemo(() => {
+    const map = new Map<string, {
+      totalEquipes: number;
+      jogosEsperadosPorEquipe: number;
+      totalPartidasEsperadas: number;
+      totalPartidasExistentes: number;
+      equipesPorContagem: Map<string, number>;
+      equipesComMenos: string[];
+      equipesComMais: string[];
+      todasBatizadas: boolean;
+    }>();
+    for (const g of classificacao) {
+      const totalEquipes = g.equipes.length;
+      const jogosEsperadosPorEquipe = totalEquipes - 1;
+      const totalPartidasEsperadas = (totalEquipes * (totalEquipes - 1)) / 2;
+
+      const contagem = new Map<string, number>();
+      for (const e of g.equipes) contagem.set(e.equipeId, 0);
+
+      const partidasPorRodada = rodadasView.flatMap((r) => r.jogos);
+      let totalPartidasExistentes = 0;
+      for (const p of partidasPorRodada) {
+        if (p.grupoId !== g.grupoId) continue;
+        if (!p.equipeAId || !p.equipeBId) continue;
+        if (p.equipeAId === p.equipeBId) continue;
+        totalPartidasExistentes += 1;
+        contagem.set(p.equipeAId, (contagem.get(p.equipeAId) ?? 0) + 1);
+        contagem.set(p.equipeBId, (contagem.get(p.equipeBId) ?? 0) + 1);
+      }
+
+      const equipesComMenos: string[] = [];
+      const equipesComMais: string[] = [];
+      for (const [eqId, qtd] of contagem.entries()) {
+        if (qtd < jogosEsperadosPorEquipe) equipesComMenos.push(eqId);
+        else if (qtd > jogosEsperadosPorEquipe) equipesComMais.push(eqId);
+      }
+
+      const todasBatizadas = equipesComMenos.length === 0 && equipesComMais.length === 0 && totalPartidasExistentes === totalPartidasEsperadas;
+      map.set(g.grupoId, {
+        totalEquipes,
+        jogosEsperadosPorEquipe,
+        totalPartidasEsperadas,
+        totalPartidasExistentes,
+        equipesPorContagem: contagem,
+        equipesComMenos,
+        equipesComMais,
+        todasBatizadas,
+      });
+    }
+    return map;
+  }, [classificacao, rodadasView]);
+
   const temResultadoNaCategoria = useMemo(() => {
     if (temResultadoGrupos) return true;
     for (const g of classificacao) {
@@ -1726,43 +1778,125 @@ export default function AdminCategoriaJogosSuperPage() {
           {classificacao.length === 0 ? (
             <div className="text-sm text-slate-600">Nenhuma classificação disponível (gere jogos e/ou recalcule).</div>
           ) : (
-            classificacao.map((g) => (
-              <div key={g.grupoId} className="rounded-lg border border-slate-200 p-4">
-                <div className="font-semibold text-slate-900 mb-3">{g.grupoNome}</div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left text-slate-500 border-b border-slate-100">
-                        <th className="py-2 pr-3 font-medium">Equipe</th>
-                        <th className="py-2 pr-3 font-medium">P</th>
-                        <th className="py-2 pr-3 font-medium">J</th>
-                        <th className="py-2 pr-3 font-medium">V</th>
-                        <th className="py-2 pr-3 font-medium">SP</th>
-                        <th className="py-2 pr-3 font-medium">GP</th>
-                        <th className="py-2 pr-3 font-medium">SG</th>
-                        <th className="py-2 pr-3 font-medium">AP%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {g.equipes.map((e) => (
-                        <tr key={e.equipeId} className="border-b border-slate-50">
-                          <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
-                          <td className="py-2 pr-3 text-slate-700">{e.pontos}</td>
-                          <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
-                          <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
-                          <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
-                          <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
-                          <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
-                          <td className="py-2 pr-3 text-slate-700">
-                            {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
-                          </td>
+            classificacao.map((g) => {
+              const resumo = resumoJogosPorGrupo.get(g.grupoId);
+              const jogosEsperadosPorEquipe = resumo?.jogosEsperadosPorEquipe ?? (g.equipes.length - 1);
+              return (
+                <div key={g.grupoId} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div>
+                      <div className="font-semibold text-slate-900">{g.grupoNome}</div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {g.equipes.length} equipes • Cada equipe joga {jogosEsperadosPorEquipe} jogos • Total de partidas esperadas: {resumo?.totalPartidasEsperadas ?? "-"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {resumo ? (
+                        <div className={`inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium ${
+                          resumo.todasBatizadas
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : resumo.equipesComMais.length > 0
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
+                              : "bg-amber-50 text-amber-700 border border-amber-200"
+                        }`}>
+                          {resumo.todasBatizadas
+                            ? `✅ ${resumo.totalPartidasExistentes}/${resumo.totalPartidasEsperadas} partidas · Todas as equipes com ${jogosEsperadosPorEquipe} jogos`
+                            : resumo.equipesComMais.length > 0
+                              ? `⚠️ ${resumo.totalPartidasExistentes}/${resumo.totalPartidasEsperadas} partidas · ${resumo.equipesComMais.length} equipe(s) jogaram MAIS de ${jogosEsperadosPorEquipe} jogos (repetição?)`
+                              : `🕒 ${resumo.totalPartidasExistentes}/${resumo.totalPartidasEsperadas} partidas · Faltam ${resumo.equipesComMenos.length} equipe(s) de completar os ${jogosEsperadosPorEquipe} jogos`}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-slate-500 border-b border-slate-100">
+                          <th className="py-2 pr-3 font-medium">Equipe</th>
+                          <th className="py-2 pr-3 font-medium" title={`Jogos disputados / Jogos esperados no total (${jogosEsperadosPorEquipe})`}>
+                            P / Total
+                          </th>
+                          <th className="py-2 pr-3 font-medium">J</th>
+                          <th className="py-2 pr-3 font-medium">V</th>
+                          <th className="py-2 pr-3 font-medium">SP</th>
+                          <th className="py-2 pr-3 font-medium">GP</th>
+                          <th className="py-2 pr-3 font-medium">SG</th>
+                          <th className="py-2 pr-3 font-medium">AP%</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {g.equipes.map((e) => {
+                          const jogosMarcados = resumo?.equipesPorContagem.get(e.equipeId) ?? 0;
+                          const prog = Math.min(1, jogosEsperadosPorEquipe > 0 ? jogosMarcados / jogosEsperadosPorEquipe : 0);
+                          const naoBate = jogosMarcados < jogosEsperadosPorEquipe || jogosMarcados > jogosEsperadosPorEquipe;
+                          const classeP = jogosMarcados > jogosEsperadosPorEquipe
+                            ? "text-rose-600 font-semibold"
+                            : jogosMarcados < jogosEsperadosPorEquipe
+                              ? "text-amber-700"
+                              : "text-emerald-700 font-semibold";
+                          return (
+                            <tr key={e.equipeId} className={`border-b border-slate-50 ${naoBate ? "bg-rose-50/30" : ""}`}>
+                              <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
+                              <td className="py-2 pr-3">
+                                <div className={`text-xs ${classeP}`} title={`Jogos marcados na grade: ${jogosMarcados} / ${jogosEsperadosPorEquipe}`}>
+                                  {jogosMarcados}<span className="text-slate-400 font-normal"> / {jogosEsperadosPorEquipe}</span>
+                                </div>
+                                <div className="mt-1 h-1 w-full rounded-full bg-slate-100 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${
+                                      jogosMarcados > jogosEsperadosPorEquipe ? "bg-rose-500" : jogosMarcados === jogosEsperadosPorEquipe ? "bg-emerald-500" : "bg-amber-400"}`}
+                                    style={{ width: `${Math.min(100, prog * 100)}%` }}
+                                  />
+                                </div>
+                              </td>
+                              <td className="py-2 pr-3 text-slate-700">{e.pontos}</td>
+                              <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
+                              <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
+                              <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
+                              <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
+                              <td className="py-2 pr-3 text-slate-700">
+                                {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {resumo && (resumo.equipesComMenos.length > 0 || resumo.equipesComMais.length > 0) ? (
+                    <details className="mt-3 text-xs">
+                      <summary className="cursor-pointer font-medium text-slate-600">
+                        {resumo.equipesComMais.length > 0
+                          ? `${resumo.equipesComMais.length} equipe(s) jogaram MAIS que ${jogosEsperadosPorEquipe} jogos (possível duplicação)`
+                          : `${resumo.equipesComMenos.length} equipe(s) ainda não completaram os ${jogosEsperadosPorEquipe} jogos`}
+                      </summary>
+                      <ul className="mt-2 space-y-1 pl-4 list-disc text-slate-600">
+                        {resumo.equipesComMenos.length > 0 ? (
+                          <li>
+                            <span className="font-medium">Faltam jogos:</span>{" "}
+                            {resumo.equipesComMenos.map((id) => {
+                              const eq = g.equipes.find((e) => e.equipeId === id);
+                              const cnt = resumo.equipesPorContagem.get(id) ?? 0;
+                              return `${eq?.equipeNome || id.slice(0, 8)} (${cnt}/${jogosEsperadosPorEquipe})`;
+                            }).join(" · ")}
+                          </li>
+                        ) : null}
+                        {resumo.equipesComMais.length > 0 ? (
+                          <li>
+                            <span className="font-medium">Jogaram mais que o esperado:</span>{" "}
+                            {resumo.equipesComMais.map((id) => {
+                              const eq = g.equipes.find((e) => e.equipeId === id);
+                              const cnt = resumo.equipesPorContagem.get(id) ?? 0;
+                              return `${eq?.equipeNome || id.slice(0, 8)} (${cnt}/${jogosEsperadosPorEquipe})`;
+                            }).join(" · ")}
+                          </li>
+                        ) : null}
+                      </ul>
+                    </details>
+                  ) : null}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
