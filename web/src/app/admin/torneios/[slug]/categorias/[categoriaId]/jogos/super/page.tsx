@@ -1891,10 +1891,8 @@ export default function AdminCategoriaJogosSuperPage() {
                       <thead>
                         <tr className="text-left text-slate-500 border-b border-slate-100">
                           <th className="py-2 pr-3 font-medium">Equipe</th>
-                          <th className="py-2 pr-3 font-medium" title={`Jogos disputados / Jogos esperados no total (${jogosEsperadosPorEquipe})`}>
-                            P / Total
-                          </th>
-                          <th className="py-2 pr-3 font-medium">J</th>
+                          <th className="py-2 pr-3 font-medium" title="Pontos acumulados (vitórias/d. sets)">P</th>
+                          <th className="py-2 pr-3 font-medium" title={`Jogos marcados / Jogos esperados no total (${jogosEsperadosPorEquipe})`}>J</th>
                           <th className="py-2 pr-3 font-medium">V</th>
                           <th className="py-2 pr-3 font-medium">SP</th>
                           <th className="py-2 pr-3 font-medium">GP</th>
@@ -1905,9 +1903,8 @@ export default function AdminCategoriaJogosSuperPage() {
                       <tbody>
                         {g.equipes.map((e) => {
                           const jogosMarcados = resumo?.equipesPorContagem.get(e.equipeId) ?? 0;
-                          const prog = Math.min(1, jogosEsperadosPorEquipe > 0 ? jogosMarcados / jogosEsperadosPorEquipe : 0);
                           const naoBate = jogosMarcados < jogosEsperadosPorEquipe || jogosMarcados > jogosEsperadosPorEquipe;
-                          const classeP = jogosMarcados > jogosEsperadosPorEquipe
+                          const classeJ = jogosMarcados > jogosEsperadosPorEquipe
                             ? "text-rose-600 font-semibold"
                             : jogosMarcados < jogosEsperadosPorEquipe
                               ? "text-amber-700"
@@ -1915,19 +1912,10 @@ export default function AdminCategoriaJogosSuperPage() {
                           return (
                             <tr key={e.equipeId} className={`border-b border-slate-50 ${naoBate ? "bg-rose-50/30" : ""}`}>
                               <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
-                              <td className="py-2 pr-3">
-                                <div className={`text-xs ${classeP}`} title={`Jogos marcados na grade: ${jogosMarcados} / ${jogosEsperadosPorEquipe}`}>
-                                  {jogosMarcados}<span className="text-slate-400 font-normal"> / {jogosEsperadosPorEquipe}</span>
-                                </div>
-                                <div className="mt-1 h-1 w-full rounded-full bg-slate-100 overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full ${
-                                      jogosMarcados > jogosEsperadosPorEquipe ? "bg-rose-500" : jogosMarcados === jogosEsperadosPorEquipe ? "bg-emerald-500" : "bg-amber-400"}`}
-                                    style={{ width: `${Math.min(100, prog * 100)}%` }}
-                                  />
-                                </div>
+                              <td className="py-2 pr-3 font-bold text-slate-900">{e.pontos}</td>
+                              <td className={`py-2 pr-3 ${classeJ}`} title={`Jogos marcados na grade: ${jogosMarcados} / ${jogosEsperadosPorEquipe}`}>
+                                {jogosMarcados}<span className="text-slate-400 font-normal"> / {jogosEsperadosPorEquipe}</span>
                               </td>
-                              <td className="py-2 pr-3 text-slate-700">{e.pontos}</td>
                               <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
                               <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
                               <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
