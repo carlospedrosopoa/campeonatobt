@@ -1902,19 +1902,19 @@ export default function AdminCategoriaJogosSuperPage() {
                       </thead>
                       <tbody>
                         {g.equipes.map((e) => {
-                          const jogosMarcados = resumo?.equipesPorContagem.get(e.equipeId) ?? 0;
-                          const naoBate = jogosMarcados < jogosEsperadosPorEquipe || jogosMarcados > jogosEsperadosPorEquipe;
-                          const classeJ = jogosMarcados > jogosEsperadosPorEquipe
+                          const jogosJogados = e.jogosJogados ?? 0;
+                          const naoBateJogados = jogosJogados < jogosEsperadosPorEquipe || jogosJogados > jogosEsperadosPorEquipe;
+                          const classeJ = jogosJogados > jogosEsperadosPorEquipe
                             ? "text-rose-600 font-semibold"
-                            : jogosMarcados < jogosEsperadosPorEquipe
+                            : jogosJogados < jogosEsperadosPorEquipe
                               ? "text-amber-700"
                               : "text-emerald-700 font-semibold";
                           return (
-                            <tr key={e.equipeId} className={`border-b border-slate-50 ${naoBate ? "bg-rose-50/30" : ""}`}>
+                            <tr key={e.equipeId} className={`border-b border-slate-50 ${naoBateJogados ? "bg-rose-50/30" : ""}`}>
                               <td className="py-2 pr-5 font-medium text-slate-900 whitespace-nowrap">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
                               <td className="py-2 pr-5 font-bold text-slate-900 tabular-nums whitespace-nowrap text-center">{e.pontos}</td>
-                              <td className={`py-2 pr-5 tabular-nums whitespace-nowrap text-center ${classeJ}`} title={`Jogos marcados na grade: ${jogosMarcados} / ${jogosEsperadosPorEquipe}`}>
-                                <span className="font-semibold">{jogosMarcados}</span>
+                              <td className={`py-2 pr-5 tabular-nums whitespace-nowrap text-center ${classeJ}`} title={`Jogos já jogados (com resultado lançado): ${jogosJogados} / ${jogosEsperadosPorEquipe}`}>
+                                <span className="font-semibold">{jogosJogados}</span>
                                 <span className="text-slate-400 font-normal">/{jogosEsperadosPorEquipe}</span>
                               </td>
                               <td className="py-2 pr-5 text-slate-700 tabular-nums whitespace-nowrap text-center">{e.jogosVencidos}</td>
