@@ -1890,14 +1890,14 @@ export default function AdminCategoriaJogosSuperPage() {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="text-left text-slate-500 border-b border-slate-100">
-                          <th className="py-2 pr-3 font-medium">Equipe</th>
-                          <th className="py-2 pr-3 font-medium" title="Pontos acumulados (vitórias/d. sets)">P</th>
-                          <th className="py-2 pr-3 font-medium" title={`Jogos marcados / Jogos esperados no total (${jogosEsperadosPorEquipe})`}>J</th>
-                          <th className="py-2 pr-3 font-medium">V</th>
-                          <th className="py-2 pr-3 font-medium">SP</th>
-                          <th className="py-2 pr-3 font-medium">GP</th>
-                          <th className="py-2 pr-3 font-medium">SG</th>
-                          <th className="py-2 pr-3 font-medium">AP%</th>
+                          <th className="py-2 pr-5 font-medium whitespace-nowrap">Equipe</th>
+                          <th className="py-2 pr-5 font-medium whitespace-nowrap text-center w-[52px]" title="Pontos acumulados (vitórias/d. sets)">P</th>
+                          <th className="py-2 pr-5 font-medium whitespace-nowrap text-center w-[64px]" title={`Jogos marcados / Jogos esperados no total (${jogosEsperadosPorEquipe})`}>J</th>
+                          <th className="py-2 pr-5 font-medium whitespace-nowrap text-center">V</th>
+                          <th className="py-2 pr-5 font-medium whitespace-nowrap text-center">SP</th>
+                          <th className="py-2 pr-5 font-medium whitespace-nowrap text-center">GP</th>
+                          <th className="py-2 pr-5 font-medium whitespace-nowrap text-center">SG</th>
+                          <th className="py-2 pr-2 font-medium whitespace-nowrap text-center">AP%</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1911,16 +1911,17 @@ export default function AdminCategoriaJogosSuperPage() {
                               : "text-emerald-700 font-semibold";
                           return (
                             <tr key={e.equipeId} className={`border-b border-slate-50 ${naoBate ? "bg-rose-50/30" : ""}`}>
-                              <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
-                              <td className="py-2 pr-3 font-bold text-slate-900">{e.pontos}</td>
-                              <td className={`py-2 pr-3 ${classeJ}`} title={`Jogos marcados na grade: ${jogosMarcados} / ${jogosEsperadosPorEquipe}`}>
-                                {jogosMarcados}<span className="text-slate-400 font-normal"> / {jogosEsperadosPorEquipe}</span>
+                              <td className="py-2 pr-5 font-medium text-slate-900 whitespace-nowrap">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
+                              <td className="py-2 pr-5 font-bold text-slate-900 tabular-nums whitespace-nowrap text-center">{e.pontos}</td>
+                              <td className={`py-2 pr-5 tabular-nums whitespace-nowrap text-center ${classeJ}`} title={`Jogos marcados na grade: ${jogosMarcados} / ${jogosEsperadosPorEquipe}`}>
+                                <span className="font-semibold">{jogosMarcados}</span>
+                                <span className="text-slate-400 font-normal">/{jogosEsperadosPorEquipe}</span>
                               </td>
-                              <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
-                              <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
-                              <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
-                              <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
-                              <td className="py-2 pr-3 text-slate-700">
+                              <td className="py-2 pr-5 text-slate-700 tabular-nums whitespace-nowrap text-center">{e.jogosVencidos}</td>
+                              <td className="py-2 pr-5 text-slate-700 tabular-nums whitespace-nowrap text-center">{e.setsPro ?? 0}</td>
+                              <td className="py-2 pr-5 text-slate-700 tabular-nums whitespace-nowrap text-center">{e.gamesPro ?? 0}</td>
+                              <td className="py-2 pr-5 text-slate-700 tabular-nums whitespace-nowrap text-center">{e.saldoGames}</td>
+                              <td className="py-2 pr-2 text-slate-700 tabular-nums whitespace-nowrap text-center">
                                 {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
                               </td>
                             </tr>
