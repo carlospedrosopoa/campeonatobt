@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -145,6 +145,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [gerandoGrupos, setGerandoGrupos] = useState(false);
   const [gerandoRodadasRestantes, setGerandoRodadasRestantes] = useState(false);
   const [aPartirDaRodada, setAPartirDaRodada] = useState<number>(2);
+  const [abaAtiva, setAbaAtiva] = useState<"jogos" | "dinamica">("jogos");
   const [recalculando, setRecalculando] = useState(false);
   const [gerandoMataMata, setGerandoMataMata] = useState(false);
   const [gerandoProximaFase, setGerandoProximaFase] = useState(false);
@@ -187,7 +188,6 @@ export default function AdminCategoriaJogosSuperPage() {
   const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
   const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
   const [torneioSuperCampeonatoFormato, setTorneioSuperCampeonatoFormato] = useState<"2_SET_SUPER_TIE" | "1_SET">("2_SET_SUPER_TIE");
-  const [abaAtiva, setAbaAtiva] = useState<"jogos" | "dinamica">("jogos");
   const [gerandoRelatorioClassificacao, setGerandoRelatorioClassificacao] = useState(false);
   const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
   const [gerandoPlanilhaContingencia, setGerandoPlanilhaContingencia] = useState(false);
@@ -1344,7 +1344,7 @@ export default function AdminCategoriaJogosSuperPage() {
       )}
 
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Jogos — Super Campeonato</h2>
             <p className="text-sm text-slate-600">
@@ -1353,42 +1353,44 @@ export default function AdminCategoriaJogosSuperPage() {
                 : "Ajustes avançados: estrutura do mata-mata, geração de rodadas e configurações perigosas. Use com cuidado."}
             </p>
           </div>
-          <div role="tablist" className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-sm">
-            <button
-              role="tab"
-              aria-selected={abaAtiva === "jogos"}
-              onClick={() => setAbaAtiva("jogos")}
-              className={`inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-md font-medium transition ${
-                abaAtiva === "jogos"
-                  ? "bg-white text-slate-900 shadow-sm border border-slate-200"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <Trophy className="h-4 w-4" />
-              Jogos / Classificação
-            </button>
-            <button
-              role="tab"
-              aria-selected={abaAtiva === "dinamica"}
-              onClick={() => {
-                if (abaAtiva !== "dinamica") {
-                  const ok = confirm(
+        </div>
+
+        <div role="tablist" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-full sm:w-auto">
+          <button
+            role="tab"
+            aria-selected={abaAtiva === "jogos"}
+            onClick={() => setAbaAtiva("jogos")}
+            className={`inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-md font-medium transition ${
+              abaAtiva === "jogos"
+                ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Trophy className="h-4 w-4" />
+            Jogos / Classificação
+          </button>
+          <button
+            role="tab"
+            aria-selected={abaAtiva === "dinamica"}
+            onClick={() => {
+              if (abaAtiva !== "dinamica") {
+                const ok = confirm(
                   "⚠️ ÁREA AVANÇADA (Dinâmica)\n\nAqui você altera estrutura do mata-mata, apaga e recria rodadas, zera jogos etc.\n\nGestores: NÃO entre aqui se você só quer lançar placares.\n\nDeseja continuar?"
                 );
-                  if (!ok) return;
-                }
+                if (ok) setAbaAtiva("dinamica");
+              } else {
                 setAbaAtiva("dinamica");
-              }}
-              className={`inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-md font-medium transition ${
-                abaAtiva === "dinamica"
-                  ? "bg-white text-slate-900 shadow-sm border border-slate-200"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <Settings className="h-4 w-4" />
-              Dinâmica / Configuração
-            </button>
-          </div>
+              }
+            }}
+            className={`inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-md font-medium transition ${
+              abaAtiva === "dinamica"
+                ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Settings className="h-4 w-4" />
+            Dinâmica / Configuração
+          </button>
         </div>
 
         {abaAtiva === "jogos" ? (
@@ -1412,568 +1414,6 @@ export default function AdminCategoriaJogosSuperPage() {
                 Abrir configurações avançadas
               </button>
             </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                disabled={gerandoRelatorioClassificacao || classificacao.length === 0}
-                onClick={gerarRelatorioClassificacao}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                title="Relatório da classificação (com banner e PNG)"
-              >
-                <FileText className="h-4 w-4" />
-                {gerandoRelatorioClassificacao ? "Gerando…" : "Relatório classificação"}
-              </button>
-
-              <button
-                type="button"
-                disabled={gerandoRelatorioJogos}
-                onClick={gerarRelatorioJogos}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                title="Gerar PDF da tabela de jogos agrupada por chave"
-              >
-                <FileText className="h-4 w-4" />
-                {gerandoRelatorioJogos ? "Gerando…" : "PDF tabela jogos"}
-              </button>
-
-              <button
-                type="button"
-                disabled={gerandoPlanilhaContingencia}
-                onClick={gerarPlanilhaContingencia}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                title="Gerar Excel offline para contingência com lancamento e classificacao por chave"
-              >
-                <FileText className="h-4 w-4" />
-                {gerandoPlanilhaContingencia ? "Gerando…" : "Excel contingência"}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {classificacao.length === 0 ? (
-                <div className="col-span-full text-sm text-slate-600">
-                  Nenhuma classificação disponível. Gere as rodadas na aba "Dinâmica / Configuração".
-                </div>
-              ) : (
-                classificacao.map((g) => {
-                  const resumo = resumoJogosPorGrupo.get(g.grupoId);
-                  const jogosEsperadosPorEquipe = resumo?.jogosEsperadosPorEquipe ?? (g.equipes.length - 1);
-                  return (
-                    <div key={g.grupoId} className="rounded-lg border border-slate-200 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                        <div>
-                          <div className="font-semibold text-slate-900">{g.grupoNome}</div>
-                          <div className="mt-0.5 text-xs text-slate-500">
-                            {g.equipes.length} equipes • Cada equipe joga {jogosEsperadosPorEquipe} jogos • Total de partidas esperadas: {resumo?.totalPartidasEsperadas ?? "-"}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          {resumo ? (
-                            <div className={`inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium ${
-                              resumo.todasBatizadas
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : resumo.equipesComMais.length > 0
-                                  ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                  : "bg-amber-50 text-amber-700 border border-amber-200"
-                            }`}>
-                              {resumo.todasBatizadas
-                                ? `✅ ${resumo.totalPartidasExistentes}/${resumo.totalPartidasEsperadas} partidas · Todas as equipes com ${jogosEsperadosPorEquipe} jogos`
-                                : resumo.equipesComMais.length > 0
-                                  ? `⚠️ ${resumo.totalPartidasExistentes}/${resumo.totalPartidasEsperadas} partidas · ${resumo.equipesComMais.length} equipe(s) jogaram MAIS de ${jogosEsperadosPorEquipe} jogos (repetição?)`
-                                  : `🕒 ${resumo.totalPartidasExistentes}/${resumo.totalPartidasEsperadas} partidas · Faltam ${resumo.equipesComMenos.length} equipe(s) de completar os ${jogosEsperadosPorEquipe} jogos`}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-left text-slate-500 border-b border-slate-100">
-                              <th className="py-2 pr-3 font-medium">Equipe</th>
-                              <th className="py-2 pr-3 font-medium" title={`Jogos disputados / Jogos esperados no total (${jogosEsperadosPorEquipe})`}>
-                                P / Total
-                              </th>
-                              <th className="py-2 pr-3 font-medium">J</th>
-                              <th className="py-2 pr-3 font-medium">V</th>
-                              <th className="py-2 pr-3 font-medium">SP</th>
-                              <th className="py-2 pr-3 font-medium">GP</th>
-                              <th className="py-2 pr-3 font-medium">SG</th>
-                              <th className="py-2 pr-3 font-medium">AP%</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {g.equipes.map((e) => {
-                              const jogosMarcados = resumo?.equipesPorContagem.get(e.equipeId) ?? 0;
-                              const prog = Math.min(1, jogosEsperadosPorEquipe > 0 ? jogosMarcados / jogosEsperadosPorEquipe : 0);
-                              const naoBate = jogosMarcados < jogosEsperadosPorEquipe || jogosMarcados > jogosEsperadosPorEquipe;
-                              const classeP = jogosMarcados > jogosEsperadosPorEquipe
-                                ? "text-rose-600 font-semibold"
-                                : jogosMarcados < jogosEsperadosPorEquipe
-                                  ? "text-amber-700"
-                                  : "text-emerald-700 font-semibold";
-                              return (
-                                <tr key={e.equipeId} className={`border-b border-slate-50 ${naoBate ? "bg-rose-50/30" : ""}`}>
-                                  <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
-                                  <td className="py-2 pr-3">
-                                    <div className={`text-xs ${classeP}`} title={`Jogos marcados na grade: ${jogosMarcados} / ${jogosEsperadosPorEquipe}`}>
-                                      {jogosMarcados}<span className="text-slate-400 font-normal"> / {jogosEsperadosPorEquipe}</span>
-                                    </div>
-                                    <div className="mt-1 h-1 w-full rounded-full bg-slate-100 overflow-hidden">
-                                      <div
-                                        className={`h-full rounded-full ${
-                                          jogosMarcados > jogosEsperadosPorEquipe ? "bg-rose-500" : jogosMarcados === jogosEsperadosPorEquipe ? "bg-emerald-500" : "bg-amber-400"
-                                        }`}
-                                        style={{ width: `${Math.min(100, prog * 100)}%` }}
-                                      />
-                                    </div>
-                                  </td>
-                                  <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
-                                  <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
-                                  <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
-                                  <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
-                                  <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
-                                  <td className="py-2 pr-3 text-slate-700">
-                                    {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                      {resumo && (resumo.equipesComMenos.length > 0 || resumo.equipesComMais.length > 0) ? (
-                        <details className="mt-3 text-xs">
-                          <summary className="cursor-pointer font-medium text-slate-600">
-                            {resumo.equipesComMais.length > 0
-                              ? `${resumo.equipesComMais.length} equipe(s) jogaram MAIS que ${jogosEsperadosPorEquipe} jogos (possível duplicação)`
-                              : `${resumo.equipesComMenos.length} equipe(s) ainda não completaram os ${jogosEsperadosPorEquipe} jogos`}
-                          </summary>
-                          <ul className="mt-2 space-y-1 pl-4 list-disc text-slate-600">
-                            {resumo.equipesComMenos.length > 0 ? (
-                              <li>
-                                <span className="font-medium">Faltam jogos:</span>{" "}
-                                {resumo.equipesComMenos.map((id) => {
-                                  const eq = g.equipes.find((e) => e.equipeId === id);
-                                  const cnt = resumo.equipesPorContagem.get(id) ?? 0;
-                                  return `${eq?.equipeNome || id.slice(0, 8)} (${cnt}/${jogosEsperadosPorEquipe})`;
-                                }).join(" · ")}
-                              </li>
-                            ) : null}
-                            {resumo.equipesComMais.length > 0 ? (
-                              <li>
-                                <span className="font-medium">Jogaram mais que o esperado:</span>{" "}
-                                {resumo.equipesComMais.map((id) => {
-                                  const eq = g.equipes.find((e) => e.equipeId === id);
-                                  const cnt = resumo.equipesPorContagem.get(id) ?? 0;
-                                  return `${eq?.equipeNome || id.slice(0, 8)} (${cnt}/${jogosEsperadosPorEquipe})`;
-                                }).join(" · ")}
-                              </li>
-                            ) : null}
-                          </ul>
-                        </details>
-                      ) : null}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 pt-2">
-              <div className="w-full md:max-w-sm space-y-2">
-                <label className="block text-sm font-medium text-slate-700">Data/Hora da categoria</label>
-                <input
-                  value={categoriaDataHorario}
-                  onChange={(e) => setCategoriaDataHorario(e.target.value)}
-                  type="datetime-local"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                />
-              </div>
-              <button
-                type="button"
-                disabled={salvandoCategoriaDataHorario}
-                onClick={() => void salvarCategoriaDataHorario()}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                <Save className="h-4 w-4" />
-                {salvandoCategoriaDataHorario ? "Salvando…" : "Salvar data/hora"}
-              </button>
-            </div>
-
-            {fase === "GRUPOS" ? (
-              <div className="space-y-4">
-                {rodadasView.length === 0 ? (
-                  <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-sm text-slate-600">Nenhuma partida encontrada.</div>
-                ) : (
-                  rodadasView.map((r) => (
-                    <div key={r.numero} className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="text-xs text-slate-500 uppercase tracking-wider">Rodada</div>
-                          <div className="text-xl font-bold text-slate-900">{ordinalRodada(r.numero)}</div>
-                          {r.dataLimite && (
-                            <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-700">
-                              <Clock className="h-3 w-3" />
-                              Limite: {formatData(r.dataLimite)}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => abrirEditarRodada(r.rodadaId ?? null, r.dataLimite)}
-                          className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                          <Clock className="h-3.5 w-3.5" />
-                          Definir limite
-                        </button>
-                      </div>
-                      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {r.jogos.map((p) => (
-                          <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
-                            <div>
-                              <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                                  <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
-                                    {p.grupoNome ?? "Grupo"}
-                                  </span>
-                                  {p.arenaNome ? (
-                                    <span className="flex items-center gap-1">
-                                      {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome ?? "Arena"} className="h-4 w-4 rounded-full object-cover" /> : null}
-                                      <MapPin className="h-3 w-3 text-slate-400" />
-                                      {p.arenaNome}
-                                      {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
-                                    </span>
-                                  ) : (
-                                    <span className="flex items-center gap-1 text-slate-400">
-                                      <MapPin className="h-3 w-3" />
-                                      Local a definir
-                                    </span>
-                                  )}
-                                </div>
-                                {getStatusBadge(p.status, p.dataHorario)}
-                              </div>
-
-                              <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-                                <div className="min-w-0 text-right">
-                                  <div className="font-bold text-slate-900 leading-tight break-words">
-                                    {p.equipeANome || p.equipeAId.slice(0, 8)}
-                                  </div>
-                                </div>
-
-                                <div className="self-stretch flex items-center justify-center">
-                                  {renderPlacarResumo(p.detalhesPlacar)}
-                                </div>
-
-                                <div className="min-w-0 text-left">
-                                  <div className="font-bold text-slate-900 leading-tight break-words">
-                                    {p.equipeBNome || p.equipeBId.slice(0, 8)}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
-                              <div className="text-xs">
-                                {p.dataHorario ? (
-                                  <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                                    {formatDataHora(p.dataHorario)}
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-1.5 text-amber-600 font-medium">
-                                    <Calendar className="h-3.5 w-3.5" />
-                                    {p.dataLimite ? `Limite: ${formatData(p.dataLimite)}` : "Sem agendamento"}
-                                  </div>
-                                )}
-                              </div>
-                              
-                              <div className="flex items-center gap-2">
-                                <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
-                                <button
-                                  type="button"
-                                  onClick={() => gerarCardPartida(p)}
-                                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                                  title="Gerar card da partida"
-                                >
-                                  <ImageIcon className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => gerarCardProgramacao(p)}
-                                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                                  title="Gerar card de programação"
-                                >
-                                  <FileText className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => abrirAgendamento(p)}
-                                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                                  title="Agendar"
-                                >
-                                  <Calendar className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => startEditPartida(p)}
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
-                                >
-                                  Lançar placar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => abrirAlterarConfronto(p)}
-                                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                                  title="Alterar confronto"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">Partidas</h2>
-                    <p className="text-sm text-slate-600">Fase {fase === "FINAL" ? "Final" : fase}.</p>
-                  </div>
-                </div>
-                {(fase === "QUARTAS" || fase === "SEMI") && semifinalistasBye ? (
-                  <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Semifinalistas (bye)</div>
-                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
-                        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">1º colocado</div>
-                        <div className="mt-1 font-semibold text-slate-900">{semifinalistasBye.s1.equipeNome}</div>
-                        <div className="mt-1 text-xs text-slate-500">Aguardando o pior classificado entre os vencedores das quartas</div>
-                      </div>
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
-                        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">2º colocado</div>
-                        <div className="mt-1 font-semibold text-slate-900">{semifinalistasBye.s2.equipeNome}</div>
-                        <div className="mt-1 text-xs text-slate-500">Aguardando o outro vencedor das quartas</div>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-                {partidasFiltradas.length === 0 ? (
-                  <div className="mt-4 py-10 text-center text-slate-500">Nenhuma partida encontrada.</div>
-                ) : fase === "FINAL" ? (
-                  <div className="mt-4 space-y-6">
-                    {partidasAgrupadasDecisivas.map((grupo) => (
-                      <section key={grupo.titulo} className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{grupo.titulo}</h3>
-                          <span className="text-xs font-medium text-slate-500">{grupo.partidas.length} jogo(s)</span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {grupo.partidas.map((p) => (
-                            <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
-                              <div>
-                                <div className="flex items-center justify-between mb-4">
-                                  <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                                    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
-                                      {labelFasePartida(p.fase)}
-                                    </span>
-                                    {p.arenaNome ? (
-                                      <span className="flex items-center gap-1">
-                                        {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome ?? "Arena"} className="h-4 w-4 rounded-full object-cover" /> : null}
-                                        <MapPin className="h-3 w-3 text-slate-400" />
-                                        {p.arenaNome}
-                                        {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center gap-1 text-slate-400">
-                                        <MapPin className="h-3 w-3" />
-                                        Local a definir
-                                      </span>
-                                    )}
-                                  </div>
-                                  {getStatusBadge(p.status, p.dataHorario)}
-                                </div>
-
-                                <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-                                  <div className="min-w-0 text-right">
-                                    <div className="font-bold text-slate-900 leading-tight break-words">
-                                      {p.equipeANome || p.equipeAId.slice(0, 8)}
-                                    </div>
-                                  </div>
-
-                                  <div className="self-stretch flex items-center justify-center">
-                                    {renderPlacarResumo(p.detalhesPlacar)}
-                                  </div>
-
-                                  <div className="min-w-0 text-left">
-                                    <div className="font-bold text-slate-900 leading-tight break-words">
-                                      {p.equipeBNome || p.equipeBId.slice(0, 8)}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
-                                <div className="text-xs">
-                                  {p.dataHorario ? (
-                                    <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                                      <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                                      {formatDataHora(p.dataHorario)}
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1.5 text-amber-600 font-medium">
-                                      <Calendar className="h-3.5 w-3.5" />
-                                      {p.dataLimite ? `Limite: ${formatData(p.dataLimite)}` : "Sem agendamento"}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
-                                  <button
-                                    type="button"
-                                    onClick={() => gerarCardPartida(p)}
-                                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                                    title="Gerar card da partida"
-                                  >
-                                    <ImageIcon className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => abrirAgendamento(p)}
-                                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                                    title="Agendar"
-                                  >
-                                    <Calendar className="h-4 w-4" />
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => startEditPartida(p)}
-                                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
-                                  >
-                                    Lançar placar
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => abrirAlterarConfronto(p)}
-                                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                                    title="Alterar confronto"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {partidasFiltradas.map((p) => (
-                      <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                              {p.arenaNome ? (
-                                    <span className="flex items-center gap-1">
-                                      {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome ?? "Arena"} className="h-4 w-4 rounded-full object-cover" /> : null}
-                                      <MapPin className="h-3 w-3 text-slate-400" />
-                                      {p.arenaNome}
-                                      {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
-                                    </span>
-                                  ) : (
-                                    <span className="flex items-center gap-1 text-slate-400">
-                                      <MapPin className="h-3 w-3" />
-                                      Local a definir
-                                    </span>
-                                  )}
-                            </div>
-                            {getStatusBadge(p.status, p.dataHorario)}
-                          </div>
-
-                          <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-                            <div className="min-w-0 text-right">
-                              <div className="font-bold text-slate-900 leading-tight break-words">
-                                {p.equipeANome || p.equipeAId.slice(0, 8)}
-                              </div>
-                            </div>
-
-                            <div className="self-stretch flex items-center justify-center">
-                              {renderPlacarResumo(p.detalhesPlacar)}
-                            </div>
-
-                            <div className="min-w-0 text-left">
-                              <div className="font-bold text-slate-900 leading-tight break-words">
-                                {p.equipeBNome || p.equipeBId.slice(0, 8)}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
-                          <div className="text-xs">
-                            {p.dataHorario ? (
-                                  <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                                    {formatDataHora(p.dataHorario)}
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-1.5 text-amber-600 font-medium">
-                                    <Calendar className="h-3.5 w-3.5" />
-                                    {p.dataLimite ? `Limite: ${formatData(p.dataLimite)}` : "Sem agendamento"}
-                                  </div>
-                                )}
-                          </div>
-                          
-                          <div className="flex items-center gap-2">
-                            <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
-                            <button
-                              type="button"
-                              onClick={() => gerarCardPartida(p)}
-                              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                              title="Gerar card da partida"
-                            >
-                              <ImageIcon className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => abrirAgendamento(p)}
-                              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                              title="Agendar"
-                            >
-                              <Calendar className="h-4 w-4" />
-                            </button>
-                            
-                            <button
-                              type="button"
-                              onClick={() => startEditPartida(p)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
-                            >
-                              Lançar placar
-                            </button>
-                            
-                            <button
-                              type="button"
-                              onClick={() => abrirAlterarConfronto(p)}
-                              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                              title="Alterar confronto"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </>
         ) : (
           <>
@@ -1981,11 +1421,50 @@ export default function AdminCategoriaJogosSuperPage() {
               <strong>⚠️ Área avançada</strong>. Os botões abaixo <strong>apagam e recriam rodadas, mudam a estrutura do mata-mata</strong> ou alteram a dinâmica inteira da categoria.
               <strong> Não use</strong> se o torneio já está em andamento (tem jogos com placar lançado) sem consultar o responsável técnico.
             </div>
+          </>
+        )}
 
-            {config && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Estrutura do mata-mata</label>
+        {abaAtiva === "jogos" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={gerandoRelatorioClassificacao || classificacao.length === 0}
+              onClick={gerarRelatorioClassificacao}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Relatório da classificação (com banner e PNG)"
+            >
+              <FileText className="h-4 w-4" />
+              {gerandoRelatorioClassificacao ? "Gerando…" : "Relatório classificação"}
+            </button>
+
+            <button
+              type="button"
+              disabled={gerandoRelatorioJogos}
+              onClick={gerarRelatorioJogos}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Gerar PDF da tabela de jogos agrupada por chave"
+            >
+              <FileText className="h-4 w-4" />
+              {gerandoRelatorioJogos ? "Gerando…" : "PDF tabela jogos"}
+            </button>
+
+            <button
+              type="button"
+              disabled={gerandoPlanilhaContingencia}
+              onClick={gerarPlanilhaContingencia}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Gerar Excel offline para contingência com lancamento e classificacao por chave"
+            >
+              <FileText className="h-4 w-4" />
+              {gerandoPlanilhaContingencia ? "Gerando…" : "Excel contingência"}
+            </button>
+          </div>
+        )}
+
+        {abaAtiva === "dinamica" && config && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Estrutura do mata-mata</label>
               <select
                 value={config.mataMata?.estrutura ?? "SUPER_CAMPEONATO_6"}
                 onChange={(e) => {
@@ -2110,7 +1589,7 @@ export default function AdminCategoriaJogosSuperPage() {
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3" style={{ display: abaAtiva === "dinamica" ? undefined : "none" }}>
           <div className="text-xs text-slate-500">Pontuação: 2-0 = 3 • 2-1 = 2/1 • 1 set: 3 (sem TB) • 2/1 (com TB)</div>
           <div className="flex items-center gap-2">
             <button
@@ -2351,7 +1830,531 @@ export default function AdminCategoriaJogosSuperPage() {
             </button>
           </div>
         </div>
+
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3" style={{ display: abaAtiva === "jogos" ? undefined : "none" }}>
+          <div className="w-full md:max-w-sm space-y-2">
+            <label className="block text-sm font-medium text-slate-700">Data/Hora da categoria</label>
+            <input
+              value={categoriaDataHorario}
+              onChange={(e) => setCategoriaDataHorario(e.target.value)}
+              type="datetime-local"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={salvandoCategoriaDataHorario}
+            onClick={() => void salvarCategoriaDataHorario()}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Save className="h-4 w-4" />
+            {salvandoCategoriaDataHorario ? "Salvando…" : "Salvar data/hora"}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ display: abaAtiva === "jogos" ? undefined : "none" }}>
+          {classificacao.length === 0 ? (
+            <div className="text-sm text-slate-600">Nenhuma classificação disponível (gere jogos e/ou recalcule). Ou gere rodadas na aba <strong className="text-amber-700">Dinâmica / Configuração</strong>.</div>
+          ) : (
+            classificacao.map((g) => {
+              const resumo = resumoJogosPorGrupo.get(g.grupoId);
+              const jogosEsperadosPorEquipe = resumo?.jogosEsperadosPorEquipe ?? (g.equipes.length - 1);
+              return (
+                <div key={g.grupoId} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div>
+                      <div className="font-semibold text-slate-900">{g.grupoNome}</div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {g.equipes.length} equipes • Cada equipe joga {jogosEsperadosPorEquipe} jogos • Total de partidas esperadas: {resumo?.totalPartidasEsperadas ?? "-"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {resumo ? (
+                        <div className={`inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium ${
+                          resumo.todasBatizadas
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : resumo.equipesComMais.length > 0
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
+                              : "bg-amber-50 text-amber-700 border border-amber-200"
+                        }`}>
+                          {resumo.todasBatizadas
+                            ? `✅ ${resumo.totalPartidasExistentes}/${resumo.totalPartidasEsperadas} partidas · Todas as equipes com ${jogosEsperadosPorEquipe} jogos`
+                            : resumo.equipesComMais.length > 0
+                              ? `⚠️ ${resumo.totalPartidasExistentes}/${resumo.totalPartidasEsperadas} partidas · ${resumo.equipesComMais.length} equipe(s) jogaram MAIS de ${jogosEsperadosPorEquipe} jogos (repetição?)`
+                              : `🕒 ${resumo.totalPartidasExistentes}/${resumo.totalPartidasEsperadas} partidas · Faltam ${resumo.equipesComMenos.length} equipe(s) de completar os ${jogosEsperadosPorEquipe} jogos`}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-slate-500 border-b border-slate-100">
+                          <th className="py-2 pr-3 font-medium">Equipe</th>
+                          <th className="py-2 pr-3 font-medium" title={`Jogos disputados / Jogos esperados no total (${jogosEsperadosPorEquipe})`}>
+                            P / Total
+                          </th>
+                          <th className="py-2 pr-3 font-medium">J</th>
+                          <th className="py-2 pr-3 font-medium">V</th>
+                          <th className="py-2 pr-3 font-medium">SP</th>
+                          <th className="py-2 pr-3 font-medium">GP</th>
+                          <th className="py-2 pr-3 font-medium">SG</th>
+                          <th className="py-2 pr-3 font-medium">AP%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.equipes.map((e) => {
+                          const jogosMarcados = resumo?.equipesPorContagem.get(e.equipeId) ?? 0;
+                          const prog = Math.min(1, jogosEsperadosPorEquipe > 0 ? jogosMarcados / jogosEsperadosPorEquipe : 0);
+                          const naoBate = jogosMarcados < jogosEsperadosPorEquipe || jogosMarcados > jogosEsperadosPorEquipe;
+                          const classeP = jogosMarcados > jogosEsperadosPorEquipe
+                            ? "text-rose-600 font-semibold"
+                            : jogosMarcados < jogosEsperadosPorEquipe
+                              ? "text-amber-700"
+                              : "text-emerald-700 font-semibold";
+                          return (
+                            <tr key={e.equipeId} className={`border-b border-slate-50 ${naoBate ? "bg-rose-50/30" : ""}`}>
+                              <td className="py-2 pr-3 font-medium text-slate-900">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
+                              <td className="py-2 pr-3">
+                                <div className={`text-xs ${classeP}`} title={`Jogos marcados na grade: ${jogosMarcados} / ${jogosEsperadosPorEquipe}`}>
+                                  {jogosMarcados}<span className="text-slate-400 font-normal"> / {jogosEsperadosPorEquipe}</span>
+                                </div>
+                                <div className="mt-1 h-1 w-full rounded-full bg-slate-100 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${
+                                      jogosMarcados > jogosEsperadosPorEquipe ? "bg-rose-500" : jogosMarcados === jogosEsperadosPorEquipe ? "bg-emerald-500" : "bg-amber-400"}`}
+                                    style={{ width: `${Math.min(100, prog * 100)}%` }}
+                                  />
+                                </div>
+                              </td>
+                              <td className="py-2 pr-3 text-slate-700">{e.pontos}</td>
+                              <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
+                              <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
+                              <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
+                              <td className="py-2 pr-3 text-slate-700">{e.saldoGames}</td>
+                              <td className="py-2 pr-3 text-slate-700">
+                                {e.jogosJogados > 0 ? `${Math.round((e.pontos / (e.jogosJogados * 3)) * 100)}%` : "0%"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {resumo && (resumo.equipesComMenos.length > 0 || resumo.equipesComMais.length > 0) ? (
+                    <details className="mt-3 text-xs">
+                      <summary className="cursor-pointer font-medium text-slate-600">
+                        {resumo.equipesComMais.length > 0
+                          ? `${resumo.equipesComMais.length} equipe(s) jogaram MAIS que ${jogosEsperadosPorEquipe} jogos (possível duplicação)`
+                          : `${resumo.equipesComMenos.length} equipe(s) ainda não completaram os ${jogosEsperadosPorEquipe} jogos`}
+                      </summary>
+                      <ul className="mt-2 space-y-1 pl-4 list-disc text-slate-600">
+                        {resumo.equipesComMenos.length > 0 ? (
+                          <li>
+                            <span className="font-medium">Faltam jogos:</span>{" "}
+                            {resumo.equipesComMenos.map((id) => {
+                              const eq = g.equipes.find((e) => e.equipeId === id);
+                              const cnt = resumo.equipesPorContagem.get(id) ?? 0;
+                              return `${eq?.equipeNome || id.slice(0, 8)} (${cnt}/${jogosEsperadosPorEquipe})`;
+                            }).join(" · ")}
+                          </li>
+                        ) : null}
+                        {resumo.equipesComMais.length > 0 ? (
+                          <li>
+                            <span className="font-medium">Jogaram mais que o esperado:</span>{" "}
+                            {resumo.equipesComMais.map((id) => {
+                              const eq = g.equipes.find((e) => e.equipeId === id);
+                              const cnt = resumo.equipesPorContagem.get(id) ?? 0;
+                              return `${eq?.equipeNome || id.slice(0, 8)} (${cnt}/${jogosEsperadosPorEquipe})`;
+                            }).join(" · ")}
+                          </li>
+                        ) : null}
+                      </ul>
+                    </details>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
+
+      {abaAtiva === "jogos" && fase === "GRUPOS" ? (
+        <div className="space-y-4">
+          {rodadasView.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-sm text-slate-600">Nenhuma partida encontrada.</div>
+          ) : (
+            rodadasView.map((r) => (
+              <div key={r.numero} className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs text-slate-500 uppercase tracking-wider">Rodada</div>
+                    <div className="text-xl font-bold text-slate-900">{ordinalRodada(r.numero)}</div>
+                    {r.dataLimite && (
+                      <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                        <Clock className="h-3 w-3" />
+                        Limite: {formatData(r.dataLimite)}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => abrirEditarRodada(r.rodadaId ?? null, r.dataLimite)}
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    Definir limite
+                  </button>
+                </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {r.jogos.map((p) => (
+                    <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                            <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
+                              {p.grupoNome ?? "Grupo"}
+                            </span>
+                            {p.arenaNome ? (
+                              <span className="flex items-center gap-1">
+                                {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome ?? "Arena"} className="h-4 w-4 rounded-full object-cover" /> : null}
+                                <MapPin className="h-3 w-3 text-slate-400" />
+                                {p.arenaNome}
+                                {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-slate-400">
+                                <MapPin className="h-3 w-3" />
+                                Local a definir
+                              </span>
+                            )}
+                          </div>
+                          {getStatusBadge(p.status, p.dataHorario)}
+                        </div>
+
+                        <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                          <div className="min-w-0 text-right">
+                            <div className="font-bold text-slate-900 leading-tight break-words">
+                              {p.equipeANome || p.equipeAId.slice(0, 8)}
+                            </div>
+                          </div>
+
+                          <div className="self-stretch flex items-center justify-center">
+                            {renderPlacarResumo(p.detalhesPlacar)}
+                          </div>
+
+                          <div className="min-w-0 text-left">
+                            <div className="font-bold text-slate-900 leading-tight break-words">
+                              {p.equipeBNome || p.equipeBId.slice(0, 8)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
+                        <div className="text-xs">
+                          {p.dataHorario ? (
+                            <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                              <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                              {formatDataHora(p.dataHorario)}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-amber-600 font-medium">
+                              <Calendar className="h-3.5 w-3.5" />
+                              {p.dataLimite ? `Limite: ${formatData(p.dataLimite)}` : "Sem agendamento"}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
+                          <button
+                            type="button"
+                            onClick={() => gerarCardPartida(p)}
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                            title="Gerar card da partida"
+                          >
+                            <ImageIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => gerarCardProgramacao(p)}
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                            title="Gerar card de programação"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => abrirAgendamento(p)}
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                            title="Agendar"
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => startEditPartida(p)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
+                          >
+                            Lançar placar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => abrirAlterarConfronto(p)}
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                            title="Alterar confronto"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : abaAtiva === "jogos" ? (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Partidas</h2>
+              <p className="text-sm text-slate-600">Fase {fase === "FINAL" ? "Final" : fase}.</p>
+            </div>
+          </div>
+          {(fase === "QUARTAS" || fase === "SEMI") && semifinalistasBye ? (
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Semifinalistas (bye)</div>
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">1º colocado</div>
+                  <div className="mt-1 font-semibold text-slate-900">{semifinalistasBye.s1.equipeNome}</div>
+                  <div className="mt-1 text-xs text-slate-500">Aguardando o pior classificado entre os vencedores das quartas</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">2º colocado</div>
+                  <div className="mt-1 font-semibold text-slate-900">{semifinalistasBye.s2.equipeNome}</div>
+                  <div className="mt-1 text-xs text-slate-500">Aguardando o outro vencedor das quartas</div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {partidasFiltradas.length === 0 ? (
+            <div className="mt-4 py-10 text-center text-slate-500">Nenhuma partida encontrada.</div>
+          ) : fase === "FINAL" ? (
+            <div className="mt-4 space-y-6">
+              {partidasAgrupadasDecisivas.map((grupo) => (
+                <section key={grupo.titulo} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{grupo.titulo}</h3>
+                    <span className="text-xs font-medium text-slate-500">{grupo.partidas.length} jogo(s)</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {grupo.partidas.map((p) => (
+                      <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                              <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
+                                {labelFasePartida(p.fase)}
+                              </span>
+                              {p.arenaNome ? (
+                                <span className="flex items-center gap-1">
+                                  {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome ?? "Arena"} className="h-4 w-4 rounded-full object-cover" /> : null}
+                                  <MapPin className="h-3 w-3 text-slate-400" />
+                                  {p.arenaNome}
+                                  {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-slate-400">
+                                  <MapPin className="h-3 w-3" />
+                                  Local a definir
+                                </span>
+                              )}
+                            </div>
+                            {getStatusBadge(p.status, p.dataHorario)}
+                          </div>
+
+                          <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                            <div className="min-w-0 text-right">
+                              <div className="font-bold text-slate-900 leading-tight break-words">
+                                {p.equipeANome || p.equipeAId.slice(0, 8)}
+                              </div>
+                            </div>
+
+                            <div className="self-stretch flex items-center justify-center">
+                              {renderPlacarResumo(p.detalhesPlacar)}
+                            </div>
+
+                            <div className="min-w-0 text-left">
+                              <div className="font-bold text-slate-900 leading-tight break-words">
+                                {p.equipeBNome || p.equipeBId.slice(0, 8)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
+                          <div className="text-xs">
+                            {p.dataHorario ? (
+                              <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                                <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                                {formatDataHora(p.dataHorario)}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-amber-600 font-medium">
+                                <Calendar className="h-3.5 w-3.5" />
+                                {p.dataLimite ? `Limite: ${formatData(p.dataLimite)}` : "Sem agendamento"}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
+                            <button
+                              type="button"
+                              onClick={() => gerarCardPartida(p)}
+                              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                              title="Gerar card da partida"
+                            >
+                              <ImageIcon className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => abrirAgendamento(p)}
+                              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                              title="Agendar"
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => startEditPartida(p)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
+                            >
+                              Lançar placar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => abrirAlterarConfronto(p)}
+                              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                              title="Alterar confronto"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {partidasFiltradas.map((p) => (
+                <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                        {p.arenaNome ? (
+                              <span className="flex items-center gap-1">
+                                {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome ?? "Arena"} className="h-4 w-4 rounded-full object-cover" /> : null}
+                                <MapPin className="h-3 w-3 text-slate-400" />
+                                {p.arenaNome}
+                                {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-slate-400">
+                                <MapPin className="h-3 w-3" />
+                                Local a definir
+                              </span>
+                            )}
+                          </div>
+                          {getStatusBadge(p.status, p.dataHorario)}
+                        </div>
+
+                    <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                      <div className="min-w-0 text-right">
+                        <div className="font-bold text-slate-900 leading-tight break-words">
+                          {p.equipeANome || p.equipeAId.slice(0, 8)}
+                        </div>
+                      </div>
+
+                      <div className="self-stretch flex items-center justify-center">
+                        {renderPlacarResumo(p.detalhesPlacar)}
+                      </div>
+
+                      <div className="min-w-0 text-left">
+                        <div className="font-bold text-slate-900 leading-tight break-words">
+                          {p.equipeBNome || p.equipeBId.slice(0, 8)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
+                    <div className="text-xs">
+                      {p.dataHorario ? (
+                            <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                              <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                              {formatDataHora(p.dataHorario)}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-amber-600 font-medium">
+                              <Calendar className="h-3.5 w-3.5" />
+                              {p.dataLimite ? `Limite: ${formatData(p.dataLimite)}` : "Sem agendamento"}
+                            </div>
+                          )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
+                      <button
+                        type="button"
+                        onClick={() => gerarCardPartida(p)}
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                        title="Gerar card da partida"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => abrirAgendamento(p)}
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                        title="Agendar"
+                      >
+                        <Calendar className="h-4 w-4" />
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={() => startEditPartida(p)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
+                      >
+                        Lançar placar
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={() => abrirAlterarConfronto(p)}
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                        title="Alterar confronto"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {editRodadaId &&
         (() => {
