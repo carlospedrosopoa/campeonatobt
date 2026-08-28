@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  ImageIcon,
   MapPin,
   Pencil,
   Save,
@@ -17,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { isRegrasBeachTennisSets, obterRegrasPartidaEfetivas, type RegrasPartidaConfig, type RegrasPartidaPorFase } from "@/lib/regras-partida";
+import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
   id: string;
@@ -58,6 +60,7 @@ type Partida = {
   quadra?: string | null;
   dataHorario?: string | null;
   dataLimite?: string | null;
+  fotoUrl?: string | null;
   equipeAId: string;
   equipeANome: string | null;
   equipeAAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
@@ -154,6 +157,9 @@ export default function AdminLancarPlacarMobilePage() {
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [config, setConfig] = useState<CategoriaConfig | null>(null);
   const [torneioSuperCampeonatoFormato, setTorneioSuperCampeonatoFormato] = useState<"2_SET_SUPER_TIE" | "1_SET">("2_SET_SUPER_TIE");
+  const [torneioNome, setTorneioNome] = useState("");
+  const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
+  const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
 
@@ -194,6 +200,9 @@ export default function AdminLancarPlacarMobilePage() {
       if (resTorneio.ok) {
         const t = (await resTorneio.json()) as any;
         setTorneioSuperCampeonatoFormato(t?.superCampeonatoFormato === "1_SET" ? "1_SET" : "2_SET_SUPER_TIE");
+        setTorneioNome(t?.nome || "");
+        setTorneioCardApenasComFotos(Boolean(t?.cardApenasComFotos));
+        setTorneioTemplateUrl(t?.templateUrl || null);
       }
 
       if (resConfig.ok) {
@@ -470,6 +479,45 @@ export default function AdminLancarPlacarMobilePage() {
     }
   }
 
+  async function gerarCardPartida(p: Partida) {
+    try {
+      setErro(null);
+      if ((p.fotoUrl || "").trim()) {
+        window.open(p.fotoUrl as string, "_blank");
+        return;
+      }
+      const result = await gerarCardPartidaAdmin({
+        torneioNome,
+        categoriaNome: categoria?.nome || "Categoria",
+        cardApenasComFotos: torneioCardApenasComFotos,
+        templateUrl: torneioTemplateUrl,
+        syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
+        salvarNoGcs: true,
+        uploadFolder: `campeonatos/cards/partidas/${slug}`,
+        persistFotoUrlApi: `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}`,
+        partida: {
+          id: p.id,
+          fase: p.fase,
+          rodadaNome: p.rodadaNome ?? null,
+          rodadaNumero: p.rodadaNumero ?? null,
+          dataHorario: p.dataHorario ?? null,
+          arenaNome: p.arenaNome ?? null,
+          quadra: p.quadra ?? null,
+          equipeANome: p.equipeANome ?? null,
+          equipeAAtletas: p.equipeAAtletas ?? [],
+          equipeBNome: p.equipeBNome ?? null,
+          equipeBAtletas: p.equipeBAtletas ?? [],
+        },
+      });
+      const url = (result?.url || "").trim();
+      if (url) {
+        setPartidas((prev) => prev.map((it) => (it.id === p.id ? { ...it, fotoUrl: url } : it)));
+      }
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível gerar o card da partida");
+    }
+  }
+
   if (carregando) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -625,7 +673,17 @@ export default function AdminLancarPlacarMobilePage() {
                       </span>
                     )}
                   </div>
-                  <StatusBadge status={p.status} dataHorario={p.dataHorario} />
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => gerarCardPartida(p)}
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white h-8 w-8 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                      title="Gerar card do jogo"
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                    </button>
+                    <StatusBadge status={p.status} dataHorario={p.dataHorario} />
+                  </div>
                 </div>
 
                 <div className="px-3 py-4 space-y-2">
@@ -668,27 +726,34 @@ export default function AdminLancarPlacarMobilePage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 px-3 pb-3">
+                <div className="grid grid-cols-3 gap-2 px-3 pb-3">
                   <button
                     type="button"
                     onClick={() => abrirEditarPlacar(p)}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-sm font-bold shadow-sm disabled:opacity-50 ${
+                    className={`inline-flex items-center justify-center gap-1 rounded-xl px-2 py-3 text-[13px] font-bold shadow-sm disabled:opacity-50 ${
                       temPlacar
                         ? "bg-slate-900 text-white hover:bg-slate-800"
                         : "bg-emerald-600 text-white hover:bg-emerald-700"
                     }`}
                   >
                     <Pencil className="h-4 w-4" />
-                    <span>{temPlacar ? "Editar placar" : "Lançar placar"}</span>
+                    <span className="truncate">{temPlacar ? "Editar" : "Placar"}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => abrirAgendamento(p)}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50"
+                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-3 text-[13px] font-bold text-slate-800 hover:bg-slate-50"
                   >
                     <Clock className="h-4 w-4" />
-                    <span>Agendar</span>
+                    <span className="truncate">Agendar</span>
                   </button>
+                  <Link
+                    href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/arbitro`}
+                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2 py-3 text-[13px] font-bold text-indigo-700 hover:bg-indigo-100"
+                  >
+                    <Smartphone className="h-4 w-4" />
+                    <span className="truncate">Árbitro</span>
+                  </Link>
                 </div>
               </article>
             );
