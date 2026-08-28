@@ -18,7 +18,11 @@ type CategoriaConfigTabelaPdf = {
   formato: "GRUPOS" | "MATA_MATA" | "LIGA";
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean };
-  mataMata?: { quantidadeClassificados?: number; habilitarReseed?: "AUTO" | "SEMPRE" | "NUNCA" };
+  mataMata?: {
+    estrutura?: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
+    quantidadeClassificados?: number;
+    habilitarReseed?: boolean | "AUTO" | "SEMPRE" | "NUNCA";
+  };
 };
 
 type GrupoClassificacaoTabelaPdf = {
