@@ -18,6 +18,7 @@ type CategoriaConfigTabelaPdf = {
   formato: "GRUPOS" | "MATA_MATA" | "LIGA";
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean };
+  mataMata?: { quantidadeClassificados?: number; habilitarReseed?: "AUTO" | "SEMPRE" | "NUNCA" };
 };
 
 type GrupoClassificacaoTabelaPdf = {
@@ -113,25 +114,75 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
 
   const porGrupo = config.classificacao?.porGrupo ?? 2;
   const melhoresTerceiros = config.classificacao?.melhoresTerceiros ?? 0;
-  const totalClassificados = grupos.length * porGrupo + melhoresTerceiros;
+  const totalClassificadosCalc = grupos.length * porGrupo + melhoresTerceiros;
+  const totalClassificados = params.superCampeonato
+    ? (config.mataMata?.quantidadeClassificados ?? totalClassificadosCalc ?? 4)
+    : totalClassificadosCalc;
   const rounds: { titulo: string; jogos: string[] }[] = [];
   const observacoes: string[] = [];
 
   if (params.superCampeonato) {
-    rounds.push({
-      titulo: "Quartas de final",
-      jogos: ["J1: 3o colocado geral x 6o colocado geral", "J2: 4o colocado geral x 5o colocado geral"],
-    });
-    rounds.push({
-      titulo: "Semifinais",
-      jogos: ["SF1: 1o colocado geral x pior vencedor das quartas", "SF2: 2o colocado geral x melhor vencedor das quartas"],
-    });
-    rounds.push({
-      titulo: "Final",
-      jogos: ["F: vencedor da SF1 x vencedor da SF2"],
-    });
-    observacoes.push("Os 1o e 2o colocados gerais entram direto nas semifinais.");
-    observacoes.push("A ordem das semifinais respeita a campanha da fase de grupos.");
+    if (totalClassificados <= 2) {
+      rounds.push({
+        titulo: "Final",
+        jogos: ["F: 1o colocado geral x 2o colocado geral"],
+      });
+    } else if (totalClassificados === 4) {
+      rounds.push({
+        titulo: "Semifinais",
+        jogos: ["SF1: 1o colocado geral x 4o colocado geral", "SF2: 2o colocado geral x 3o colocado geral"],
+      });
+      rounds.push({
+        titulo: "Final",
+        jogos: ["F: vencedor da SF1 x vencedor da SF2"],
+      });
+      observacoes.push("Os 4 melhores colocados gerais se enfrentam em cruzamento 1x4 / 2x3.");
+    } else if (totalClassificados === 6) {
+      rounds.push({
+        titulo: "Quartas de final",
+        jogos: ["J1: 3o colocado geral x 6o colocado geral", "J2: 4o colocado geral x 5o colocado geral"],
+      });
+      rounds.push({
+        titulo: "Semifinais",
+        jogos: ["SF1: 1o colocado geral x pior vencedor das quartas", "SF2: 2o colocado geral x melhor vencedor das quartas"],
+      });
+      rounds.push({
+        titulo: "Final",
+        jogos: ["F: vencedor da SF1 x vencedor da SF2"],
+      });
+      observacoes.push("Os 1o e 2o colocados gerais entram direto nas semifinais.");
+      observacoes.push("A ordem das semifinais respeita a campanha da fase de grupos.");
+    } else if ([8, 16].includes(totalClassificados)) {
+      const primeiraFase = faseParaQuantidade(totalClassificados);
+      const jogosPrimeiraFase: string[] = [];
+      for (let i = 1; i <= totalClassificados / 2; i += 1) {
+        jogosPrimeiraFase.push(
+          `J${i}: ${formatarPosicaoClassificacao(i)} x ${formatarPosicaoClassificacao(totalClassificados + 1 - i)}`
+        );
+      }
+      rounds.push({ titulo: primeiraFase, jogos: jogosPrimeiraFase });
+      rounds.push({
+        titulo: "Semifinais",
+        jogos: [
+          `SF1: Vencedor do J1 x Vencedor do J2`,
+          `SF2: Vencedor do J${totalClassificados / 2 - 1} x Vencedor do J${totalClassificados / 2}`,
+        ],
+      });
+      rounds.push({
+        titulo: "Final",
+        jogos: ["F: Vencedor da SF1 x Vencedor da SF2"],
+      });
+    } else {
+      rounds.push({
+        titulo: faseParaQuantidade(totalClassificados),
+        jogos: [`Mata-mata com os ${totalClassificados} primeiros colocados gerais.`],
+      });
+      rounds.push({
+        titulo: "Final",
+        jogos: ["F: definida apos a fase anterior."],
+      });
+      observacoes.push(`Serao classificados ${totalClassificados} colocados gerais para o mata-mata.`);
+    }
   } else if (grupos.length === 1 && totalClassificados === 2) {
     rounds.push({
       titulo: "Final",
