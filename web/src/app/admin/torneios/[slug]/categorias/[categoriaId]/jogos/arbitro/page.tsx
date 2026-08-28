@@ -3,7 +3,21 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, ChevronDown, ChevronUp, Loader2, RefreshCw, Save, Trophy, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  ImageIcon,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  Save,
+  Smartphone,
+  Trophy,
+  X,
+} from "lucide-react";
 import {
   isRegrasBeachTennisSets,
   isRegrasVoleiSets,
@@ -12,6 +26,7 @@ import {
   type RegrasPartidaPorFase,
   type SuperCampeonatoFormato,
 } from "@/lib/regras-partida";
+import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 
 type Categoria = {
   id: string;
@@ -58,8 +73,10 @@ type Partida = {
   rodadaNumero?: number | null;
   dataHorario?: string | null;
   dataLimite?: string | null;
+  arenaId?: string | null;
   arenaNome?: string | null;
   quadra?: string | null;
+  fotoUrl?: string | null;
   equipeAId: string;
   equipeANome: string | null;
   equipeBId: string;
@@ -67,6 +84,8 @@ type Partida = {
   vencedorId: string | null;
   detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
 };
+
+type Arena = { id: string; nome: string; logoUrl?: string | null };
 
 type FormPlacar = {
   s1a: string;
@@ -164,6 +183,22 @@ function nomeEquipe(partida: Pick<Partida, "equipeAId" | "equipeANome" | "equipe
   return nome || id.slice(0, 8);
 }
 
+function toLocalDateTimeInput(value: string | null | undefined) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function toLocalDateInput(value: string | null | undefined) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
 export default function AdminCategoriaJogosArbitroPage() {
   const params = useParams<{ slug: string; categoriaId: string }>();
   const slug = params.slug;
@@ -171,6 +206,8 @@ export default function AdminCategoriaJogosArbitroPage() {
 
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [torneio, setTorneio] = useState<TorneioResumo | null>(null);
+  const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
+  const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [config, setConfig] = useState<CategoriaConfig | null>(null);
   const [classificacao, setClassificacao] = useState<GrupoClassificacao[]>([]);
   const [partidas, setPartidas] = useState<Partida[]>([]);
@@ -186,6 +223,15 @@ export default function AdminCategoriaJogosArbitroPage() {
   const [editPartidaFase, setEditPartidaFase] = useState<string | null>(null);
   const [salvandoPartida, setSalvandoPartida] = useState(false);
   const [formPlacar, setFormPlacar] = useState<FormPlacar>(FORM_PLACAR_VAZIO);
+
+  const [editAgendamentoId, setEditAgendamentoId] = useState<string | null>(null);
+  const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
+  const [arenas, setArenas] = useState<Arena[]>([]);
+  const [agendaArenaId, setAgendaArenaId] = useState("");
+  const [agendaQuadra, setAgendaQuadra] = useState("");
+  const [agendaDataHorario, setAgendaDataHorario] = useState("");
+  const [agendaDataLimite, setAgendaDataLimite] = useState("");
+  const [carregandoArenas, setCarregandoArenas] = useState(false);
 
   const partidaEditandoInterno = partidas.find((partida) => partida.id === editPartidaId) ?? null;
   const regrasEfetivas = useMemo(() => {
@@ -237,6 +283,8 @@ export default function AdminCategoriaJogosArbitroPage() {
           superCampeonato: Boolean(data?.superCampeonato),
           superCampeonatoFormato: data?.superCampeonatoFormato === "1_SET" ? "1_SET" : "2_SET_SUPER_TIE",
         });
+        setTorneioCardApenasComFotos(Boolean(data?.cardApenasComFotos));
+        setTorneioTemplateUrl(data?.templateUrl || null);
       }
 
       if (resConfig.ok) setConfig((await resConfig.json()) as CategoriaConfig);
@@ -568,6 +616,7 @@ export default function AdminCategoriaJogosArbitroPage() {
   }
 
   const partidaEditando = partidaEditandoInterno ?? partidas.find((partida) => partida.id === editPartidaId) ?? null;
+  const partidaAgendando = partidas.find((partida) => partida.id === editAgendamentoId) ?? null;
   const regrasBT = isRegrasBeachTennisSets(regrasEfetivas) ? regrasEfetivas : null;
   const regrasVolei = isRegrasVoleiSets(regrasEfetivas) ? regrasEfetivas : null;
   const melhorDe = regrasVolei?.melhorDe ?? regrasBT?.melhorDe ?? 1;
@@ -594,6 +643,100 @@ export default function AdminCategoriaJogosArbitroPage() {
     { aKey: "s4a", bKey: "s4b" },
     { aKey: "s5a", bKey: "s5b" },
   ];
+
+  async function abrirAgendamento(p: Partida) {
+    setEditAgendamentoId(p.id);
+    setAgendaArenaId(p.arenaId ?? "");
+    setAgendaQuadra((p.quadra ?? "").toString());
+    setAgendaDataHorario(toLocalDateTimeInput(p.dataHorario ?? null));
+    setAgendaDataLimite(toLocalDateInput(p.dataLimite ?? null));
+
+    if (arenas.length > 0) return;
+    try {
+      setCarregandoArenas(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/arenas`, { cache: "no-store" });
+      if (!res.ok) return;
+      const rows = (await res.json()) as any[];
+      const lista = rows
+        .map((a) => ({ id: a.id as string, nome: (a.nome as string) ?? "", logoUrl: (a.logoUrl as string | null | undefined) ?? null }))
+        .filter((a) => a.id && a.nome)
+        .sort((a, b) => a.nome.localeCompare(b.nome));
+      setArenas(lista);
+    } finally {
+      setCarregandoArenas(false);
+    }
+  }
+
+  async function salvarAgendamento(partida: Partida) {
+    try {
+      setSalvandoAgendamento(true);
+      setErro(null);
+      setFlash(null);
+      if (agendaDataHorario.trim() && !agendaArenaId) throw new Error("Selecione uma arena para agendar a partida");
+      const toIsoDateTime = (v: string) => (v.trim() ? new Date(v).toISOString() : null);
+      const toIsoDate = (v: string) => (v.trim() ? new Date(`${v}T00:00:00`).toISOString() : null);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partida.id}/agendamento`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          arenaId: agendaArenaId || null,
+          quadra: agendaQuadra.trim() || null,
+          dataHorario: toIsoDateTime(agendaDataHorario),
+          dataLimite: toIsoDate(agendaDataLimite),
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao salvar agendamento");
+      await carregarPartidas();
+      setFlash("Agendamento salvo com sucesso.");
+      setEditAgendamentoId(null);
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoAgendamento(false);
+    }
+  }
+
+  async function gerarCardPartida(p: Partida) {
+    try {
+      setErro(null);
+      setFlash(null);
+      if ((p.fotoUrl || "").trim()) {
+        window.open(p.fotoUrl as string, "_blank");
+        return;
+      }
+      const result = await gerarCardPartidaAdmin({
+        torneioNome: torneio?.nome || "",
+        categoriaNome: categoria?.nome || "Categoria",
+        cardApenasComFotos: torneioCardApenasComFotos,
+        templateUrl: torneioTemplateUrl,
+        syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
+        salvarNoGcs: true,
+        uploadFolder: `campeonatos/cards/partidas/${slug}`,
+        persistFotoUrlApi: `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}`,
+        partida: {
+          id: p.id,
+          fase: p.fase,
+          rodadaNome: p.rodadaNome ?? null,
+          rodadaNumero: p.rodadaNumero ?? null,
+          dataHorario: p.dataHorario ?? null,
+          arenaNome: p.arenaNome ?? null,
+          quadra: p.quadra ?? null,
+          equipeANome: p.equipeANome ?? null,
+          equipeAAtletas: [],
+          equipeBNome: p.equipeBNome ?? null,
+          equipeBAtletas: [],
+        },
+      });
+      const url = (result?.url || "").trim();
+      if (url) {
+        setPartidas((prev) => prev.map((it) => (it.id === p.id ? { ...it, fotoUrl: url } : it)));
+        setFlash("Card da partida gerado com sucesso.");
+      }
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível gerar o card da partida");
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -764,16 +907,35 @@ export default function AdminCategoriaJogosArbitroPage() {
                     {grupo.partidas.map((partida) => (
                       <article key={partida.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                         <div className="mb-3 flex items-center justify-between gap-2">
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">
                               {partida.grupoNome || partida.rodadaNome || LABEL_FASE[partida.fase]}
                             </div>
                             <div className="mt-1 text-xs text-slate-500">
-                              {formatDataHora(partida.dataHorario) || (partida.dataLimite ? `Limite ${formatDataHora(partida.dataLimite)}` : "Sem horário")}
-                              {partida.arenaNome ? ` • ${partida.arenaNome}${partida.quadra ? ` • Q. ${partida.quadra}` : ""}` : ""}
+                              <span className="inline-flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {formatDataHora(partida.dataHorario) || (partida.dataLimite ? `Limite ${formatDataHora(partida.dataLimite)}` : "Sem horário")}
+                              </span>
+                              {partida.arenaNome && (
+                                <span className="inline-flex items-center gap-1 ml-2">
+                                  <MapPin className="h-3 w-3" />
+                                  {partida.arenaNome}
+                                  {partida.quadra ? ` • Q. ${partida.quadra}` : ""}
+                                </span>
+                              )}
                             </div>
                           </div>
-                          {getStatusBadge(partida.status, partida.dataHorario)}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => gerarCardPartida(partida)}
+                              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white h-8 w-8 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                              title="Gerar card do jogo"
+                            >
+                              <ImageIcon className="h-4 w-4" />
+                            </button>
+                            {getStatusBadge(partida.status, partida.dataHorario)}
+                          </div>
                         </div>
 
                         <div className="space-y-2">
@@ -795,14 +957,33 @@ export default function AdminCategoriaJogosArbitroPage() {
                           Placar completo: <span className="font-semibold text-slate-900">{formatPlacar(partida.detalhesPlacar)}</span>
                         </div>
 
-                        <div className="mt-3">
+                        <div className="mt-3 grid grid-cols-3 gap-2">
                           <button
                             type="button"
                             onClick={() => startEditPartida(partida)}
-                            className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+                            className={`rounded-xl px-2 py-3 text-[13px] font-bold shadow-sm ${
+                              partida.status === "FINALIZADA" || partida.status === "WO"
+                                ? "bg-slate-900 text-white hover:bg-slate-800"
+                                : "bg-orange-500 text-white hover:bg-orange-600"
+                            }`}
                           >
-                            {partida.status === "FINALIZADA" || partida.status === "WO" ? "Editar placar" : "Informar placar"}
+                            {partida.status === "FINALIZADA" || partida.status === "WO" ? "Editar" : "Placar"}
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => abrirAgendamento(partida)}
+                            className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-3 text-[13px] font-bold text-slate-800 hover:bg-slate-50"
+                          >
+                            <Clock className="h-4 w-4" />
+                            <span className="truncate">Agendar</span>
+                          </button>
+                          <Link
+                            href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/lancar-placar`}
+                            className="inline-flex items-center justify-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2 py-3 text-[13px] font-bold text-indigo-700 hover:bg-indigo-100"
+                          >
+                            <Smartphone className="h-4 w-4" />
+                            <span className="truncate">Lançar</span>
+                          </Link>
                         </div>
                       </article>
                     ))}
@@ -923,6 +1104,100 @@ export default function AdminCategoriaJogosArbitroPage() {
                 >
                   {salvandoPartida ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {salvandoPartida ? "Salvando..." : "Salvar placar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {partidaAgendando ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/50 sm:items-center sm:justify-center">
+          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-t-3xl bg-white shadow-xl sm:rounded-3xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Agendar jogo</div>
+                <div className="mt-1 text-base font-bold text-slate-900">
+                  {nomeEquipe(partidaAgendando, "A")} <span className="text-slate-400">vs</span> {nomeEquipe(partidaAgendando, "B")}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditAgendamentoId(null)}
+                className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-800">Arena</label>
+                <select
+                  value={agendaArenaId}
+                  onChange={(e) => setAgendaArenaId(e.target.value)}
+                  disabled={carregandoArenas}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300 bg-white disabled:opacity-50"
+                >
+                  <option value="">{arenas.length === 0 ? "Nenhuma arena cadastrada" : "Selecione uma arena"}</option>
+                  {arenas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-800">Quadra (opcional)</label>
+                <input
+                  value={agendaQuadra}
+                  onChange={(e) => setAgendaQuadra(e.target.value)}
+                  placeholder="Ex: 1"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-800">Data e horário</label>
+                <input
+                  type="datetime-local"
+                  step={60}
+                  value={agendaDataHorario}
+                  onChange={(e) => setAgendaDataHorario(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-800">Data limite (opcional)</label>
+                <input
+                  type="date"
+                  value={agendaDataLimite}
+                  onChange={(e) => setAgendaDataLimite(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 bg-white px-4 py-4">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditAgendamentoId(null)}
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void salvarAgendamento(partidaAgendando)}
+                  disabled={salvandoAgendamento}
+                  className="flex-[2] inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {salvandoAgendamento ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {salvandoAgendamento ? "Salvando…" : "Salvar agendamento"}
                 </button>
               </div>
             </div>
