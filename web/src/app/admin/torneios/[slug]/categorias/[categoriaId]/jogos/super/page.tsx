@@ -1448,6 +1448,15 @@ export default function AdminCategoriaJogosSuperPage() {
               {gerandoRelatorioJogos ? "Gerando…" : "PDF tabela jogos"}
             </button>
 
+            <Link
+              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/lancar-placar`}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+              title="Abrir tela rápida mobile de lançamento de placar e agendamentos"
+            >
+              <Smartphone className="h-4 w-4" />
+              Tela celular
+            </Link>
+
             <button
               type="button"
               disabled={gerandoPlanilhaContingencia}
