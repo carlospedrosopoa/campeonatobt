@@ -232,56 +232,70 @@ function findRoundRobinOrderMatchingFirstRounds(params: {
   const n = teams.length;
   const expectedRounds = n - 1;
   const K = Math.min(params.firstRoundPairs.length, expectedRounds);
+  if (K === 0) return null;
 
-  const pairKey = (a: string, b: string) => (a < b ? `${a}||${b}` : `${b}||${a}`);
+  const pairKey = (a: string, b: string) => {
+    const sa = String(a);
+    const sb = String(b);
+    return sa < sb ? `${sa}||${sb}` : `${sb}||${sa}`;
+  };
   const firstRoundPairSets = params.firstRoundPairs
     .slice(0, K)
     .map((round) => new Set(round.map(([a, b]) => pairKey(String(a), String(b)))));
 
-  function normalizarRoundRobin(arr: string[]) {
-    const rounds: Set<string>[] = [];
-    const totalRounds = arr.length - 1;
+  function matchesAllRounds(arr: string[]): boolean {
+    const half = arr.length / 2;
     let current = [...arr];
-    for (let r = 0; r < totalRounds; r++) {
-      const pairs = new Set<string>();
-      const half = current.length / 2;
+    for (let r = 0; r < K; r++) {
+      const expected = firstRoundPairSets[r];
+      if (!expected) continue;
+      const got = new Set<string>();
       for (let i = 0; i < half; i++) {
         const a = current[i];
         const b = current[current.length - 1 - i];
         if (a === "__BYE__" || b === "__BYE__") continue;
-        pairs.add(pairKey(a, b));
+        got.add(pairKey(a, b));
       }
-      rounds.push(pairs);
+      if (expected.size !== got.size) return false;
+      for (const p of expected) if (!got.has(p)) return false;
       const fixed = current[0];
       const rest = current.slice(1);
-      rest.unshift(rest.pop() as string);
+      const last = rest.pop() as string;
+      rest.unshift(last);
       current = [fixed, ...rest];
-    }
-    return rounds;
-  }
-
-  const used = new Set<string>();
-  const positions: string[] = Array.from({ length: n }, () => "");
-
-  function matchesFirstRounds(arr: string[]) {
-    const generated = normalizarRoundRobin(arr);
-    for (let r = 0; r < K; r++) {
-      const expected = firstRoundPairSets[r];
-      const got = generated[r];
-      if (!expected || !got) continue;
-      if (expected.size !== got.size) return false;
-      for (const p of expected) {
-        if (!got.has(p)) return false;
-      }
     }
     return true;
   }
 
-  function backtrack(pos: number): boolean {
-    if (pos === n) {
-      return matchesFirstRounds(positions);
+  const rebuild = tryRebuildFromRound1({
+    r1: params.firstRoundPairs[0] ?? [],
+    n,
+    matchesAllRounds,
+  });
+  if (rebuild) return rebuild;
+
+  if (n > 12) {
+    const deadline = Date.now() + 5_000;
+    const copy = [...teams];
+    while (Date.now() < deadline) {
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      if (matchesAllRounds(copy)) return [...copy];
     }
-    for (const t of teams) {
+    return null;
+  }
+
+  const used = new Set<string>();
+  const positions: string[] = Array.from({ length: n }, () => "");
+  const timeoutAt = Date.now() + 10_000;
+
+  function backtrack(pos: number): boolean {
+    if (Date.now() > timeoutAt) return false;
+    if (pos === n) return matchesAllRounds(positions);
+    for (let i = 0; i < teams.length; i++) {
+      const t = teams[i];
       if (used.has(t)) continue;
       positions[pos] = t;
       used.add(t);
@@ -294,6 +308,137 @@ function findRoundRobinOrderMatchingFirstRounds(params: {
   const ok = backtrack(0);
   if (!ok) return null;
   return [...positions];
+}
+
+function tryRebuildFromRound1(params: {
+  r1: [string, string][];
+  n: number;
+  matchesAllRounds: (arr: string[]) => boolean;
+}): string[] | null {
+  const { r1, n, matchesAllRounds } = params;
+  if (!r1 || r1.length === 0) return null;
+  const lastIdx = n - 1;
+  const half = n / 2;
+
+  const r1Norm: [string, string][] = r1.map(([a, b]) => [String(a), String(b)]);
+
+  const candidatesForFixed = new Set<string>();
+  for (const [a, b] of r1Norm) {
+    candidatesForFixed.add(a);
+    candidatesForFixed.add(b);
+  }
+  const candList = Array.from(candidatesForFixed);
+  const pairOpponent = new Map<string, string>();
+  for (const [a, b] of r1Norm) {
+    pairOpponent.set(a, b);
+    pairOpponent.set(b, a);
+  }
+
+  const fixedDeadline = Date.now() + 6_000;
+  for (let c = 0; c < candList.length; c++) {
+    if (Date.now() > fixedDeadline) break;
+    const fixed = candList[c];
+    const opponent = pairOpponent.get(fixed);
+    if (!opponent) continue;
+
+    const others: [string, string][] = [];
+    const used = new Set<string>([fixed, opponent]);
+    for (const [a, b] of r1Norm) {
+      if ((a === fixed && b === opponent) || (b === fixed && a === opponent)) continue;
+      if (used.has(a) || used.has(b)) continue;
+      others.push([a, b]);
+      used.add(a);
+      used.add(b);
+    }
+    const expectedOtherPairs = half - 1;
+    while (others.length < expectedOtherPairs) {
+      others.push(["__BYE__", "__BYE_FILL__"]);
+    }
+    const tooMany = others.length - expectedOtherPairs;
+    if (tooMany > 0) others.splice(expectedOtherPairs);
+
+    const m = others.length;
+    const maxCombos = 2_000_000;
+    const visitedOrderings = new Set<string>();
+    const order = Array.from({ length: m }, (_, i) => i);
+    let combos = 0;
+
+    const localDeadline = Date.now() + 6_000;
+    const checkFlipMask = (ordering: number[]) => {
+      if (Date.now() > localDeadline) return false;
+      const totalMasks = 1 << m;
+      for (let mask = 0; mask < totalMasks; mask++) {
+        if (++combos > maxCombos) return false;
+        if (Date.now() > localDeadline) return false;
+        const estado: string[] = new Array(n).fill("");
+        estado[0] = fixed;
+        estado[lastIdx] = opponent;
+        for (let k = 0; k < m; k++) {
+          const pair = others[ordering[k]];
+          const flip = ((mask >> k) & 1) === 1;
+          const esq = k + 1;
+          const dir = lastIdx - 1 - k;
+          estado[esq] = flip ? pair[1] : pair[0];
+          estado[dir] = flip ? pair[0] : pair[1];
+        }
+        if (estado.some((v) => !v)) continue;
+        if (matchesAllRounds(estado)) {
+          throw estado;
+        }
+      }
+      return true;
+    };
+
+    try {
+      const firstOrder = order.slice();
+      if (!checkFlipMask(firstOrder)) continue;
+
+      if (m <= 8) {
+        const ord = order.slice();
+        let hasNext = true;
+        let permCount = 0;
+        while (hasNext) {
+          permCount++;
+          if (permCount > 50000) break;
+          if (Date.now() > localDeadline) break;
+          hasNext = nextPermutation(ord);
+          if (hasNext) {
+            const key = ord.join(",");
+            if (visitedOrderings.has(key)) continue;
+            visitedOrderings.add(key);
+            if (!checkFlipMask(ord)) break;
+          }
+        }
+      }
+    } catch (estadoOrError) {
+      if (Array.isArray(estadoOrError) && estadoOrError.length === n) {
+        return estadoOrError as string[];
+      }
+    }
+  }
+
+  return null;
+}
+
+function nextPermutation(arr: number[]): boolean {
+  let i = arr.length - 2;
+  while (i >= 0 && arr[i] >= arr[i + 1]) i--;
+  if (i < 0) return false;
+  let j = arr.length - 1;
+  while (arr[j] <= arr[i]) j--;
+  const tmp = arr[i];
+  arr[i] = arr[j];
+  arr[j] = tmp;
+  let lo = i + 1;
+  let hi = arr.length - 1;
+  while (lo < hi) {
+    const t = arr[lo];
+    arr[lo] = arr[hi];
+    arr[hi] = t;
+    lo++;
+    hi--;
+  }
+  return true;
 }
 
 function partidaIniciada(p: { status?: any; vencedorId?: any; placarA?: any; placarB?: any; detalhesPlacar?: any }) {
