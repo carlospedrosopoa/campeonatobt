@@ -875,6 +875,34 @@ export class DinamicaCategoriaService {
     const rodadasAnteriores = Math.max(0, aPartirDaRodada - 1);
     const firstRoundPairsList: [string, string][][] = [];
     let allPreviousRoundsOk = true;
+
+    const pairKeyPrev = (a: string, b: string) => {
+      const sa = String(a);
+      const sb = String(b);
+      return sa < sb ? `${sa}||${sb}` : `${sb}||${sa}`;
+    };
+    const todosConfrontosAnterioresGlobal = new Map<string, number[]>();
+    for (const p of partidasRows) {
+      const n = getNumero(p.rodadaId);
+      if (n === null || n >= aPartirDaRodada) continue;
+      if (!p.equipeAId || !p.equipeBId) continue;
+      const kk = pairKeyPrev(p.equipeAId, p.equipeBId);
+      const arrGlobal = todosConfrontosAnterioresGlobal.get(kk) ?? [];
+      arrGlobal.push(n);
+      todosConfrontosAnterioresGlobal.set(kk, arrGlobal);
+    }
+    for (const [_k, rodadasList] of todosConfrontosAnterioresGlobal.entries()) {
+      const unicasRodadas = Array.from(new Set(rodadasList)).sort((a, b) => a - b);
+      if (unicasRodadas.length >= 2) {
+        const r1 = unicasRodadas[0];
+        const r2 = unicasRodadas[1];
+        throw new Error(
+          `As rodadas anteriores já contêm um confronto repetido: o mesmo jogo aparece na Rodada ${r1} e na Rodada ${r2}. ` +
+          `Corrija antes de gerar as demais rodadas (cada dupla só pode enfrentar outra uma única vez na fase de grupos).`
+        );
+      }
+    }
+
     for (let n = 1; n <= rodadasAnteriores; n++) {
       const pairs = partidasRows
         .filter((p) => getNumero(p.rodadaId) === n)
@@ -918,6 +946,51 @@ export class DinamicaCategoriaService {
     }
 
     const maxRodadas = rounds.length;
+
+    const pairKey = (a: string, b: string) => {
+      const sa = String(a);
+      const sb = String(b);
+      return sa < sb ? `${sa}||${sb}` : `${sb}||${sa}`;
+    };
+
+    const confrontosExistentesAnteriores = new Set<string>();
+    for (const p of partidasRows) {
+      const n = getNumero(p.rodadaId);
+      if (n === null || n >= aPartirDaRodada) continue;
+      if (!p.equipeAId || !p.equipeBId) continue;
+      confrontosExistentesAnteriores.add(pairKey(p.equipeAId, p.equipeBId));
+    }
+
+    for (let idx = aPartirDaRodada - 1; idx < rounds.length; idx++) {
+      const rodadaNumero = idx + 1;
+      for (const [a, b] of rounds[idx].pairs) {
+        const k = pairKey(a, b);
+        if (confrontosExistentesAnteriores.has(k)) {
+          const rodadasAntigasStr = Array.from(
+            (() => {
+              const m = new Map<string, number[]>();
+              for (const p of partidasRows) {
+                const n = getNumero(p.rodadaId);
+                if (n === null || n >= aPartirDaRodada) continue;
+                if (!p.equipeAId || !p.equipeBId) continue;
+                const kk = pairKey(p.equipeAId, p.equipeBId);
+                if (kk !== k) continue;
+                const arr = m.get(kk) ?? [];
+                arr.push(n);
+                m.set(kk, arr);
+              }
+              return m.get(k) ?? [];
+            })()
+          ).join(", ");
+          throw new Error(
+            `Conflito de confronto ao gerar rodadas: o mesmo jogo aparece já na(s) rodada(s) ${rodadasAntigasStr} e também seria criado na Rodada ${rodadaNumero}. ` +
+            `As rodadas 1 a ${aPartirDaRodada - 1} precisam formar um início válido de Round Robin (sem confrontos repetidos entre si). ` +
+            `Verifique as edições manuais realizadas e tente novamente.`
+          );
+        }
+        confrontosExistentesAnteriores.add(k);
+      }
+    }
 
     const resultado = await db.transaction(async (tx) => {
       if (rodadaIdsFrom.length > 0) {
