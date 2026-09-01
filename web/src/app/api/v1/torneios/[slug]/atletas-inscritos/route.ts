@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, usuarios } from "@/db/schema";
@@ -179,11 +179,12 @@ export async function GET(
       }>;
     }
   >();
-  const atletasJaIncluidos = new Set<string>();
+  const atletasJaIncluidosNaCategoria = new Set<string>();
 
   for (const r of rows) {
-    if (atletasJaIncluidos.has(r.atletaId)) continue;
-    atletasJaIncluidos.add(r.atletaId);
+    const dedupKey = `${r.categoriaId}::${r.atletaId}`;
+    if (atletasJaIncluidosNaCategoria.has(dedupKey)) continue;
+    atletasJaIncluidosNaCategoria.add(dedupKey);
 
     const catId = r.categoriaId;
     if (!byCategoria.has(catId)) {
