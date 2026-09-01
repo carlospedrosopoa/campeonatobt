@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, usuarios } from "@/db/schema";
@@ -11,11 +11,79 @@ function primeiroNome(nome: string) {
   return trimmed.split(/\s+/)[0] || "";
 }
 
-function montarNomeDupla(equipeNome: string | null, atletas: string[]) {
+function removerAcentos(str: string) {
+  return String(str || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function montarNomeDupla(
+  equipeNome: string | null,
+  atletasDaCategoriaNaEquipe: string[],
+  todosIntegrantesReaisDaEquipe: string[]
+) {
+  const integrantesReais =
+    Array.isArray(todosIntegrantesReaisDaEquipe) && todosIntegrantesReaisDaEquipe.length > 0
+      ? todosIntegrantesReaisDaEquipe
+      : atletasDaCategoriaNaEquipe ?? [];
+
+  const primeirosNomes = integrantesReais
+    .map(primeiroNome)
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i);
+
   const nomeEquipe = (equipeNome || "").trim();
-  if (nomeEquipe) return nomeEquipe;
-  const nomes = atletas.map(primeiroNome).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  return nomes.length > 0 ? nomes.join("/") : "Dupla";
+
+  if (primeirosNomes.length === 0) {
+    return nomeEquipe || "Dupla";
+  }
+
+  const usarIntegrantesOrdenados = () => {
+    return primeirosNomes.slice().sort((a, b) => a.localeCompare(b)).join("/") || "Dupla";
+  };
+
+  if (!nomeEquipe) return usarIntegrantesOrdenados();
+
+  const primeiroNomeSet = new Set(primeirosNomes.map((n) => n.toLowerCase()));
+  const integranteNomeCompletoSet = new Set(
+    integrantesReais.map((n) => removerAcentos(String(n || "").toLowerCase()))
+  );
+  const equipeNomeLower = nomeEquipe.toLowerCase();
+  const equipeNomeSemAcento = removerAcentos(equipeNomeLower);
+  const equipeNomeTemSeparador = nomeEquipe.includes("/") || nomeEquipe.includes(" e ") || nomeEquipe.includes("&");
+
+  let pareceNomeIndividual = false;
+  if (primeiroNomeSet.has(equipeNomeLower)) pareceNomeIndividual = true;
+  if (!pareceNomeIndividual) {
+    for (const nomeCompleto of integranteNomeCompletoSet) {
+      if (!nomeCompleto) continue;
+      if (nomeCompleto === equipeNomeSemAcento) { pareceNomeIndividual = true; break; }
+      if (nomeCompleto.startsWith(`${equipeNomeSemAcento} `)) { pareceNomeIndividual = true; break; }
+      if (equipeNomeSemAcento && nomeCompleto && equipeNomeSemAcento.length >= 3 && nomeCompleto.startsWith(equipeNomeSemAcento.split(/\s/)[0] as string) && equipeNomeSemAcento.split(/\s+/).length <= 2 && equipeNomeTemSeparador === false) {
+        const partes = equipeNomeLower.split(/\s+/).filter(Boolean);
+        if (partes.length <= 2 && primeiroNomeSet.has(partes[0] as string)) {
+          pareceNomeIndividual = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!pareceNomeIndividual && equipeNomeTemSeparador) {
+    return nomeEquipe;
+  }
+
+  if (!pareceNomeIndividual && primeirosNomes.length >= 2) {
+    const partesEquipe = nomeEquipe
+      .split(/[\s/&]+| e /i)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const matches = partesEquipe.filter((p) => primeiroNomeSet.has(p.toLowerCase())).length;
+    if (matches >= 2) return nomeEquipe;
+    if (matches === 0 && nomeEquipe.length >= 5) return nomeEquipe;
+  }
+
+  return usarIntegrantesOrdenados();
 }
 
 export async function GET(
@@ -69,6 +137,25 @@ export async function GET(
     .leftJoin(torneioAtletaPrefs, and(eq(torneioAtletaPrefs.torneioId, torneio.id), eq(torneioAtletaPrefs.usuarioId, usuarios.id)))
     .where(and(eq(inscricoes.torneioId, torneio.id), inArray(inscricoes.status, statusesFiltro as any)))
     .orderBy(asc(inscricoes.dataInscricao), asc(categorias.dataHorario), asc(categorias.nome), asc(equipes.nome), asc(usuarios.nome));
+
+  const equipeIdsUnicos = Array.from(new Set(rows.map((r) => r.equipeId).filter(Boolean)));
+  const integrantesReaisPorEquipe = new Map<string, string[]>();
+  if (equipeIdsUnicos.length > 0) {
+    const rowsIntegrantes = await db
+      .select({
+        equipeId: equipeIntegrantes.equipeId,
+        atletaNome: usuarios.nome,
+      })
+      .from(equipeIntegrantes)
+      .innerJoin(usuarios, eq(usuarios.id, equipeIntegrantes.usuarioId))
+      .where(inArray(equipeIntegrantes.equipeId, equipeIdsUnicos));
+    for (const r of rowsIntegrantes) {
+      if (!r.equipeId || !r.atletaNome) continue;
+      const arr = integrantesReaisPorEquipe.get(r.equipeId) ?? [];
+      arr.push(r.atletaNome);
+      integrantesReaisPorEquipe.set(r.equipeId, arr);
+    }
+  }
 
   const byCategoria = new Map<
     string,
@@ -158,7 +245,11 @@ export async function GET(
             atletaCamiseta:
               atleta.atletaCamiseta ??
               (atleta.atletaPlaynaquadraId ? camisetasDoPlay.get(atleta.atletaPlaynaquadraId) ?? null : null),
-            equipeNome: montarNomeDupla(atleta.equipeNome, atletasPorEquipe.get(atleta.equipeId) ?? []),
+            equipeNome: montarNomeDupla(
+              atleta.equipeNome,
+              atletasPorEquipe.get(atleta.equipeId) ?? [],
+              integrantesReaisPorEquipe.get(atleta.equipeId) ?? []
+            ),
           }))
           .sort((a, b) => {
             const equipe = (a.equipeNome || "").localeCompare(b.equipeNome || "");
