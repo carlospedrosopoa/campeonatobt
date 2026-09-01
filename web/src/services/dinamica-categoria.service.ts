@@ -441,6 +441,136 @@ function nextPermutation(arr: number[]): boolean {
   return true;
 }
 
+function pairKeyNorm(a: string, b: string): string {
+  const sa = String(a);
+  const sb = String(b);
+  return sa < sb ? `${sa}||${sb}` : `${sb}||${sa}`;
+}
+
+function completeRoundsWithGreedyMatching(params: {
+  teamIds: string[];
+  existingRoundsPairs: [string, string][][];
+}): { pairs: [string, string][] }[] | null {
+  const teamsBase = [...params.teamIds];
+  if (teamsBase.length < 2) return null;
+  const teams = [...teamsBase];
+  const hasBye = teams.length % 2 !== 0;
+  if (hasBye) teams.push("__BYE__");
+  const n = teams.length;
+  const totalRounds = n - 1;
+  const teamsSet = new Set(teams);
+
+  const usedEdges = new Set<string>();
+  const rounds: { pairs: [string, string][] }[] = [];
+
+  for (let r = 0; r < params.existingRoundsPairs.length; r++) {
+    const roundPairs: [string, string][] = [];
+    const seenThisRound = new Set<string>();
+    for (const [a0, b0] of params.existingRoundsPairs[r]) {
+      const a = String(a0);
+      const b = String(b0);
+      if (!teamsSet.has(a) || !teamsSet.has(b)) continue;
+      if (a === b) continue;
+      if (seenThisRound.has(a) || seenThisRound.has(b)) continue;
+      if (a === "__BYE__" || b === "__BYE__") {
+        const outro = a === "__BYE__" ? b : a;
+        if (seenThisRound.has("__BYE__") || seenThisRound.has(outro)) continue;
+      }
+      seenThisRound.add(a);
+      seenThisRound.add(b);
+      const k = pairKeyNorm(a, b);
+      if (!usedEdges.has(k)) {
+        usedEdges.add(k);
+      }
+      roundPairs.push([a, b]);
+    }
+    rounds.push({ pairs: roundPairs });
+  }
+
+  const alreadyCompletedRounds = rounds.length;
+
+  const buildOneMatching = (usedSet: Set<string>, disponiveisIniciais: Set<string>): [string, string][] | null => {
+    const disponiveis = new Set(disponiveisIniciais);
+    const result: [string, string][] = [];
+
+    const escolher = (): boolean => {
+      if (disponiveis.size === 0) return true;
+
+      let mrvTeam: string | null = null;
+      let mrvCount = Infinity;
+      let mrvOponentes: string[] = [];
+      const dispArr = Array.from(disponiveis);
+      for (const t of dispArr) {
+        const ops: string[] = [];
+        for (const u of dispArr) {
+          if (u === t) continue;
+          if (t === "__BYE__" && u === "__BYE__") continue;
+          const k = pairKeyNorm(t, u);
+          if (usedSet.has(k)) continue;
+          ops.push(u);
+        }
+        if (ops.length < mrvCount) {
+          mrvCount = ops.length;
+          mrvTeam = t;
+          mrvOponentes = ops;
+        }
+      }
+
+      if (!mrvTeam || mrvOponentes.length === 0) return false;
+
+      const t = mrvTeam;
+      disponiveis.delete(t);
+
+      for (let i = 0; i < mrvOponentes.length; i++) {
+        const u = mrvOponentes[i];
+        if (!disponiveis.has(u)) continue;
+        const k = pairKeyNorm(t, u);
+        if (usedSet.has(k)) continue;
+        usedSet.add(k);
+        disponiveis.delete(u);
+        result.push([t, u]);
+        if (escolher()) return true;
+        result.pop();
+        disponiveis.add(u);
+        usedSet.delete(k);
+      }
+
+      disponiveis.add(t);
+      return false;
+    };
+
+    if (!escolher()) return null;
+    return result;
+  };
+
+  for (let r = alreadyCompletedRounds; r < totalRounds; r++) {
+    const disp = new Set(teams);
+    let matched: [string, string][] | null = null;
+
+    for (let attempt = 0; attempt < 8 && matched === null; attempt++) {
+      const localUsed = new Set(usedEdges);
+      matched = buildOneMatching(localUsed, disp);
+      if (matched) {
+        for (const [a, b] of matched) usedEdges.add(pairKeyNorm(a, b));
+        const filtered: [string, string][] = matched.filter(
+          ([a, b]) => a !== "__BYE__" && b !== "__BYE__"
+        );
+        rounds.push({ pairs: filtered });
+        break;
+      }
+      const arrTeams = Array.from(disp);
+      for (let i = arrTeams.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arrTeams[i], arrTeams[j]] = [arrTeams[j], arrTeams[i]];
+      }
+    }
+
+    if (!matched) return null;
+  }
+
+  return rounds;
+}
+
 function partidaIniciada(p: { status?: any; vencedorId?: any; placarA?: any; placarB?: any; detalhesPlacar?: any }) {
   if (p.status && p.status !== "AGENDADA") return true;
   if (p.vencedorId) return true;
@@ -1067,6 +1197,7 @@ export class DinamicaCategoriaService {
 
     let initialOrder: string[] | null = null;
     let rounds: { pairs: [string, string][] }[] = [];
+    let usouGreedyComplemento = false;
 
     if (rodadasAnteriores === 0) {
       const shuffled = [...teamIds];
@@ -1075,19 +1206,35 @@ export class DinamicaCategoriaService {
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
       rounds = gerarRodadasRoundRobin(shuffled);
-    } else if (rodadasAnteriores === 1 || !allPreviousRoundsOk) {
-      initialOrder = buildInitialOrderFromRound1Pairs({ teamIds, round1Pairs: firstRoundPairsList[0] ?? [] });
-      rounds = gerarRodadasRoundRobinFromOrder(initialOrder);
     } else {
-      initialOrder = findRoundRobinOrderMatchingFirstRounds({ teamIds, firstRoundPairs: firstRoundPairsList });
-      if (!initialOrder) {
-        const qts = rodadasAnteriores;
-        throw new Error(
-          `Não foi possível encontrar uma tabela Round Robin compatível com as rodadas 1 a ${qts}. ` +
-          `Verifique se não há dupla repetida (duas equipes se enfrentando mais de uma vez) e se todas as equipes aparecem em cada rodada.`
-        );
+      try {
+        if (rodadasAnteriores === 1 || !allPreviousRoundsOk) {
+          initialOrder = buildInitialOrderFromRound1Pairs({ teamIds, round1Pairs: firstRoundPairsList[0] ?? [] });
+          rounds = gerarRodadasRoundRobinFromOrder(initialOrder);
+        } else {
+          initialOrder = findRoundRobinOrderMatchingFirstRounds({ teamIds, firstRoundPairs: firstRoundPairsList });
+          if (!initialOrder) throw new Error("__FALLBACK_GREEDY__");
+          rounds = gerarRodadasRoundRobinFromOrder(initialOrder);
+        }
+      } catch (e: any) {
+        const msg = typeof e?.message === "string" ? e.message : String(e ?? "");
+        if (msg !== "__FALLBACK_GREEDY__" && !msg.includes("Não foi possível encontrar uma tabela Round Robin") && !msg.includes("Falha ao montar")) {
+          throw e;
+        }
+        const completou = completeRoundsWithGreedyMatching({
+          teamIds,
+          existingRoundsPairs: firstRoundPairsList,
+        });
+        if (!completou) {
+          const qts = rodadasAnteriores;
+          throw new Error(
+            `Não foi possível encontrar uma tabela de jogos válida com as rodadas 1 a ${qts}. ` +
+            `Verifique se não há dupla repetida (duas equipes se enfrentando mais de uma vez) e se todas as equipes aparecem em cada rodada.`
+          );
+        }
+        rounds = completou;
+        usouGreedyComplemento = true;
       }
-      rounds = gerarRodadasRoundRobinFromOrder(initialOrder);
     }
 
     const maxRodadas = rounds.length;
