@@ -489,7 +489,14 @@ export class InscricoesService {
     const integranteIds = [atletaAId, ...(atletaBId ? [atletaBId] : [])];
     const equipeIdExistente = await this.buscarEquipePorIntegrantes(dados.torneioId, integranteIds);
     const equipeId = equipeIdExistente ?? (await this.criarEquipeComIntegrantes(dados.torneioId, dados.equipeNome?.trim(), integranteIds));
+
+    if (dados.equipeNome !== undefined) {
+      const nome = (dados.equipeNome || "").trim();
+      await db.update(equipes).set({ nome: nome ? nome : null }).where(eq(equipes.id, equipeId));
+    }
     await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, equipeId));
+    await db.delete(equipeIntegrantes).where(eq(equipeIntegrantes.equipeId, equipeId));
+    await db.insert(equipeIntegrantes).values(integranteIds.map((usuarioId) => ({ equipeId, usuarioId })));
 
     const [torneioRow] = await db
       .select({
@@ -829,16 +836,19 @@ export class InscricoesService {
   }
 
   private async buscarEquipePorIntegrantes(torneioId: string, integranteIds: string[]) {
+    const tamanho = integranteIds.length;
     const candidatos = await db
       .select({
         equipeId: equipeIntegrantes.equipeId,
-        cnt: sql<number>`count(*)`,
       })
       .from(equipeIntegrantes)
       .innerJoin(equipes, eq(equipeIntegrantes.equipeId, equipes.id))
       .where(and(eq(equipes.torneioId, torneioId), inArray(equipeIntegrantes.usuarioId, integranteIds)))
-      .groupBy(equipeIntegrantes.equipeId)
-      .having(sql`count(*) = ${integranteIds.length}`)
+      .groupBy(equipeIntegrantes.equipeId, equipes.id)
+      .having(and(
+        sql`count(distinct ${equipeIntegrantes.usuarioId}) = ${tamanho}`,
+        sql`(select count(*) from equipe_integrantes ei where ei.equipe_id = ${equipes.id}) = ${tamanho}`
+      ))
       .limit(1);
 
     return candidatos[0]?.equipeId ?? null;
