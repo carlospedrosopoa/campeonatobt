@@ -306,12 +306,25 @@ export class InscricoesService {
   }
 
   async listarPorCategoria(categoriaId: string) {
+    const [config, catRow] = await Promise.all([
+      categoriaConfigService.obterOuDefault(categoriaId),
+      db
+        .select({ genero: categorias.genero, torneioId: categorias.torneioId })
+        .from(categorias)
+        .where(eq(categorias.id, categoriaId))
+        .limit(1),
+    ]);
+    const tipoParticipacao = config.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
+    const ehSimples = tipoParticipacao === "SIMPLES";
+    const torneioId = catRow[0]?.torneioId;
+
     const rows = await db
       .select({
         inscricaoId: inscricoes.id,
         status: inscricoes.status,
         dataInscricao: inscricoes.dataInscricao,
         torneioId: inscricoes.torneioId,
+        categoriaId: inscricoes.categoriaId,
         equipeId: equipes.id,
         equipeNome: equipes.nome,
         equipeCapitaoUsuarioId: equipes.capitaoUsuarioId,
@@ -334,34 +347,89 @@ export class InscricoesService {
       .leftJoin(inscricaoPagamentos, and(eq(inscricaoPagamentos.inscricaoId, inscricoes.id), eq(inscricaoPagamentos.usuarioId, usuarios.id)))
       .where(eq(inscricoes.categoriaId, categoriaId));
 
-    const map = new Map<
-      string,
-      {
-        id: string;
-        status: string;
-        dataInscricao: Date;
-        equipe: {
-          id: string;
-          nome: string | null;
-          capitaoUsuarioId?: string | null;
-          atletas: {
-            id: string;
-            nome: string;
-            email: string;
-            telefone: string | null;
-              playnaquadraAtletaId?: string | null;
-            fotoUrl: string | null;
-            camisetaOpcao?: string | null;
-            pago: boolean;
-            pagamentoStatus?: string;
-            valorDevido?: string | null;
-          }[];
-        };
+    const equipeIdsSet = new Set<string>();
+    for (const r of rows) if (r.equipeId) equipeIdsSet.add(r.equipeId);
+    const equipeIds = Array.from(equipeIdsSet);
+    const todosIntegrantesPorEquipe = new Map<string, { usuarioId: string; nome: string }[]>();
+    if (ehSimples && equipeIds.length > 0) {
+      const all = await db
+        .select({
+          equipeId: equipeIntegrantes.equipeId,
+          usuarioId: equipeIntegrantes.usuarioId,
+          nome: usuarios.nome,
+        })
+        .from(equipeIntegrantes)
+        .innerJoin(usuarios, eq(usuarios.id, equipeIntegrantes.usuarioId))
+        .where(inArray(equipeIntegrantes.equipeId, equipeIds));
+      for (const row of all) {
+        if (!todosIntegrantesPorEquipe.has(row.equipeId)) todosIntegrantesPorEquipe.set(row.equipeId, []);
+        todosIntegrantesPorEquipe.get(row.equipeId)!.push({ usuarioId: row.usuarioId, nome: row.nome });
       }
-    >();
+    }
+
+    const pagamentosPorInscricao = new Map<string, { usuarioId: string; pago: boolean; status?: string | null; valorDevido?: string | null }[]>();
+    if (ehSimples && torneioId) {
+      const inscIds = Array.from(new Set(rows.map((r) => r.inscricaoId)));
+      if (inscIds.length > 0) {
+        const pags = await db
+          .select({
+            inscricaoId: inscricaoPagamentos.inscricaoId,
+            usuarioId: inscricaoPagamentos.usuarioId,
+            pago: inscricaoPagamentos.pago,
+            status: inscricaoPagamentos.status,
+            valorDevido: inscricaoPagamentos.valorDevido,
+          })
+          .from(inscricaoPagamentos)
+          .where(inArray(inscricaoPagamentos.inscricaoId, inscIds));
+        for (const p of pags) {
+          if (!pagamentosPorInscricao.has(p.inscricaoId)) pagamentosPorInscricao.set(p.inscricaoId, []);
+          pagamentosPorInscricao.get(p.inscricaoId)!.push({ usuarioId: p.usuarioId, pago: Boolean(p.pago), status: p.status, valorDevido: p.valorDevido });
+        }
+      }
+    }
+
+    type Atleta = {
+      id: string;
+      nome: string;
+      email: string;
+      telefone: string | null;
+      playnaquadraAtletaId?: string | null;
+      fotoUrl: string | null;
+      camisetaOpcao?: string | null;
+      pago: boolean;
+      pagamentoStatus?: string;
+      valorDevido?: string | null;
+    };
+    type Inscricao = {
+      id: string;
+      status: string;
+      dataInscricao: Date;
+      equipe: {
+        id: string;
+        nome: string | null;
+        capitaoUsuarioId?: string | null;
+        atletas: Atleta[];
+      };
+    };
+
+    const map = new Map<string, Inscricao>();
+    const equipesJáComCapitãoCorrigido = new Set<string>();
+    const updatesCapitao: { equipeId: string; capitaoUsuarioId: string | null }[] = [];
 
     for (const r of rows) {
       const key = r.inscricaoId;
+      const atleta: Atleta = {
+        id: r.atletaId,
+        nome: r.atletaNome,
+        email: r.atletaEmail,
+        telefone: r.atletaTelefone ?? null,
+        playnaquadraAtletaId: r.atletaPlaynaquadraAtletaId ?? null,
+        fotoUrl: r.atletaFotoUrl ?? null,
+        camisetaOpcao: r.atletaCamisetaOpcao ?? null,
+        pagamentoStatus: r.atletaPagamentoStatus ?? (Boolean(r.atletaPago) ? "PAGO" : "PENDENTE"),
+        pago: Boolean(r.atletaPago) || r.atletaPagamentoStatus === "PAGO",
+        valorDevido: r.atletaValorDevido ?? null,
+      };
       const current = map.get(key);
       if (!current) {
         map.set(key, {
@@ -372,47 +440,93 @@ export class InscricoesService {
             id: r.equipeId,
             nome: r.equipeNome,
             capitaoUsuarioId: r.equipeCapitaoUsuarioId ?? null,
-            atletas: [
-              {
-                id: r.atletaId,
-                nome: r.atletaNome,
-                email: r.atletaEmail,
-                telefone: r.atletaTelefone ?? null,
-                playnaquadraAtletaId: r.atletaPlaynaquadraAtletaId ?? null,
-                fotoUrl: r.atletaFotoUrl ?? null,
-                camisetaOpcao: r.atletaCamisetaOpcao ?? null,
-                pagamentoStatus: r.atletaPagamentoStatus ?? (Boolean(r.atletaPago) ? "PAGO" : "PENDENTE"),
-                pago: Boolean(r.atletaPago) || r.atletaPagamentoStatus === "PAGO",
-                valorDevido: r.atletaValorDevido ?? null,
-              },
-            ],
+            atletas: [atleta],
           },
         });
       } else {
-        current.equipe.atletas.push({
-          id: r.atletaId,
-          nome: r.atletaNome,
-          email: r.atletaEmail,
-          telefone: r.atletaTelefone ?? null,
-          playnaquadraAtletaId: r.atletaPlaynaquadraAtletaId ?? null,
-          fotoUrl: r.atletaFotoUrl ?? null,
-          camisetaOpcao: r.atletaCamisetaOpcao ?? null,
-          pagamentoStatus: r.atletaPagamentoStatus ?? (Boolean(r.atletaPago) ? "PAGO" : "PENDENTE"),
-          pago: Boolean(r.atletaPago) || r.atletaPagamentoStatus === "PAGO",
-          valorDevido: r.atletaValorDevido ?? null,
-        });
+        current.equipe.atletas.push(atleta);
       }
     }
 
     const result = Array.from(map.values());
     for (const item of result) {
-      const nomeAtual = (item.equipe.nome || "").trim();
-      if (!nomeAtual) {
-        const nomes = item.equipe.atletas
-          .map((a) => (a.nome || "").trim().split(/\s+/)[0])
-          .filter(Boolean)
-          .sort((a, b) => a.localeCompare(b));
-        item.equipe.nome = nomes.length > 0 ? nomes.join("/") : "Equipe";
+      if (ehSimples) {
+        const capitãoId = item.equipe.capitaoUsuarioId;
+        let atletasOriginaisExibicao: Atleta[] = item.equipe.atletas.slice();
+        let preferenciaAtletaSimplesId: string | null = null;
+
+        if (capitãoId) {
+          const match = atletasOriginaisExibicao.find((a) => a.id === capitãoId);
+          if (match) preferenciaAtletaSimplesId = match.id;
+        }
+        if (!preferenciaAtletaSimplesId && atletasOriginaisExibicao.length === 1) {
+          preferenciaAtletaSimplesId = atletasOriginaisExibicao[0].id;
+        }
+        if (!preferenciaAtletaSimplesId && todosIntegrantesPorEquipe.get(item.equipe.id)?.length === 1) {
+          preferenciaAtletaSimplesId = todosIntegrantesPorEquipe.get(item.equipe.id)![0].usuarioId;
+        }
+
+        let pagamentoSimplificado: { usuarioId: string; pago: boolean; status?: string | null; valorDevido?: string | null } | null = null;
+        if (torneioId && !preferenciaAtletaSimplesId && atletasOriginaisExibicao.length > 1) {
+          const pagsInsc = pagamentosPorInscricao.get(item.id) ?? [];
+          const pagsComValor = pagsInsc.filter((p) => p.valorDevido);
+          if (pagsComValor.length === 1) {
+            pagamentoSimplificado = pagsComValor[0];
+            preferenciaAtletaSimplesId = pagamentoSimplificado.usuarioId;
+          }
+        }
+
+        if (preferenciaAtletaSimplesId) {
+          const atletaFinal =
+            atletasOriginaisExibicao.find((a) => a.id === preferenciaAtletaSimplesId) ??
+            atletasOriginaisExibicao[0];
+          if (atletaFinal) {
+            item.equipe.atletas = [atletaFinal];
+            if (pagamentoSimplificado && pagamentoSimplificado.usuarioId === atletaFinal.id) {
+              const status = pagamentoSimplificado.status ?? (pagamentoSimplificado.pago ? "PAGO" : "PENDENTE");
+              atletaFinal.pagamentoStatus = status;
+              atletaFinal.pago = pagamentoSimplificado.pago || status === "PAGO";
+              if (pagamentoSimplificado.valorDevido !== undefined && pagamentoSimplificado.valorDevido !== null) {
+                atletaFinal.valorDevido = pagamentoSimplificado.valorDevido;
+              }
+            }
+          }
+        } else if (atletasOriginaisExibicao.length > 1) {
+          item.equipe.atletas = atletasOriginaisExibicao.slice(0, 1);
+        }
+
+        const primeiroNome = (item.equipe.atletas[0]?.nome || "").trim().split(/\s+/)[0];
+        item.equipe.nome = primeiroNome || (item.equipe.nome || "Atleta");
+
+        if (!equipesJáComCapitãoCorrigido.has(item.equipe.id)) {
+          equipesJáComCapitãoCorrigido.add(item.equipe.id);
+          const capitaoDeveria = item.equipe.atletas[0]?.id ?? null;
+          if (capitaoDeveria && capitaoDeveria !== item.equipe.capitaoUsuarioId) {
+            updatesCapitao.push({ equipeId: item.equipe.id, capitaoUsuarioId: capitaoDeveria });
+            item.equipe.capitaoUsuarioId = capitaoDeveria;
+          }
+        }
+      } else {
+        const nomeAtual = (item.equipe.nome || "").trim();
+        if (!nomeAtual) {
+          const nomes = item.equipe.atletas
+            .map((a) => (a.nome || "").trim().split(/\s+/)[0])
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b));
+          item.equipe.nome = nomes.length > 0 ? nomes.join("/") : "Equipe";
+        }
+      }
+    }
+
+    if (updatesCapitao.length > 0) {
+      const chunks: typeof updatesCapitao[] = [];
+      for (let i = 0; i < updatesCapitao.length; i += 100) chunks.push(updatesCapitao.slice(i, i + 100));
+      for (const chunk of chunks) {
+        await db.transaction(async (tx) => {
+          for (const u of chunk) {
+            await tx.update(equipes).set({ capitaoUsuarioId: u.capitaoUsuarioId }).where(eq(equipes.id, u.equipeId));
+          }
+        });
       }
     }
 
@@ -489,14 +603,11 @@ export class InscricoesService {
     const integranteIds = [atletaAId, ...(atletaBId ? [atletaBId] : [])];
     const equipeIdExistente = await this.buscarEquipePorIntegrantes(dados.torneioId, integranteIds);
     const equipeId = equipeIdExistente ?? (await this.criarEquipeComIntegrantes(dados.torneioId, dados.equipeNome?.trim(), integranteIds));
-
-    if (dados.equipeNome !== undefined) {
+    if (!equipeIdExistente && dados.equipeNome !== undefined) {
       const nome = (dados.equipeNome || "").trim();
       await db.update(equipes).set({ nome: nome ? nome : null }).where(eq(equipes.id, equipeId));
     }
     await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, equipeId));
-    await db.delete(equipeIntegrantes).where(eq(equipeIntegrantes.equipeId, equipeId));
-    await db.insert(equipeIntegrantes).values(integranteIds.map((usuarioId) => ({ equipeId, usuarioId })));
 
     const [torneioRow] = await db
       .select({
@@ -662,19 +773,11 @@ export class InscricoesService {
       throw new Error("Um dos atletas já está inscrito nesta categoria");
     }
 
-    if (dados.equipeNome !== undefined) {
-      const nome = (dados.equipeNome || "").trim();
-      await db.update(equipes).set({ nome: nome ? nome : null }).where(eq(equipes.id, ins.equipeId));
-    }
-
     await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, ins.equipeId));
 
     if (dados.status) {
       await db.update(inscricoes).set({ status: dados.status }).where(eq(inscricoes.id, inscricaoId));
     }
-
-    await db.delete(equipeIntegrantes).where(eq(equipeIntegrantes.equipeId, ins.equipeId));
-    await db.insert(equipeIntegrantes).values(integranteIds.map((usuarioId) => ({ equipeId: ins.equipeId, usuarioId })));
 
     await db
       .delete(inscricaoPagamentos)
