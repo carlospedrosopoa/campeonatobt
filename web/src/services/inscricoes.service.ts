@@ -601,12 +601,7 @@ export class InscricoesService {
     }
 
     const integranteIds = [atletaAId, ...(atletaBId ? [atletaBId] : [])];
-    const equipeIdExistente = await this.buscarEquipePorIntegrantes(dados.torneioId, integranteIds);
-    const equipeId = equipeIdExistente ?? (await this.criarEquipeComIntegrantes(dados.torneioId, dados.equipeNome?.trim(), integranteIds));
-    if (!equipeIdExistente && dados.equipeNome !== undefined) {
-      const nome = (dados.equipeNome || "").trim();
-      await db.update(equipes).set({ nome: nome ? nome : null }).where(eq(equipes.id, equipeId));
-    }
+    const equipeId = await this.criarEquipeComIntegrantes(dados.torneioId, dados.equipeNome?.trim(), integranteIds);
     await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, equipeId));
 
     const [torneioRow] = await db
