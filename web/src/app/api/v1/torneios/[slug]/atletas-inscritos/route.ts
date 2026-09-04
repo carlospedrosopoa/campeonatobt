@@ -1,9 +1,11 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, usuarios } from "@/db/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { buscarCamisetaAtletaNoPlay } from "@/services/playnaquadra-camiseta";
+import { categoriaConfigService } from "@/services/categoria-config.service";
+import type { CategoriaTipoParticipacao } from "@/services/categoria-config.service";
 
 function primeiroNome(nome: string) {
   const trimmed = (nome || "").trim();
@@ -120,12 +122,15 @@ export async function GET(
       inscricaoStatus: inscricoes.status,
       equipeId: equipes.id,
       equipeNome: equipes.nome,
+      equipeCapitaoUsuarioId: equipes.capitaoUsuarioId,
       atletaId: usuarios.id,
       atletaNome: usuarios.nome,
       atletaEmail: usuarios.email,
       atletaTelefone: usuarios.telefone,
       atletaPlaynaquadraId: usuarios.playnaquadraAtletaId,
       atletaPago: inscricaoPagamentos.pago,
+      atletaPagamentoStatus: inscricaoPagamentos.status,
+      atletaValorDevido: inscricaoPagamentos.valorDevido,
       atletaCamiseta: torneioAtletaPrefs.camisetaOpcao,
     })
     .from(inscricoes)
@@ -138,24 +143,69 @@ export async function GET(
     .where(and(eq(inscricoes.torneioId, torneio.id), inArray(inscricoes.status, statusesFiltro as any)))
     .orderBy(asc(inscricoes.dataInscricao), asc(categorias.dataHorario), asc(categorias.nome), asc(equipes.nome), asc(usuarios.nome));
 
+  const categoriaIdsUnicos = Array.from(new Set(rows.map((r) => r.categoriaId).filter(Boolean)));
+  const tiposPorCategoria = new Map<string, CategoriaTipoParticipacao>();
+  await Promise.all(
+    categoriaIdsUnicos.map(async (catId) => {
+      const cfg = await categoriaConfigService.obterOuDefault(catId);
+      tiposPorCategoria.set(catId, cfg.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS");
+    })
+  );
+
+  const inscricaoIdsUnicos = Array.from(new Set(rows.map((r) => r.inscricaoId).filter(Boolean)));
+  const pagamentosPorInscricao = new Map<string, { usuarioId: string; pago: boolean; status?: string | null; valorDevido?: string | null }[]>();
+  if (inscricaoIdsUnicos.length > 0) {
+    const pags = await db
+      .select({
+        inscricaoId: inscricaoPagamentos.inscricaoId,
+        usuarioId: inscricaoPagamentos.usuarioId,
+        pago: inscricaoPagamentos.pago,
+        status: inscricaoPagamentos.status,
+        valorDevido: inscricaoPagamentos.valorDevido,
+      })
+      .from(inscricaoPagamentos)
+      .where(inArray(inscricaoPagamentos.inscricaoId, inscricaoIdsUnicos));
+    for (const p of pags) {
+      if (!pagamentosPorInscricao.has(p.inscricaoId)) pagamentosPorInscricao.set(p.inscricaoId, []);
+      pagamentosPorInscricao.get(p.inscricaoId)!.push({ usuarioId: p.usuarioId, pago: Boolean(p.pago), status: p.status, valorDevido: p.valorDevido });
+    }
+  }
+
   const equipeIdsUnicos = Array.from(new Set(rows.map((r) => r.equipeId).filter(Boolean)));
-  const integrantesReaisPorEquipe = new Map<string, string[]>();
+  const integrantesReaisPorEquipe = new Map<string, { usuarioId: string; nome: string }[]>();
   if (equipeIdsUnicos.length > 0) {
     const rowsIntegrantes = await db
       .select({
         equipeId: equipeIntegrantes.equipeId,
+        usuarioId: equipeIntegrantes.usuarioId,
         atletaNome: usuarios.nome,
       })
       .from(equipeIntegrantes)
       .innerJoin(usuarios, eq(usuarios.id, equipeIntegrantes.usuarioId))
       .where(inArray(equipeIntegrantes.equipeId, equipeIdsUnicos));
     for (const r of rowsIntegrantes) {
-      if (!r.equipeId || !r.atletaNome) continue;
+      if (!r.equipeId || !r.atletaNome || !r.usuarioId) continue;
       const arr = integrantesReaisPorEquipe.get(r.equipeId) ?? [];
-      arr.push(r.atletaNome);
+      arr.push({ usuarioId: r.usuarioId, nome: r.atletaNome });
       integrantesReaisPorEquipe.set(r.equipeId, arr);
     }
   }
+
+  type RowAtleta = {
+    atletaId: string;
+    atletaNome: string;
+    atletaEmail: string;
+    atletaTelefone: string | null;
+    atletaPlaynaquadraId: string | null;
+    atletaCamiseta: string | null;
+    equipeId: string;
+    equipeNome: string | null;
+    inscricaoId: string;
+    inscricaoStatus: string;
+    pago: boolean;
+    categoriaId: string;
+    categoriaNome: string;
+  };
 
   const byCategoria = new Map<
     string,
@@ -164,39 +214,14 @@ export async function GET(
       categoriaNome: string;
       categoriaGenero: string;
       categoriaDataHorario: Date | null;
-      atletas: Array<{
-        atletaId: string;
-        atletaNome: string;
-        atletaEmail: string;
-        atletaTelefone: string | null;
-        atletaPlaynaquadraId: string | null;
-        atletaCamiseta: string | null;
-        equipeId: string;
-        equipeNome: string | null;
-        inscricaoId: string;
-        inscricaoStatus: string;
-        pago: boolean;
-      }>;
+      tipoParticipacao: CategoriaTipoParticipacao;
+      atletas: RowAtleta[];
     }
   >();
-  const atletasJaIncluidosNaCategoria = new Set<string>();
 
+  const byInscricao = new Map<string, RowAtleta[]>();
   for (const r of rows) {
-    const dedupKey = `${r.categoriaId}::${r.atletaId}`;
-    if (atletasJaIncluidosNaCategoria.has(dedupKey)) continue;
-    atletasJaIncluidosNaCategoria.add(dedupKey);
-
-    const catId = r.categoriaId;
-    if (!byCategoria.has(catId)) {
-      byCategoria.set(catId, {
-        categoriaId: r.categoriaId,
-        categoriaNome: r.categoriaNome,
-        categoriaGenero: r.categoriaGenero,
-        categoriaDataHorario: r.categoriaDataHorario ?? null,
-        atletas: [],
-      });
-    }
-    byCategoria.get(catId)!.atletas.push({
+    const row: RowAtleta = {
       atletaId: r.atletaId,
       atletaNome: r.atletaNome,
       atletaEmail: r.atletaEmail,
@@ -207,8 +232,105 @@ export async function GET(
       equipeNome: r.equipeNome ?? null,
       inscricaoId: r.inscricaoId,
       inscricaoStatus: r.inscricaoStatus,
-      pago: Boolean(r.atletaPago),
-    });
+      pago: Boolean(r.atletaPago) || r.atletaPagamentoStatus === "PAGO",
+      categoriaId: r.categoriaId,
+      categoriaNome: r.categoriaNome,
+    };
+    if (!byInscricao.has(r.inscricaoId)) byInscricao.set(r.inscricaoId, []);
+    byInscricao.get(r.inscricaoId)!.push(row);
+
+    const catId = r.categoriaId;
+    if (!byCategoria.has(catId)) {
+      byCategoria.set(catId, {
+        categoriaId: r.categoriaId,
+        categoriaNome: r.categoriaNome,
+        categoriaGenero: r.categoriaGenero,
+        categoriaDataHorario: r.categoriaDataHorario ?? null,
+        tipoParticipacao: tiposPorCategoria.get(catId) ?? "DUPLAS",
+        atletas: [],
+      });
+    }
+  }
+
+  const equipesJáComCapitãoCorrigido = new Set<string>();
+  const updatesCapitao: { equipeId: string; capitaoUsuarioId: string | null }[] = [];
+  const atletasJaIncluidosNaCategoria = new Set<string>();
+
+  for (const [inscricaoId, atletasDaInscricao] of byInscricao.entries()) {
+    if (atletasDaInscricao.length === 0) continue;
+    const primeiro = atletasDaInscricao[0];
+    const cat = byCategoria.get(primeiro.categoriaId);
+    if (!cat) continue;
+
+    const ehSimples = cat.tipoParticipacao === "SIMPLES";
+
+    if (ehSimples) {
+      let selecionado: RowAtleta | null = null;
+      const integrantesReaisEquipe = integrantesReaisPorEquipe.get(primeiro.equipeId) ?? [];
+      const capitaoId = rows.find((r) => r.inscricaoId === inscricaoId)?.equipeCapitaoUsuarioId ?? null;
+
+      if (capitaoId) {
+        const m = atletasDaInscricao.find((a) => a.atletaId === capitaoId);
+        if (m) selecionado = m;
+      }
+      if (!selecionado && atletasDaInscricao.length === 1) {
+        selecionado = atletasDaInscricao[0];
+      }
+      if (!selecionado && integrantesReaisEquipe.length === 1) {
+        const uId = integrantesReaisEquipe[0].usuarioId;
+        selecionado = atletasDaInscricao.find((a) => a.atletaId === uId) ?? atletasDaInscricao[0];
+      }
+      if (!selecionado && atletasDaInscricao.length > 1) {
+        const pags = pagamentosPorInscricao.get(inscricaoId) ?? [];
+        const comValor = pags.filter((p) => p.valorDevido);
+        if (comValor.length === 1) {
+          const uId = comValor[0].usuarioId;
+          selecionado = atletasDaInscricao.find((a) => a.atletaId === uId) ?? atletasDaInscricao[0];
+          const pg = comValor[0];
+          if (selecionado && selecionado.atletaId === uId) {
+            const status = pg.status ?? (pg.pago ? "PAGO" : "PENDENTE");
+            selecionado.pago = pg.pago || status === "PAGO";
+          }
+        }
+      }
+      if (!selecionado) {
+        selecionado = atletasDaInscricao[0];
+      }
+
+      const primeiroNomeAtleta = (selecionado.atletaNome || "").trim().split(/\s+/)[0];
+      selecionado.equipeNome = primeiroNomeAtleta || (selecionado.equipeNome || "Atleta");
+
+      if (!equipesJáComCapitãoCorrigido.has(primeiro.equipeId)) {
+        equipesJáComCapitãoCorrigido.add(primeiro.equipeId);
+        if (selecionado.atletaId && selecionado.atletaId !== capitaoId) {
+          updatesCapitao.push({ equipeId: primeiro.equipeId, capitaoUsuarioId: selecionado.atletaId });
+        }
+      }
+
+      const dedupKey = `${cat.categoriaId}::${selecionado.atletaId}`;
+      if (atletasJaIncluidosNaCategoria.has(dedupKey)) continue;
+      atletasJaIncluidosNaCategoria.add(dedupKey);
+      cat.atletas.push(selecionado);
+    } else {
+      for (const atleta of atletasDaInscricao) {
+        const dedupKey = `${cat.categoriaId}::${atleta.atletaId}`;
+        if (atletasJaIncluidosNaCategoria.has(dedupKey)) continue;
+        atletasJaIncluidosNaCategoria.add(dedupKey);
+        cat.atletas.push(atleta);
+      }
+    }
+  }
+
+  if (updatesCapitao.length > 0) {
+    const chunks: typeof updatesCapitao[] = [];
+    for (let i = 0; i < updatesCapitao.length; i += 100) chunks.push(updatesCapitao.slice(i, i + 100));
+    for (const chunk of chunks) {
+      await db.transaction(async (tx) => {
+        for (const u of chunk) {
+          await tx.update(equipes).set({ capitaoUsuarioId: u.capitaoUsuarioId }).where(eq(equipes.id, u.equipeId));
+        }
+      });
+    }
   }
 
   const playIdsSemCamiseta = Array.from(

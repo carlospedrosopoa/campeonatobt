@@ -16,6 +16,8 @@ type AtletaInscrito = {
   inscricaoId: string;
   inscricaoStatus: string;
   pago: boolean;
+  categoriaId?: string;
+  categoriaNome?: string;
 };
 
 type CategoriaInscritos = {
@@ -23,6 +25,7 @@ type CategoriaInscritos = {
   categoriaNome: string;
   categoriaGenero: string;
   categoriaDataHorario?: string | null;
+  tipoParticipacao?: "SIMPLES" | "DUPLAS";
   atletas: AtletaInscrito[];
 };
 
@@ -136,10 +139,27 @@ export default function AdminAtletasInscritosPage() {
   const totalDuplas = useMemo(
     () =>
       (data?.categorias || []).reduce((acc, c) => {
+        const tipo = c.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
+        if (tipo === "SIMPLES") return acc;
         return acc + new Set(c.atletas.map((a) => a.equipeId)).size;
       }, 0),
     [data]
   );
+  const totaisPorCategoria = useMemo(() => {
+    const map = new Map<string, { equipes: number; atletas: number }>();
+    for (const c of data?.categorias || []) {
+      const tipo = c.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
+      if (tipo === "SIMPLES") {
+        map.set(c.categoriaId, { equipes: c.atletas.length, atletas: c.atletas.length });
+      } else {
+        map.set(c.categoriaId, {
+          equipes: new Set(c.atletas.map((a) => a.equipeId)).size,
+          atletas: c.atletas.length,
+        });
+      }
+    }
+    return map;
+  }, [data]);
   const gradeCamisetas = useMemo<GradeCamisetaRow[]>(() => {
     const counts = new Map<string, GradeCamisetaRow>();
 
@@ -339,7 +359,11 @@ export default function AdminAtletasInscritosPage() {
       {!carregando && data && data.categorias.length > 0 && (
         <div className="space-y-6">
           {data.categorias.map((c) => {
-            const totalDuplasCategoria = new Set(c.atletas.map((a) => a.equipeId)).size;
+            const totais = totaisPorCategoria.get(c.categoriaId) ?? {
+              equipes: new Set(c.atletas.map((a) => a.equipeId)).size,
+              atletas: c.atletas.length,
+            };
+            const tipo = c.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
 
             return (
             <div key={c.categoriaId} className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
@@ -347,7 +371,9 @@ export default function AdminAtletasInscritosPage() {
                 <div>
                   <div className="font-bold text-slate-900">{c.categoriaNome}</div>
                   <div className="text-xs text-slate-500 mt-1">
-                    {totalDuplasCategoria} dupla(s) • {c.atletas.length} atleta(s)
+                    {tipo === "SIMPLES"
+                      ? `${totais.equipes} atleta(s)`
+                      : `${totais.equipes} dupla(s) • ${totais.atletas} atleta(s)`}
                   </div>
                 </div>
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
