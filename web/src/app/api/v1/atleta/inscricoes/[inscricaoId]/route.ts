@@ -294,15 +294,23 @@ export async function DELETE(
       torneioId: inscricoes.torneioId,
       categoriaId: inscricoes.categoriaId,
       status: inscricoes.status,
+      torneioStatus: torneios.status,
     })
     .from(inscricoes)
     .innerJoin(equipeIntegrantes, eq(equipeIntegrantes.equipeId, inscricoes.equipeId))
+    .innerJoin(torneios, eq(torneios.id, inscricoes.torneioId))
     .where(and(eq(inscricoes.id, id), eq(equipeIntegrantes.usuarioId, auth.user.id)))
     .limit(1);
   const ins = insRows[0];
   if (!ins) return NextResponse.json({ error: "Inscrição não encontrada" }, { status: 404 });
   if (ins.status !== "PENDENTE" && ins.status !== "APROVADA") {
     return NextResponse.json({ error: "Só é possível cancelar inscrições pendentes ou aprovadas" }, { status: 400 });
+  }
+  if (ins.torneioStatus !== "ABERTO") {
+    return NextResponse.json(
+      { error: "Não é possível cancelar: inscrições só podem ser canceladas enquanto o torneio estiver ABERTO. Entre em contato com o administrador." },
+      { status: 400 }
+    );
   }
 
   const torneioComJogosEmAndamento = await db
