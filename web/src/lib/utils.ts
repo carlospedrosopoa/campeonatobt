@@ -22,11 +22,13 @@ export function slugify(text: string): string {
     .toString()
     .toLowerCase()
     .trim()
-    .normalize('NFD') // Separa acentos das letras
-    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-    .replace(/\s+/g, '-') // Substitui espaços por hífens
-    .replace(/[^\w\-]+/g, '') // Remove caracteres não alfanuméricos
-    .replace(/\-\-+/g, '-'); // Remove múltiplos hífens
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\/\\.,;:&|_+=@#$%^*(){}[\]<>?!~`"'°ºª]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\-]+/g, '')
+    .replace(/\-\-+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 export const DEFAULT_PANELINHA_TIMEZONE = "America/Sao_Paulo";
