@@ -1,7 +1,6 @@
 import { db } from "@/db";
-import { categorias, torneios, usuarios } from "@/db/schema";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
-import { formatarNumeroGzappy } from "@/services/gzappy.service";
+import { categorias, parceiroConvitesWhatsapp, torneios, usuarios } from "@/db/schema";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { getAppAtletaUrl } from "@/lib/app-atleta-url";
 
 export type ConviteWhatsappStatus =
@@ -216,29 +215,29 @@ export async function getOrCreateConviteParaReenvio(params: {
 
   const recentes = await db
     .select({
-      id: sql`id`,
-      torneioId: sql`torneio_id`,
-      categoriaId: sql`categoria_id`,
-      atletaConvidanteId: sql`atleta_convidante_id`,
-      parceiroNome: sql`parceiro_nome`,
-      parceiroWhatsappNormalizado: sql`parceiro_whatsapp_normalizado`,
-      parceiroWhatsappBruto: sql`parceiro_whatsapp_bruto`,
-      whatsappStatus: sql`whatsapp_status`,
-      mensagemEnviadaText: sql`mensagem_enviada_text`,
-      linkCriarPerfilUsado: sql`link_criar_perfil_usado`,
-      reenvioCount: sql`reenvio_count`,
-      criadoEm: sql`criado_em`,
-      ultimoReenvioEm: sql`ultimo_reenvio_em`,
+      id: parceiroConvitesWhatsapp.id,
+      torneioId: parceiroConvitesWhatsapp.torneioId,
+      categoriaId: parceiroConvitesWhatsapp.categoriaId,
+      atletaConvidanteId: parceiroConvitesWhatsapp.atletaConvidanteId,
+      parceiroNome: parceiroConvitesWhatsapp.parceiroNome,
+      parceiroWhatsappNormalizado: parceiroConvitesWhatsapp.parceiroWhatsappNormalizado,
+      parceiroWhatsappBruto: parceiroConvitesWhatsapp.parceiroWhatsappBruto,
+      whatsappStatus: parceiroConvitesWhatsapp.whatsappStatus,
+      mensagemEnviadaText: parceiroConvitesWhatsapp.mensagemEnviadaText,
+      linkCriarPerfilUsado: parceiroConvitesWhatsapp.linkCriarPerfilUsado,
+      reenvioCount: parceiroConvitesWhatsapp.reenvioCount,
+      criadoEm: parceiroConvitesWhatsapp.criadoEm,
+      ultimoReenvioEm: parceiroConvitesWhatsapp.ultimoReenvioEm,
     })
-    .from(sql`parceiro_convites_whatsapp`)
+    .from(parceiroConvitesWhatsapp)
     .where(
       and(
-        eq(sql`atleta_convidante_id::text`, params.atletaId),
-        eq(sql`categoria_id::text`, params.categoriaId),
-        eq(sql`parceiro_whatsapp_normalizado`, params.parceiroWhatsappNormalizado)
+        eq(parceiroConvitesWhatsapp.atletaConvidanteId, params.atletaId as any),
+        eq(parceiroConvitesWhatsapp.categoriaId, params.categoriaId as any),
+        eq(parceiroConvitesWhatsapp.parceiroWhatsappNormalizado, params.parceiroWhatsappNormalizado)
       )
     )
-    .orderBy(desc(sql`criado_em`))
+    .orderBy(desc(parceiroConvitesWhatsapp.criadoEm))
     .limit(20);
 
   const ordered = recentes.map(rowToTable);
@@ -307,31 +306,31 @@ async function criarNovoRegistro(params: {
   parceiroWhatsappNormalizado: string;
 }): Promise<ConviteTableRow> {
   const inserted = await db
-    .insert(sql`parceiro_convites_whatsapp`)
+    .insert(parceiroConvitesWhatsapp)
     .values({
-      torneio_id: params.torneioId,
-      categoria_id: params.categoriaId,
-      atleta_convidante_id: params.atletaId,
-      parceiro_nome: params.parceiroNome,
-      parceiro_whatsapp_bruto: params.parceiroWhatsappBruto,
-      parceiro_whatsapp_normalizado: params.parceiroWhatsappNormalizado,
-      whatsapp_status: "PENDENTE",
-      reenvio_count: 0,
-    } as any)
+      torneioId: params.torneioId,
+      categoriaId: params.categoriaId,
+      atletaConvidanteId: params.atletaId,
+      parceiroNome: params.parceiroNome,
+      parceiroWhatsappBruto: params.parceiroWhatsappBruto,
+      parceiroWhatsappNormalizado: params.parceiroWhatsappNormalizado,
+      whatsappStatus: "PENDENTE",
+      reenvioCount: 0,
+    })
     .returning({
-      id: sql`id`,
-      torneioId: sql`torneio_id`,
-      categoriaId: sql`categoria_id`,
-      atletaConvidanteId: sql`atleta_convidante_id`,
-      parceiroNome: sql`parceiro_nome`,
-      parceiroWhatsappNormalizado: sql`parceiro_whatsapp_normalizado`,
-      parceiroWhatsappBruto: sql`parceiro_whatsapp_bruto`,
-      whatsappStatus: sql`whatsapp_status`,
-      mensagemEnviadaText: sql`mensagem_enviada_text`,
-      linkCriarPerfilUsado: sql`link_criar_perfil_usado`,
-      reenvioCount: sql`reenvio_count`,
-      criadoEm: sql`criado_em`,
-      ultimoReenvioEm: sql`ultimo_reenvio_em`,
+      id: parceiroConvitesWhatsapp.id,
+      torneioId: parceiroConvitesWhatsapp.torneioId,
+      categoriaId: parceiroConvitesWhatsapp.categoriaId,
+      atletaConvidanteId: parceiroConvitesWhatsapp.atletaConvidanteId,
+      parceiroNome: parceiroConvitesWhatsapp.parceiroNome,
+      parceiroWhatsappNormalizado: parceiroConvitesWhatsapp.parceiroWhatsappNormalizado,
+      parceiroWhatsappBruto: parceiroConvitesWhatsapp.parceiroWhatsappBruto,
+      whatsappStatus: parceiroConvitesWhatsapp.whatsappStatus,
+      mensagemEnviadaText: parceiroConvitesWhatsapp.mensagemEnviadaText,
+      linkCriarPerfilUsado: parceiroConvitesWhatsapp.linkCriarPerfilUsado,
+      reenvioCount: parceiroConvitesWhatsapp.reenvioCount,
+      criadoEm: parceiroConvitesWhatsapp.criadoEm,
+      ultimoReenvioEm: parceiroConvitesWhatsapp.ultimoReenvioEm,
     });
   return rowToTable(inserted[0]);
 }
@@ -356,32 +355,32 @@ export async function registrarEnvioGzappy(params: RegistrarEnvioGzappyInput): P
   }
 
   const updatedRows = await db
-    .update(sql`parceiro_convites_whatsapp`)
+    .update(parceiroConvitesWhatsapp)
     .set({
-      mensagem_enviada_text: params.mensagemFinal,
-      link_criar_perfil_usado: params.linkCriarPerfilUsado,
-      whatsapp_status: status,
-      whatsapp_enviado_em: enviadoEm,
-      whatsapp_erro: erro,
-      gzappy_response_jsonb: gzappyResponse as any,
-      reenvio_count: sql`CASE WHEN criado_em = atualizado_em THEN 0 ELSE coalesce(reenvio_count, 0) + 1 END`,
-      ultimo_reenvio_em: new Date(),
-    } as any)
-    .where(eq(sql`id::text`, params.row.id))
+      mensagemEnviadaText: params.mensagemFinal,
+      linkCriarPerfilUsado: params.linkCriarPerfilUsado,
+      whatsappStatus: status,
+      whatsappEnviadoEm: enviadoEm,
+      whatsappErro: erro,
+      gzappyResponseJsonb: gzappyResponse as any,
+      reenvioCount: sql`CASE WHEN ${parceiroConvitesWhatsapp.criadoEm} = ${parceiroConvitesWhatsapp.atualizadoEm} THEN 0 ELSE coalesce(${parceiroConvitesWhatsapp.reenvioCount}, 0) + 1 END`,
+      ultimoReenvioEm: new Date(),
+    })
+    .where(eq(parceiroConvitesWhatsapp.id, params.row.id as any))
     .returning({
-      id: sql`id`,
-      torneioId: sql`torneio_id`,
-      categoriaId: sql`categoria_id`,
-      atletaConvidanteId: sql`atleta_convidante_id`,
-      parceiroNome: sql`parceiro_nome`,
-      parceiroWhatsappNormalizado: sql`parceiro_whatsapp_normalizado`,
-      parceiroWhatsappBruto: sql`parceiro_whatsapp_bruto`,
-      whatsappStatus: sql`whatsapp_status`,
-      mensagemEnviadaText: sql`mensagem_enviada_text`,
-      linkCriarPerfilUsado: sql`link_criar_perfil_usado`,
-      reenvioCount: sql`reenvio_count`,
-      criadoEm: sql`criado_em`,
-      ultimoReenvioEm: sql`ultimo_reenvio_em`,
+      id: parceiroConvitesWhatsapp.id,
+      torneioId: parceiroConvitesWhatsapp.torneioId,
+      categoriaId: parceiroConvitesWhatsapp.categoriaId,
+      atletaConvidanteId: parceiroConvitesWhatsapp.atletaConvidanteId,
+      parceiroNome: parceiroConvitesWhatsapp.parceiroNome,
+      parceiroWhatsappNormalizado: parceiroConvitesWhatsapp.parceiroWhatsappNormalizado,
+      parceiroWhatsappBruto: parceiroConvitesWhatsapp.parceiroWhatsappBruto,
+      whatsappStatus: parceiroConvitesWhatsapp.whatsappStatus,
+      mensagemEnviadaText: parceiroConvitesWhatsapp.mensagemEnviadaText,
+      linkCriarPerfilUsado: parceiroConvitesWhatsapp.linkCriarPerfilUsado,
+      reenvioCount: parceiroConvitesWhatsapp.reenvioCount,
+      criadoEm: parceiroConvitesWhatsapp.criadoEm,
+      ultimoReenvioEm: parceiroConvitesWhatsapp.ultimoReenvioEm,
     });
   return rowToTable(updatedRows[0]);
 }

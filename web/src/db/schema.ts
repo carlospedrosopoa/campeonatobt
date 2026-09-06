@@ -18,6 +18,7 @@ export const statusPanelinhaPlayParticipanteEnum = pgEnum('status_panelinha_play
 export const statusPanelinhaPlayJogoEnum = pgEnum('status_panelinha_play_jogo', ['PENDENTE', 'REGISTRADO', 'CONFIRMADO', 'CANCELADO']);
 export const statusPanelinhaTemporadaEnum = pgEnum('status_panelinha_temporada', ['ABERTA', 'ENCERRADA']);
 export const statusComunicacaoWhatsappEnum = pgEnum('status_comunicacao_whatsapp', ['PENDENTE', 'ENVIADO', 'FALHA', 'SEM_TELEFONE', 'NAO_ENVIADO']);
+export const statusConviteParceiroWhatsappEnum = pgEnum('status_convite_parceiro_whatsapp', ['PENDENTE', 'ENVIADO', 'FALHA', 'SEM_GZAPPY', 'SEM_WHATSAPP', 'CANCELADO']);
 export const modeloTorneioEnum = pgEnum('modelo_torneio', ['NORMAL', 'SUPERCAMPEONATO']);
 export const tipoCardInscricaoEnum = pgEnum('tipo_card_inscricao', ['TIPO_1', 'TIPO_2']);
 
@@ -520,6 +521,26 @@ export const apoiadores = pgTable('apoiadores', {
   latitude: text('latitude'),
   longitude: text('longitude'),
   siteUrl: text('site_url'),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});
+
+export const parceiroConvitesWhatsapp = pgTable('parceiro_convites_whatsapp', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  torneioId: uuid('torneio_id').references(() => torneios.id).notNull(),
+  categoriaId: uuid('categoria_id').references(() => categorias.id).notNull(),
+  atletaConvidanteId: uuid('atleta_convidante_id').references(() => usuarios.id).notNull(),
+  parceiroNome: text('parceiro_nome').notNull(),
+  parceiroWhatsappBruto: text('parceiro_whatsapp_bruto').notNull(),
+  parceiroWhatsappNormalizado: text('parceiro_whatsapp_normalizado').notNull(),
+  whatsappStatus: statusConviteParceiroWhatsappEnum('whatsapp_status').default('PENDENTE').notNull(),
+  mensagemEnviadaText: text('mensagem_enviada_text'),
+  linkCriarPerfilUsado: text('link_criar_perfil_usado'),
+  whatsappEnviadoEm: timestamp('whatsapp_enviado_em'),
+  whatsappErro: text('whatsapp_erro'),
+  gzappyResponseJsonb: json('gzappy_response_jsonb'),
+  reenvioCount: integer('reenvio_count').default(0).notNull(),
+  ultimoReenvioEm: timestamp('ultimo_reenvio_em'),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });
