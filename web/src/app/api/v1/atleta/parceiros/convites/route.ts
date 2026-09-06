@@ -16,6 +16,7 @@ import {
   whatsappJaCadastrado,
   type ConviteWhatsappStatus,
   type ConviteWhatsappAviso,
+  type UsuarioParceiroCadastrado,
 } from "@/services/parceiro-convites.service";
 
 type PostBody = {
@@ -95,7 +96,8 @@ export async function POST(request: NextRequest) {
   const atleta = rowsAtleta[0];
   if (!atleta) return NextResponse.json({ error: "Atleta não encontrado." }, { status: 404 });
 
-  const aviso: ConviteWhatsappAviso = (await whatsappJaCadastrado(parceiroWhatsappBruto)) ? "WHATSAPP_JA_CADASTRADO" : null;
+  const usuarioJaCadastrado: UsuarioParceiroCadastrado | null = await whatsappJaCadastrado(parceiroWhatsappBruto);
+  const aviso: ConviteWhatsappAviso = usuarioJaCadastrado ? "WHATSAPP_JA_CADASTRADO" : null;
 
   let createdOrReused;
   try {
@@ -122,6 +124,17 @@ export async function POST(request: NextRequest) {
         linkCriarPerfil: createdOrReused.row.linkCriarPerfilUsado || buildLinkCriarPerfil(createdOrReused.row.id),
         whatsappMascarado: maskWhatsapp(createdOrReused.row.parceiroWhatsappNormalizado),
         esperaSegundos: createdOrReused.esperaSegundos,
+        aviso,
+        usuarioParceiroCadastrado: usuarioJaCadastrado
+          ? {
+              id: usuarioJaCadastrado.id,
+              nome: usuarioJaCadastrado.nome,
+              email: usuarioJaCadastrado.email,
+              telefone: usuarioJaCadastrado.telefone,
+              fotoUrl: usuarioJaCadastrado.fotoUrl,
+              playnaquadraAtletaId: usuarioJaCadastrado.playnaquadraAtletaId,
+            }
+          : null,
       },
       { status: 429 }
     );
@@ -204,6 +217,16 @@ export async function POST(request: NextRequest) {
       whatsappMascarado: maskWhatsapp(rowPersisted.parceiroWhatsappNormalizado),
       parceiroNome: rowPersisted.parceiroNome,
       aviso,
+      usuarioParceiroCadastrado: usuarioJaCadastrado
+        ? {
+            id: usuarioJaCadastrado.id,
+            nome: usuarioJaCadastrado.nome,
+            email: usuarioJaCadastrado.email,
+            telefone: usuarioJaCadastrado.telefone,
+            fotoUrl: usuarioJaCadastrado.fotoUrl,
+            playnaquadraAtletaId: usuarioJaCadastrado.playnaquadraAtletaId,
+          }
+        : null,
       mensagemPreview: mensagemFinal.split("\n").slice(0, 6).join("\n"),
       envio: respostaEnvio,
       metadata: {

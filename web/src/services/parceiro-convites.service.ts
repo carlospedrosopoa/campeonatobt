@@ -164,19 +164,46 @@ export async function categoriaEhDuplas(categoriaId: string): Promise<{
   };
 }
 
-export async function whatsappJaCadastrado(bruto: string): Promise<boolean> {
+export type UsuarioParceiroCadastrado = {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string | null;
+  fotoUrl: string | null;
+  playnaquadraAtletaId: string | null;
+  whatsappNormalizado: string;
+};
+
+export async function whatsappJaCadastrado(bruto: string): Promise<UsuarioParceiroCadastrado | null> {
   const normalized = normalizePhone(bruto);
-  if (!normalized) return false;
+  if (!normalized) return null;
   const variants = new Set<string>([normalized]);
   if (normalized.startsWith("55") && normalized.length >= 12) variants.add(normalized.slice(2));
   if (normalized.length <= 11 && !normalized.startsWith("55")) variants.add(`55${normalized}`);
   const list = Array.from(variants);
   const rows = await db
-    .select({ id: usuarios.id })
+    .select({
+      id: usuarios.id,
+      nome: usuarios.nome,
+      email: usuarios.email,
+      telefone: usuarios.telefone,
+      fotoUrl: usuarios.fotoUrl,
+      playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
+    })
     .from(usuarios)
     .where(sql`regexp_replace(coalesce(${usuarios.telefone}, ''), '\\D', '', 'g') in ${sql.raw(`(${list.map((v) => `'${v.replace(/'/g, "''")}'`).join(",")})`)}`)
     .limit(1);
-  return rows.length > 0;
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    id: String(r.id),
+    nome: String(r.nome || ""),
+    email: String(r.email || ""),
+    telefone: r.telefone ? String(r.telefone) : null,
+    fotoUrl: r.fotoUrl ? String(r.fotoUrl) : null,
+    playnaquadraAtletaId: r.playnaquadraAtletaId ? String(r.playnaquadraAtletaId) : null,
+    whatsappNormalizado: normalized,
+  };
 }
 
 function rowToTable(r: any): ConviteTableRow {
