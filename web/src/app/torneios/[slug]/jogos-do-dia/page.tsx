@@ -8,23 +8,11 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-function ymdSaoPaulo(date = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
-
 export default async function TorneioJogosDoDiaPublicPage({ params }: PageProps) {
   const { slug } = await params;
   const torneio = await torneiosService.buscarPorSlug(slug);
 
   if (!torneio || torneio.oculto) notFound();
-
-  const dataHoje = ymdSaoPaulo();
-  const jsonUrl = `/api/public/torneios/${encodeURIComponent(slug)}/jogos-do-dia?data=${encodeURIComponent(dataHoje)}`;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -41,27 +29,6 @@ export default async function TorneioJogosDoDiaPublicPage({ params }: PageProps)
             >
               Voltar ao torneio
             </Link>
-            <a
-              href={jsonUrl}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Abrir JSON (extensão)
-            </a>
-          </div>
-        </div>
-
-        <div className="mt-6 bg-white border border-slate-200 rounded-xl p-5">
-          <div className="text-sm text-slate-600">
-            Endpoint público (para validar a extensão):{" "}
-            <a className="text-blue-700 hover:underline break-all" href={jsonUrl} target="_blank" rel="noreferrer">
-              {jsonUrl}
-            </a>
-          </div>
-          <div className="text-xs text-slate-500 mt-2">
-            Parâmetros: <span className="font-mono">data=YYYY-MM-DD</span> e opcional{" "}
-            <span className="font-mono">mencoes=@a,@b,@c</span>.
           </div>
         </div>
       </div>
