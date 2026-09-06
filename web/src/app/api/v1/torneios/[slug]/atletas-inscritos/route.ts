@@ -1,8 +1,8 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, usuarios } from "@/db/schema";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { buscarCamisetaAtletaNoPlay } from "@/services/playnaquadra-camiseta";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import type { CategoriaTipoParticipacao } from "@/services/categoria-config.service";
@@ -22,12 +22,12 @@ function removerAcentos(str: string) {
 function montarNomeDupla(
   equipeNome: string | null,
   atletasDaCategoriaNaEquipe: string[],
-  todosIntegrantesReaisDaEquipe: string[]
+  todosIntegrantesReaisDaEquipe: { usuarioId: string; nome: string }[]
 ) {
-  const integrantesReais =
-    Array.isArray(todosIntegrantesReaisDaEquipe) && todosIntegrantesReaisDaEquipe.length > 0
-      ? todosIntegrantesReaisDaEquipe
-      : atletasDaCategoriaNaEquipe ?? [];
+  const integrantesReaisNomes = Array.isArray(todosIntegrantesReaisDaEquipe) && todosIntegrantesReaisDaEquipe.length > 0
+    ? todosIntegrantesReaisDaEquipe.map((p) => p.nome).filter(Boolean)
+    : (atletasDaCategoriaNaEquipe ?? []);
+  const integrantesReais = integrantesReaisNomes;
 
   const primeirosNomes = integrantesReais
     .map(primeiroNome)
