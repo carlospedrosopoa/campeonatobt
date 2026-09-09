@@ -369,22 +369,22 @@ export async function gerarCardPartidaAdmin(params: GerarCardParams) {
     const url = fotoAtletaOuAvatar(a);
     return url ? carregarImagem(url) : Promise.resolve(null);
   }));
-  const tamanhoAvatar = 255;
-  const ajusteNomesY = 50;
-  const larguraNome = 250;
+  const tamanhoAvatar = 345;
+  const ajusteNomesY = 58;
+  const larguraNome = 340;
   const categoriaEhSimples = atletasA.length <= 1 && atletasB.length <= 1;
   const posicoes = categoriaEhSimples
     ? [
-        { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
-        { x: 510, y: 635, tipo: "simples" as const },
-        { x: 90, y: 1320, tipo: "simples" as const },
-        { x: 550, y: 1200, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 40, y: 730, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 500, y: 600, tipo: "simples" as const },
+        { x: 80, y: 1280, tipo: "simples" as const },
+        { x: 540, y: 1150, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
       ]
     : [
-        { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
-        { x: 510, y: 635, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
-        { x: 90, y: 1320, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
-        { x: 550, y: 1200, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
+        { x: 40, y: 730, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 500, y: 600, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
+        { x: 80, y: 1280, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 540, y: 1150, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
       ];
   for (const p of posicoes) {
     if (p.tipo === "simples") {
@@ -550,22 +550,22 @@ export async function gerarCardProgramacaoAdmin(params: GerarCardProgramacaoPara
     })
   );
 
-  const tamanhoAvatar = 255;
-  const ajusteNomesY = 50;
-  const larguraNome = 250;
+  const tamanhoAvatar = 345;
+  const ajusteNomesY = 58;
+  const larguraNome = 340;
   const categoriaEhSimples = atletasA.length <= 1 && atletasB.length <= 1;
   const posicoes = categoriaEhSimples
     ? [
-        { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
-        { x: 510, y: 635, tipo: "simples" as const },
-        { x: 90, y: 1320, tipo: "simples" as const },
-        { x: 550, y: 1200, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 40, y: 730, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 500, y: 600, tipo: "simples" as const },
+        { x: 80, y: 1280, tipo: "simples" as const },
+        { x: 540, y: 1150, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
       ]
     : [
-        { x: 55, y: 755, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
-        { x: 510, y: 635, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
-        { x: 90, y: 1320, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
-        { x: 550, y: 1200, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
+        { x: 40, y: 730, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 500, y: 600, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
+        { x: 80, y: 1280, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 540, y: 1150, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
       ];
   for (const p of posicoes) {
     if (p.tipo === "simples") {
