@@ -250,7 +250,6 @@ BEGIN
               ON tmp.inscricao_id = i.id
              AND tmp.equipe_nova_id IS NOT NULL
       WHERE i.categoria_id = g.categoria_id
-        AND i.torneio_id   = g.torneio_id
         AND i.equipe_id    = ge.equipe_id
       LIMIT 1
     ) tmp_agg ON TRUE
