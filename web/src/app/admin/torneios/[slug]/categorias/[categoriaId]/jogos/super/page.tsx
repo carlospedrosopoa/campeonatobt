@@ -1,4 +1,4 @@
-﻿"use client";
+﻿﻿﻿﻿﻿﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -127,6 +127,113 @@ function ordemFaseDecisiva(fase?: string | null) {
   return 99;
 }
 
+const REGRA_JOGO_VOLEI_PRAIA = "VOLEI_3_21";
+
+function normalizarTexto(value?: string | null) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function isEsporteVoleiPraia(esporteNome?: string | null) {
+  const normalizado = normalizarTexto(esporteNome);
+  return normalizado.includes("volei de praia") || normalizado.includes("beach volleyball");
+}
+
+function getRegraJogoValue(regras?: CategoriaConfig["regrasPartida"]) {
+  if (isRegrasVoleiSets(regras)) {
+    if (regras.melhorDe === 5) return "VOLEI_5_25";
+    if (regras.pontosPorSet === 21) return "VOLEI_3_21";
+    return "VOLEI_3_25";
+  }
+  if (regras?.melhorDe === 3 && regras?.superTiebreakDecisivo?.habilitado) {
+    if (regras?.gamesPorSet === 4 && regras?.tiebreak?.habilitado && regras?.tiebreak?.em === 3) return "2SETS_4_TB3x3_SUPER10";
+    return "2SETS_SUPER10";
+  }
+  if (regras?.melhorDe === 1 && regras?.gamesPorSet === 6 && regras?.tiebreak?.habilitado === false) return "1SET_6_SEM_TB";
+  if (regras?.melhorDe === 1 && regras?.gamesPorSet === 5 && regras?.tiebreak?.habilitado === false) return "1SET_5_SEM_TB";
+  return "1SET_6_TB";
+}
+
+function buildRegrasPartidaPreset(valor: string): RegrasPartidaConfig {
+  if (valor === "VOLEI_5_25") {
+    return {
+      tipo: "VOLEI_SETS",
+      melhorDe: 5,
+      pontosPorSet: 25,
+      tieBreakDecisivo: { habilitado: true, ate: 15, diffMin: 2 },
+      diffMin: 2,
+    };
+  }
+  if (valor === "VOLEI_3_21") {
+    return {
+      tipo: "VOLEI_SETS",
+      melhorDe: 3,
+      pontosPorSet: 21,
+      tieBreakDecisivo: { habilitado: true, ate: 15, diffMin: 2 },
+      diffMin: 2,
+    };
+  }
+  if (valor === "VOLEI_3_25") {
+    return {
+      tipo: "VOLEI_SETS",
+      melhorDe: 3,
+      pontosPorSet: 25,
+      tieBreakDecisivo: { habilitado: true, ate: 15, diffMin: 2 },
+      diffMin: 2,
+    };
+  }
+  if (valor === "2SETS_4_TB3x3_SUPER10") {
+    return {
+      tipo: "BT_SETS",
+      melhorDe: 3,
+      gamesPorSet: 4,
+      tiebreak: { habilitado: true, em: 3, ate: 5, diffMin: 2 },
+      superTiebreakDecisivo: { habilitado: true, ate: 10, diffMin: 2 },
+      incluirSuperTieEmGames: false,
+    };
+  }
+  if (valor === "2SETS_SUPER10") {
+    return {
+      tipo: "BT_SETS",
+      melhorDe: 3,
+      gamesPorSet: 6,
+      tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
+      superTiebreakDecisivo: { habilitado: true, ate: 10, diffMin: 2 },
+      incluirSuperTieEmGames: false,
+    };
+  }
+  if (valor === "1SET_6_SEM_TB") {
+    return {
+      tipo: "BT_SETS",
+      melhorDe: 1,
+      gamesPorSet: 6,
+      tiebreak: { habilitado: false, em: 6, ate: 0, diffMin: 2 },
+      superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+      incluirSuperTieEmGames: false,
+    };
+  }
+  if (valor === "1SET_5_SEM_TB") {
+    return {
+      tipo: "BT_SETS",
+      melhorDe: 1,
+      gamesPorSet: 5,
+      tiebreak: { habilitado: false, em: 5, ate: 0, diffMin: 2 },
+      superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+      incluirSuperTieEmGames: false,
+    };
+  }
+  return {
+    tipo: "BT_SETS",
+    melhorDe: 1,
+    gamesPorSet: 6,
+    tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
+    superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+    incluirSuperTieEmGames: false,
+  };
+}
+
 export default function AdminCategoriaJogosSuperPage() {
   const params = useParams<{ slug: string; categoriaId: string }>();
   const slug = params.slug;
@@ -184,6 +291,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [rodadaDataLimite, setRodadaDataLimite] = useState("");
   const [salvandoRodada, setSalvandoRodada] = useState(false);
   const [torneioNome, setTorneioNome] = useState("Torneio");
+  const [torneioEsporteNome, setTorneioEsporteNome] = useState<string | null>(null);
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
   const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
@@ -204,6 +312,18 @@ export default function AdminCategoriaJogosSuperPage() {
     s3b: "",
   });
 
+  const ehVoleiPraia = useMemo(() => isEsporteVoleiPraia(torneioEsporteNome), [torneioEsporteNome]);
+  const regraJogoSelecionada = useMemo(
+    () => (ehVoleiPraia ? REGRA_JOGO_VOLEI_PRAIA : getRegraJogoValue(config?.regrasPartida)),
+    [ehVoleiPraia, config]
+  );
+
+  useEffect(() => {
+    if (!ehVoleiPraia || !config) return;
+    if (getRegraJogoValue(config.regrasPartida) === REGRA_JOGO_VOLEI_PRAIA) return;
+    setConfig((prev) => (prev ? { ...prev, regrasPartida: buildRegrasPartidaPreset(REGRA_JOGO_VOLEI_PRAIA) } : prev));
+  }, [ehVoleiPraia, config]);
+
   async function carregarCategoria() {
     const resCat = await fetch(`/api/v1/torneios/${slug}/categorias`, { cache: "no-store" });
     if (!resCat.ok) {
@@ -219,6 +339,7 @@ export default function AdminCategoriaJogosSuperPage() {
     if (!res.ok) return;
     const t = (await res.json()) as any;
     if (t?.nome) setTorneioNome(String(t.nome));
+    setTorneioEsporteNome((t?.esporteNome as string | null | undefined) ?? null);
     setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
     setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
     setTorneioCardApenasComFotos(Boolean(t?.cardApenasComFotos));
@@ -1472,6 +1593,36 @@ export default function AdminCategoriaJogosSuperPage() {
 
         {abaAtiva === "dinamica" && config && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-semibold text-slate-800">Regra do jogo (quantidade de sets e tipo)</label>
+              <select
+                value={regraJogoSelecionada}
+                onChange={(e) => {
+                  const regrasPartida = buildRegrasPartidaPreset(e.target.value);
+                  setConfig((p) => (p ? { ...p, regrasPartida } : p));
+                }}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-400 shadow-sm"
+              >
+                {ehVoleiPraia ? (
+                  <option value={REGRA_JOGO_VOLEI_PRAIA}>Vôlei de praia: 2 sets até 21 + 3º set até 15</option>
+                ) : (
+                  <>
+                    <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
+                    <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
+                    <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
+                    <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
+                    <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie até 10</option>
+                    <option value="VOLEI_3_21">Vôlei melhor de 3 até 21</option>
+                    <option value="VOLEI_3_25">Vôlei melhor de 3 até 25</option>
+                    <option value="VOLEI_5_25">Vôlei melhor de 5 até 25</option>
+                  </>
+                )}
+              </select>
+              <div className="text-xs text-slate-500">
+                Define quantidade de sets por partida, quando acontece tie-break e como é o set decisivo (super tie 10 ou não).
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Estrutura do mata-mata</label>
               <select
