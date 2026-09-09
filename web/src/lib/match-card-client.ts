@@ -278,6 +278,14 @@ async function sincronizarFotosPlaynaquadra(syncFotosUrl?: string | null) {
   }
 }
 
+function separarPrimeiroUltimoNome(nomeCompleto: string): { primeiroNome: string; ultimoNome: string } {
+  const tokens = nomeCompleto.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length <= 1) return { primeiroNome: tokens[0] || "Atleta", ultimoNome: "" };
+  const ultimo = tokens[tokens.length - 1];
+  const primeiros = tokens.slice(0, -1).join(" ");
+  return { primeiroNome: primeiros, ultimoNome: ultimo };
+}
+
 function drawTextCenter(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
   const words = text.trim().split(/\s+/);
   const lines: string[] = [];
@@ -444,12 +452,21 @@ export async function gerarCardPartidaAdmin(params: GerarCardParams) {
 
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.fillStyle = "#ffffff";
   ctx.font = "700 22px Inter, Arial, sans-serif";
   for (const p of posicoes) {
     if (p.tipo === "simples") continue;
-    const nome = p.atleta?.nome || "Atleta";
-    drawTextCenter(ctx, nome, p.x + tamanhoAvatar / 2, p.y + tamanhoAvatar + ajusteNomesY, larguraNome, 28);
+    const nomeCompleto = p.atleta?.nome || "Atleta";
+    const { primeiroNome, ultimoNome } = separarPrimeiroUltimoNome(nomeCompleto);
+    const centroX = p.x + tamanhoAvatar / 2;
+    const linhaY = p.y + tamanhoAvatar + ajusteNomesY;
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 22px Inter, Arial, sans-serif";
+    drawTextCenter(ctx, primeiroNome, centroX, linhaY, larguraNome, 28);
+    if (ultimoNome) {
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "500 18px Inter, Arial, sans-serif";
+      drawTextCenter(ctx, ultimoNome, centroX, linhaY + 28, larguraNome, 22);
+    }
   }
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
@@ -627,12 +644,21 @@ export async function gerarCardProgramacaoAdmin(params: GerarCardProgramacaoPara
 
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.fillStyle = "#ffffff";
   ctx.font = "700 22px Inter, Arial, sans-serif";
   for (const p of posicoes) {
     if (p.tipo === "simples") continue;
-    const nome = p.atleta?.nome || "Atleta";
-    drawTextCenter(ctx, nome, p.x + tamanhoAvatar / 2, p.y + tamanhoAvatar + ajusteNomesY, larguraNome, 28);
+    const nomeCompleto = p.atleta?.nome || "Atleta";
+    const { primeiroNome, ultimoNome } = separarPrimeiroUltimoNome(nomeCompleto);
+    const centroX = p.x + tamanhoAvatar / 2;
+    const linhaY = p.y + tamanhoAvatar + ajusteNomesY;
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 22px Inter, Arial, sans-serif";
+    drawTextCenter(ctx, primeiroNome, centroX, linhaY, larguraNome, 28);
+    if (ultimoNome) {
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "500 18px Inter, Arial, sans-serif";
+      drawTextCenter(ctx, ultimoNome, centroX, linhaY + 28, larguraNome, 22);
+    }
   }
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
