@@ -256,12 +256,17 @@ BEGIN
     ) tmp_agg ON TRUE
     WHERE tmp_agg.equipe_antiga_id IS NOT NULL
   LOOP
-    UPDATE grupo_equipes
-    SET equipe_id = r2.equipe_nova
-    WHERE grupo_id  = r2.grupo_id
-      AND equipe_id = r2.equipe_antiga;
+    DECLARE
+      v_rows BIGINT;
+    BEGIN
+      UPDATE grupo_equipes
+      SET equipe_id = r2.equipe_nova
+      WHERE grupo_id  = r2.grupo_id
+        AND equipe_id = r2.equipe_antiga;
 
-    GET DIAGNOSTICS grupoequipes_repontadas = grupoequipes_repontadas + ROW_COUNT;
+      GET DIAGNOSTICS v_rows = ROW_COUNT;
+      grupoequipes_repontadas := grupoequipes_repontadas + v_rows;
+    END;
   END LOOP;
 
   RAISE NOTICE '5) Grupo_equipes repontadas: %', grupoequipes_repontadas;
