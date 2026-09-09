@@ -168,9 +168,23 @@ export class PainelQuadrasService {
       .where(eq(partidas.torneioId, torneioId))
       .orderBy(asc(categorias.nome), asc(partidas.dataHorario), asc(partidas.criadoEm));
 
-    const equipeIds = Array.from(new Set(rows.flatMap((row) => [row.equipeAId, row.equipeBId]).filter(Boolean))) as string[];
-    const nomesEquipes = await equipesDisplayService.mapNomesEquipes(equipeIds);
     const categoriaIds = Array.from(new Set(rows.map((row) => row.categoriaId).filter(Boolean))) as string[];
+
+    const equipeIdsPorCategoria = new Map<string, string[]>();
+    for (const row of rows) {
+      if (!row.categoriaId) continue;
+      const list = equipeIdsPorCategoria.get(row.categoriaId) ?? [];
+      if (row.equipeAId && !list.includes(row.equipeAId)) list.push(row.equipeAId);
+      if (row.equipeBId && !list.includes(row.equipeBId)) list.push(row.equipeBId);
+      equipeIdsPorCategoria.set(row.categoriaId, list);
+    }
+
+    const nomesPorCategoria = new Map<string, Map<string, string>>();
+    for (const catId of categoriaIds) {
+      const eqs = equipeIdsPorCategoria.get(catId) ?? [];
+      nomesPorCategoria.set(catId, await equipesDisplayService.mapNomesEquipes(eqs, { categoriaId: catId }));
+    }
+
     const configEntries = await Promise.all(
       categoriaIds.map(async (categoriaId) => [categoriaId, await categoriaConfigService.obterOuDefault(categoriaId)] as const)
     );
@@ -178,6 +192,7 @@ export class PainelQuadrasService {
 
     const partidasComNomes: PainelQuadrasPartida[] = rows.map((row) => {
       const config = configMap.get(row.categoriaId);
+      const nomesMap = row.categoriaId ? nomesPorCategoria.get(row.categoriaId) : undefined;
       return {
         id: row.id,
         categoriaId: row.categoriaId,
@@ -194,8 +209,8 @@ export class PainelQuadrasService {
         finalizadoEm: row.finalizadoEm ? new Date(row.finalizadoEm).toISOString() : null,
         equipeAId: row.equipeAId,
         equipeBId: row.equipeBId,
-        equipeANome: nomesEquipes.get(row.equipeAId) ?? null,
-        equipeBNome: nomesEquipes.get(row.equipeBId) ?? null,
+        equipeANome: nomesMap?.get(row.equipeAId) ?? null,
+        equipeBNome: nomesMap?.get(row.equipeBId) ?? null,
         placarA: row.placarA ?? 0,
         placarB: row.placarB ?? 0,
         detalhesPlacar: (row.detalhesPlacar as PainelQuadrasPartida["detalhesPlacar"]) ?? null,

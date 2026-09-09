@@ -149,31 +149,14 @@ export class PartidaHeadToHeadService {
     }
 
     const equipesAtuaisIds = [partidaAtual.equipeAId, partidaAtual.equipeBId];
-    const [nomesEquipesAtuais, integrantesAtuaisRows] = await Promise.all([
-      equipesDisplayService.mapNomesEquipes(equipesAtuaisIds),
-      db
-        .select({
-          equipeId: equipeIntegrantes.equipeId,
-          atletaId: usuarios.id,
-          atletaNome: usuarios.nome,
-          fotoUrl: usuarios.fotoUrl,
-          playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
-        })
-        .from(equipeIntegrantes)
-        .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
-        .where(inArray(equipeIntegrantes.equipeId, equipesAtuaisIds)),
+    const [nomesEquipesAtuais, atletasPorEquipeAtualMap] = await Promise.all([
+      equipesDisplayService.mapNomesEquipes(equipesAtuaisIds, { categoriaId: partidaAtual.categoriaId }),
+      equipesDisplayService.mapAtletasEquipes(equipesAtuaisIds, { categoriaId: partidaAtual.categoriaId }),
     ]);
 
     const atletasPorEquipeAtual = new Map<string, AtletaResumo[]>();
-    for (const row of integrantesAtuaisRows) {
-      const lista = atletasPorEquipeAtual.get(row.equipeId) ?? [];
-      lista.push({
-        id: row.atletaId,
-        nome: row.atletaNome,
-        fotoUrl: row.fotoUrl ?? null,
-        playnaquadraAtletaId: row.playnaquadraAtletaId ?? null,
-      });
-      atletasPorEquipeAtual.set(row.equipeId, lista);
+    for (const [equipeId, atletas] of atletasPorEquipeAtualMap.entries()) {
+      atletasPorEquipeAtual.set(equipeId, atletas as AtletaResumo[]);
     }
 
     const duplaAAtual: TimeResumo = {
@@ -236,66 +219,61 @@ export class PartidaHeadToHeadService {
           .orderBy(desc(partidas.finalizadoEm), desc(partidas.dataHorario), desc(partidas.criadoEm))
       : [];
 
-    const todasEquipesIds = Array.from(
-      new Set(
-        [
-          ...equipesRelacionadasIds,
-          ...partidasHistoricas.flatMap((partida) => [partida.equipeAId, partida.equipeBId]),
-          duplaAAtual.id,
-          duplaBAtual.id,
-        ].filter(Boolean)
-      )
-    ) as string[];
+    const partidasComCategoria = [
+      { categoriaId: partidaAtual.categoriaId, equipeAId: duplaAAtual.id, equipeBId: duplaBAtual.id },
+      ...partidasHistoricas.map((p) => ({ categoriaId: p.categoriaId, equipeAId: p.equipeAId, equipeBId: p.equipeBId })),
+    ];
 
-    const [nomesEquipesTodas, integrantesRows] = await Promise.all([
-      equipesDisplayService.mapNomesEquipes(todasEquipesIds),
-      todasEquipesIds.length
-        ? db
-            .select({
-              equipeId: equipeIntegrantes.equipeId,
-              atletaId: usuarios.id,
-              atletaNome: usuarios.nome,
-              fotoUrl: usuarios.fotoUrl,
-              playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
-            })
-            .from(equipeIntegrantes)
-            .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
-            .where(inArray(equipeIntegrantes.equipeId, todasEquipesIds))
-        : Promise.resolve([]),
-    ]);
-
-    const atletasPorEquipe = new Map<string, AtletaResumo[]>();
-    for (const row of integrantesRows) {
-      const lista = atletasPorEquipe.get(row.equipeId) ?? [];
-      lista.push({
-        id: row.atletaId,
-        nome: row.atletaNome,
-        fotoUrl: row.fotoUrl ?? null,
-        playnaquadraAtletaId: row.playnaquadraAtletaId ?? null,
-      });
-      atletasPorEquipe.set(row.equipeId, lista);
+    const equipeIdsPorCategoria = new Map<string, string[]>();
+    for (const p of partidasComCategoria) {
+      if (!p.categoriaId) continue;
+      const list = equipeIdsPorCategoria.get(p.categoriaId) ?? [];
+      if (p.equipeAId && !list.includes(p.equipeAId)) list.push(p.equipeAId);
+      if (p.equipeBId && !list.includes(p.equipeBId)) list.push(p.equipeBId);
+      equipeIdsPorCategoria.set(p.categoriaId, list);
     }
 
-    const obterTime = (equipeId: string): TimeResumo => ({
-      id: equipeId,
-      nome: nomesEquipesTodas.get(equipeId) ?? equipeId.slice(0, 8),
-      atletas: atletasPorEquipe.get(equipeId) ?? [],
-    });
+    const categoriaIds = Array.from(equipeIdsPorCategoria.keys());
+    const nomesPorCategoria = new Map<string, Map<string, string>>();
+    const atletasPorCategoria = new Map<string, Map<string, AtletaResumo[]>>();
+    for (const catId of categoriaIds) {
+      const eqs = equipeIdsPorCategoria.get(catId) ?? [];
+      const [nomes, atletasMap] = await Promise.all([
+        equipesDisplayService.mapNomesEquipes(eqs, { categoriaId: catId }),
+        equipesDisplayService.mapAtletasEquipes(eqs, { categoriaId: catId }),
+      ]);
+      nomesPorCategoria.set(catId, nomes);
+      const atletasResumoMap = new Map<string, AtletaResumo[]>();
+      for (const [eid, atletas] of atletasMap.entries()) {
+        atletasResumoMap.set(eid, atletas as AtletaResumo[]);
+      }
+      atletasPorCategoria.set(catId, atletasResumoMap);
+    }
+
+    const obterTime = (equipeId: string, categoriaId?: string | null): TimeResumo => {
+      const nomesMap = categoriaId ? nomesPorCategoria.get(categoriaId) : undefined;
+      const atletasMap = categoriaId ? atletasPorCategoria.get(categoriaId) : undefined;
+      return {
+        id: equipeId,
+        nome: nomesMap?.get(equipeId) ?? equipeId.slice(0, 8),
+        atletas: atletasMap?.get(equipeId) ?? [],
+      };
+    };
 
     const chaveDuplaAAtual = chaveAtletas(duplaAAtual.atletas);
     const chaveDuplaBAtual = chaveAtletas(duplaBAtual.atletas);
 
     const historicoDuplas = ordenarHistoricoDesc(
       partidasHistoricas.filter((partida) => {
-        const timeA = obterTime(partida.equipeAId);
-        const timeB = obterTime(partida.equipeBId);
+        const timeA = obterTime(partida.equipeAId, partida.categoriaId);
+        const timeB = obterTime(partida.equipeBId, partida.categoriaId);
         const chaveA = chaveAtletas(timeA.atletas);
         const chaveB = chaveAtletas(timeB.atletas);
         return (chaveA === chaveDuplaAAtual && chaveB === chaveDuplaBAtual) || (chaveA === chaveDuplaBAtual && chaveB === chaveDuplaAAtual);
       })
     ).map((partida) => {
-      const timeA = obterTime(partida.equipeAId);
-      const timeB = obterTime(partida.equipeBId);
+      const timeA = obterTime(partida.equipeAId, partida.categoriaId);
+      const timeB = obterTime(partida.equipeBId, partida.categoriaId);
       const duplaAEstaNoLadoA = chaveAtletas(timeA.atletas) === chaveDuplaAAtual;
       const timeDuplaA = duplaAEstaNoLadoA ? timeA : timeB;
       const timeDuplaB = duplaAEstaNoLadoA ? timeB : timeA;
@@ -345,8 +323,8 @@ export class PartidaHeadToHeadService {
       duplaBAtual.atletas.map((atletaB) => {
         const historico = ordenarHistoricoDesc(
           partidasHistoricas.filter((partida) => {
-            const timeA = obterTime(partida.equipeAId);
-            const timeB = obterTime(partida.equipeBId);
+            const timeA = obterTime(partida.equipeAId, partida.categoriaId);
+            const timeB = obterTime(partida.equipeBId, partida.categoriaId);
             const atletaANoLadoA = timeA.atletas.some((atleta) => atleta.id === atletaA.id);
             const atletaANoLadoB = timeB.atletas.some((atleta) => atleta.id === atletaA.id);
             const atletaBNoLadoA = timeA.atletas.some((atleta) => atleta.id === atletaB.id);
@@ -354,8 +332,8 @@ export class PartidaHeadToHeadService {
             return (atletaANoLadoA && atletaBNoLadoB) || (atletaANoLadoB && atletaBNoLadoA);
           })
         ).map((partida) => {
-          const timeA = obterTime(partida.equipeAId);
-          const timeB = obterTime(partida.equipeBId);
+          const timeA = obterTime(partida.equipeAId, partida.categoriaId);
+          const timeB = obterTime(partida.equipeBId, partida.categoriaId);
           const atletaAEstaNoLadoA = timeA.atletas.some((atleta) => atleta.id === atletaA.id);
           const ladoAtletaA = atletaAEstaNoLadoA ? timeA : timeB;
           const ladoAtletaB = atletaAEstaNoLadoA ? timeB : timeA;

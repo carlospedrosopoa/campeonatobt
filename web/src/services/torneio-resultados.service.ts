@@ -48,17 +48,29 @@ export class TorneioResultadosService {
     );
     if (finaisValidas.length === 0) return result;
 
-    const equipeIds = Array.from(
-      new Set(
-        finaisValidas.flatMap((item) => [item.equipeAId, item.equipeBId]).filter(Boolean)
-      )
-    ) as string[];
-    const nomesEquipes = await equipesDisplayService.mapNomesEquipes(equipeIds);
+    const categoriaIds = Array.from(new Set(finaisValidas.map((i) => i.categoriaId).filter(Boolean))) as string[];
+
+    const equipeIdsPorCategoria = new Map<string, string[]>();
+    for (const item of finaisValidas) {
+      if (!item.categoriaId) continue;
+      const list = equipeIdsPorCategoria.get(item.categoriaId) ?? [];
+      if (item.equipeAId && !list.includes(item.equipeAId)) list.push(item.equipeAId);
+      if (item.equipeBId && !list.includes(item.equipeBId)) list.push(item.equipeBId);
+      equipeIdsPorCategoria.set(item.categoriaId, list);
+    }
+
+    const nomesPorCategoria = new Map<string, Map<string, string>>();
+    for (const catId of categoriaIds) {
+      const eqs = equipeIdsPorCategoria.get(catId) ?? [];
+      nomesPorCategoria.set(catId, await equipesDisplayService.mapNomesEquipes(eqs, { categoriaId: catId }));
+    }
 
     const categoriasProcessadas = new Set<string>();
     for (const item of finaisValidas) {
       if (categoriasProcessadas.has(item.categoriaId)) continue;
       categoriasProcessadas.add(item.categoriaId);
+
+      const nomesMap = nomesPorCategoria.get(item.categoriaId);
 
       const campeaoEquipeId = item.vencedorId!;
       const viceEquipeId = item.vencedorId === item.equipeAId ? item.equipeBId! : item.equipeAId!;
@@ -68,9 +80,9 @@ export class TorneioResultadosService {
         categoriaNome: item.categoriaNome,
         categoriaSlug: item.categoriaSlug,
         campeaoEquipeId,
-        campeaoNome: nomesEquipes.get(campeaoEquipeId) ?? "Dupla campea",
+        campeaoNome: nomesMap?.get(campeaoEquipeId) ?? "Dupla campea",
         viceEquipeId,
-        viceNome: nomesEquipes.get(viceEquipeId) ?? "Dupla vice-campea",
+        viceNome: nomesMap?.get(viceEquipeId) ?? "Dupla vice-campea",
       };
 
       const atual = result.get(item.torneioId) ?? [];

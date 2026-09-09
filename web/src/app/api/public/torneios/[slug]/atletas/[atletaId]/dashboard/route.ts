@@ -37,8 +37,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     const rows = await db
       .select({
         id: partidas.id,
-        categoriaId: partidas.categoriaId,
-        categoriaNome: categorias.nome,
         fase: partidas.fase,
         status: partidas.status,
         rodadaId: partidas.rodadaId,
@@ -61,6 +59,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
         fotoUrl: partidas.fotoUrl,
         transmissaoUrl: partidas.transmissaoUrl,
         criadoEm: partidas.criadoEm,
+        categoriaId: partidas.categoriaId,
       })
       .from(partidas)
       .innerJoin(categorias, eq(partidas.categoriaId, categorias.id))
@@ -70,38 +69,39 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       .where(and(eq(partidas.torneioId, torneio.id), or(inArray(partidas.equipeAId, equipeIds), inArray(partidas.equipeBId, equipeIds))))
       .orderBy(asc(partidas.dataHorario), asc(rodadas.numero), asc(partidas.criadoEm));
 
-    const allEquipeIds = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
-    const mapNomes = await equipesDisplayService.mapNomesEquipes(allEquipeIds);
+    const categoriaIds = Array.from(new Set(rows.map((r) => r.categoriaId).filter(Boolean))) as string[];
 
-    const atletasRows =
-      allEquipeIds.length > 0
-        ? await db
-            .select({
-              equipeId: equipeIntegrantes.equipeId,
-              atletaId: usuarios.id,
-              atletaNome: usuarios.nome,
-              atletaFotoUrl: usuarios.fotoUrl,
-            })
-            .from(equipeIntegrantes)
-            .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
-            .where(inArray(equipeIntegrantes.equipeId, allEquipeIds))
-        : [];
+    const equipeIdsPorCategoria = new Map<string, string[]>();
+    for (const r of rows) {
+      if (!r.categoriaId) continue;
+      const list = equipeIdsPorCategoria.get(r.categoriaId) ?? [];
+      if (r.equipeAId && !list.includes(r.equipeAId)) list.push(r.equipeAId);
+      if (r.equipeBId && !list.includes(r.equipeBId)) list.push(r.equipeBId);
+      equipeIdsPorCategoria.set(r.categoriaId, list);
+    }
 
-    const mapAtletas = new Map<string, { id: string; nome: string; fotoUrl: string | null }[]>();
-    for (const a of atletasRows) {
-      const current = mapAtletas.get(a.equipeId) ?? [];
-      current.push({ id: a.atletaId, nome: a.atletaNome, fotoUrl: a.atletaFotoUrl ?? null });
-      mapAtletas.set(a.equipeId, current);
+    const nomesPorCategoria = new Map<string, Map<string, string>>();
+    const atletasPorCategoria = new Map<string, Map<string, { id: string; nome: string; fotoUrl: string | null }[]>>();
+    for (const catId of categoriaIds) {
+      const eqs = equipeIdsPorCategoria.get(catId) ?? [];
+      const [nomes, atletas] = await Promise.all([
+        equipesDisplayService.mapNomesEquipes(eqs, { categoriaId: catId }),
+        equipesDisplayService.mapAtletasEquipes(eqs, { categoriaId: catId }),
+      ]);
+      nomesPorCategoria.set(catId, nomes);
+      atletasPorCategoria.set(catId, atletas);
     }
 
     const result = rows.map((r) => {
       const meuTimeId = equipeIds.includes(r.equipeAId) ? r.equipeAId : r.equipeBId;
+      const nomesMap = r.categoriaId ? nomesPorCategoria.get(r.categoriaId) : undefined;
+      const atletasMap = r.categoriaId ? atletasPorCategoria.get(r.categoriaId) : undefined;
       return {
         ...r,
-        equipeANome: mapNomes.get(r.equipeAId) ?? null,
-        equipeBNome: mapNomes.get(r.equipeBId) ?? null,
-        equipeAAtletas: r.equipeAId ? mapAtletas.get(r.equipeAId) ?? [] : [],
-        equipeBAtletas: r.equipeBId ? mapAtletas.get(r.equipeBId) ?? [] : [],
+        equipeANome: nomesMap?.get(r.equipeAId) ?? null,
+        equipeBNome: nomesMap?.get(r.equipeBId) ?? null,
+        equipeAAtletas: r.equipeAId ? atletasMap?.get(r.equipeAId) ?? [] : [],
+        equipeBAtletas: r.equipeBId ? atletasMap?.get(r.equipeBId) ?? [] : [],
         meuTimeId,
       };
     });

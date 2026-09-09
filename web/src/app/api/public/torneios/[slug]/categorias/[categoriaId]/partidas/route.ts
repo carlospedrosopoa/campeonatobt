@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { db } from "@/db";
-import { arenas, equipeIntegrantes, grupos, partidas, rodadas, usuarios } from "@/db/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { arenas, grupos, partidas, rodadas } from "@/db/schema";
+import { and, asc, eq } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 
 export async function GET(
@@ -61,27 +61,8 @@ export async function GET(
       .orderBy(asc(rodadas.numero), asc(partidas.criadoEm));
 
     const equipeIds = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
-    const mapNomes = await equipesDisplayService.mapNomesEquipes(equipeIds);
-    const atletasRows =
-      equipeIds.length > 0
-        ? await db
-            .select({
-              equipeId: equipeIntegrantes.equipeId,
-              atletaId: usuarios.id,
-              atletaNome: usuarios.nome,
-              atletaFotoUrl: usuarios.fotoUrl,
-            })
-            .from(equipeIntegrantes)
-            .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
-            .where(inArray(equipeIntegrantes.equipeId, equipeIds))
-        : [];
-
-    const mapAtletas = new Map<string, { id: string; nome: string; fotoUrl: string | null }[]>();
-    for (const a of atletasRows) {
-      const current = mapAtletas.get(a.equipeId) ?? [];
-      current.push({ id: a.atletaId, nome: a.atletaNome, fotoUrl: a.atletaFotoUrl ?? null });
-      mapAtletas.set(a.equipeId, current);
-    }
+    const mapNomes = await equipesDisplayService.mapNomesEquipes(equipeIds, { categoriaId });
+    const mapAtletas = await equipesDisplayService.mapAtletasEquipes(equipeIds, { categoriaId });
 
     const result = rows.map((r) => ({
       ...r,

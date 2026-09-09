@@ -386,7 +386,7 @@ export class ClassificacaoCategoriaService {
     for (const g of gruposRows) byGrupo.set(g.id, { grupoId: g.id, grupoNome: g.nome, equipes: [] });
 
     const equipeIds = Array.from(new Set(equipesRows.map((e) => e.equipeId)));
-    const nomesEquipes = await equipesDisplayService.mapNomesEquipes(equipeIds);
+    const nomesEquipes = await equipesDisplayService.mapNomesEquipes(equipeIds, { categoriaId });
 
     for (const e of equipesRows) {
       const games = gamesPorEquipe.get(`${e.grupoId}:${e.equipeId}`) ?? { pro: 0, contra: 0, setsPro: 0 };

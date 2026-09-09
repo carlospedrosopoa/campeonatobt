@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
@@ -528,40 +528,43 @@ export async function GET(
       });
     }
 
-    const equipeIds = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
-    const mapNomes = await equipesDisplayService.mapNomesEquipes(equipeIds);
     const categoriaIds = Array.from(new Set(rows.map((r) => r.categoriaId).filter(Boolean))) as string[];
     const configEntries = await Promise.all(
       categoriaIds.map(async (categoriaId) => [categoriaId, await categoriaConfigService.obterOuDefault(categoriaId)] as const)
     );
     const configMap = new Map(configEntries);
-    
-    const atletasRows = await db
-      .select({
-        equipeId: equipeIntegrantes.equipeId,
-        atletaId: usuarios.id,
-        atletaNome: usuarios.nome,
-        atletaFotoUrl: usuarios.fotoUrl,
-      })
-      .from(equipeIntegrantes)
-      .innerJoin(usuarios, eq(equipeIntegrantes.usuarioId, usuarios.id))
-      .where(inArray(equipeIntegrantes.equipeId, equipeIds));
 
-    const mapAtletas = new Map<string, { id: string; nome: string; fotoUrl: string | null }[]>();
-    for (const a of atletasRows) {
-      const current = mapAtletas.get(a.equipeId) ?? [];
-      current.push({ id: a.atletaId, nome: a.atletaNome, fotoUrl: a.atletaFotoUrl ?? null });
-      mapAtletas.set(a.equipeId, current);
+    const equipeIdsPorCategoria = new Map<string, string[]>();
+    for (const r of rows) {
+      if (!r.categoriaId) continue;
+      const list = equipeIdsPorCategoria.get(r.categoriaId) ?? [];
+      if (r.equipeAId && !list.includes(r.equipeAId)) list.push(r.equipeAId);
+      if (r.equipeBId && !list.includes(r.equipeBId)) list.push(r.equipeBId);
+      equipeIdsPorCategoria.set(r.categoriaId, list);
+    }
+
+    const nomesPorCategoria = new Map<string, Map<string, string>>();
+    const atletasPorCategoria = new Map<string, Map<string, { id: string; nome: string; fotoUrl: string | null }[]>>();
+    for (const catId of categoriaIds) {
+      const eqs = equipeIdsPorCategoria.get(catId) ?? [];
+      const [nomes, atletas] = await Promise.all([
+        equipesDisplayService.mapNomesEquipes(eqs, { categoriaId: catId }),
+        equipesDisplayService.mapAtletasEquipes(eqs, { categoriaId: catId }),
+      ]);
+      nomesPorCategoria.set(catId, nomes);
+      atletasPorCategoria.set(catId, atletas);
     }
 
     const partidasResult = rows.map((r) => {
       const config = configMap.get(r.categoriaId);
+      const nomesMap = r.categoriaId ? nomesPorCategoria.get(r.categoriaId) : undefined;
+      const atletasMap = r.categoriaId ? atletasPorCategoria.get(r.categoriaId) : undefined;
       return {
         ...r,
-        equipeANome: mapNomes.get(r.equipeAId) ?? null,
-        equipeBNome: mapNomes.get(r.equipeBId) ?? null,
-        equipeAAtletas: r.equipeAId ? mapAtletas.get(r.equipeAId) ?? [] : [],
-        equipeBAtletas: r.equipeBId ? mapAtletas.get(r.equipeBId) ?? [] : [],
+        equipeANome: nomesMap?.get(r.equipeAId) ?? null,
+        equipeBNome: nomesMap?.get(r.equipeBId) ?? null,
+        equipeAAtletas: r.equipeAId ? atletasMap?.get(r.equipeAId) ?? [] : [],
+        equipeBAtletas: r.equipeBId ? atletasMap?.get(r.equipeBId) ?? [] : [],
         regrasPartida: obterRegrasPartidaEfetivas({
           regrasBase: config?.regrasPartida,
           regrasPorFase: config?.regrasPartidaPorFase ?? null,
