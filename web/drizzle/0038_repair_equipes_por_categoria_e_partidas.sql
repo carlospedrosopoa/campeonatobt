@@ -230,30 +230,25 @@ BEGIN
 
   -----------------------------------------------------------------
   -- 5) Atualizar grupo_equipes (equipe_id por grupo na fase
-  --    GRUPOS) e qualquer outra referencia futura (ex.: vencedor_id
-  --    em partidas que ja foram finalizadas -> nao atualizamos, mas
-  --    a migration 0035_1 tambem nao usava).
+  --    GRUPOS). NAO usar alias na tabela-alvo grupo_equipes em FROM
+  --    (sintaxe PostgreSQL UPDATE FROM: a tabela alvo nao se
+  --    referencia no FROM, e sim pelo nome completo no WHERE).
   -----------------------------------------------------------------
   FOR r2 IN
     SELECT
-      ge.grupo_id          AS grupo_id,
-      tmp_agg.equipe_antiga_id AS equipe_antiga,
-      tmp_agg.equipe_nova_id   AS equipe_nova
-    FROM grupo_equipes ge
-    INNER JOIN grupos g ON g.id = ge.grupo_id
-    INNER JOIN LATERAL (
-      SELECT DISTINCT
-        i.equipe_id          AS equipe_antiga_id,
-        tmp.equipe_nova_id   AS equipe_nova_id
-      FROM inscricoes i
-      INNER JOIN tmp_repair_equipes_por_categoria tmp
-              ON tmp.inscricao_id = i.id
-             AND tmp.equipe_nova_id IS NOT NULL
-      WHERE i.categoria_id = g.categoria_id
-        AND i.equipe_id    = ge.equipe_id
-      LIMIT 1
-    ) tmp_agg ON TRUE
-    WHERE tmp_agg.equipe_antiga_id IS NOT NULL
+      g.id                AS grupo_id,
+      i.equipe_id         AS equipe_antiga,
+      tmp.equipe_nova_id  AS equipe_nova
+    FROM grupos g
+    INNER JOIN grupo_equipes ge_sem_uso ON ge_sem_uso.grupo_id = g.id
+    INNER JOIN inscricoes i
+            ON i.categoria_id = g.categoria_id
+           AND i.equipe_id    = ge_sem_uso.equipe_id
+    INNER JOIN tmp_repair_equipes_por_categoria tmp
+            ON tmp.inscricao_id = i.id
+           AND tmp.equipe_nova_id IS NOT NULL
+    WHERE tmp.equipe_antiga_id = ge_sem_uso.equipe_id
+    GROUP BY g.id, i.equipe_id, tmp.equipe_nova_id
   LOOP
     DECLARE
       v_rows BIGINT;
