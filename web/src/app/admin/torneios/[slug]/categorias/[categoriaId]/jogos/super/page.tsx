@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿﻿﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -7,7 +7,7 @@ import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageI
 import { gerarCardPartidaAdmin, gerarCardProgramacaoAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
-import { isRegrasBeachTennisSets, obterRegrasPartidaEfetivas, type RegrasPartidaConfig, type RegrasPartidaPorFase } from "@/lib/regras-partida";
+import { isRegrasBeachTennisSets, isRegrasVoleiSets, obterRegrasPartidaEfetivas, type RegrasPartidaConfig, type RegrasPartidaPorFase } from "@/lib/regras-partida";
 import { PartidaHeadToHeadButton } from "@/components/admin/PartidaHeadToHeadButton";
 
 type Categoria = {
