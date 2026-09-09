@@ -2,10 +2,9 @@ import React from "react";
 
 export function separarPrimeiroUltimoNome(nomeCompleto: string): { primeiroNome: string; ultimoNome: string } {
   const tokens = String(nomeCompleto || "").trim().split(/\s+/).filter(Boolean);
-  if (tokens.length <= 1) return { primeiroNome: tokens[0] || "Atleta", ultimoNome: "" };
-  const ultimo = tokens[tokens.length - 1];
-  const primeiros = tokens.slice(0, -1).join(" ");
-  return { primeiroNome: primeiros, ultimoNome: ultimo };
+  if (tokens.length === 0) return { primeiroNome: "Atleta", ultimoNome: "" };
+  if (tokens.length === 1) return { primeiroNome: tokens[0], ultimoNome: "" };
+  return { primeiroNome: tokens[0], ultimoNome: tokens[tokens.length - 1] };
 }
 
 type NomeAtletaProps = {

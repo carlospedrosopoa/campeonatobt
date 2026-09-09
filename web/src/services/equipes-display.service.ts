@@ -2,16 +2,19 @@ import { db } from "@/db";
 import { equipeIntegrantes, equipes, usuarios } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
-function firstName(full: string) {
+function primeiroEUltimoNome(full: string) {
   const trimmed = (full || "").trim();
   if (!trimmed) return "";
-  return trimmed.split(/\s+/)[0];
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return "";
+  if (tokens.length === 1) return tokens[0];
+  return `${tokens[0]} ${tokens[tokens.length - 1]}`;
 }
 
 function buildDisplayName(equipeNome: string | null, atletas: string[]) {
   const nome = (equipeNome || "").trim();
   if (nome) return nome;
-  const nomes = atletas.map(firstName).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  const nomes = atletas.map(primeiroEUltimoNome).filter(Boolean).sort((a, b) => a.localeCompare(b));
   if (nomes.length === 0) return "Dupla";
   return nomes.join("/");
 }

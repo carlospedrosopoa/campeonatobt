@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -809,6 +809,15 @@ export default function AdminCategoriaJogosSuperPage() {
       s2: { equipeId: b.equipeId, equipeNome: (b.equipeNome || b.equipeId.slice(0, 8)).toString() },
     };
   }, [classificacao]);
+
+  const equipeAtletasMap = useMemo(() => {
+    const map = new Map<string, { id: string; nome: string; fotoUrl?: string | null }[]>();
+    for (const p of partidas) {
+      if (p.equipeAId && p.equipeAAtletas?.length) map.set(p.equipeAId, p.equipeAAtletas);
+      if (p.equipeBId && p.equipeBAtletas?.length) map.set(p.equipeBId, p.equipeBAtletas);
+    }
+    return map;
+  }, [partidas]);
 
   function getPlacarSets(detalhes: Partida["detalhesPlacar"]) {
     if (!detalhes || detalhes.length === 0) return [];
@@ -2066,7 +2075,9 @@ export default function AdminCategoriaJogosSuperPage() {
                           const jogosJogados = e.jogosJogados ?? 0;
                           return (
                             <tr key={e.equipeId} className="border-b border-slate-50">
-                              <td className="py-2 pr-5 font-medium text-slate-900 whitespace-nowrap">{e.equipeNome || e.equipeId.slice(0, 8)}</td>
+                              <td className="py-2 pr-5 text-slate-900 whitespace-nowrap leading-tight">
+                                <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
+                              </td>
                               <td className="py-2 pr-5 font-bold text-slate-900 tabular-nums whitespace-nowrap text-center">{e.pontos}</td>
                               <td className="py-2 pr-5 text-slate-700 tabular-nums whitespace-nowrap text-center" title={`Jogos já jogados (com resultado lançado): ${jogosJogados} / ${jogosEsperadosPorEquipe}`}>
                                 <span>{jogosJogados}</span>

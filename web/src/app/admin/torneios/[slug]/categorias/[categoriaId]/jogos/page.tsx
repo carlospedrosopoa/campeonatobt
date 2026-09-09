@@ -711,6 +711,15 @@ export default function AdminCategoriaJogosPage() {
       .filter((grupo) => grupo.partidas.length > 0);
   }, [fasePartidas, partidasFiltradas]);
 
+  const equipeAtletasMap = useMemo(() => {
+    const map = new Map<string, { id: string; nome: string; fotoUrl?: string | null }[]>();
+    for (const p of partidas) {
+      if (p.equipeAId && p.equipeAAtletas?.length) map.set(p.equipeAId, p.equipeAAtletas);
+      if (p.equipeBId && p.equipeBAtletas?.length) map.set(p.equipeBId, p.equipeBAtletas);
+    }
+    return map;
+  }, [partidas]);
+
   function renderPartidaCard(p: Partida) {
     return (
       <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
@@ -2216,7 +2225,9 @@ export default function AdminCategoriaJogosPage() {
                                     <Crown className="h-3.5 w-3.5" />
                                   </span>
                                 )}
-                                <span className="font-medium text-slate-900 truncate">{e.equipeNome || e.equipeId.slice(0, 8)}</span>
+                                <span className="truncate leading-tight">
+                                  <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
+                                </span>
                               </div>
                             </td>
                             <td className="py-2 pr-3 font-semibold text-slate-900">{e.pontos}</td>
