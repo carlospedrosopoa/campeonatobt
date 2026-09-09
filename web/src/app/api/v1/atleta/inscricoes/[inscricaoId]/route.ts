@@ -240,20 +240,21 @@ export async function PUT(
   }
 
   await db.transaction(async (tx) => {
-    if (equipeNome) {
-      await tx.update(equipes).set({ nome: equipeNome }).where(eq(equipes.id, ins.equipeId));
-    }
-
-    await tx.delete(equipeIntegrantes).where(and(eq(equipeIntegrantes.equipeId, ins.equipeId), eq(equipeIntegrantes.usuarioId, parceiroAtualId)));
-    await tx.delete(equipeIntegrantes).where(and(eq(equipeIntegrantes.equipeId, ins.equipeId), eq(equipeIntegrantes.usuarioId, novoParceiroId)));
-    await tx.insert(equipeIntegrantes).values({ equipeId: ins.equipeId, usuarioId: novoParceiroId });
-
-    await tx
-      .update(equipes)
-      .set({
+    const [novaEquipe] = await tx
+      .insert(equipes)
+      .values({
+        torneioId: ins.torneioId,
+        nome: equipeNome || null,
         capitaoUsuarioId: meuId,
       })
-      .where(eq(equipes.id, ins.equipeId));
+      .returning({ id: equipes.id });
+
+    await tx.insert(equipeIntegrantes).values([
+      { equipeId: novaEquipe.id, usuarioId: meuId },
+      { equipeId: novaEquipe.id, usuarioId: novoParceiroId },
+    ]);
+
+    await tx.update(inscricoes).set({ equipeId: novaEquipe.id }).where(eq(inscricoes.id, id));
 
     await tx
       .delete(inscricaoPagamentos)

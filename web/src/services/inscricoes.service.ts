@@ -768,13 +768,9 @@ export class InscricoesService {
       throw new Error("Um dos atletas já está inscrito nesta categoria");
     }
 
-    await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, ins.equipeId));
-
-    await db.delete(equipeIntegrantes).where(eq(equipeIntegrantes.equipeId, ins.equipeId));
-    await db
-      .insert(equipeIntegrantes)
-      .values(integranteIds.map((usuarioId) => ({ equipeId: ins.equipeId, usuarioId })))
-      .onConflictDoNothing();
+    const novaEquipeId = await this.criarEquipeComIntegrantes(ins.torneioId, undefined, integranteIds);
+    await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, novaEquipeId));
+    await db.update(inscricoes).set({ equipeId: novaEquipeId }).where(eq(inscricoes.id, inscricaoId));
 
     if (dados.status) {
       await db.update(inscricoes).set({ status: dados.status }).where(eq(inscricoes.id, inscricaoId));
