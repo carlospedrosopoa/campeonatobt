@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { isRegrasBeachTennisSets, obterRegrasPartidaEfetivas, type RegrasPartidaConfig, type RegrasPartidaPorFase } from "@/lib/regras-partida";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
+import { NomeEquipeComSobrenome } from "@/lib/nome-atleta";
 
 type Categoria = {
   id: string;
@@ -647,10 +648,6 @@ export default function AdminLancarPlacarMobilePage() {
 
         {rodadaAtual?.jogos?.length &&
           rodadaAtual.jogos.map((p) => {
-            const nomeA = p.equipeANome || p.equipeAId.slice(0, 8);
-            const nomeB = p.equipeBNome || p.equipeBId.slice(0, 8);
-            const atletaNomesA = (p.equipeAAtletas ?? []).map((a) => a.nome).filter(Boolean).join(" / ");
-            const atletaNomesB = (p.equipeBAtletas ?? []).map((a) => a.nome).filter(Boolean).join(" / ");
             const temPlacar =
               p.status === "FINALIZADA" ||
               p.status === "WO" ||
@@ -689,17 +686,11 @@ export default function AdminLancarPlacarMobilePage() {
                 <div className="px-3 py-4 space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0 text-right">
-                      <div className="text-sm font-bold text-slate-900 leading-tight truncate">{nomeA}</div>
-                      {atletaNomesA && atletaNomesA !== nomeA && (
-                        <div className="text-[11px] text-slate-500 leading-tight truncate">{atletaNomesA}</div>
-                      )}
+                      <div className="text-sm leading-tight"><NomeEquipeComSobrenome atletas={p.equipeAAtletas} nomeEquipeFallback={p.equipeANome || p.equipeAId.slice(0, 8)} /></div>
                     </div>
                     <div className="text-xs font-bold text-slate-400 px-2 flex-shrink-0">x</div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-slate-900 leading-tight truncate">{nomeB}</div>
-                      {atletaNomesB && atletaNomesB !== nomeB && (
-                        <div className="text-[11px] text-slate-500 leading-tight truncate">{atletaNomesB}</div>
-                      )}
+                      <div className="text-sm leading-tight"><NomeEquipeComSobrenome atletas={p.equipeBAtletas} nomeEquipeFallback={p.equipeBNome || p.equipeBId.slice(0, 8)} /></div>
                     </div>
                   </div>
 
@@ -764,8 +755,6 @@ export default function AdminLancarPlacarMobilePage() {
         (() => {
           const partida = partidas.find((p) => p.id === editPartidaId);
           if (!partida) return null;
-          const nomeA = partida.equipeANome || partida.equipeAId.slice(0, 8);
-          const nomeB = partida.equipeBNome || partida.equipeBId.slice(0, 8);
           const superTie = true;
           const melhorDe = torneioSuperCampeonatoFormato === "1_SET" ? 1 : 3;
           return (
@@ -774,7 +763,9 @@ export default function AdminLancarPlacarMobilePage() {
                 <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-3 flex items-center justify-between gap-2 z-10">
                   <div className="min-w-0">
                     <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Placar</div>
-                    <div className="text-sm font-extrabold text-slate-900 truncate">{nomeA} x {nomeB}</div>
+                    <div className="text-sm font-extrabold text-slate-900 leading-tight truncate">
+                      <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} tamanho="md" /> <span className="text-slate-400 mx-1">x</span> <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} tamanho="md" />
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -887,8 +878,8 @@ export default function AdminLancarPlacarMobilePage() {
                 <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-3 flex items-center justify-between gap-2 z-10">
                   <div className="min-w-0">
                     <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Agendar</div>
-                    <div className="text-sm font-extrabold text-slate-900 truncate">
-                      {partida.equipeANome || partida.equipeAId.slice(0, 8)} x {partida.equipeBNome || partida.equipeBId.slice(0, 8)}
+                    <div className="text-sm font-extrabold text-slate-900 leading-tight truncate">
+                      <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} tamanho="md" /> <span className="text-slate-400 mx-1">x</span> <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} tamanho="md" />
                     </div>
                   </div>
                   <button

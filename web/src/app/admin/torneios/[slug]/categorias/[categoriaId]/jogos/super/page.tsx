@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -9,6 +9,7 @@ import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
 import { isRegrasBeachTennisSets, isRegrasVoleiSets, obterRegrasPartidaEfetivas, type RegrasPartidaConfig, type RegrasPartidaPorFase } from "@/lib/regras-partida";
 import { PartidaHeadToHeadButton } from "@/components/admin/PartidaHeadToHeadButton";
+import { NomeEquipeComSobrenome } from "@/lib/nome-atleta";
 
 type Categoria = {
   id: string;
@@ -2177,8 +2178,8 @@ export default function AdminCategoriaJogosSuperPage() {
 
                         <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
                           <div className="min-w-0 text-right">
-                            <div className="font-bold text-slate-900 leading-tight break-words">
-                              {p.equipeANome || p.equipeAId.slice(0, 8)}
+                            <div className="leading-tight break-words">
+                              <NomeEquipeComSobrenome atletas={p.equipeAAtletas} nomeEquipeFallback={p.equipeANome || p.equipeAId.slice(0, 8)} />
                             </div>
                           </div>
 
@@ -2187,8 +2188,8 @@ export default function AdminCategoriaJogosSuperPage() {
                           </div>
 
                           <div className="min-w-0 text-left">
-                            <div className="font-bold text-slate-900 leading-tight break-words">
-                              {p.equipeBNome || p.equipeBId.slice(0, 8)}
+                            <div className="leading-tight break-words">
+                              <NomeEquipeComSobrenome atletas={p.equipeBAtletas} nomeEquipeFallback={p.equipeBNome || p.equipeBId.slice(0, 8)} />
                             </div>
                           </div>
                         </div>
@@ -2322,8 +2323,8 @@ export default function AdminCategoriaJogosSuperPage() {
 
                           <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
                             <div className="min-w-0 text-right">
-                              <div className="font-bold text-slate-900 leading-tight break-words">
-                                {p.equipeANome || p.equipeAId.slice(0, 8)}
+                              <div className="leading-tight break-words">
+                                <NomeEquipeComSobrenome atletas={p.equipeAAtletas} nomeEquipeFallback={p.equipeANome || p.equipeAId.slice(0, 8)} />
                               </div>
                             </div>
 
@@ -2332,8 +2333,8 @@ export default function AdminCategoriaJogosSuperPage() {
                             </div>
 
                             <div className="min-w-0 text-left">
-                              <div className="font-bold text-slate-900 leading-tight break-words">
-                                {p.equipeBNome || p.equipeBId.slice(0, 8)}
+                              <div className="leading-tight break-words">
+                                <NomeEquipeComSobrenome atletas={p.equipeBAtletas} nomeEquipeFallback={p.equipeBNome || p.equipeBId.slice(0, 8)} />
                               </div>
                             </div>
                           </div>
@@ -2423,8 +2424,8 @@ export default function AdminCategoriaJogosSuperPage() {
 
                     <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
                       <div className="min-w-0 text-right">
-                        <div className="font-bold text-slate-900 leading-tight break-words">
-                          {p.equipeANome || p.equipeAId.slice(0, 8)}
+                        <div className="leading-tight break-words">
+                          <NomeEquipeComSobrenome atletas={p.equipeAAtletas} nomeEquipeFallback={p.equipeANome || p.equipeAId.slice(0, 8)} />
                         </div>
                       </div>
 
@@ -2433,8 +2434,8 @@ export default function AdminCategoriaJogosSuperPage() {
                       </div>
 
                       <div className="min-w-0 text-left">
-                        <div className="font-bold text-slate-900 leading-tight break-words">
-                          {p.equipeBNome || p.equipeBId.slice(0, 8)}
+                        <div className="leading-tight break-words">
+                          <NomeEquipeComSobrenome atletas={p.equipeBAtletas} nomeEquipeFallback={p.equipeBNome || p.equipeBId.slice(0, 8)} />
                         </div>
                       </div>
                     </div>
@@ -2600,9 +2601,9 @@ export default function AdminCategoriaJogosSuperPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-xs text-slate-500 uppercase tracking-wider">Alterar confronto</div>
-                      <div className="text-lg font-bold text-slate-900">
-                        {partida.equipeANome || partida.equipeAId.slice(0, 8)} <span className="text-slate-400">vs</span>{" "}
-                        {partida.equipeBNome || partida.equipeBId.slice(0, 8)}
+                      <div className="text-lg font-bold text-slate-900 leading-tight">
+                        <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} tamanho="lg" /> <span className="text-slate-400 mx-2">vs</span>{" "}
+                        <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} tamanho="lg" />
                       </div>
                       <div className="text-sm text-slate-600 mt-1">
                         {partida.fase === "GRUPOS"
@@ -2739,9 +2740,9 @@ export default function AdminCategoriaJogosSuperPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-xs text-slate-500 uppercase tracking-wider">Agendamento</div>
-                      <div className="text-lg font-bold text-slate-900">
-                        {partida.equipeANome || partida.equipeAId.slice(0, 8)} <span className="text-slate-400">vs</span>{" "}
-                        {partida.equipeBNome || partida.equipeBId.slice(0, 8)}
+                      <div className="text-lg font-bold text-slate-900 leading-tight">
+                        <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} tamanho="lg" /> <span className="text-slate-400 mx-2">vs</span>{" "}
+                        <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} tamanho="lg" />
                       </div>
                     </div>
                     <button type="button" onClick={() => setEditAgendamentoId(null)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
@@ -2880,9 +2881,9 @@ export default function AdminCategoriaJogosSuperPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-xs text-slate-500 uppercase tracking-wider">Lançar placar</div>
-                      <div className="text-lg font-bold text-slate-900">
-                        {partida.equipeANome || partida.equipeAId.slice(0, 8)} <span className="text-slate-400">vs</span>{" "}
-                        {partida.equipeBNome || partida.equipeBId.slice(0, 8)}
+                      <div className="text-lg font-bold text-slate-900 leading-tight">
+                        <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} tamanho="lg" /> <span className="text-slate-400 mx-2">vs</span>{" "}
+                        <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} tamanho="lg" />
                       </div>
                     </div>
                     <button type="button" onClick={() => setEditPartidaId(null)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">

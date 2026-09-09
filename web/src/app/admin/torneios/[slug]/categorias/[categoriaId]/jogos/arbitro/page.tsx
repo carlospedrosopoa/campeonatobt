@@ -27,6 +27,7 @@ import {
   type SuperCampeonatoFormato,
 } from "@/lib/regras-partida";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
+import { NomeEquipeComSobrenome } from "@/lib/nome-atleta";
 
 type Categoria = {
   id: string;
@@ -79,8 +80,10 @@ type Partida = {
   fotoUrl?: string | null;
   equipeAId: string;
   equipeANome: string | null;
+  equipeAAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
   equipeBId: string;
   equipeBNome: string | null;
+  equipeBAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
   vencedorId: string | null;
   detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
 };
@@ -177,10 +180,19 @@ function formatPlacar(detalhes: Partida["detalhesPlacar"]) {
     .join(" ");
 }
 
-function nomeEquipe(partida: Pick<Partida, "equipeAId" | "equipeANome" | "equipeBId" | "equipeBNome">, lado: "A" | "B") {
-  const nome = lado === "A" ? partida.equipeANome : partida.equipeBNome;
+function nomeEquipeStr(partida: Pick<Partida, "equipeAId" | "equipeANome" | "equipeBId" | "equipeBNome" | "equipeAAtletas" | "equipeBAtletas">, lado: "A" | "B") {
+  const atletas = lado === "A" ? partida.equipeAAtletas : partida.equipeBAtletas;
+  const fallback = lado === "A" ? partida.equipeANome : partida.equipeBNome;
   const id = lado === "A" ? partida.equipeAId : partida.equipeBId;
-  return nome || id.slice(0, 8);
+  if (atletas?.length) return atletas.map((a) => a.nome).join(" / ");
+  return fallback || id.slice(0, 8);
+}
+
+function nomeEquipe(partida: Pick<Partida, "equipeAId" | "equipeANome" | "equipeBId" | "equipeBNome" | "equipeAAtletas" | "equipeBAtletas">, lado: "A" | "B") {
+  const atletas = lado === "A" ? partida.equipeAAtletas : partida.equipeBAtletas;
+  const fallback = lado === "A" ? partida.equipeANome : partida.equipeBNome;
+  const id = lado === "A" ? partida.equipeAId : partida.equipeBId;
+  return <NomeEquipeComSobrenome atletas={atletas} nomeEquipeFallback={fallback || id.slice(0, 8)} />;
 }
 
 function toLocalDateTimeInput(value: string | null | undefined) {
@@ -359,8 +371,8 @@ export default function AdminCategoriaJogosArbitroPage() {
     return Array.from(
       new Map(
         partidas.flatMap((partida) => [
-          [partida.equipeAId, nomeEquipe(partida, "A")],
-          [partida.equipeBId, nomeEquipe(partida, "B")],
+          [partida.equipeAId, nomeEquipeStr(partida, "A")],
+          [partida.equipeBId, nomeEquipeStr(partida, "B")],
         ])
       ).entries()
     )
@@ -723,9 +735,9 @@ export default function AdminCategoriaJogosArbitroPage() {
           arenaNome: p.arenaNome ?? null,
           quadra: p.quadra ?? null,
           equipeANome: p.equipeANome ?? null,
-          equipeAAtletas: [],
+          equipeAAtletas: p.equipeAAtletas ?? [],
           equipeBNome: p.equipeBNome ?? null,
-          equipeBAtletas: [],
+          equipeBAtletas: p.equipeBAtletas ?? [],
         },
       });
       const url = (result?.url || "").trim();

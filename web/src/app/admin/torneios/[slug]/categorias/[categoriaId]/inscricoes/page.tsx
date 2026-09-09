@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Banknote, Gamepad2, ImageIcon, Pencil, Plus, RefreshCw, Save, Trash2, Users, X } from "lucide-react";
 import { gerarCardDuplasInscritasAdmin, gerarCardInscricaoAdmin } from "@/lib/match-card-client";
+import { NomeAtletaSobrenome, NomeEquipeComSobrenome, separarPrimeiroUltimoNome } from "@/lib/nome-atleta";
 
 type Categoria = {
   id: string;
@@ -248,7 +249,7 @@ export default function AdminCategoriaInscricoesPage() {
       const duplas = inscricoesParaDivulgacao
         .map((inscricao) => ({
           id: inscricao.equipe.id || inscricao.id,
-          nome: (inscricao.equipe.nome || "").trim() || inscricao.equipe.atletas.map((atleta) => atleta.nome.split(" ")[0]).join(" / "),
+          nome: (inscricao.equipe.nome || "").trim() || inscricao.equipe.atletas.map((atleta) => atleta.nome).join(" / "),
         }))
         .filter((dupla) => dupla.nome);
 
@@ -1136,7 +1137,7 @@ export default function AdminCategoriaInscricoesPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-slate-900">{i.equipe.nome || "Equipe"}</div>
-                  <div className="text-xs text-slate-500">{i.equipe.atletas.map((a) => a.nome.split(" ")[0]).join(" & ")}</div>
+                  <div className="text-xs text-slate-500"><NomeEquipeComSobrenome atletas={i.equipe.atletas} nomeEquipeFallback={i.equipe.nome} tamanho="sm" separador=" &amp; " /></div>
                   {!categoriaEhSimples ? (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {i.equipe.atletas.map((a, indice) => {
@@ -1146,7 +1147,7 @@ export default function AdminCategoriaInscricoesPage() {
                             key={`${i.id}:${a.id}:capitao-mobile`}
                             className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${ehCapitao ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}
                           >
-                            {a.nome.split(" ")[0]}
+                            <NomeAtletaSobrenome nome={a.nome} tamanho="sm" />
                             {ehCapitao ? " • Capitão" : ""}
                           </span>
                         );
@@ -1164,7 +1165,8 @@ export default function AdminCategoriaInscricoesPage() {
                 <div className="mt-2 flex flex-col gap-2">
                   {i.equipe.atletas.map((a) => {
                     const key = `${i.id}:${a.id}`;
-                    const firstName = (a.nome || "").trim().split(/\s+/)[0] || "Atleta";
+                    const { primeiroNome, ultimoNome } = separarPrimeiroUltimoNome(a.nome);
+                    const firstName = primeiroNome + (ultimoNome ? ` ${ultimoNome}` : "") || "Atleta";
                     const valor = (a.valorDevido ?? categoria?.valorInscricao ?? null) as string | null;
                     const valorLabel = valor
                       ? ` (${Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`
@@ -1283,7 +1285,7 @@ export default function AdminCategoriaInscricoesPage() {
                       <div>
                         <div className="font-semibold text-slate-900">{i.equipe.nome || "Equipe"}</div>
                         <div className="text-xs text-slate-500">
-                          {i.equipe.atletas.map((a) => a.nome.split(" ")[0]).join(" & ")}
+                          <NomeEquipeComSobrenome atletas={i.equipe.atletas} nomeEquipeFallback={i.equipe.nome} tamanho="sm" separador=" &amp; " />
                         </div>
                         {!categoriaEhSimples ? (
                           <div className="mt-2 flex flex-wrap gap-2">
@@ -1294,7 +1296,7 @@ export default function AdminCategoriaInscricoesPage() {
                                   key={`${i.id}:${a.id}:capitao-desktop`}
                                   className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${ehCapitao ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}
                                 >
-                                  {a.nome.split(" ")[0]}
+                                  <NomeAtletaSobrenome nome={a.nome} tamanho="sm" />
                                   {ehCapitao ? " • Capitão" : ""}
                                 </span>
                               );
@@ -1311,7 +1313,8 @@ export default function AdminCategoriaInscricoesPage() {
                     <div className="flex flex-col gap-1.5">
                       {i.equipe.atletas.map((a) => {
                         const key = `${i.id}:${a.id}`;
-                        const firstName = (a.nome || "").trim().split(/\s+/)[0] || "Atleta";
+                        const { primeiroNome, ultimoNome } = separarPrimeiroUltimoNome(a.nome);
+                        const firstName = primeiroNome + (ultimoNome ? ` ${ultimoNome}` : "") || "Atleta";
                         const valor = (a.valorDevido ?? categoria?.valorInscricao ?? null) as string | null;
                         const valorLabel = valor
                           ? ` (${Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`
