@@ -770,6 +770,12 @@ export class InscricoesService {
 
     await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, ins.equipeId));
 
+    await db.delete(equipeIntegrantes).where(eq(equipeIntegrantes.equipeId, ins.equipeId));
+    await db
+      .insert(equipeIntegrantes)
+      .values(integranteIds.map((usuarioId) => ({ equipeId: ins.equipeId, usuarioId })))
+      .onConflictDoNothing();
+
     if (dados.status) {
       await db.update(inscricoes).set({ status: dados.status }).where(eq(inscricoes.id, inscricaoId));
     }

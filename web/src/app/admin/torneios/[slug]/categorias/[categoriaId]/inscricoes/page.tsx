@@ -83,6 +83,8 @@ export default function AdminCategoriaInscricoesPage() {
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [sucesso, setSucesso] = useState<string | null>(null);
+  const sucessoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [mostraForm, setMostraForm] = useState(false);
   const [editandoInscricao, setEditandoInscricao] = useState<Inscricao | null>(null);
@@ -570,8 +572,16 @@ export default function AdminCategoriaInscricoesPage() {
       }
 
       await carregar();
+      const eraEdicao = Boolean(editandoInscricao);
       setMostraForm(false);
       setEditandoInscricao(null);
+      if (sucessoTimeoutRef.current) clearTimeout(sucessoTimeoutRef.current);
+      setSucesso(
+        eraEdicao
+          ? "Inscrição atualizada com sucesso! Atletas alterados, capitão, status e valores atualizados."
+          : "Inscrição criada com sucesso!"
+      );
+      sucessoTimeoutRef.current = setTimeout(() => setSucesso(null), 5500);
     } catch (e: any) {
       setErro(e?.message || "Erro inesperado");
     } finally {
@@ -740,6 +750,14 @@ export default function AdminCategoriaInscricoesPage() {
       </div>
 
       {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
+      {sucesso && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-start gap-2">
+          <svg className="h-5 w-5 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span className="whitespace-normal">{sucesso}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
