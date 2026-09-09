@@ -375,16 +375,16 @@ export async function gerarCardPartidaAdmin(params: GerarCardParams) {
   const categoriaEhSimples = atletasA.length <= 1 && atletasB.length <= 1;
   const posicoes = categoriaEhSimples
     ? [
-        { x: 52, y: 742, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
-        { x: 505, y: 622, tipo: "simples" as const },
-        { x: 87, y: 1305, tipo: "simples" as const },
-        { x: 530, y: 1182, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 35, y: 735, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 480, y: 622, tipo: "simples" as const },
+        { x: 67, y: 1305, tipo: "simples" as const },
+        { x: 515, y: 1182, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
       ]
     : [
-        { x: 52, y: 742, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
-        { x: 505, y: 622, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
-        { x: 87, y: 1305, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
-        { x: 530, y: 1182, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
+        { x: 35, y: 735, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 465, y: 632, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
+        { x: 55, y: 1290, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 515, y: 1197, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
       ];
   for (const p of posicoes) {
     if (p.tipo === "simples") {
@@ -556,16 +556,16 @@ export async function gerarCardProgramacaoAdmin(params: GerarCardProgramacaoPara
   const categoriaEhSimples = atletasA.length <= 1 && atletasB.length <= 1;
   const posicoes = categoriaEhSimples
     ? [
-        { x: 52, y: 742, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
-        { x: 505, y: 622, tipo: "simples" as const },
-        { x: 87, y: 1305, tipo: "simples" as const },
-        { x: 530, y: 1182, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 35, y: 735, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 480, y: 622, tipo: "simples" as const },
+        { x: 67, y: 1305, tipo: "simples" as const },
+        { x: 515, y: 1182, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
       ]
     : [
-        { x: 52, y: 742, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
-        { x: 505, y: 622, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
-        { x: 87, y: 1305, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
-        { x: 530, y: 1182, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
+        { x: 35, y: 735, atleta: atletasA[0], imagem: fotosA[0], tipo: "atleta" as const },
+        { x: 465, y: 632, atleta: atletasA[1], imagem: fotosA[1], tipo: "atleta" as const },
+        { x: 55, y: 1290, atleta: atletasB[0], imagem: fotosB[0], tipo: "atleta" as const },
+        { x: 515, y: 1197, atleta: atletasB[1], imagem: fotosB[1], tipo: "atleta" as const },
       ];
   for (const p of posicoes) {
     if (p.tipo === "simples") {
