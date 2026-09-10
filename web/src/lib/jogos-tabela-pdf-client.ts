@@ -248,7 +248,12 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
     ? (config.mataMata?.quantidadeClassificados ?? totalClassificadosCalc ?? 4)
     : totalClassificadosCalc;
 
-  const estrutura = config.mataMata?.estrutura ?? "PADRAO";
+  const estruturaConfig = config.mataMata?.estrutura ?? "PADRAO";
+  const ehGrupos6MelhoresPrimeirosByeDetectado =
+    grupos.length === 3 && porGrupo === 2 && melhoresTerceiros === 0 && totalClassificadosCalc === 6;
+  const ehGrupos6MelhoresPrimeirosBye =
+    estruturaConfig === "GRUPOS_6_MELHORES_PRIMEIROS_BYE" ||
+    ehGrupos6MelhoresPrimeirosByeDetectado;
   const rankingOrdenado = extrairEquipesOrdenadasEliminatorias(params);
   const equipeNaPosicaoGeral = (posicao: number) =>
     rankingOrdenado[posicao - 1] ?? null;
@@ -346,7 +351,7 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
       });
       observacoes.push(`Serao classificados ${totalClassificados} colocados gerais para o mata-mata.`);
     }
-  } else if (estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") {
+  } else if (ehGrupos6MelhoresPrimeirosBye) {
     const primeirosPorGrupo: EquipeClassificadaPdf[] = [];
     for (const g of grupos) {
       const e = g.equipes?.[0];
@@ -358,6 +363,7 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
           rankGrupo: 1,
           pontos: e.pontos ?? 0,
           jogosVencidos: e.jogosVencidos,
+          jogosJogados: (e as any).jogosJogados ?? 0,
           saldoGames: e.saldoGames ?? 0,
           gamesPro: (e as any).gamesPro ?? 0,
         });
@@ -386,6 +392,7 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
           rankGrupo: 2,
           pontos: e.pontos ?? 0,
           jogosVencidos: e.jogosVencidos,
+          jogosJogados: (e as any).jogosJogados ?? 0,
           saldoGames: e.saldoGames ?? 0,
           gamesPro: (e as any).gamesPro ?? 0,
         });

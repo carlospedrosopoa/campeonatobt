@@ -626,7 +626,10 @@ export default function AdminCategoriaJogosPage() {
 
   const classificadosByes = useMemo(() => {
     if (!config || classificacao.length === 0) return null;
-    const estrutura = config.mataMata?.estrutura ?? "PADRAO";
+    const estruturaConfig = config.mataMata?.estrutura ?? "PADRAO";
+    const porGrupo = config.classificacao?.porGrupo ?? 2;
+    const melhoresTerceiros = config.classificacao?.melhoresTerceiros ?? 0;
+    const totalClassificadosCalc = porGrupo * classificacao.length + melhoresTerceiros;
 
     const calcularAp = (e: { pontos?: number; jogosJogados?: number } | null | undefined) => {
       const p = Number(e?.pontos ?? 0);
@@ -634,7 +637,14 @@ export default function AdminCategoriaJogosPage() {
       return j <= 0 ? 0 : (p / (j * 3)) * 100;
     };
 
-    if (estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") {
+    const ehGrupos6MelhoresPrimeirosBye =
+      estruturaConfig === "GRUPOS_6_MELHORES_PRIMEIROS_BYE" ||
+      (classificacao.length === 3 && porGrupo === 2 && melhoresTerceiros === 0 && totalClassificadosCalc === 6);
+
+    const ehSuperCampeonato6 =
+      estruturaConfig === "SUPER_CAMPEONATO_6" && classificacao.length === 1;
+
+    if (ehGrupos6MelhoresPrimeirosBye) {
       const primeirosPorGrupo: (GrupoClassificacao["equipes"][number] & { grupoNome: string; rankGrupo: number })[] = [];
       for (const g of classificacao) {
         if (g.equipes?.[0]) {
@@ -671,7 +681,7 @@ export default function AdminCategoriaJogosPage() {
       };
     }
 
-    if (estrutura === "SUPER_CAMPEONATO_6") {
+    if (ehSuperCampeonato6) {
       const g0 = classificacao[0];
       const bye1 = g0?.equipes?.[0];
       const bye2 = g0?.equipes?.[1];
@@ -686,13 +696,11 @@ export default function AdminCategoriaJogosPage() {
       };
     }
 
-    if (estrutura === "PADRAO") {
+    if (estruturaConfig === "PADRAO" && !ehGrupos6MelhoresPrimeirosBye && !ehSuperCampeonato6) {
       const flat = classificacao.flatMap((g) =>
         (g.equipes ?? []).map((e, i) => ({ ...e, rankGrupo: i + 1, grupoNome: g.grupoNome }))
       );
-      const porGrupo = config.classificacao?.porGrupo ?? 2;
-      const melhoresTerceiros = config.classificacao?.melhoresTerceiros ?? 0;
-      const total = porGrupo * classificacao.length + melhoresTerceiros;
+      const total = totalClassificadosCalc;
       if (total < 2) return null;
       const pot = 1 << Math.ceil(Math.log2(Math.max(2, total)));
       const byesCount = pot - total;
