@@ -33,6 +33,7 @@ type GrupoClassificacaoTabelaPdf = {
     pontos: number;
     jogosVencidos?: number;
     saldoGames: number;
+    gamesPro?: number;
   }[];
 };
 
@@ -94,6 +95,117 @@ function formatarPosicaoClassificacao(posicao: number) {
   return `${posicao}º`;
 }
 
+type EquipeClassificadaPdf = {
+  equipeId: string;
+  equipeNome: string;
+  grupoNome: string;
+  rankGrupo: number;
+  pontos: number;
+  jogosVencidos?: number;
+  saldoGames: number;
+  gamesPro?: number;
+};
+
+function extrairEquipesOrdenadasEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams): EquipeClassificadaPdf[] {
+  const config = params.config;
+  const grupos = (params.classificacao ?? []).slice().sort((a, b) =>
+    a.grupoNome.localeCompare(b.grupoNome, "pt-BR", { numeric: true, sensitivity: "base" })
+  );
+  if (!config) return [];
+  const porGrupo = config.classificacao?.porGrupo ?? 2;
+  const melhoresTerceiros = config.classificacao?.melhoresTerceiros ?? 0;
+
+  const todas: EquipeClassificadaPdf[] = [];
+  for (const g of grupos) {
+    for (let i = 0; i < Math.min(g.equipes.length, porGrupo); i += 1) {
+      const eq = g.equipes[i];
+      if (eq) {
+        todas.push({
+          equipeId: eq.equipeId,
+          equipeNome: (eq.equipeNome || eq.equipeId.slice(0, 8)).toString(),
+          grupoNome: g.grupoNome,
+          rankGrupo: i + 1,
+          pontos: eq.pontos ?? 0,
+          jogosVencidos: eq.jogosVencidos,
+          saldoGames: eq.saldoGames ?? 0,
+          gamesPro: (eq as any).gamesPro ?? 0,
+        });
+      }
+    }
+  }
+
+  if (melhoresTerceiros > 0) {
+    const terceiros: EquipeClassificadaPdf[] = [];
+    for (const g of grupos) {
+      const eq = g.equipes[2];
+      if (eq) {
+        terceiros.push({
+          equipeId: eq.equipeId,
+          equipeNome: (eq.equipeNome || eq.equipeId.slice(0, 8)).toString(),
+          grupoNome: g.grupoNome,
+          rankGrupo: 3,
+          pontos: eq.pontos ?? 0,
+          jogosVencidos: eq.jogosVencidos,
+          saldoGames: eq.saldoGames ?? 0,
+          gamesPro: (eq as any).gamesPro ?? 0,
+        });
+      }
+    }
+    terceiros.sort((a, b) => {
+      const va = a.jogosVencidos ?? 0;
+      const vb = b.jogosVencidos ?? 0;
+      if (vb !== va) return vb - va;
+      if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+      if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+      return a.equipeId.localeCompare(b.equipeId);
+    });
+    for (let i = 0; i < Math.min(melhoresTerceiros, terceiros.length); i += 1) {
+      todas.push(terceiros[i]);
+    }
+  }
+
+  todas.sort((a, b) => {
+    const va = a.jogosVencidos ?? 0;
+    const vb = b.jogosVencidos ?? 0;
+    if (vb !== va) return vb - va;
+    if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+    if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+    return a.equipeId.localeCompare(b.equipeId);
+  });
+
+  return todas;
+}
+
+function obterColocadoGrupo(
+  params: AbrirTabelaJogosPdfPorChavesParams,
+  grupoNome: string,
+  posicao: number
+): EquipeClassificadaPdf | null {
+  const grupo = (params.classificacao ?? []).find(
+    (g) => g.grupoNome.localeCompare(grupoNome, "pt-BR", { sensitivity: "base" }) === 0
+  );
+  const eq = grupo?.equipes?.[posicao - 1];
+  if (!eq) return null;
+  return {
+    equipeId: eq.equipeId,
+    equipeNome: (eq.equipeNome || eq.equipeId.slice(0, 8)).toString(),
+    grupoNome,
+    rankGrupo: posicao,
+    pontos: eq.pontos ?? 0,
+    jogosVencidos: eq.jogosVencidos,
+    saldoGames: eq.saldoGames ?? 0,
+    gamesPro: (eq as any).gamesPro ?? 0,
+  };
+}
+
+function formatarEquipeComNome(
+  equipe: EquipeClassificadaPdf | null,
+  rotuloGenerico: string
+) {
+  if (!equipe) return rotuloGenerico;
+  return `${equipe.equipeNome} (${rotuloGenerico})`;
+}
+
 function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
   const config = params.config;
   const grupos = (params.classificacao ?? [])
@@ -122,19 +234,37 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
   const totalClassificados = params.superCampeonato
     ? (config.mataMata?.quantidadeClassificados ?? totalClassificadosCalc ?? 4)
     : totalClassificadosCalc;
+
+  const estrutura = config.mataMata?.estrutura ?? "PADRAO";
+  const rankingOrdenado = extrairEquipesOrdenadasEliminatorias(params);
+  const equipeNaPosicaoGeral = (posicao: number) =>
+    rankingOrdenado[posicao - 1] ?? null;
+
   const rounds: { titulo: string; jogos: string[] }[] = [];
   const observacoes: string[] = [];
+  const classificadosDiretos: { label: string; equipe: EquipeClassificadaPdf | null }[] = [];
 
   if (params.superCampeonato) {
     if (totalClassificados <= 2) {
+      const eq1 = equipeNaPosicaoGeral(1);
+      const eq2 = equipeNaPosicaoGeral(2);
       rounds.push({
         titulo: "Final",
-        jogos: ["F: 1o colocado geral x 2o colocado geral"],
+        jogos: [
+          `F: ${formatarEquipeComNome(eq1, "1o colocado geral")} x ${formatarEquipeComNome(eq2, "2o colocado geral")}`,
+        ],
       });
     } else if (totalClassificados === 4) {
+      const eq1 = equipeNaPosicaoGeral(1);
+      const eq2 = equipeNaPosicaoGeral(2);
+      const eq3 = equipeNaPosicaoGeral(3);
+      const eq4 = equipeNaPosicaoGeral(4);
       rounds.push({
         titulo: "Semifinais",
-        jogos: ["SF1: 1o colocado geral x 4o colocado geral", "SF2: 2o colocado geral x 3o colocado geral"],
+        jogos: [
+          `SF1: ${formatarEquipeComNome(eq1, "1o colocado geral")} x ${formatarEquipeComNome(eq4, "4o colocado geral")}`,
+          `SF2: ${formatarEquipeComNome(eq2, "2o colocado geral")} x ${formatarEquipeComNome(eq3, "3o colocado geral")}`,
+        ],
       });
       rounds.push({
         titulo: "Final",
@@ -142,13 +272,27 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
       });
       observacoes.push("Os 4 melhores colocados gerais se enfrentam em cruzamento 1x4 / 2x3.");
     } else if (totalClassificados === 6) {
+      const s1 = equipeNaPosicaoGeral(1);
+      const s2 = equipeNaPosicaoGeral(2);
+      const eq3 = equipeNaPosicaoGeral(3);
+      const eq4 = equipeNaPosicaoGeral(4);
+      const eq5 = equipeNaPosicaoGeral(5);
+      const eq6 = equipeNaPosicaoGeral(6);
+      classificadosDiretos.push({ label: "1o colocado geral (bye p/ Semifinal)", equipe: s1 });
+      classificadosDiretos.push({ label: "2o colocado geral (bye p/ Semifinal)", equipe: s2 });
       rounds.push({
         titulo: "Quartas de final",
-        jogos: ["J1: 3o colocado geral x 6o colocado geral", "J2: 4o colocado geral x 5o colocado geral"],
+        jogos: [
+          `J1: ${formatarEquipeComNome(eq3, "3o colocado geral")} x ${formatarEquipeComNome(eq6, "6o colocado geral")}`,
+          `J2: ${formatarEquipeComNome(eq4, "4o colocado geral")} x ${formatarEquipeComNome(eq5, "5o colocado geral")}`,
+        ],
       });
       rounds.push({
         titulo: "Semifinais",
-        jogos: ["SF1: 1o colocado geral x pior vencedor das quartas", "SF2: 2o colocado geral x melhor vencedor das quartas"],
+        jogos: [
+          `SF1: ${formatarEquipeComNome(s1, "1o colocado geral")} x pior vencedor das quartas`,
+          `SF2: ${formatarEquipeComNome(s2, "2o colocado geral")} x melhor vencedor das quartas`,
+        ],
       });
       rounds.push({
         titulo: "Final",
@@ -160,8 +304,10 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
       const primeiraFase = faseParaQuantidade(totalClassificados);
       const jogosPrimeiraFase: string[] = [];
       for (let i = 1; i <= totalClassificados / 2; i += 1) {
+        const eqA = equipeNaPosicaoGeral(i);
+        const eqB = equipeNaPosicaoGeral(totalClassificados + 1 - i);
         jogosPrimeiraFase.push(
-          `J${i}: ${formatarPosicaoClassificacao(i)} x ${formatarPosicaoClassificacao(totalClassificados + 1 - i)}`
+          `J${i}: ${formatarEquipeComNome(eqA, formatarPosicaoClassificacao(i))} x ${formatarEquipeComNome(eqB, formatarPosicaoClassificacao(totalClassificados + 1 - i))}`
         );
       }
       rounds.push({ titulo: primeiraFase, jogos: jogosPrimeiraFase });
@@ -187,24 +333,116 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
       });
       observacoes.push(`Serao classificados ${totalClassificados} colocados gerais para o mata-mata.`);
     }
-  } else if (grupos.length === 1 && totalClassificados === 2) {
-    rounds.push({
-      titulo: "Final",
-      jogos: ["F: 1o colocado geral x 2o colocado geral"],
+  } else if (estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") {
+    const primeirosPorGrupo: EquipeClassificadaPdf[] = [];
+    for (const g of grupos) {
+      const e = g.equipes?.[0];
+      if (e) {
+        primeirosPorGrupo.push({
+          equipeId: e.equipeId,
+          equipeNome: (e.equipeNome || e.equipeId.slice(0, 8)).toString(),
+          grupoNome: g.grupoNome,
+          rankGrupo: 1,
+          pontos: e.pontos ?? 0,
+          jogosVencidos: e.jogosVencidos,
+          saldoGames: e.saldoGames ?? 0,
+          gamesPro: (e as any).gamesPro ?? 0,
+        });
+      }
+    }
+    primeirosPorGrupo.sort((a, b) => {
+      const va = a.jogosVencidos ?? 0;
+      const vb = b.jogosVencidos ?? 0;
+      if (vb !== va) return vb - va;
+      if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+      if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+      return a.equipeId.localeCompare(b.equipeId);
     });
-  } else if (totalClassificados === 6) {
+
+    const segundosPorGrupo: EquipeClassificadaPdf[] = [];
+    for (const g of grupos) {
+      const e = g.equipes?.[1];
+      if (e) {
+        segundosPorGrupo.push({
+          equipeId: e.equipeId,
+          equipeNome: (e.equipeNome || e.equipeId.slice(0, 8)).toString(),
+          grupoNome: g.grupoNome,
+          rankGrupo: 2,
+          pontos: e.pontos ?? 0,
+          jogosVencidos: e.jogosVencidos,
+          saldoGames: e.saldoGames ?? 0,
+          gamesPro: (e as any).gamesPro ?? 0,
+        });
+      }
+    }
+    segundosPorGrupo.sort((a, b) => {
+      const va = a.jogosVencidos ?? 0;
+      const vb = b.jogosVencidos ?? 0;
+      if (vb !== va) return vb - va;
+      if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+      if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+      return a.equipeId.localeCompare(b.equipeId);
+    });
+
+    const bye1 = primeirosPorGrupo[0] ?? null;
+    const bye2 = primeirosPorGrupo[1] ?? null;
+    const terceiroPrimeiro = primeirosPorGrupo[2] ?? null;
+    const piorSegundo = segundosPorGrupo[2] ?? null;
+    const segundoA = segundosPorGrupo[0] ?? null;
+    const segundoB = segundosPorGrupo[1] ?? null;
+
+    if (bye1) classificadosDiretos.push({ label: `Melhor 1o colocado (${bye1.grupoNome}) - bye p/ Semifinal`, equipe: bye1 });
+    if (bye2) classificadosDiretos.push({ label: `2o melhor 1o colocado (${bye2.grupoNome}) - bye p/ Semifinal`, equipe: bye2 });
+
     rounds.push({
       titulo: "Quartas de final",
       jogos: [
-        `J1: ${formatarPosicaoClassificacao(3)} x ${formatarPosicaoClassificacao(6)}`,
-        `J2: ${formatarPosicaoClassificacao(4)} x ${formatarPosicaoClassificacao(5)}`,
+        `J1: ${formatarEquipeComNome(terceiroPrimeiro, "3o melhor 1o colocado")} x ${formatarEquipeComNome(piorSegundo, "pior 2o colocado")}`,
+        `J2: ${formatarEquipeComNome(segundoA, "melhor 2o colocado")} x ${formatarEquipeComNome(segundoB, "2o melhor 2o colocado")}`,
       ],
     });
     rounds.push({
       titulo: "Semifinais",
       jogos: [
-        `SF1: ${formatarPosicaoClassificacao(1)} x Vencedor do J2`,
-        `SF2: ${formatarPosicaoClassificacao(2)} x Vencedor do J1`,
+        `SF1: ${formatarEquipeComNome(bye1, "1o melhor 1o colocado")} x pior vencedor das quartas`,
+        `SF2: ${formatarEquipeComNome(bye2, "2o melhor 1o colocado")} x melhor vencedor das quartas`,
+      ],
+    });
+    rounds.push({
+      titulo: "Final",
+      jogos: ["F: vencedor da SF1 x vencedor da SF2"],
+    });
+    observacoes.push("Os 2 melhores primeiros colocados entre os grupos passam direto para as semifinais.");
+    observacoes.push("Os 3o melhor 1o colocado e os 2o colocados disputam as quartas de final.");
+    observacoes.push("A ordem das semifinais respeita a campanha da fase de grupos.");
+  } else if (grupos.length === 1 && totalClassificados === 2) {
+    const eq1 = equipeNaPosicaoGeral(1);
+    const eq2 = equipeNaPosicaoGeral(2);
+    rounds.push({
+      titulo: "Final",
+      jogos: [`F: ${formatarEquipeComNome(eq1, "1o colocado geral")} x ${formatarEquipeComNome(eq2, "2o colocado geral")}`],
+    });
+  } else if (totalClassificados === 6) {
+    const eq1 = equipeNaPosicaoGeral(1);
+    const eq2 = equipeNaPosicaoGeral(2);
+    const eq3 = equipeNaPosicaoGeral(3);
+    const eq4 = equipeNaPosicaoGeral(4);
+    const eq5 = equipeNaPosicaoGeral(5);
+    const eq6 = equipeNaPosicaoGeral(6);
+    if (eq1) classificadosDiretos.push({ label: "1o melhor classificado - bye p/ Semifinal", equipe: eq1 });
+    if (eq2) classificadosDiretos.push({ label: "2o melhor classificado - bye p/ Semifinal", equipe: eq2 });
+    rounds.push({
+      titulo: "Quartas de final",
+      jogos: [
+        `J1: ${formatarEquipeComNome(eq3, formatarPosicaoClassificacao(3))} x ${formatarEquipeComNome(eq6, formatarPosicaoClassificacao(6))}`,
+        `J2: ${formatarEquipeComNome(eq4, formatarPosicaoClassificacao(4))} x ${formatarEquipeComNome(eq5, formatarPosicaoClassificacao(5))}`,
+      ],
+    });
+    rounds.push({
+      titulo: "Semifinais",
+      jogos: [
+        `SF1: ${formatarEquipeComNome(eq1, formatarPosicaoClassificacao(1))} x Vencedor do J2`,
+        `SF2: ${formatarEquipeComNome(eq2, formatarPosicaoClassificacao(2))} x Vencedor do J1`,
       ],
     });
     rounds.push({
@@ -214,9 +452,16 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
   } else if (grupos.length === 2 && porGrupo >= 2 && totalClassificados === 4) {
     const g0 = grupos[0]?.grupoNome || "Grupo A";
     const g1 = grupos[1]?.grupoNome || "Grupo B";
+    const g0p1 = obterColocadoGrupo(params, g0, 1);
+    const g0p2 = obterColocadoGrupo(params, g0, 2);
+    const g1p1 = obterColocadoGrupo(params, g1, 1);
+    const g1p2 = obterColocadoGrupo(params, g1, 2);
     rounds.push({
       titulo: "Semifinais",
-      jogos: [`SF1: 1o do ${g0} x 2o do ${g1}`, `SF2: 1o do ${g1} x 2o do ${g0}`],
+      jogos: [
+        `SF1: ${formatarEquipeComNome(g0p1, `1o do ${g0}`)} x ${formatarEquipeComNome(g1p2, `2o do ${g1}`)}`,
+        `SF2: ${formatarEquipeComNome(g1p1, `1o do ${g1}`)} x ${formatarEquipeComNome(g0p2, `2o do ${g0}`)}`,
+      ],
     });
     rounds.push({
       titulo: "Final",
@@ -230,10 +475,10 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
     rounds.push({
       titulo: "Quartas de final",
       jogos: [
-        `J1: 1o do ${g0} x 2o do ${g3}`,
-        `J2: 1o do ${g1} x 2o do ${g2}`,
-        `J3: 1o do ${g2} x 2o do ${g1}`,
-        `J4: 1o do ${g3} x 2o do ${g0}`,
+        `J1: ${formatarEquipeComNome(obterColocadoGrupo(params, g0, 1), `1o do ${g0}`)} x ${formatarEquipeComNome(obterColocadoGrupo(params, g3, 2), `2o do ${g3}`)}`,
+        `J2: ${formatarEquipeComNome(obterColocadoGrupo(params, g1, 1), `1o do ${g1}`)} x ${formatarEquipeComNome(obterColocadoGrupo(params, g2, 2), `2o do ${g2}`)}`,
+        `J3: ${formatarEquipeComNome(obterColocadoGrupo(params, g2, 1), `1o do ${g2}`)} x ${formatarEquipeComNome(obterColocadoGrupo(params, g1, 2), `2o do ${g1}`)}`,
+        `J4: ${formatarEquipeComNome(obterColocadoGrupo(params, g3, 1), `1o do ${g3}`)} x ${formatarEquipeComNome(obterColocadoGrupo(params, g0, 2), `2o do ${g0}`)}`,
       ],
     });
     rounds.push({
@@ -247,9 +492,20 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
   } else if ([2, 4, 8, 16].includes(totalClassificados)) {
     const primeiraFase = faseParaQuantidade(totalClassificados);
     const jogosPrimeiraFase: string[] = [];
+    const pot = totalClassificados;
+    const classificadosReais = rankingOrdenado.length;
+    const byesCount = pot - classificadosReais;
+    if (byesCount > 0) {
+      for (let i = 0; i < byesCount; i += 1) {
+        const eq = equipeNaPosicaoGeral(i + 1);
+        if (eq) classificadosDiretos.push({ label: `${formatarPosicaoClassificacao(i + 1)} classificado - bye`, equipe: eq });
+      }
+    }
     for (let i = 1; i <= totalClassificados / 2; i += 1) {
+      const eqA = equipeNaPosicaoGeral(i);
+      const eqB = equipeNaPosicaoGeral(totalClassificados + 1 - i);
       jogosPrimeiraFase.push(
-        `J${i}: ${formatarPosicaoClassificacao(i)} x ${formatarPosicaoClassificacao(totalClassificados + 1 - i)}`
+        `J${i}: ${formatarEquipeComNome(eqA, formatarPosicaoClassificacao(i))} x ${formatarEquipeComNome(eqB, formatarPosicaoClassificacao(totalClassificados + 1 - i))}`
       );
     }
     rounds.push({ titulo: primeiraFase, jogos: jogosPrimeiraFase });
@@ -278,6 +534,27 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
   if (melhoresTerceiros > 0) {
     observacoes.push(`Ha ${melhoresTerceiros} vaga(s) para melhores terceiros, definidos pela campanha na fase de grupos.`);
   }
+
+  const classificadosDiretosHtml =
+    classificadosDiretos.length > 0
+      ? `
+        <div class="classificados-diretos">
+          <div class="classificados-diretos-titulo">Classificados diretos (bye) para proxima fase</div>
+          <div class="classificados-diretos-lista">
+            ${classificadosDiretos
+              .map(
+                (c) => `
+                  <div class="classificados-direto-item">
+                    <div class="classificados-direto-nome">${escapeHtml(c.equipe?.equipeNome ?? "-")}</div>
+                    <div class="classificados-direto-label">${escapeHtml(c.label)}</div>
+                  </div>
+                `
+              )
+              .join("")}
+          </div>
+        </div>
+      `
+      : "";
 
   const roundsHtml =
     rounds.length > 0
@@ -325,6 +602,7 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
       <p class="eliminatorias-intro">
         Abaixo esta a regra de cruzamentos das eliminatorias desta categoria, da entrada no mata-mata ate a final.
       </p>
+      ${classificadosDiretosHtml}
       ${roundsHtml}
       ${observacoesHtml}
     </section>
@@ -668,6 +946,58 @@ export function abrirTabelaJogosPdfPorChaves(params: AbrirTabelaJogosPdfPorChave
           }
           .eliminatoria-observacao + .eliminatoria-observacao {
             margin-top: 6px;
+          }
+          .classificados-diretos {
+            margin-top: 18px;
+            padding: 14px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
+            border: 1px solid #a7f3d0;
+            page-break-inside: avoid;
+          }
+          .classificados-diretos-titulo {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #065f46;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .classificados-diretos-titulo::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 999px;
+            box-shadow: 0 0 0 3px rgba(16,185,129,0.25);
+          }
+          .classificados-diretos-lista {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
+          }
+          .classificados-direto-item {
+            padding: 10px 12px;
+            background: #ffffff;
+            border: 1px solid #d1fae5;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(16,185,129,0.08);
+          }
+          .classificados-direto-nome {
+            font-size: 13px;
+            font-weight: 800;
+            color: #064e3b;
+            line-height: 1.3;
+          }
+          .classificados-direto-label {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #047857;
+            font-weight: 600;
           }
           .footer {
             margin-top: 28px;

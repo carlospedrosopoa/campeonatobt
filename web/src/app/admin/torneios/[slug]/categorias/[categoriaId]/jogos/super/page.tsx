@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -2280,24 +2280,141 @@ export default function AdminCategoriaJogosSuperPage() {
             </div>
           </div>
           {(fase === "QUARTAS" || fase === "SEMI") && semifinalistasBye ? (
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Semifinalistas (bye)</div>
-              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">1º colocado</div>
-                  <div className="mt-1 font-semibold text-slate-900">{semifinalistasBye.s1.equipeNome}</div>
-                  <div className="mt-1 text-xs text-slate-500">Aguardando o pior classificado entre os vencedores das quartas</div>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="inline-flex items-center justify-center rounded-md bg-emerald-500 text-white p-1.5 shadow-sm">
+                  <Trophy className="h-4 w-4" />
                 </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">2º colocado</div>
-                  <div className="mt-1 font-semibold text-slate-900">{semifinalistasBye.s2.equipeNome}</div>
-                  <div className="mt-1 text-xs text-slate-500">Aguardando o outro vencedor das quartas</div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                    Semifinalistas classificados (bye)
+                  </div>
+                  <div className="text-xs text-emerald-700/80">
+                    1º e 2º colocados da fase de grupos passam direto para as semifinais.
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="relative rounded-lg border border-emerald-100 bg-white p-4 shadow-sm hover:shadow-md transition-all">
+                  <div className="absolute -top-2 -left-2 inline-flex items-center justify-center rounded-full bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 shadow-sm">
+                    #1
+                  </div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    1º colocado
+                  </div>
+                  <div className="font-semibold text-slate-900 leading-tight">
+                    {semifinalistasBye.s1.equipeNome}
+                  </div>
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 border border-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-800">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Classificado direto (bye)
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    Aguardando o pior classificado entre os vencedores das quartas
+                  </div>
+                </div>
+                <div className="relative rounded-lg border border-emerald-100 bg-white p-4 shadow-sm hover:shadow-md transition-all">
+                  <div className="absolute -top-2 -left-2 inline-flex items-center justify-center rounded-full bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 shadow-sm">
+                    #2
+                  </div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    2º colocado
+                  </div>
+                  <div className="font-semibold text-slate-900 leading-tight">
+                    {semifinalistasBye.s2.equipeNome}
+                  </div>
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 border border-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-800">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Classificado direto (bye)
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    Aguardando o outro vencedor das quartas
+                  </div>
                 </div>
               </div>
             </div>
           ) : null}
+          {fase === "SEMI" && partidasFiltradas.length === 0 && semifinalistasBye ? (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">
+                    Preview — Semifinais
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Os confrontos serão gerados automaticamente após o encerramento das quartas de final.
+                  </p>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-100">
+                  A definir
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { equipe: semifinalistasBye.s1, seed: "1º colocado geral" },
+                  { equipe: semifinalistasBye.s2, seed: "2º colocado geral" },
+                ].map((item, idx) => (
+                  <div key={`preview-semi-super-${item.equipe.equipeId}`} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                          <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
+                            Semifinal
+                          </span>
+                          <span className="text-slate-400">• Jogo {idx + 1}</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-100">
+                          A definir
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-4 mb-4">
+                        <div className="flex-1 text-right">
+                          <div className="leading-tight">
+                            <div className="font-semibold text-slate-900">{item.equipe.equipeNome}</div>
+                            <div className="mt-1 text-[11px] text-emerald-700 inline-flex items-center gap-1">
+                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                              {item.seed}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-center justify-center min-w-[3rem]">
+                          <span className="text-lg font-bold text-slate-400 font-mono tracking-tight bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                            vs
+                          </span>
+                        </div>
+
+                        <div className="flex-1 text-left">
+                          <div className="leading-tight">
+                            <div className="font-medium text-slate-400 italic">
+                              Aguardando vencedor...
+                            </div>
+                            <div className="mt-1 text-[11px] text-slate-400">
+                              Quartas de final
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
+                      <div className="text-xs flex items-center gap-1.5 text-amber-600 font-medium">
+                        <Calendar className="h-3.5 w-3.5" />
+                        Local e horário a definir
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {partidasFiltradas.length === 0 ? (
-            <div className="mt-4 py-10 text-center text-slate-500">Nenhuma partida encontrada.</div>
+            <div className="mt-4 py-10 text-center text-slate-500">
+              {fase === "SEMI" && semifinalistasBye
+                ? "Confrontos das semifinais serão gerados após o término das quartas de final."
+                : "Nenhuma partida encontrada."}
+            </div>
           ) : fase === "FINAL" ? (
             <div className="mt-4 space-y-6">
               {partidasAgrupadasDecisivas.map((grupo) => (

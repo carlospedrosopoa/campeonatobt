@@ -624,6 +624,104 @@ export default function AdminCategoriaJogosPage() {
     });
   }, [config, montagemGruposLinhas]);
 
+  const classificadosByes = useMemo(() => {
+    if (!config || classificacao.length === 0) return null;
+    const estrutura = config.mataMata?.estrutura ?? "PADRAO";
+
+    if (estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") {
+      const primeirosPorGrupo: (GrupoClassificacao["equipes"][number] & { grupoNome: string; rankGrupo: number })[] = [];
+      for (const g of classificacao) {
+        if (g.equipes?.[0]) {
+          primeirosPorGrupo.push({ ...g.equipes[0], grupoNome: g.grupoNome, rankGrupo: 1 });
+        }
+      }
+      if (primeirosPorGrupo.length < 3) return null;
+      const ordenados = [...primeirosPorGrupo].sort((a, b) => {
+        if (b.jogosVencidos !== a.jogosVencidos) return b.jogosVencidos - a.jogosVencidos;
+        if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+        if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+        return a.equipeId.localeCompare(b.equipeId);
+      });
+      return {
+        estrutura: "GRUPOS_6_MELHORES_PRIMEIROS_BYE" as const,
+        proximaFase: "SEMI" as const,
+        classificadosParaProximaFase: [
+          {
+            seedLabel: "1º colocado geral",
+            equipeId: ordenados[0].equipeId,
+            equipeNome: ordenados[0].equipeNome || ordenados[0].equipeId.slice(0, 8),
+            grupoNome: ordenados[0].grupoNome,
+          },
+          {
+            seedLabel: "2º colocado geral",
+            equipeId: ordenados[1].equipeId,
+            equipeNome: ordenados[1].equipeNome || ordenados[1].equipeId.slice(0, 8),
+            grupoNome: ordenados[1].grupoNome,
+          },
+        ],
+      };
+    }
+
+    if (estrutura === "SUPER_CAMPEONATO_6") {
+      const g0 = classificacao[0];
+      const bye1 = g0?.equipes?.[0];
+      const bye2 = g0?.equipes?.[1];
+      if (!bye1 || !bye2) return null;
+      return {
+        estrutura: "SUPER_CAMPEONATO_6" as const,
+        proximaFase: "SEMI" as const,
+        classificadosParaProximaFase: [
+          { seedLabel: "1º colocado", equipeId: bye1.equipeId, equipeNome: bye1.equipeNome || bye1.equipeId.slice(0, 8), grupoNome: g0?.grupoNome },
+          { seedLabel: "2º colocado", equipeId: bye2.equipeId, equipeNome: bye2.equipeNome || bye2.equipeId.slice(0, 8), grupoNome: g0?.grupoNome },
+        ],
+      };
+    }
+
+    if (estrutura === "PADRAO") {
+      const flat = classificacao.flatMap((g) =>
+        (g.equipes ?? []).map((e, i) => ({ ...e, rankGrupo: i + 1, grupoNome: g.grupoNome }))
+      );
+      const porGrupo = config.classificacao?.porGrupo ?? 2;
+      const melhoresTerceiros = config.classificacao?.melhoresTerceiros ?? 0;
+      const total = porGrupo * classificacao.length + melhoresTerceiros;
+      if (total < 2) return null;
+      const pot = 1 << Math.ceil(Math.log2(Math.max(2, total)));
+      const byesCount = pot - total;
+      if (byesCount <= 0) return null;
+      const ordenados = flat.sort((a, b) => {
+        if (a.rankGrupo !== b.rankGrupo) return a.rankGrupo - b.rankGrupo;
+        if (b.jogosVencidos !== a.jogosVencidos) return b.jogosVencidos - a.jogosVencidos;
+        if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+        return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+      });
+      const byes = ordenados.slice(0, byesCount);
+      if (byes.length === 0) return null;
+      let primeiraFase: "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL" = "QUARTAS";
+      if (pot === 2) primeiraFase = "FINAL";
+      else if (pot === 4) primeiraFase = "SEMI";
+      else if (pot === 8) primeiraFase = "QUARTAS";
+      else primeiraFase = "OITAVAS";
+      const proximaFaseMap: Record<string, "SEMI" | "QUARTAS" | "FINAL"> = {
+        OITAVAS: "QUARTAS",
+        QUARTAS: "SEMI",
+        SEMI: "FINAL",
+      };
+      return {
+        estrutura: "PADRAO" as const,
+        faseAtualMataMata: primeiraFase,
+        proximaFase: (proximaFaseMap[primeiraFase] ?? "SEMI") as "SEMI" | "QUARTAS" | "FINAL",
+        classificadosParaProximaFase: byes.map((e, idx) => ({
+          seedLabel: `Classificado ${idx + 1} (bye)`,
+          equipeId: e.equipeId,
+          equipeNome: e.equipeNome || e.equipeId.slice(0, 8),
+          grupoNome: (e as any).grupoNome,
+        })),
+      };
+    }
+
+    return null;
+  }, [classificacao, config]);
+
   function formatPlacar(detalhes: Partida["detalhesPlacar"]) {
     if (!detalhes || detalhes.length === 0) return "X";
     return detalhes
@@ -2291,8 +2389,123 @@ export default function AdminCategoriaJogosPage() {
           </div>
         </div>
 
+        {classificadosByes?.classificadosParaProximaFase && classificadosByes.classificadosParaProximaFase.length > 0 && fasePartidas !== "GRUPOS" && fasePartidas !== "FINAL" && (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-white p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="inline-flex items-center justify-center rounded-md bg-emerald-500 text-white p-1.5 shadow-sm">
+                <Trophy className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                  Classificados para {labelFasePartida(classificadosByes.proximaFase)}
+                </div>
+                <div className="text-xs text-emerald-700/80">
+                  Estas equipes passaram direto por bye e já estão garantidas na próxima fase.
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {classificadosByes.classificadosParaProximaFase.map((item, idx) => (
+                <div key={item.equipeId} className="relative rounded-lg border border-emerald-100 bg-white p-4 shadow-sm hover:shadow-md transition-all">
+                  <div className="absolute -top-2 -left-2 inline-flex items-center justify-center rounded-full bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 shadow-sm">
+                    #{idx + 1}
+                  </div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    {item.seedLabel}
+                    {item.grupoNome ? ` • ${item.grupoNome}` : ""}
+                  </div>
+                  <div className="font-semibold text-slate-900 leading-tight">
+                    {item.equipeNome}
+                  </div>
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 border border-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-800">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Classificado direto (bye)
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {classificadosByes?.proximaFase === fasePartidas && partidasFiltradas.length === 0 && (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">
+                  Preview — {labelFasePartida(fasePartidas)}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Os confrontos serão gerados automaticamente após o encerramento da fase anterior.
+                </p>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-100">
+                A definir
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {classificadosByes.classificadosParaProximaFase.map((item, idx) => (
+                <div key={`preview-${item.equipeId}`} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                        <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
+                          {labelFasePartida(classificadosByes.proximaFase)}
+                        </span>
+                        <span className="text-slate-400">• Jogo {idx + 1}</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-100">
+                        A definir
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                      <div className="flex-1 text-right">
+                        <div className="leading-tight">
+                          <div className="font-semibold text-slate-900">{item.equipeNome}</div>
+                          <div className="mt-1 text-[11px] text-emerald-700 inline-flex items-center gap-1">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                            Classificado por bye
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-center justify-center min-w-[3rem]">
+                        <span className="text-lg font-bold text-slate-400 font-mono tracking-tight bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                          vs
+                        </span>
+                      </div>
+
+                      <div className="flex-1 text-left">
+                        <div className="leading-tight">
+                          <div className="font-medium text-slate-400 italic">
+                            Aguardando vencedor...
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-400">
+                            {classificadosByes.proximaFase === "SEMI" ? "Quartas de final" : "Fase anterior"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
+                    <div className="text-xs flex items-center gap-1.5 text-amber-600 font-medium">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Local e horário a definir
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
           {partidasFiltradas.length === 0 ? (
-            <div className="py-10 text-center text-slate-500">Nenhuma partida encontrada.</div>
+            <div className="py-10 text-center text-slate-500">
+              {classificadosByes?.proximaFase === fasePartidas
+                ? "Confrontos desta fase serão gerados após o término da fase anterior."
+                : "Nenhuma partida encontrada."}
+            </div>
           ) : fasePartidas === "GRUPOS" ? (
             <div className="mt-4 space-y-6">
               {partidasAgrupadasPorGrupo.map((grupo) => (
