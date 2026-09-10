@@ -103,6 +103,7 @@ type EquipeClassificadaPdf = {
   rankGrupo: number;
   pontos: number;
   jogosVencidos?: number;
+  jogosJogados?: number;
   saldoGames: number;
   gamesPro?: number;
 };
@@ -128,6 +129,7 @@ function extrairEquipesOrdenadasEliminatorias(params: AbrirTabelaJogosPdfPorChav
           rankGrupo: i + 1,
           pontos: eq.pontos ?? 0,
           jogosVencidos: eq.jogosVencidos,
+          jogosJogados: (eq as any).jogosJogados ?? 0,
           saldoGames: eq.saldoGames ?? 0,
           gamesPro: (eq as any).gamesPro ?? 0,
         });
@@ -147,6 +149,7 @@ function extrairEquipesOrdenadasEliminatorias(params: AbrirTabelaJogosPdfPorChav
           rankGrupo: 3,
           pontos: eq.pontos ?? 0,
           jogosVencidos: eq.jogosVencidos,
+          jogosJogados: (eq as any).jogosJogados ?? 0,
           saldoGames: eq.saldoGames ?? 0,
           gamesPro: (eq as any).gamesPro ?? 0,
         });
@@ -200,6 +203,7 @@ function obterColocadoGrupo(
     rankGrupo: posicao,
     pontos: eq.pontos ?? 0,
     jogosVencidos: eq.jogosVencidos,
+    jogosJogados: (eq as any).jogosJogados ?? 0,
     saldoGames: eq.saldoGames ?? 0,
     gamesPro: (eq as any).gamesPro ?? 0,
   };
