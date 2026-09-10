@@ -32,6 +32,7 @@ type GrupoClassificacaoTabelaPdf = {
     equipeNome?: string;
     pontos: number;
     jogosVencidos?: number;
+    jogosJogados?: number;
     saldoGames: number;
     gamesPro?: number;
   }[];
@@ -156,6 +157,9 @@ function extrairEquipesOrdenadasEliminatorias(params: AbrirTabelaJogosPdfPorChav
       const vb = b.jogosVencidos ?? 0;
       if (vb !== va) return vb - va;
       if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+      const apA = calcularApEquipe(a);
+      const apB = calcularApEquipe(b);
+      if (Math.abs(apB - apA) > 0.0001) return apB - apA;
       if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
       return a.equipeId.localeCompare(b.equipeId);
     });
@@ -169,6 +173,9 @@ function extrairEquipesOrdenadasEliminatorias(params: AbrirTabelaJogosPdfPorChav
     const vb = b.jogosVencidos ?? 0;
     if (vb !== va) return vb - va;
     if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+    const apA = calcularApEquipe(a);
+    const apB = calcularApEquipe(b);
+    if (Math.abs(apB - apA) > 0.0001) return apB - apA;
     if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
     return a.equipeId.localeCompare(b.equipeId);
   });
@@ -204,6 +211,12 @@ function formatarEquipeComNome(
 ) {
   if (!equipe) return rotuloGenerico;
   return `${equipe.equipeNome} (${rotuloGenerico})`;
+}
+
+function calcularApEquipe(e: { pontos?: number; jogosJogados?: number } | null | undefined) {
+  const p = Number(e?.pontos ?? 0);
+  const j = Number(e?.jogosJogados ?? 0);
+  return j <= 0 ? 0 : (p / (j * 3)) * 100;
 }
 
 function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
@@ -355,6 +368,9 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
       const vb = b.jogosVencidos ?? 0;
       if (vb !== va) return vb - va;
       if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+      const apA = calcularApEquipe(a);
+      const apB = calcularApEquipe(b);
+      if (Math.abs(apB - apA) > 0.0001) return apB - apA;
       if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
       return a.equipeId.localeCompare(b.equipeId);
     });
@@ -380,6 +396,9 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
       const vb = b.jogosVencidos ?? 0;
       if (vb !== va) return vb - va;
       if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+      const apA = calcularApEquipe(a);
+      const apB = calcularApEquipe(b);
+      if (Math.abs(apB - apA) > 0.0001) return apB - apA;
       if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
       return a.equipeId.localeCompare(b.equipeId);
     });

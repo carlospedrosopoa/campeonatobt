@@ -628,6 +628,12 @@ export default function AdminCategoriaJogosPage() {
     if (!config || classificacao.length === 0) return null;
     const estrutura = config.mataMata?.estrutura ?? "PADRAO";
 
+    const calcularAp = (e: { pontos?: number; jogosJogados?: number } | null | undefined) => {
+      const p = Number(e?.pontos ?? 0);
+      const j = Number(e?.jogosJogados ?? 0);
+      return j <= 0 ? 0 : (p / (j * 3)) * 100;
+    };
+
     if (estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") {
       const primeirosPorGrupo: (GrupoClassificacao["equipes"][number] & { grupoNome: string; rankGrupo: number })[] = [];
       for (const g of classificacao) {
@@ -639,6 +645,9 @@ export default function AdminCategoriaJogosPage() {
       const ordenados = [...primeirosPorGrupo].sort((a, b) => {
         if (b.jogosVencidos !== a.jogosVencidos) return b.jogosVencidos - a.jogosVencidos;
         if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+        const apA = calcularAp(a);
+        const apB = calcularAp(b);
+        if (Math.abs(apB - apA) > 0.0001) return apB - apA;
         if ((b.gamesPro ?? 0) !== (a.gamesPro ?? 0)) return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
         return a.equipeId.localeCompare(b.equipeId);
       });
@@ -692,6 +701,9 @@ export default function AdminCategoriaJogosPage() {
         if (a.rankGrupo !== b.rankGrupo) return a.rankGrupo - b.rankGrupo;
         if (b.jogosVencidos !== a.jogosVencidos) return b.jogosVencidos - a.jogosVencidos;
         if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+        const apA = calcularAp(a);
+        const apB = calcularAp(b);
+        if (Math.abs(apB - apA) > 0.0001) return apB - apA;
         return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
       });
       const byes = ordenados.slice(0, byesCount);

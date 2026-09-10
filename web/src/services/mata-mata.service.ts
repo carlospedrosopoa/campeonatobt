@@ -664,6 +664,9 @@ export class MataMataService {
     } else {
       if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
       if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+      const ma = this.calcularMetricasNormalizadas(a);
+      const mb = this.calcularMetricasNormalizadas(b);
+      if (Math.abs(mb.apPercent - ma.apPercent) > 0.0001) return mb.apPercent - ma.apPercent;
       if (b.gamesPro !== a.gamesPro) return b.gamesPro - a.gamesPro;
     }
     return a.equipeId.localeCompare(b.equipeId);
@@ -683,6 +686,9 @@ export class MataMataService {
         }
         if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
         if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+        const ma = this.calcularMetricasNormalizadas(a);
+        const mb = this.calcularMetricasNormalizadas(b);
+        if (Math.abs(mb.apPercent - ma.apPercent) > 0.0001) return mb.apPercent - ma.apPercent;
         if (b.gamesPro !== a.gamesPro) return b.gamesPro - a.gamesPro;
         return 0;
       }
@@ -711,6 +717,9 @@ export class MataMataService {
 
     if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
     if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+    const ma = this.calcularMetricasNormalizadas(a);
+    const mb = this.calcularMetricasNormalizadas(b);
+    if (Math.abs(mb.apPercent - ma.apPercent) > 0.0001) return mb.apPercent - ma.apPercent;
     if (b.gamesPro !== a.gamesPro) return b.gamesPro - a.gamesPro;
     return 0;
   }
