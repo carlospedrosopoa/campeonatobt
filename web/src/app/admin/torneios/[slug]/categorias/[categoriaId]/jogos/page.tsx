@@ -1804,7 +1804,7 @@ export default function AdminCategoriaJogosPage() {
               title="Gerar PDF da tabela de jogos agrupada por chave"
             >
               <FileText className="h-4 w-4" />
-              {gerandoRelatorioJogos ? "Gerando…" : "PDF tabela jogos"}
+              {gerandoRelatorioJogos ? "Gerandoï¿½" : "PDF tabela jogos"}
             </button>
 
             <button
@@ -1812,10 +1812,10 @@ export default function AdminCategoriaJogosPage() {
               disabled={classificacao.length === 0 || gerandoRelatorioClassificacao}
               onClick={gerarRelatorioClassificacao}
               className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar relatório de classificação com foto dos atletas (PNG imprimível)"
+              title="Gerar relatï¿½rio de classificaï¿½ï¿½o com foto dos atletas (PNG imprimï¿½vel)"
             >
               <Crown className="h-4 w-4" />
-              {gerandoRelatorioClassificacao ? "Gerando…" : "Classificação (PNG)"}
+              {gerandoRelatorioClassificacao ? "Gerandoï¿½" : "Classificaï¿½ï¿½o (PNG)"}
             </button>
 
             <button
@@ -1823,10 +1823,10 @@ export default function AdminCategoriaJogosPage() {
               disabled={!categoria || gerandoPlanilhaContingencia}
               onClick={gerarPlanilhaContingencia}
               className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar Excel offline para contingência com lancamento e classificacao por chave"
+              title="Gerar Excel offline para contingï¿½ncia com lancamento e classificacao por chave"
             >
               <FileText className="h-4 w-4" />
-              {gerandoPlanilhaContingencia ? "Gerando…" : "Excel contingência"}
+              {gerandoPlanilhaContingencia ? "Gerandoï¿½" : "Excel contingï¿½ncia"}
             </button>
 
             <button
@@ -1838,7 +1838,7 @@ export default function AdminCategoriaJogosPage() {
                   const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" });
                   if (!res.ok) {
                     const msg = await res.json().catch(() => null);
-                    throw new Error(msg?.error || "Falha ao recalcular classificação");
+                    throw new Error(msg?.error || "Falha ao recalcular classificaï¿½ï¿½o");
                   }
                   const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
                   if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
@@ -1850,7 +1850,7 @@ export default function AdminCategoriaJogosPage() {
               }}
               className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
             >
-              {recalculando ? "Recalculando…" : "Recalcular"}
+              {recalculando ? "Recalculandoï¿½" : "Recalcular"}
             </button>
 
             <button
@@ -1865,10 +1865,10 @@ export default function AdminCategoriaJogosPage() {
                     body: JSON.stringify({ faseAtual: fasePartidas }),
                   });
                   const payload = (await res.json().catch(() => null)) as any;
-                  if (!res.ok) throw new Error(payload?.error || "Falha ao gerar próxima fase");
+                  if (!res.ok) throw new Error(payload?.error || "Falha ao gerar prï¿½xima fase");
                   const proximaFaseDestino = (payload?.faseCriada || payload?.faseAtualizada) as string | null;
                   if (!proximaFaseDestino) {
-                    throw new Error("A próxima fase ainda não está pronta. Verifique se todos os jogos da fase atual estão finalizados.");
+                    throw new Error("A prï¿½xima fase ainda nï¿½o estï¿½ pronta. Verifique se todos os jogos da fase atual estï¿½o finalizados.");
                   }
                   setFasePartidas(proximaFaseDestino as any);
                   await carregarPartidas(proximaFaseDestino as any);
@@ -1880,9 +1880,9 @@ export default function AdminCategoriaJogosPage() {
                 }
               }}
               className="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-white px-3 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Força a geração ou sincronização da fase seguinte"
+              title="Forï¿½a a geraï¿½ï¿½o ou sincronizaï¿½ï¿½o da fase seguinte"
             >
-              {gerandoProximaFase ? "Gerando…" : "Gerar próxima fase"}
+              {gerandoProximaFase ? "Gerandoï¿½" : "Gerar prï¿½xima fase"}
             </button>
           </div>
         </div>
@@ -1892,8 +1892,8 @@ export default function AdminCategoriaJogosPage() {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Classificação</h2>
-            <p className="text-sm text-slate-600">Classificação por grupo.</p>
+            <h2 className="text-xl font-bold text-slate-900">Classificaï¿½ï¿½o</h2>
+            <p className="text-sm text-slate-600">Classificaï¿½ï¿½o por grupo.</p>
           </div>
         </div>
 
