@@ -2,6 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { runTournamentRegistrationAgent } from "@/services/ai/agent";
 import { enviarMensagemGzappy } from "@/services/gzappy.service";
 
+if (
+  typeof process !== "undefined" &&
+  typeof (process as any).emitWarning === "function" &&
+  !(globalThis as any).__gzappyDepSilenced__
+) {
+  (globalThis as any).__gzappyDepSilenced__ = true;
+  const SILENCED_CODES = new Set(["DEP0169"]);
+  const originalEmitWarning = (process as any).emitWarning.bind(process);
+  (process as any).emitWarning = function patchedEmitWarning(
+    warning: string | Error,
+    options?: any,
+    ...rest: any[]
+  ) {
+    const code =
+      (typeof warning === "object" && warning !== null && (warning as any).code) ||
+      (typeof options === "object" && options !== null && (options as any).code) ||
+      (typeof options === "string" ? options : undefined);
+    if (typeof code === "string" && SILENCED_CODES.has(code)) return;
+    return originalEmitWarning(warning, options, ...rest);
+  };
+}
+
 export const dynamic = "force-dynamic";
 
 type ParsedGzappyInbound = {
