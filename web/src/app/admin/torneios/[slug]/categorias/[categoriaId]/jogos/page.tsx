@@ -28,7 +28,7 @@ type CategoriaConfig = {
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean; disputaTerceiroLugar?: boolean };
   mataMata?: {
-    estrutura: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
+    estrutura: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO" | "GRUPOS_10_CRUZAMENTO_PADRAO";
     quantidadeClassificados?: number;
     habilitarReseed?: boolean;
   };
@@ -641,6 +641,10 @@ export default function AdminCategoriaJogosPage() {
       estruturaConfig === "GRUPOS_6_MELHORES_PRIMEIROS_BYE" ||
       (classificacao.length === 3 && porGrupo === 2 && melhoresTerceiros === 0 && totalClassificadosCalc === 6);
 
+    const ehGrupos10CruzamentoPadrao =
+      estruturaConfig === "GRUPOS_10_CRUZAMENTO_PADRAO" ||
+      (classificacao.length === 5 && porGrupo === 2 && melhoresTerceiros === 0 && totalClassificadosCalc === 10);
+
     const ehSuperCampeonato6 =
       estruturaConfig === "SUPER_CAMPEONATO_6" && classificacao.length === 1;
 
@@ -696,7 +700,50 @@ export default function AdminCategoriaJogosPage() {
       };
     }
 
-    if (estruturaConfig === "PADRAO" && !ehGrupos6MelhoresPrimeirosBye && !ehSuperCampeonato6) {
+    if (ehGrupos10CruzamentoPadrao) {
+      const primeirosPorGrupo: (GrupoClassificacao["equipes"][number] & { grupoNome: string; rankGrupo: number })[] = [];
+      const segundosPorGrupo: (GrupoClassificacao["equipes"][number] & { grupoNome: string; rankGrupo: number })[] = [];
+      for (const g of classificacao) {
+        const e1 = g.equipes?.[0];
+        const e2 = g.equipes?.[1];
+        if (e1) primeirosPorGrupo.push({ ...e1, grupoNome: g.grupoNome, rankGrupo: 1 });
+        if (e2) segundosPorGrupo.push({ ...e2, grupoNome: g.grupoNome, rankGrupo: 2 });
+      }
+      primeirosPorGrupo.sort((a, b) => {
+        if (b.jogosVencidos !== a.jogosVencidos) return b.jogosVencidos - a.jogosVencidos;
+        if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+        const apA = calcularAp(a);
+        const apB = calcularAp(b);
+        if (Math.abs(apB - apA) > 0.0001) return apB - apA;
+        return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+      });
+      segundosPorGrupo.sort((a, b) => {
+        if (b.jogosVencidos !== a.jogosVencidos) return b.jogosVencidos - a.jogosVencidos;
+        if (b.saldoGames !== a.saldoGames) return b.saldoGames - a.saldoGames;
+        const apA = calcularAp(a);
+        const apB = calcularAp(b);
+        if (Math.abs(apB - apA) > 0.0001) return apB - apA;
+        return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+      });
+      const sementesOrdenadas = [...primeirosPorGrupo, ...segundosPorGrupo];
+      const tamanhoChave = 16;
+      const qtdByes = tamanhoChave - sementesOrdenadas.length;
+      const byes = sementesOrdenadas.slice(0, qtdByes);
+      if (byes.length !== 6) return null;
+      return {
+        estrutura: "GRUPOS_10_CRUZAMENTO_PADRAO" as const,
+        faseAtualMataMata: "OITAVAS" as const,
+        proximaFase: "QUARTAS" as const,
+        classificadosParaProximaFase: byes.map((e, idx) => ({
+          seedLabel: `Classificado ${idx + 1} (bye p/ quartas)`,
+          equipeId: e.equipeId,
+          equipeNome: e.equipeNome || e.equipeId.slice(0, 8),
+          grupoNome: e.grupoNome,
+        })),
+      };
+    }
+
+    if (estruturaConfig === "PADRAO" && !ehGrupos6MelhoresPrimeirosBye && !ehSuperCampeonato6 && !ehGrupos10CruzamentoPadrao) {
       const flat = classificacao.flatMap((g) =>
         (g.equipes ?? []).map((e, i) => ({ ...e, rankGrupo: i + 1, grupoNome: g.grupoNome }))
       );
@@ -1891,7 +1938,8 @@ export default function AdminCategoriaJogosPage() {
                               | "PADRAO"
                               | "SUPER_CAMPEONATO_6"
                               | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
-                              | "GRUPOS_8_CRUZAMENTO_PADRAO",
+                              | "GRUPOS_8_CRUZAMENTO_PADRAO"
+                              | "GRUPOS_10_CRUZAMENTO_PADRAO",
                           },
                         }
                       : p
@@ -1900,6 +1948,7 @@ export default function AdminCategoriaJogosPage() {
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
               >
                 <option value="PADRAO">Padrão do sistema</option>
+                <option value="GRUPOS_10_CRUZAMENTO_PADRAO">10 classificados (5 chaves x 2) com cruzamento padrão entre chaves</option>
                 <option value="GRUPOS_8_CRUZAMENTO_PADRAO">8 classificados com cruzamento padrão entre chaves</option>
                 <option value="GRUPOS_6_MELHORES_PRIMEIROS_BYE">6 classificados com 2 melhores primeiros direto na semifinal</option>
               </select>
@@ -1929,7 +1978,8 @@ export default function AdminCategoriaJogosPage() {
                               | "PADRAO"
                               | "SUPER_CAMPEONATO_6"
                               | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
-                              | "GRUPOS_8_CRUZAMENTO_PADRAO",
+                              | "GRUPOS_8_CRUZAMENTO_PADRAO"
+                              | "GRUPOS_10_CRUZAMENTO_PADRAO",
                             quantidadeClassificados: p.mataMata?.quantidadeClassificados,
                             ...(p.mataMata ?? {}),
                             habilitarReseed:

@@ -855,7 +855,31 @@ export class MataMataService {
     }
 
     // Caso não seja Super Campeonato, mantemos a logica original
-    if (params.faseAtual === "QUARTAS" && winners.length === 2) {
+    const totalQualificados = seeds.length;
+    const temByesNaPrimeiraFase = totalQualificados === 6 || totalQualificados === 10 || !isPowerOfTwo(totalQualificados);
+    const tamanhoChaveOriginalNormal = getNextPowerOfTwo(totalQualificados);
+    const byesTotal = tamanhoChaveOriginalNormal - totalQualificados;
+    const byesEquipesIds: string[] = byesTotal > 0 ? seeds.slice(0, byesTotal) : [];
+
+    if (temByesNaPrimeiraFase && params.faseAtual === "OITAVAS" && totalQualificados === 10) {
+      const rank = new Map<string, number>();
+      for (let i = 0; i < seeds.length; i++) rank.set(seeds[i], i + 1);
+
+      const habilitarReseed = config.mataMata?.habilitarReseed;
+      const usarReseed = habilitarReseed === true || habilitarReseed === undefined;
+      const equipesFaseAtual = [...byesEquipesIds, ...winners].filter(Boolean);
+
+      if (usarReseed) {
+        equipesFaseAtual.sort((a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999));
+        for (let i = 0; i < equipesFaseAtual.length / 2; i++) {
+          pairings.push({ a: equipesFaseAtual[i], b: equipesFaseAtual[equipesFaseAtual.length - 1 - i] });
+        }
+      } else {
+        for (let i = 0; i < equipesFaseAtual.length; i += 2) {
+          pairings.push({ a: equipesFaseAtual[i], b: equipesFaseAtual[i + 1] });
+        }
+      }
+    } else if (params.faseAtual === "QUARTAS" && winners.length === 2) {
       if (estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE" && seeds.length === 6) {
         const estruturaByes = this.montarEstruturaGrupos6MelhoresPrimeirosBye({ qualificados, superCampeonato });
         const rank = new Map<string, number>();
@@ -1346,18 +1370,38 @@ export class MataMataService {
       return { fase: null as any, partidasCriadas: 0, qualificados: total };
     }
 
-    if (!(isPowerOfTwo(total) || total === 6)) {
-      throw new Error("Quantidade de classificados não fecha chave (2/4/6/8/16). Ajuste porGrupo/melhoresTerceiros.");
+    if (!(isPowerOfTwo(total) || total === 6 || total === 10)) {
+      throw new Error("Quantidade de classificados não fecha chave (2/4/6/8/10/16). Ajuste porGrupo/melhoresTerceiros.");
     }
 
     await db.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), not(eq(partidas.fase, "GRUPOS"))));
 
-    const fase = faseParaQuantidade(total);
+    let fase = faseParaQuantidade(total);
+    if (total === 10) fase = "OITAVAS";
 
     const pairings: { a: string; b: string }[] = [];
     const gruposOrdenados = [...grupos].sort((a, b) => a.grupoNome.localeCompare(b.grupoNome));
 
-    if (total === 6) {
+    const primeirosOrdenados = orderedByRank.get(1) ?? [];
+    const segundosOrdenados = orderedByRank.get(2) ?? [];
+
+    if (total === 10 && (config.mataMata?.estrutura === "GRUPOS_10_CRUZAMENTO_PADRAO" || (gruposOrdenados.length === 5 && (config.classificacao?.porGrupo ?? 2) === 2 && (config.classificacao?.melhoresTerceiros ?? 0) === 0))) {
+      if (!(gruposOrdenados.length === 5 && (config.classificacao?.porGrupo ?? 2) >= 2 && total === 10)) {
+        throw new Error("A estrutura de 10 classificados com cruzamento padrão exige 5 grupos com 2 classificados por grupo (melhores terceiros = 0).");
+      }
+      if (primeirosOrdenados.length !== 5 || segundosOrdenados.length !== 5) {
+        throw new Error("Não foi possível montar cruzamento padrão entre chaves para 10 classificados: faltam 1os ou 2os colocados.");
+      }
+      const sementes = [...primeirosOrdenados, ...segundosOrdenados];
+      const tamanhoChave = 16;
+      for (let i = 0; i < tamanhoChave / 2; i++) {
+        const idx1 = i;
+        const idx2 = tamanhoChave - 1 - i;
+        if (idx1 < sementes.length && idx2 < sementes.length) {
+          pairings.push({ a: sementes[idx1].equipeId, b: sementes[idx2].equipeId });
+        }
+      }
+    } else if (total === 6) {
       if (config.mataMata?.estrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") {
         const estruturaByes = this.montarEstruturaGrupos6MelhoresPrimeirosBye({
           qualificados,

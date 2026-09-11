@@ -16,7 +16,8 @@ export type MataMataEstrutura =
   | "PADRAO"
   | "SUPER_CAMPEONATO_6"
   | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
-  | "GRUPOS_8_CRUZAMENTO_PADRAO";
+  | "GRUPOS_8_CRUZAMENTO_PADRAO"
+  | "GRUPOS_10_CRUZAMENTO_PADRAO";
 
 export type CategoriaConfigV1 = {
   versao: 1;

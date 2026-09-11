@@ -35,7 +35,7 @@ type GrupoClassificacao = {
 
 type CategoriaConfig = {
   mataMata?: {
-    estrutura?: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
+    estrutura?: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO" | "GRUPOS_10_CRUZAMENTO_PADRAO";
   };
 };
 
@@ -112,7 +112,7 @@ export default function AdminCategoriaChavePage() {
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [superCampeonato, setSuperCampeonato] = useState(false);
   const [mataMataEstrutura, setMataMataEstrutura] = useState<
-    "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO"
+    "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO" | "GRUPOS_10_CRUZAMENTO_PADRAO"
   >("PADRAO");
   const [classificacao, setClassificacao] = useState<GrupoClassificacao[]>([]);
   const [erro, setErro] = useState<string | null>(null);

@@ -19,7 +19,7 @@ type CategoriaConfigTabelaPdf = {
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean };
   mataMata?: {
-    estrutura?: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
+    estrutura?: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO" | "GRUPOS_10_CRUZAMENTO_PADRAO";
     quantidadeClassificados?: number;
     habilitarReseed?: boolean | "AUTO" | "SEMPRE" | "NUNCA";
   };
@@ -258,6 +258,10 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
   const ehGrupos6MelhoresPrimeirosBye =
     estruturaConfig === "GRUPOS_6_MELHORES_PRIMEIROS_BYE" ||
     ehGrupos6MelhoresPrimeirosByeDetectado;
+  const ehGrupos10CruzamentoDetectado =
+    grupos.length === 5 && porGrupo === 2 && melhoresTerceiros === 0 && totalClassificadosCalc === 10;
+  const ehGrupos10Cruzamento =
+    estruturaConfig === "GRUPOS_10_CRUZAMENTO_PADRAO" || ehGrupos10CruzamentoDetectado;
   const rankingOrdenado = extrairEquipesOrdenadasEliminatorias(params);
   const equipeNaPosicaoGeral = (posicao: number) =>
     rankingOrdenado[posicao - 1] ?? null;
@@ -519,6 +523,81 @@ function montarSecaoEliminatorias(params: AbrirTabelaJogosPdfPorChavesParams) {
       titulo: "Final",
       jogos: ["F: vencedor da SF1 x vencedor da SF2"],
     });
+  } else if (ehGrupos10Cruzamento || totalClassificados === 10) {
+    const tamanhoChave = 16;
+    const pot = 10;
+    const sementes: EquipeClassificadaPdf[] = [];
+    for (let r = 1; r <= 2; r += 1) {
+      for (let i = 0; i < grupos.length; i += 1) {
+        const g = grupos[i];
+        const eq = g?.equipes?.[r - 1];
+        if (eq) {
+          sementes.push({
+            equipeId: eq.equipeId,
+            equipeNome: (eq.equipeNome || eq.equipeId.slice(0, 8)).toString(),
+            grupoNome: g.grupoNome,
+            rankGrupo: r,
+            pontos: eq.pontos ?? 0,
+            jogosVencidos: eq.jogosVencidos,
+            jogosJogados: (eq as any).jogosJogados ?? 0,
+            saldoGames: eq.saldoGames ?? 0,
+            gamesPro: (eq as any).gamesPro ?? 0,
+          });
+        }
+      }
+      if (r === 1) {
+        sementes.sort((a, b) => {
+          if ((b.jogosVencidos ?? 0) !== (a.jogosVencidos ?? 0)) return (b.jogosVencidos ?? 0) - (a.jogosVencidos ?? 0);
+          if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+          const apA = calcularApEquipe(a);
+          const apB = calcularApEquipe(b);
+          if (Math.abs(apB - apA) > 0.0001) return apB - apA;
+          return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+        });
+      } else {
+        sementes.sort((a, b) => {
+          if (a.rankGrupo !== b.rankGrupo) return a.rankGrupo - b.rankGrupo;
+          if ((b.jogosVencidos ?? 0) !== (a.jogosVencidos ?? 0)) return (b.jogosVencidos ?? 0) - (a.jogosVencidos ?? 0);
+          if ((b.saldoGames ?? 0) !== (a.saldoGames ?? 0)) return (b.saldoGames ?? 0) - (a.saldoGames ?? 0);
+          const apA = calcularApEquipe(a);
+          const apB = calcularApEquipe(b);
+          if (Math.abs(apB - apA) > 0.0001) return apB - apA;
+          return (b.gamesPro ?? 0) - (a.gamesPro ?? 0);
+        });
+      }
+    }
+    const byesCount = tamanhoChave - pot;
+    for (let i = 0; i < byesCount; i += 1) {
+      const eq = sementes[i] ?? null;
+      if (eq) classificadosDiretos.push({ label: `${formatarPosicaoClassificacao(i + 1)} classificado - bye p/ quartas`, equipe: eq });
+    }
+    const jogosPrimeiraFase: string[] = [];
+    let jogoIdx = 0;
+    for (let i = 0; i < tamanhoChave / 2; i += 1) {
+      const idx1 = i;
+      const idx2 = tamanhoChave - 1 - i;
+      if (idx1 < pot && idx2 < pot) {
+        jogoIdx += 1;
+        const eqA = sementes[idx1] ?? null;
+        const eqB = sementes[idx2] ?? null;
+        jogosPrimeiraFase.push(
+          `J${jogoIdx}: ${formatarEquipeComNome(eqA, formatarPosicaoClassificacao(idx1 + 1))} x ${formatarEquipeComNome(eqB, formatarPosicaoClassificacao(idx2 + 1))}`
+        );
+      }
+    }
+    rounds.push({ titulo: "Oitavas de final", jogos: jogosPrimeiraFase });
+    rounds.push({ titulo: "Quartas de final", jogos: [
+      "Q1: Vencedor do J1 x 8o classificado (bye)",
+      "Q2: 4o classificado (bye) x 5o classificado (bye)",
+      "Q3: 2o classificado (bye) x 7o classificado (bye)",
+      "Q4: 3o classificado (bye) x Vencedor do J2",
+    ]});
+    rounds.push({ titulo: "Semifinais", jogos: [
+      "SF1: Vencedor de Q1 x Vencedor de Q2",
+      "SF2: Vencedor de Q3 x Vencedor de Q4",
+    ]});
+    rounds.push({ titulo: "Final", jogos: ["F: Vencedor da SF1 x Vencedor da SF2"] });
+    observacoes.push("10 classificados (5 chaves x 2) geram chave com 16 slots; os 6 melhores seeds passam direto pelas oitavas (bye).");
   } else if ([2, 4, 8, 16].includes(totalClassificados)) {
     const primeiraFase = faseParaQuantidade(totalClassificados);
     const jogosPrimeiraFase: string[] = [];

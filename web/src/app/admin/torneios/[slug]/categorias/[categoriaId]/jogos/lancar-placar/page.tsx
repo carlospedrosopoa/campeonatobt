@@ -39,7 +39,7 @@ type CategoriaConfig = {
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean; disputaTerceiroLugar?: boolean };
   mataMata?: {
-    estrutura: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO";
+    estrutura: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO" | "GRUPOS_10_CRUZAMENTO_PADRAO";
     quantidadeClassificados?: number;
     habilitarReseed?: boolean;
   };
