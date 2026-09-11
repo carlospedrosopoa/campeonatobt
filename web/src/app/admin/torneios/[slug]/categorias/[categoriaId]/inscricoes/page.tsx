@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft, Banknote, Gamepad2, ImageIcon, Pencil, Plus, RefreshCw, Save, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Banknote, Gamepad2, ImageIcon, Pencil, Plus, RefreshCw, Save, Settings, Trash2, Users, X } from "lucide-react";
 import { gerarCardDuplasInscritasAdmin, gerarCardInscricaoAdmin } from "@/lib/match-card-client";
 import { NomeAtletaSobrenome, NomeEquipeComSobrenome, separarPrimeiroUltimoNome } from "@/lib/nome-atleta";
 
@@ -705,6 +705,13 @@ export default function AdminCategoriaInscricoesPage() {
             >
               <Banknote className="h-4 w-4" />
               Inscrições
+            </Link>
+            <Link
+              href={`/admin/torneios/${slug}/categorias/${categoriaId}/configuracao`}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-initial"
+            >
+              <Settings className="h-4 w-4" />
+              Configuração
             </Link>
             <Link
               href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}

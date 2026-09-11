@@ -1726,14 +1726,14 @@ export default function AdminCategoriaJogosPage() {
             </Link>
             <Link
               href={`/admin/torneios/${slug}/categorias/${categoriaId}/configuracao`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
             >
               <Settings className="h-4 w-4" />
               Configuração
             </Link>
             <Link
               href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}
-              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               <Gamepad2 className="h-4 w-4" />
               Jogos
@@ -1765,866 +1765,470 @@ export default function AdminCategoriaJogosPage() {
 
       {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
 
-      {resultadoFinal && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Concluído</div>
-              <div className="text-lg font-bold text-slate-900">Resultado final</div>
-            </div>
-            <Trophy className="h-6 w-6 text-orange-500" />
-          </div>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-lg border border-slate-200 p-4">
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Campeão</div>
-              <div className="mt-1 flex items-center gap-2 font-semibold text-slate-900">
-                <Crown className="h-4 w-4 text-orange-500" />
-                {resultadoFinal.campeao}
-              </div>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-4">
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Vice</div>
-              <div className="mt-1 flex items-center gap-2 font-semibold text-slate-900">
-                <Swords className="h-4 w-4 text-slate-700" />
-                {resultadoFinal.vice}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-            <button
-              type="button"
-              disabled={!categoria || gerandoRelatorioJogos}
-              onClick={gerarRelatorioJogos}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar PDF da tabela de jogos agrupada por chave"
-            >
-              <FileText className="h-4 w-4" />
-              {gerandoRelatorioJogos ? "Gerando�" : "PDF tabela jogos"}
-            </button>
-
-            <button
-              type="button"
-              disabled={classificacao.length === 0 || gerandoRelatorioClassificacao}
-              onClick={gerarRelatorioClassificacao}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar relat�rio de classifica��o com foto dos atletas (PNG imprim�vel)"
-            >
-              <Crown className="h-4 w-4" />
-              {gerandoRelatorioClassificacao ? "Gerando�" : "Classifica��o (PNG)"}
-            </button>
-
-            <button
-              type="button"
-              disabled={!categoria || gerandoPlanilhaContingencia}
-              onClick={gerarPlanilhaContingencia}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar Excel offline para conting�ncia com lancamento e classificacao por chave"
-            >
-              <FileText className="h-4 w-4" />
-              {gerandoPlanilhaContingencia ? "Gerando�" : "Excel conting�ncia"}
-            </button>
-
-            <button
-              type="button"
-              disabled={recalculando}
-              onClick={async () => {
-                try {
-                  setRecalculando(true);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" });
-                  if (!res.ok) {
-                    const msg = await res.json().catch(() => null);
-                    throw new Error(msg?.error || "Falha ao recalcular classifica��o");
-                  }
-                  const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
-                  if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
-                } catch (e: any) {
-                  setErro(e?.message || "Erro inesperado");
-                } finally {
-                  setRecalculando(false);
-                }
-              }}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-            >
-              {recalculando ? "Recalculando�" : "Recalcular"}
-            </button>
-
-            <button
-              type="button"
-              disabled={gerandoProximaFase || fasePartidas === "GRUPOS" || fasePartidas === "FINAL"}
-              onClick={async () => {
-                try {
-                  setGerandoProximaFase(true);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-proxima-fase`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ faseAtual: fasePartidas }),
-                  });
-                  const payload = (await res.json().catch(() => null)) as any;
-                  if (!res.ok) throw new Error(payload?.error || "Falha ao gerar pr�xima fase");
-                  const proximaFaseDestino = (payload?.faseCriada || payload?.faseAtualizada) as string | null;
-                  if (!proximaFaseDestino) {
-                    throw new Error("A pr�xima fase ainda n�o est� pronta. Verifique se todos os jogos da fase atual est�o finalizados.");
-                  }
-                  setFasePartidas(proximaFaseDestino as any);
-                  await carregarPartidas(proximaFaseDestino as any);
-                  await carregarResultadoFinal();
-                } catch (e: any) {
-                  setErro(e?.message || "Erro inesperado");
-                } finally {
-                  setGerandoProximaFase(false);
-                }
-              }}
-              className="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-white px-3 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="For�a a gera��o ou sincroniza��o da fase seguinte"
-            >
-              {gerandoProximaFase ? "Gerando�" : "Gerar pr�xima fase"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Classifica��o</h2>
-            <p className="text-sm text-slate-600">Classifica��o por grupo.</p>
+            <h2 className="text-xl font-bold text-slate-900">Dinâmica da categoria</h2>
+            <p className="text-sm text-slate-600">Defina grupos, classificados e gere chaves.</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {classificacao.length === 0 ? (
-            <div className="text-sm text-slate-600">Nenhuma classificação disponível (gere grupos e/ou recalcule).</div>
-          ) : (
-            classificacao.map((g) => (
-              <div key={g.grupoId} className="rounded-lg border border-slate-200 p-4">
-                <div className="font-semibold text-slate-900 mb-3">{g.grupoNome}</div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left text-slate-500 border-b border-slate-100">
-                        <th className="py-2 pr-3 font-medium">#</th>
-                        <th className="py-2 pr-3 font-medium">Equipe</th>
-                        <th className="py-2 pr-3 font-medium">P</th>
-                        <th className="py-2 pr-3 font-medium">J</th>
-                        <th className="py-2 pr-3 font-medium">V</th>
-                        <th className="py-2 pr-3 font-medium">GP</th>
-                        <th className="py-2 pr-3 font-medium">SP</th>
-                        <th className="py-2 pr-3 font-medium">SG</th>
-                        <th className="py-2 font-medium">AP%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {g.equipes.map((e, idx) => {
-                        const ap = e.jogosJogados > 0 ? Math.round((e.pontos / (e.jogosJogados * 3)) * 100) : 0;
-                        const rowClass =
-                          idx === 0
-                            ? "bg-gradient-to-r from-amber-50 to-white border-amber-100/60"
-                            : idx === 1
-                              ? "bg-gradient-to-r from-slate-50 to-white border-slate-100/60"
-                              : "";
-                        const sgClass = e.saldoGames >= 0 ? "text-green-700 font-semibold" : "text-red-700 font-semibold";
-                        const posClass =
-                          idx === 0
-                            ? "bg-amber-100 text-amber-800"
-                            : idx === 1
-                              ? "bg-slate-200 text-slate-700"
-                              : idx === 2
-                                ? "bg-orange-100 text-orange-800"
-                                : "bg-slate-100 text-slate-600";
-                        return (
-                          <tr key={e.equipeId} className={`border-b border-slate-50 ${rowClass}`}>
-                            <td className="py-2 pr-3">
-                              <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${posClass}`}>
-                                {idx + 1}
-                              </span>
-                            </td>
-                            <td className="py-2 pr-3">
-                              <div className="flex items-center gap-2">
-                                {Boolean(e.cabecaChave) && (
-                                  <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 p-0.5 text-amber-600" title="Cabeça de chave do grupo">
-                                    <Crown className="h-3.5 w-3.5" />
-                                  </span>
-                                )}
-                                <span className="truncate leading-tight">
-                                  <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
-                                </span>
-                              </div>
-                            </td>
-                            <td className="py-2 pr-3 font-semibold text-slate-900">{e.pontos}</td>
-                            <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
-                            <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
-                            <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
-                            <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
-                            <td className={`py-2 pr-3 ${sgClass}`}>{e.saldoGames}</td>
-                            <td className="py-2 text-slate-700">{ap}%</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+        {config ? (
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Formato</label>
+              <select
+                value={config.formato}
+                onChange={(e) => setConfig((p) => (p ? { ...p, formato: e.target.value as any } : p))}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="GRUPOS">GRUPOS</option>
+                <option value="LIGA">LIGA</option>
+                <option value="MATA_MATA">MATA_MATA</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Regra do jogo</label>
+              <select
+                value={regraJogoSelecionada}
+                onChange={(e) => {
+                  const regrasPartida = buildRegrasPartidaPreset(e.target.value);
+                  setConfig((p) => (p ? { ...p, regrasPartida } : p));
+                }}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                {ehVoleiPraia ? (
+                  <option value={REGRA_JOGO_VOLEI_PRAIA}>Vôlei de praia: 2 sets até 21 + 3º set até 15</option>
+                ) : (
+                  <>
+                    <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
+                    <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
+                    <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
+                    <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
+                    <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie até 10</option>
+                    <option value="VOLEI_3_21">Vôlei melhor de 3 até 21</option>
+                    <option value="VOLEI_3_25">Vôlei melhor de 3 até 25</option>
+                    <option value="VOLEI_5_25">Vôlei melhor de 5 até 25</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Grupos</label>
+              <select
+                value={config.grupos?.modo === "MANUAL" && config.grupos?.quantidade === 1 ? "UNICO" : "AUTO"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "UNICO") {
+                    setConfig((p) =>
+                      p
+                        ? {
+                            ...p,
+                            grupos: {
+                              ...(p.grupos ?? { modo: "AUTO", tamanhoAlvo: 4 }),
+                              modo: "MANUAL",
+                              quantidade: 1,
+                            },
+                          }
+                        : p
+                    );
+                  } else {
+                    setConfig((p) =>
+                      p
+                        ? {
+                            ...p,
+                            grupos: {
+                              ...(p.grupos ?? { modo: "AUTO", tamanhoAlvo: 4 }),
+                              modo: "AUTO",
+                              quantidade: undefined,
+                            },
+                          }
+                        : p
+                    );
+                  }
+                }}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="AUTO">Auto</option>
+                <option value="UNICO">Grupo único</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Tamanho alvo do grupo</label>
+              <select
+                value={config.grupos?.tamanhoAlvo ?? 4}
+                onChange={(e) =>
+                  setConfig((p) =>
+                    p ? { ...p, grupos: { ...(p.grupos ?? { modo: "AUTO", tamanhoAlvo: 4 }), tamanhoAlvo: Number(e.target.value) as any } } : p
+                  )
+                }
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value={3}>3</option>
+                <option value={4}>4</option>
+                <option value={5}>5</option>
+                <option value={6}>6</option>
+                <option value={7}>7</option>
+                <option value={8}>8</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Classificam por grupo</label>
+              <input
+                value={config.classificacao?.porGrupo ?? 2}
+                onChange={(e) => setConfig((p) => (p ? { ...p, classificacao: { ...(p.classificacao ?? { porGrupo: 2 }), porGrupo: Number(e.target.value) } } : p))}
+                type="number"
+                min={1}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Melhores terceiros</label>
+              <input
+                value={config.classificacao?.melhoresTerceiros ?? 0}
+                onChange={(e) =>
+                  setConfig((p) =>
+                    p ? { ...p, classificacao: { ...(p.classificacao ?? { porGrupo: 2 }), melhoresTerceiros: Number(e.target.value) || 0 } } : p
+                  )
+                }
+                type="number"
+                min={0}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Estrutura do mata-mata</label>
+              <select
+                value={config.mataMata?.estrutura ?? "PADRAO"}
+                onChange={(e) =>
+                  setConfig((p) =>
+                    p
+                      ? {
+                          ...p,
+                          mataMata: {
+                            ...(p.mataMata ?? {}),
+                            estrutura: e.target.value as
+                              | "PADRAO"
+                              | "SUPER_CAMPEONATO_6"
+                              | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
+                              | "GRUPOS_8_CRUZAMENTO_PADRAO"
+                              | "GRUPOS_10_CRUZAMENTO_PADRAO",
+                          },
+                        }
+                      : p
+                  )
+                }
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="PADRAO">Padrão do sistema</option>
+                <option value="GRUPOS_10_CRUZAMENTO_PADRAO">10 classificados (5 chaves x 2) com cruzamento padrão entre chaves</option>
+                <option value="GRUPOS_8_CRUZAMENTO_PADRAO">8 classificados com cruzamento padrão entre chaves</option>
+                <option value="GRUPOS_6_MELHORES_PRIMEIROS_BYE">6 classificados com 2 melhores primeiros direto na semifinal</option>
+              </select>
+              <div className="text-xs text-slate-500">
+                Use a opção de 8 classificados para 4 chaves com cruzamento padrão nas quartas, ou a de 6 classificados quando os 2 melhores líderes precisarem entrar direto na semifinal.
+              </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Re-seed entre fases do mata-mata</label>
+              <select
+                value={
+                  config.mataMata?.habilitarReseed === true
+                    ? "true"
+                    : config.mataMata?.habilitarReseed === false
+                      ? "false"
+                      : "auto"
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setConfig((p) =>
+                    p
+                      ? ({
+                          ...p,
+                          mataMata: {
+                            estrutura: (p.mataMata?.estrutura ?? "PADRAO") as
+                              | "PADRAO"
+                              | "SUPER_CAMPEONATO_6"
+                              | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
+                              | "GRUPOS_8_CRUZAMENTO_PADRAO"
+                              | "GRUPOS_10_CRUZAMENTO_PADRAO",
+                            quantidadeClassificados: p.mataMata?.quantidadeClassificados,
+                            ...(p.mataMata ?? {}),
+                            habilitarReseed:
+                              val === "true" ? true :
+                              val === "false" ? false :
+                              undefined,
+                          },
+                        } satisfies CategoriaConfig)
+                      : p
+                  );
+                }}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="auto">Automático (re-seed só se houver byes)</option>
+                <option value="true">Sempre usar re-seed por rank</option>
+                <option value="false">Nunca usar re-seed (bracket tradicional)</option>
+              </select>
+              <p className="text-xs text-slate-500">
+                Automático: com chave cheia (ex: 8 classificados) não faz re-seed e usa avanço normal de bracket. Com byes (ex: 6 classificados) faz re-seed por rank.
+              </p>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Tipo de participação</label>
+              <select
+                value={config.tipoParticipacao ?? "DUPLAS"}
+                onChange={(e) =>
+                  setConfig((p) =>
+                    p
+                      ? {
+                          ...p,
+                          tipoParticipacao: e.target.value === "SIMPLES" ? "SIMPLES" : "DUPLAS",
+                        }
+                      : p
+                  )
+                }
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
+              >
+                <option value="DUPLAS">Duplas</option>
+                <option value="SIMPLES">Simples</option>
+              </select>
+              <div className="text-xs text-slate-500">Define se a categoria aceita 2 atletas por equipe ou apenas 1.</div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Finais</label>
+              <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                <span>Disputa de 3º lugar</span>
+                <input
+                  type="checkbox"
+                  checked={config.fase2?.disputaTerceiroLugar === true}
+                  onChange={(e) =>
+                    setConfig((p) =>
+                      p
+                        ? {
+                            ...p,
+                            fase2: {
+                              ...(p.fase2 ?? { habilitada: true, temFinal: true, disputaTerceiroLugar: false }),
+                              disputaTerceiroLugar: e.target.checked,
+                            },
+                          }
+                        : p
+                    )
+                  }
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+              </label>
+              <div className="text-xs text-slate-500">Quando ativada, a semifinal gera final e 3º lugar automaticamente.</div>
+            </div>
+
+            <div className="space-y-3 md:col-span-6 pt-2 border-t border-slate-100">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">Regras por fase</div>
+                  <div className="text-xs text-slate-500">
+                    Deixe em "Padrão" para usar a regra do jogo acima. Quando configurada, a regra específica da fase (ou a de mata-mata para oitavas/quartas/semi/final) prevalece.
+                  </div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </div>
-
-
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Partidas</h2>
-            <p className="text-sm text-slate-600">Lance placares conforme a regra da categoria.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {([
+                  { key: "GRUPOS", label: "Grupos", hint: "Fase de grupos / liga" },
+                  { key: "MATA_MATA", label: "Mata-mata (genérico)", hint: "Oitavas, quartas, semi, final, 3º lugar" },
+                  { key: "SEMI", label: "Semifinal", hint: "Apenas semi" },
+                  { key: "FINAL", label: "Final", hint: "Apenas a grande final" },
+                ] as Array<{ key: FasePartida; label: string; hint: string }>).map((item) => {
+                  const regraAtual = config?.regrasPartidaPorFase?.[item.key] ?? null;
+                  const presetAtual = regraAtual ? getRegraJogoValue(regraAtual as any) : "PADRAO";
+                  return (
+                    <div key={item.key} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-700">{item.label}</div>
+                        <div className="text-[11px] leading-tight text-slate-500">{item.hint}</div>
+                      </div>
+                      <select
+                        value={presetAtual}
+                        onChange={(e) => {
+                          const valor = e.target.value;
+                          setConfig((p) => {
+                            if (!p) return p;
+                            const atual: RegrasPartidaPorFase = { ...(p.regrasPartidaPorFase ?? {}) };
+                            if (valor === "PADRAO") {
+                              delete atual[item.key];
+                            } else {
+                              atual[item.key] = buildRegrasPartidaPreset(valor);
+                            }
+                            const temChaves = Object.keys(atual).length > 0;
+                            return {
+                              ...p,
+                              regrasPartidaPorFase: temChaves ? atual : undefined,
+                            };
+                          });
+                        }}
+                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                      >
+                        <option value="PADRAO">Padrão (usa regra do jogo)</option>
+                        {!ehVoleiPraia && (
+                          <>
+                            <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
+                            <option value="1SET_6_SEM_TB">1 set até 6 sem tie</option>
+                            <option value="1SET_5_SEM_TB">1 set até 5 sem tie</option>
+                            <option value="2SETS_SUPER10">2 sets até 6 + super tie 10</option>
+                            <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie 10</option>
+                          </>
+                        )}
+                        <option value="VOLEI_3_21">Vôlei md3 até 21</option>
+                        <option value="VOLEI_3_25">Vôlei md3 até 25</option>
+                        {!ehVoleiPraia && <option value="VOLEI_5_25">Vôlei md5 até 25</option>}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
-            <select
-              value={filtroAtletaId}
-              onChange={(e) => setFiltroAtletaId(e.target.value)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-              title="Filtrar partidas por atleta"
-            >
-              <option value="">Todos atletas</option>
-              {atletasFiltroOptions.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.nome}
-                </option>
-              ))}
-            </select>
-            <select
-              value={fasePartidas}
-              onChange={(e) => setFasePartidas(e.target.value as any)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-            >
-              <option value="GRUPOS">GRUPOS</option>
-              <option value="OITAVAS">OITAVAS</option>
-              <option value="QUARTAS">QUARTAS</option>
-              <option value="SEMI">SEMI</option>
-              <option value="FINAL">FINAL</option>
-            </select>
+        ) : (
+          <div className="text-sm text-slate-600">Carregando configuração…</div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          <div className="text-xs text-slate-500">Desempate padrão: VITORIAS → SALDO_GAMES → CONFRONTO_DIRETO (ENTRE 2) → GAMES_PRO → SORTEIO</div>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <button
               type="button"
-              onClick={() => carregarPartidas()}
-              disabled={carregandoPartidas}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              disabled={!config || salvandoConfig}
+              onClick={async () => {
+                if (!config) return;
+                try {
+                  setSalvandoConfig(true);
+                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/config`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(config),
+                  });
+                  if (!res.ok) {
+                    const msg = await res.json().catch(() => null);
+                    throw new Error(msg?.error || "Falha ao salvar configuração");
+                  }
+                } catch (e: any) {
+                  setErro(e?.message || "Erro inesperado");
+                } finally {
+                  setSalvandoConfig(false);
+                }
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
             >
-              {carregandoPartidas ? "Atualizando…" : "Atualizar"}
+              <Save className="h-4 w-4" />
+              {salvandoConfig ? "Salvando…" : "Salvar config"}
+            </button>
+
+            <button
+              type="button"
+              disabled={gerandoGrupos || !config}
+              onClick={async () => {
+                if (!config) return;
+                try {
+                  setGerandoGrupos(true);
+                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-grupos`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(config),
+                  });
+                  if (!res.ok) {
+                    const msg = await res.json().catch(() => null);
+                    throw new Error(msg?.error || "Falha ao gerar grupos");
+                  }
+                  const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+                  if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+                  setFasePartidas("GRUPOS");
+                  await carregarPartidas("GRUPOS");
+                } catch (e: any) {
+                  setErro(e?.message || "Erro inesperado");
+                } finally {
+                  setGerandoGrupos(false);
+                }
+              }}
+              className="inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-2.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50 sm:px-4 sm:text-sm"
+            >
+              {gerandoGrupos ? "Gerando…" : "Gerar grupos/jogos"}
+            </button>
+
+            <button
+              type="button"
+              disabled={!config || carregandoMontagemGrupos}
+              onClick={abrirMontagemManualGrupos}
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
+              title="Definir manualmente em qual grupo cada dupla ficará"
+            >
+              {carregandoMontagemGrupos ? "Carregando…" : "Montar grupos manual"}
+            </button>
+
+            <button
+              type="button"
+              disabled={classificacao.length < 2 || salvandoTrocaGrupos}
+              onClick={abrirTrocaEntreGrupos}
+              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
+              title="Trocar duas duplas entre grupos e regerar os jogos"
+            >
+              Trocar duplas grupos
+            </button>
+
+            <button
+              type="button"
+              disabled={gerandoMataMata}
+              onClick={async () => {
+                try {
+                  setGerandoMataMata(true);
+                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-mata-mata`, { method: "POST" });
+                  const payload = (await res.json().catch(() => null)) as any;
+                  if (!res.ok) {
+                    if (payload?.code === "TIE_BREAK_REQUIRED" && Array.isArray(payload?.tieGroups)) {
+                      const groups = payload.tieGroups as ManualTieBreakGroup[];
+                      setManualTieBreakGroups(groups);
+                      setManualTieBreakOrder(
+                        Object.fromEntries(groups.map((g) => [g.key, g.items.map((i) => i.equipeId)]))
+                      );
+                      setManualTieBreakOpen(true);
+                      return;
+                    }
+                    throw new Error(payload?.error || "Falha ao gerar mata-mata");
+                  }
+                  if (payload?.fase) {
+                    setFasePartidas(payload.fase);
+                    await carregarPartidas(payload.fase);
+                  } else {
+                    await carregarPartidas();
+                  }
+                } catch (e: any) {
+                  setErro(e?.message || "Erro inesperado");
+                } finally {
+                  setGerandoMataMata(false);
+                }
+              }}
+              className="inline-flex items-center justify-center rounded-md bg-orange-500 px-3 py-2.5 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50 sm:px-4 sm:text-sm"
+            >
+              {gerandoMataMata ? "Gerando…" : "Gerar mata-mata"}
+            </button>
+
+            <button
+              type="button"
+              disabled={resetando}
+              onClick={resetarJogos}
+              className="inline-flex items-center justify-center rounded-md border border-red-200 bg-white px-3 py-2.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 sm:ml-2 sm:px-4 sm:text-sm"
+              title="Excluir todos os jogos e grupos"
+            >
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
         </div>
-
-        {classificadosByes?.classificadosParaProximaFase && classificadosByes.classificadosParaProximaFase.length > 0 && fasePartidas !== "GRUPOS" && fasePartidas !== "FINAL" && (
-          <div className="mt-4 rounded-xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-white p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="inline-flex items-center justify-center rounded-md bg-emerald-500 text-white p-1.5 shadow-sm">
-                <Trophy className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                  Classificados para {labelFasePartida(classificadosByes.proximaFase)}
-                </div>
-                <div className="text-xs text-emerald-700/80">
-                  Estas equipes passaram direto por bye e já estão garantidas na próxima fase.
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {classificadosByes.classificadosParaProximaFase.map((item, idx) => (
-                <div key={item.equipeId} className="relative rounded-lg border border-emerald-100 bg-white p-4 shadow-sm hover:shadow-md transition-all">
-                  <div className="absolute -top-2 -left-2 inline-flex items-center justify-center rounded-full bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 shadow-sm">
-                    #{idx + 1}
-                  </div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                    {item.seedLabel}
-                    {item.grupoNome ? ` • ${item.grupoNome}` : ""}
-                  </div>
-                  <div className="font-semibold text-slate-900 leading-tight">
-                    {item.equipeNome}
-                  </div>
-                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 border border-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-800">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Classificado direto (bye)
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {classificadosByes?.proximaFase === fasePartidas && partidasFiltradas.length === 0 && (
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">
-                  Preview — {labelFasePartida(fasePartidas)}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Os confrontos serão gerados automaticamente após o encerramento da fase anterior.
-                </p>
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-100">
-                A definir
-              </span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {classificadosByes.classificadosParaProximaFase.map((item, idx) => (
-                <div key={`preview-${item.equipeId}`} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
-                          {labelFasePartida(classificadosByes.proximaFase)}
-                        </span>
-                        <span className="text-slate-400">• Jogo {idx + 1}</span>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-100">
-                        A definir
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-4 mb-4">
-                      <div className="flex-1 text-right">
-                        <div className="leading-tight">
-                          <div className="font-semibold text-slate-900">{item.equipeNome}</div>
-                          <div className="mt-1 text-[11px] text-emerald-700 inline-flex items-center gap-1">
-                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                            Classificado por bye
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-center justify-center min-w-[3rem]">
-                        <span className="text-lg font-bold text-slate-400 font-mono tracking-tight bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                          vs
-                        </span>
-                      </div>
-
-                      <div className="flex-1 text-left">
-                        <div className="leading-tight">
-                          <div className="font-medium text-slate-400 italic">
-                            Aguardando vencedor...
-                          </div>
-                          <div className="mt-1 text-[11px] text-slate-400">
-                            {classificadosByes.proximaFase === "SEMI" ? "Quartas de final" : "Fase anterior"}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
-                    <div className="text-xs flex items-center gap-1.5 text-amber-600 font-medium">
-                      <Calendar className="h-3.5 w-3.5" />
-                      Local e horário a definir
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-          {partidasFiltradas.length === 0 ? (
-            <div className="py-10 text-center text-slate-500">
-              {classificadosByes?.proximaFase === fasePartidas
-                ? "Confrontos desta fase serão gerados após o término da fase anterior."
-                : "Nenhuma partida encontrada."}
-            </div>
-          ) : fasePartidas === "GRUPOS" ? (
-            <div className="mt-4 space-y-6">
-              {partidasAgrupadasPorGrupo.map((grupo) => (
-                <section key={grupo.grupoNome} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{grupo.grupoNome}</h3>
-                    <span className="text-xs font-medium text-slate-500">{grupo.partidas.length} jogo(s)</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {grupo.partidas.map((p) => renderPartidaCard(p))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          ) : fasePartidas === "FINAL" ? (
-            <div className="mt-4 space-y-6">
-              {partidasAgrupadasDecisivas.map((grupo) => (
-                <section key={grupo.titulo} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{grupo.titulo}</h3>
-                    <span className="text-xs font-medium text-slate-500">{grupo.partidas.length} jogo(s)</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {grupo.partidas.map((p) => renderPartidaCard(p))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {partidasFiltradas.map((p) => renderPartidaCard(p))}
-            </div>
-          )}
       </div>
-
-      {editPartidaId &&
-        (() => {
-          const partida = partidas.find((p) => p.id === editPartidaId);
-          if (!partida) return null;
-          const regras = obterRegrasPartidaEfetivas({
-            regrasBase: config?.regrasPartida ?? null,
-            regrasPorFase: config?.regrasPartidaPorFase ?? null,
-            fase: editPartidaFase ?? null,
-          });
-          const regrasBT = isRegrasBeachTennisSets(regras) ? regras : null;
-          const regrasVolei = isRegrasVoleiSets(regras) ? regras : null;
-          const melhorDe = regrasVolei?.melhorDe ?? regrasBT?.melhorDe ?? 1;
-          const superTie = regrasBT?.superTiebreakDecisivo?.habilitado ?? false;
-          const tbHabilitado = regrasBT?.tiebreak?.habilitado ?? true;
-          const tbEm = regrasBT?.tiebreak?.em ?? (regrasBT?.gamesPorSet ?? 6);
-          const s1aN = Number(formPlacar.s1a);
-          const s1bN = Number(formPlacar.s1b);
-          const s2aN = Number(formPlacar.s2a);
-          const s2bN = Number(formPlacar.s2b);
-          const isTbScore = (a: number, b: number) =>
-            Number.isFinite(a) && Number.isFinite(b) && ((a === tbEm && b === tbEm) || (Math.max(a, b) === tbEm + 1 && Math.min(a, b) === tbEm));
-
-          const showTb1 = Boolean(regrasBT) && tbHabilitado && (Boolean(formPlacar.tb1a.trim() || formPlacar.tb1b.trim()) || isTbScore(s1aN, s1bN));
-          const showTb2 = Boolean(regrasBT) && tbHabilitado && (Boolean(formPlacar.tb2a.trim() || formPlacar.tb2b.trim()) || isTbScore(s2aN, s2bN));
-          const camposSets: Array<{
-            aKey: keyof typeof formPlacar;
-            bKey: keyof typeof formPlacar;
-            tbAKey?: keyof typeof formPlacar;
-            tbBKey?: keyof typeof formPlacar;
-          }> = [
-            { aKey: "s1a", bKey: "s1b", tbAKey: "tb1a", tbBKey: "tb1b" },
-            { aKey: "s2a", bKey: "s2b", tbAKey: "tb2a", tbBKey: "tb2b" },
-            { aKey: "s3a", bKey: "s3b" },
-            { aKey: "s4a", bKey: "s4b" },
-            { aKey: "s5a", bKey: "s5b" },
-          ];
-
-          return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditPartidaId(null)}>
-              <div
-                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <div className="p-6 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs text-slate-500 uppercase tracking-wider">Lançar placar</div>
-                      <div className="text-lg font-bold text-slate-900 leading-tight">
-                        <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} tamanho="lg" /> <span className="text-slate-400 mx-2">vs</span>{" "}
-                        <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} tamanho="lg" />
-                      </div>
-                    </div>
-                    <button type="button" onClick={() => setEditPartidaId(null)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-                      <X className="h-4 w-4" />
-                      Fechar
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Link Foto</label>
-                        <input
-                          type="text"
-                          value={fotoUrl}
-                          onChange={(e) => setFotoUrl(e.target.value)}
-                          placeholder="https://..."
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Link Transmissão</label>
-                        <input
-                          type="text"
-                          value={transmissaoUrl}
-                          onChange={(e) => setTransmissaoUrl(e.target.value)}
-                          placeholder="https://..."
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {camposSets.slice(0, melhorDe).map((campo, index) => {
-                      const mostrarTb = index === 0 ? showTb1 : index === 1 ? showTb2 : false;
-                      const tbAKey = campo.tbAKey;
-                      const tbBKey = campo.tbBKey;
-                      const label =
-                        regrasVolei && index === melhorDe - 1 && regrasVolei.tieBreakDecisivo?.habilitado
-                          ? `Set ${index + 1} (tie-break)`
-                          : regrasBT && index === 2 && superTie
-                            ? "Super tie"
-                            : `Set ${index + 1}`;
-
-                      return (
-                        <div key={campo.aKey} className="space-y-2">
-                          <label className="text-sm font-medium text-slate-700">{label}</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              value={formPlacar[campo.aKey]}
-                              onChange={(e) => setFormPlacar((p) => ({ ...p, [campo.aKey]: e.target.value }))}
-                              type="number"
-                              className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                            />
-                            <span className="text-slate-400">x</span>
-                            <input
-                              value={formPlacar[campo.bKey]}
-                              onChange={(e) => setFormPlacar((p) => ({ ...p, [campo.bKey]: e.target.value }))}
-                              type="number"
-                              className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                            />
-                          </div>
-                          {mostrarTb && tbAKey && tbBKey ? (
-                            <div className="pt-2">
-                              <div className="text-xs text-slate-500 mb-1">Tie-break</div>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  value={formPlacar[tbAKey]}
-                                  onChange={(e) => setFormPlacar((p) => ({ ...p, [tbAKey]: e.target.value }))}
-                                  type="number"
-                                  className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                                />
-                                <span className="text-slate-400">x</span>
-                                <input
-                                  value={formPlacar[tbBKey]}
-                                  onChange={(e) => setFormPlacar((p) => ({ ...p, [tbBKey]: e.target.value }))}
-                                  type="number"
-                                  className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                                />
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2">
-                    <button type="button" onClick={() => setEditPartidaId(null)} className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                      Cancelar
-                    </button>
-                    {(partida.status === "FINALIZADA" || partida.status === "WO") && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            setSalvandoPartida(true);
-                            setErro(null);
-                            const res = await fetch(
-                              `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partida.id}/cancelar-placar`,
-                              { method: "POST" }
-                            );
-                            const payload = (await res.json().catch(() => null)) as any;
-                            if (!res.ok) throw new Error(payload?.error || "Falha ao cancelar placar");
-                            if (fasePartidas === "GRUPOS") {
-                              await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" }).catch(() => null);
-                              const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
-                              if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
-                            }
-                            await carregarPartidas();
-                            await carregarResultadoFinal();
-                            setEditPartidaId(null);
-                          } catch (e: any) {
-                            setErro(e?.message || "Erro inesperado");
-                          } finally {
-                            setSalvandoPartida(false);
-                          }
-                        }}
-                        disabled={salvandoPartida}
-                        className="inline-flex items-center justify-center rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        Cancelar placar
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => salvarPlacar(partida)}
-                      disabled={salvandoPartida}
-                      className="inline-flex items-center justify-center gap-2 rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-                    >
-                      <Save className="h-4 w-4" />
-                      {salvandoPartida ? "Salvando…" : "Salvar placar"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-      {editAgendamentoId &&
-        (() => {
-          const partida = partidas.find((p) => p.id === editAgendamentoId);
-          if (!partida) return null;
-          return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditAgendamentoId(null)}>
-              <div
-                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <div className="p-6 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs text-slate-500 uppercase tracking-wider">Agendamento</div>
-                      <div className="text-lg font-bold text-slate-900 leading-tight">
-                        <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} tamanho="lg" /> <span className="text-slate-400 mx-2">vs</span>{" "}
-                        <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} tamanho="lg" />
-                      </div>
-                    </div>
-                    <button type="button" onClick={() => setEditAgendamentoId(null)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-                      <X className="h-4 w-4" />
-                      Fechar
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Arena</label>
-                      <select
-                        value={agendaArenaId}
-                        onChange={(e) => setAgendaArenaId(e.target.value)}
-                        disabled={carregandoArenas}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white disabled:opacity-50"
-                      >
-                        <option value="">{arenas.length === 0 ? "Nenhuma arena disponível" : "Selecione uma arena"}</option>
-                        {arenas.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.nome}
-                          </option>
-                        ))}
-                      </select>
-                      {agendaArenaId && arenas.find((a) => a.id === agendaArenaId)?.logoUrl ? (
-                        <div className="flex items-center gap-2 text-xs text-slate-600">
-                          <img
-                            src={arenas.find((a) => a.id === agendaArenaId)?.logoUrl || ""}
-                            alt={arenas.find((a) => a.id === agendaArenaId)?.nome || "Arena"}
-                            className="h-5 w-5 rounded-full object-cover"
-                          />
-                          {arenas.find((a) => a.id === agendaArenaId)?.nome}
-                        </div>
-                      ) : null}
-                      <div className="text-xs text-slate-500">
-                        Cadastre arenas em <Link href={`/admin/torneios/${slug}/arenas`} className="underline">Arenas</Link>.
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Quadra (opcional)</label>
-                      <input
-                        value={agendaQuadra}
-                        onChange={(e) => setAgendaQuadra(e.target.value)}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                        placeholder="Ex: Quadra 1"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Data e horário agendados</label>
-                      <input
-                        value={agendaDataHorario}
-                        onChange={(e) => setAgendaDataHorario(e.target.value)}
-                        type="datetime-local"
-                        step={60}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Data limite</label>
-                      <input
-                        value={agendaDataLimite}
-                        onChange={(e) => setAgendaDataLimite(e.target.value)}
-                        type="date"
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditAgendamentoId(null)}
-                      className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          setSalvandoAgendamento(true);
-                          setErro(null);
-                          if (agendaDataHorario.trim() && !agendaArenaId) throw new Error("Selecione uma arena para agendar a partida");
-                          const toIsoDateTime = (v: string) => (v.trim() ? new Date(v).toISOString() : null);
-                          const toIsoDate = (v: string) => (v.trim() ? new Date(`${v}T00:00:00`).toISOString() : null);
-                          const res = await fetch(
-                            `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partida.id}/agendamento`,
-                            {
-                              method: "PUT",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                arenaId: agendaArenaId || null,
-                                quadra: agendaQuadra.trim() || null,
-                                dataHorario: toIsoDateTime(agendaDataHorario),
-                                dataLimite: toIsoDate(agendaDataLimite),
-                              }),
-                            }
-                          );
-                          const payload = (await res.json().catch(() => null)) as any;
-                          if (!res.ok) throw new Error(payload?.error || "Falha ao salvar agendamento");
-                          await carregarPartidas();
-                          setEditAgendamentoId(null);
-                        } catch (e: any) {
-                          setErro(e?.message || "Erro inesperado");
-                        } finally {
-                          setSalvandoAgendamento(false);
-                        }
-                      }}
-                      disabled={salvandoAgendamento}
-                      className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                    >
-                      <Save className="h-4 w-4" />
-                      {salvandoAgendamento ? "Salvando…" : "Salvar"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-      {editConfrontoId &&
-        (() => {
-          const partida = partidas.find((p) => p.id === editConfrontoId);
-          if (!partida) return null;
-          return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditConfrontoId(null)}>
-              <div
-                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <div className="p-6 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs text-slate-500 uppercase tracking-wider">Alterar confronto</div>
-                      <div className="text-lg font-bold text-slate-900 leading-tight">
-                        <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} tamanho="lg" /> <span className="text-slate-400 mx-2">vs</span>{" "}
-                        <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} tamanho="lg" />
-                      </div>
-                      <div className="text-sm text-slate-600 mt-1">
-                        Disponível para manutenção da chave antes de qualquer jogo da fase começar.
-                      </div>
-                    </div>
-                    <button type="button" onClick={() => setEditConfrontoId(null)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-                      <X className="h-4 w-4" />
-                      Fechar
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Dupla A</label>
-                      <select
-                        value={confrontoEquipeAId}
-                        onChange={(e) => setConfrontoEquipeAId(e.target.value)}
-                        disabled={carregandoEquipes}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white disabled:opacity-50"
-                      >
-                        {equipes.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.nome}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Dupla B</label>
-                      <select
-                        value={confrontoEquipeBId}
-                        onChange={(e) => setConfrontoEquipeBId(e.target.value)}
-                        disabled={carregandoEquipes}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white disabled:opacity-50"
-                      >
-                        {equipes.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.nome}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {partida.fase !== "GRUPOS" && (
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                      <div className="text-sm text-slate-700">
-                        Modo manutenção: permite reorganizar confrontos da fase mesmo com repetição temporária de duplas, desde que nenhum jogo da fase tenha começado.
-                      </div>
-                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={modoManutencaoConfronto}
-                          onChange={(e) => setModoManutencaoConfronto(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300"
-                        />
-                        Ativar
-                      </label>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-end gap-2">
-                    <button type="button" onClick={() => setEditConfrontoId(null)} className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          setSalvandoConfronto(true);
-                          setErro(null);
-                          const res = await fetch(
-                            `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partida.id}/alterar-confronto`,
-                            {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                equipeAId: confrontoEquipeAId,
-                                equipeBId: confrontoEquipeBId,
-                                force: partida.fase !== "GRUPOS" && modoManutencaoConfronto,
-                              }),
-                            }
-                          );
-                          const payload = (await res.json().catch(() => null)) as any;
-                          if (!res.ok) throw new Error(payload?.error || "Falha ao alterar confronto");
-                          await carregarPartidas();
-                          await carregarResultadoFinal();
-                          setEditConfrontoId(null);
-                        } catch (e: any) {
-                          setErro(e?.message || "Erro inesperado");
-                        } finally {
-                          setSalvandoConfronto(false);
-                        }
-                      }}
-                      disabled={salvandoConfronto || carregandoEquipes || !confrontoEquipeAId || !confrontoEquipeBId || confrontoEquipeAId === confrontoEquipeBId}
-                      className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                    >
-                      <Save className="h-4 w-4" />
-                      {salvandoConfronto ? "Salvando…" : "Salvar confronto"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
 
       {trocaGruposOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setTrocaGruposOpen(false)}>

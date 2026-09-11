@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -1383,6 +1383,13 @@ export default function AdminCategoriaJogosSuperPage() {
             >
               <Banknote className="h-4 w-4" />
               Inscrições
+            </Link>
+            <Link
+              href={`/admin/torneios/${slug}/categorias/${categoriaId}/configuracao`}
+              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Settings className="h-4 w-4" />
+              Configuração
             </Link>
             <Link
               href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}

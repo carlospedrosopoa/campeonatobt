@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, Gamepad2, Network, Pencil, PlusCircle, RefreshCcw, Save } from "lucide-react";
+import { ArrowLeft, Banknote, Gamepad2, Network, Pencil, PlusCircle, RefreshCcw, Save, Settings } from "lucide-react";
 
 type Categoria = {
   id: string;
@@ -495,6 +495,13 @@ export default function AdminCategoriaChavePage() {
             >
               <Banknote className="h-4 w-4" />
               Inscrições
+            </Link>
+            <Link
+              href={`/admin/torneios/${slug}/categorias/${categoriaId}/configuracao`}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-initial"
+            >
+              <Settings className="h-4 w-4" />
+              Configuração
             </Link>
             <Link
               href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}
