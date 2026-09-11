@@ -1804,7 +1804,7 @@ export default function AdminCategoriaJogosPage() {
               title="Gerar PDF da tabela de jogos agrupada por chave"
             >
               <FileText className="h-4 w-4" />
-              {gerandoRelatorioJogos ? "Gerando�" : "PDF tabela jogos"}
+              {gerandoRelatorioJogos ? "Gerando…" : "PDF tabela jogos"}
             </button>
 
             <button
@@ -1812,10 +1812,10 @@ export default function AdminCategoriaJogosPage() {
               disabled={classificacao.length === 0 || gerandoRelatorioClassificacao}
               onClick={gerarRelatorioClassificacao}
               className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar relat�rio de classifica��o com foto dos atletas (PNG imprim�vel)"
+              title="Gerar relatório de classificação com foto dos atletas (PNG imprimível)"
             >
               <Crown className="h-4 w-4" />
-              {gerandoRelatorioClassificacao ? "Gerando�" : "Classifica��o (PNG)"}
+              {gerandoRelatorioClassificacao ? "Gerando…" : "Classificação (PNG)"}
             </button>
 
             <button
@@ -1823,10 +1823,10 @@ export default function AdminCategoriaJogosPage() {
               disabled={!categoria || gerandoPlanilhaContingencia}
               onClick={gerarPlanilhaContingencia}
               className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar Excel offline para conting�ncia com lancamento e classificacao por chave"
+              title="Gerar Excel offline para contingência com lançamento e classificação por chave"
             >
               <FileText className="h-4 w-4" />
-              {gerandoPlanilhaContingencia ? "Gerando�" : "Excel conting�ncia"}
+              {gerandoPlanilhaContingencia ? "Gerando…" : "Excel contingência"}
             </button>
 
             <button
@@ -1838,7 +1838,7 @@ export default function AdminCategoriaJogosPage() {
                   const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" });
                   if (!res.ok) {
                     const msg = await res.json().catch(() => null);
-                    throw new Error(msg?.error || "Falha ao recalcular classifica��o");
+                    throw new Error(msg?.error || "Falha ao recalcular classificação");
                   }
                   const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
                   if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
@@ -1850,28 +1850,56 @@ export default function AdminCategoriaJogosPage() {
               }}
               className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
             >
-              {recalculando ? "Recalculando�" : "Recalcular"}
+              {recalculando ? "Recalculando…" : "Recalcular"}
             </button>
 
             <button
               type="button"
-              disabled={gerandoProximaFase || fasePartidas === "GRUPOS" || fasePartidas === "FINAL"}
+              disabled={gerandoProximaFase || fasePartidas === "FINAL"}
               onClick={async () => {
                 try {
                   setGerandoProximaFase(true);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-proxima-fase`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ faseAtual: fasePartidas }),
-                  });
-                  const payload = (await res.json().catch(() => null)) as any;
-                  if (!res.ok) throw new Error(payload?.error || "Falha ao gerar pr�xima fase");
-                  const proximaFaseDestino = (payload?.faseCriada || payload?.faseAtualizada) as string | null;
-                  if (!proximaFaseDestino) {
-                    throw new Error("A pr�xima fase ainda n�o est� pronta. Verifique se todos os jogos da fase atual est�o finalizados.");
+                  let proximaFaseDestino: string | null = null;
+                  if (fasePartidas === "GRUPOS") {
+                    const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-mata-mata`, { method: "POST" });
+                    const payload = (await res.json().catch(() => null)) as any;
+                    if (!res.ok) {
+                      if (res.status === 409 && payload?.code === "TIE_BREAK_REQUIRED") {
+                        setManualTieBreakGroups(Array.isArray(payload.tieGroups) ? payload.tieGroups : []);
+                        setManualTieBreakOrder({});
+                        setManualTieBreakOpen(true);
+                        return;
+                      }
+                      throw new Error(payload?.error || "Falha ao gerar mata-mata");
+                    }
+                    proximaFaseDestino =
+                      (payload?.proximaFase as string) ||
+                      (payload?.primeiraFase as string) ||
+                      (payload?.faseCriada as string) ||
+                      null;
+                    if (!proximaFaseDestino) {
+                      const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+                      if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+                    }
+                  } else {
+                    const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-proxima-fase`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ faseAtual: fasePartidas }),
+                    });
+                    const payload = (await res.json().catch(() => null)) as any;
+                    if (!res.ok) throw new Error(payload?.error || "Falha ao gerar próxima fase");
+                    proximaFaseDestino = (payload?.faseCriada || payload?.faseAtualizada) as string | null;
+                    if (!proximaFaseDestino) {
+                      throw new Error("A próxima fase ainda não está pronta. Verifique se todos os jogos da fase atual estão finalizados.");
+                    }
                   }
-                  setFasePartidas(proximaFaseDestino as any);
-                  await carregarPartidas(proximaFaseDestino as any);
+                  if (proximaFaseDestino) {
+                    setFasePartidas(proximaFaseDestino as any);
+                    await carregarPartidas(proximaFaseDestino as any);
+                  } else {
+                    await carregarPartidas();
+                  }
                   await carregarResultadoFinal();
                 } catch (e: any) {
                   setErro(e?.message || "Erro inesperado");
@@ -1880,9 +1908,9 @@ export default function AdminCategoriaJogosPage() {
                 }
               }}
               className="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-white px-3 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="For�a a gera��o ou sincroniza��o da fase seguinte"
+              title="Força a geração (mata-mata após grupos) ou sincronização da fase seguinte"
             >
-              {gerandoProximaFase ? "Gerando�" : "Gerar pr�xima fase"}
+              {gerandoProximaFase ? "Gerando…" : fasePartidas === "GRUPOS" ? "Gerar mata-mata" : "Gerar próxima fase"}
             </button>
           </div>
         </div>
@@ -1892,8 +1920,8 @@ export default function AdminCategoriaJogosPage() {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Classifica��o</h2>
-            <p className="text-sm text-slate-600">Classifica��o por grupo.</p>
+            <h2 className="text-xl font-bold text-slate-900">Classificação</h2>
+            <p className="text-sm text-slate-600">Classificação por grupo.</p>
           </div>
         </div>
 
