@@ -435,24 +435,24 @@ export default function AdminCategoriaSorteioPage() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1e293b_0%,#0f172a_45%,#020617_100%)] text-white">
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-2">
+      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-4 px-3 py-3 sm:px-4 lg:px-5">
+        <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-3.5 shadow-xl backdrop-blur">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1.5">
               <Link
                 href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}
-                className="inline-flex items-center gap-2 text-sm text-slate-300 transition hover:text-white"
+                className="inline-flex items-center gap-2 text-xs text-slate-300 transition hover:text-white"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-3.5 w-3.5" />
                 Voltar para a tela operacional
               </Link>
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">
-                <Sparkles className="h-3.5 w-3.5" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-200">
+                <Sparkles className="h-3 w-3" />
                 Sorteio ao vivo
               </div>
               <div>
-                <h1 className="text-3xl font-black tracking-tight sm:text-4xl">{categoria ? categoria.nome : "Carregando categoria..."}</h1>
-                <p className="mt-2 text-sm text-slate-300 sm:text-base">
+                <h1 className="text-2xl font-black tracking-tight sm:text-3xl">{categoria ? categoria.nome : "Carregando categoria..."}</h1>
+                <p className="mt-1 text-xs text-slate-300 sm:text-sm">
                   {torneioNome}
                   {categoria ? ` • ${categoria.genero}` : ""}
                   {categoria?.vagasMaximas ? ` • ${categoria.vagasMaximas} vagas` : ""}
@@ -464,21 +464,21 @@ export default function AdminCategoriaSorteioPage() {
               <button
                 type="button"
                 onClick={alternarTelaCheia}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/10"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/10"
               >
-                <Tv className="h-4 w-4" />
-                {fullscreenAtivo ? "Sair da tela cheia" : "Tela cheia"}
+                <Tv className="h-3.5 w-3.5" />
+                {fullscreenAtivo ? "Sair tela cheia" : "Tela cheia"}
               </button>
               <button
                 type="button"
                 onClick={() => setMostrarSelecaoCabecas((prev) => !prev)}
                 disabled={carregando || equipesAprovadas.length < 2 || gruposJaGerados}
-                className="inline-flex items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-300/30 bg-amber-400/15 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Crown className="h-4 w-4" />
-                Cabeças de chave
+                <Crown className="h-3.5 w-3.5" />
+                Cabeças
                 {cabecasChaveIds.length > 0 && (
-                  <span className="rounded-full bg-amber-300/25 px-2 py-0.5 text-[11px] font-bold text-amber-200">
+                  <span className="rounded-full bg-amber-300/25 px-2 py-0.5 text-[10px] font-bold text-amber-200">
                     {cabecasChaveIds.length}/{maxCabecas}
                   </span>
                 )}
@@ -487,57 +487,57 @@ export default function AdminCategoriaSorteioPage() {
                 type="button"
                 onClick={prepararSorteio}
                 disabled={carregando || equipesAprovadas.length < 2}
-                className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/20 px-4 py-2 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/20 px-3 py-1.5 text-xs font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/30 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <RefreshCcw className="h-4 w-4" />
-                Novo embaralhamento
+                <RefreshCcw className="h-3.5 w-3.5" />
+                Embaralhar
               </button>
               <button
                 type="button"
                 onClick={revelarProxima}
                 disabled={carregando || equipesAprovadas.length < 2 || Boolean(sorteio && sorteioCompleto)}
-                className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-cyan-400 px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Play className="h-4 w-4" />
+                <Play className="h-3.5 w-3.5" />
                 Revelar próxima
               </button>
               <button
                 type="button"
                 onClick={revelarTudo}
                 disabled={carregando || equipesAprovadas.length < 2 || !sorteio}
-                className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <SkipForward className="h-4 w-4" />
-                Fechar resultado
+                <SkipForward className="h-3.5 w-3.5" />
+                Fechar
               </button>
               <button
                 type="button"
                 onClick={salvarSorteio}
                 disabled={!sorteioCompleto || salvando}
-                className="inline-flex items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-400/20 px-4 py-2 text-sm font-semibold text-amber-50 transition hover:bg-amber-400/30 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-300/30 bg-amber-400/20 px-3 py-1.5 text-xs font-semibold text-amber-50 transition hover:bg-amber-400/30 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Save className="h-4 w-4" />
+                <Save className="h-3.5 w-3.5" />
                 {salvando ? "Gravando..." : "Gravar grupos"}
               </button>
             </div>
           </div>
 
           <div className="grid gap-2 md:grid-cols-4">
-            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Aprovadas</div>
-              <div className="mt-1 text-2xl font-black leading-none">{equipesAprovadas.length}</div>
+            <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5">
+              <div className="text-[9px] uppercase tracking-[0.18em] text-slate-400">Aprovadas</div>
+              <div className="mt-0.5 text-xl font-black leading-none">{equipesAprovadas.length}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Grupos</div>
-              <div className="mt-1 text-2xl font-black leading-none">{sorteio?.grupos.length ?? classificacao.length ?? 0}</div>
+            <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5">
+              <div className="text-[9px] uppercase tracking-[0.18em] text-slate-400">Grupos</div>
+              <div className="mt-0.5 text-xl font-black leading-none">{sorteio?.grupos.length ?? classificacao.length ?? 0}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Reveladas</div>
-              <div className="mt-1 text-2xl font-black leading-none">{revelados}</div>
+            <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5">
+              <div className="text-[9px] uppercase tracking-[0.18em] text-slate-400">Reveladas</div>
+              <div className="mt-0.5 text-xl font-black leading-none">{revelados}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Restantes</div>
-              <div className="mt-1 text-2xl font-black leading-none">{totalRestante}</div>
+            <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5">
+              <div className="text-[9px] uppercase tracking-[0.18em] text-slate-400">Restantes</div>
+              <div className="mt-0.5 text-xl font-black leading-none">{totalRestante}</div>
             </div>
           </div>
         </div>
@@ -555,38 +555,38 @@ export default function AdminCategoriaSorteioPage() {
             Ainda nao ha equipes aprovadas suficientes para fazer o sorteio ao vivo.
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-3">
             {mostrarSelecaoCabecas && (
-              <section className="rounded-[28px] border border-amber-300/20 bg-amber-400/5 p-5 shadow-xl backdrop-blur">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <section className="rounded-2xl border border-amber-300/20 bg-amber-400/5 p-3.5 shadow-lg backdrop-blur">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-amber-200/80">
-                      <Crown className="h-3.5 w-3.5 text-amber-300" />
+                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-amber-200/80">
+                      <Crown className="h-3 w-3 text-amber-300" />
                       Cabeças de chave
                     </div>
-                    <div className="mt-1 text-lg font-bold text-white">
+                    <div className="mt-0.5 text-base font-bold text-white">
                       Defina até <span className="text-amber-300">{maxCabecas}</span> cabeça(s) de chave (uma por grupo)
                     </div>
-                    <p className="mt-1 text-sm text-slate-300">
+                    <p className="mt-0.5 text-xs text-slate-300">
                       Cada cabeça de chave é automaticamente alocada em um grupo diferente. O restante das duplas é sorteado normalmente.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm font-semibold text-slate-100">
+                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-0.5 text-xs font-semibold text-slate-100">
                       {cabecasChaveIds.length} / {maxCabecas}
                     </div>
                     <button
                       type="button"
                       onClick={() => setCabecasChaveIds([])}
                       disabled={cabecasChaveIds.length === 0}
-                      className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-50"
                     >
                       Limpar
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="mt-3 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {equipesAprovadas.map((equipe) => {
                     const selecionada = cabecasChaveIds.includes(equipe.equipeId);
                     const bloqueada = !selecionada && cabecasChaveIds.length >= maxCabecas;
@@ -596,7 +596,7 @@ export default function AdminCategoriaSorteioPage() {
                         type="button"
                         onClick={() => toggleCabecaChave(equipe.equipeId)}
                         disabled={bloqueada}
-                        className={`flex items-start justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                        className={`flex items-start justify-between gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
                           selecionada
                             ? "border-amber-300/50 bg-amber-400/15 shadow-[0_0_0_1px_rgba(251,191,36,0.25)]"
                             : bloqueada
@@ -609,21 +609,21 @@ export default function AdminCategoriaSorteioPage() {
                             {equipe.equipeNome}
                           </div>
                           {equipe.atletas.length > 0 && (
-                            <div className="mt-1 text-xs text-slate-300 truncate">{equipe.atletas.join(" / ")}</div>
+                            <div className="mt-0.5 text-[11px] text-slate-300 truncate">{equipe.atletas.join(" / ")}</div>
                           )}
                         </div>
                         <div
-                          className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                          className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] ${
                             selecionada ? "bg-amber-300/25 text-amber-200" : "bg-white/10 text-slate-400"
                           }`}
                         >
                           {selecionada ? (
                             <>
-                              <Crown className="h-3 w-3" />
+                              <Crown className="h-2.5 w-2.5" />
                               Selecionada
                             </>
                           ) : bloqueada ? (
-                            "Limite atingido"
+                            "Limite"
                           ) : (
                             "Selecionar"
                           )}
@@ -635,13 +635,13 @@ export default function AdminCategoriaSorteioPage() {
               </section>
             )}
 
-            <div className="grid gap-5 xl:grid-cols-[1.42fr_0.58fr]">
-            <section className="space-y-6">
-              <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="grid gap-3 xl:grid-cols-[1.65fr_0.35fr]">
+            <section className="space-y-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3 shadow-xl backdrop-blur">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Modo da live</div>
-                    <div className="mt-1 flex items-center gap-2 text-lg font-bold">
+                    <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Modo da live</div>
+                    <div className="mt-0.5 flex items-center gap-2 text-sm font-bold">
                       <span className={modo === "SORTEANDO" ? "text-cyan-300" : "text-slate-300"}>Sorteando</span>
                       <span className="text-slate-600">/</span>
                       <button
@@ -653,71 +653,71 @@ export default function AdminCategoriaSorteioPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="text-sm text-slate-300">
-                    {gruposJaGerados && !sorteio ? "Esta categoria ja possui grupos gravados." : "Use esta tela so para a apresentacao da live."}
+                  <div className="text-[11px] text-slate-300">
+                    {gruposJaGerados && !sorteio ? "Grupos gravados." : "Use esta tela so para a apresentacao da live."}
                   </div>
                 </div>
 
-                <div className="mt-6 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-                  <div className="rounded-[24px] border border-cyan-400/20 bg-slate-950/70 p-5">
-                    <div className="text-xs uppercase tracking-[0.22em] text-cyan-200/70">Destaque da vez</div>
-                    <div className={`mt-4 rounded-[24px] border border-white/10 bg-white/5 p-6 ${ultimaEquipe ? "animate-draw-card" : ""}`}>
+                <div className="mt-3 grid gap-2.5 lg:grid-cols-[1.05fr_0.95fr]">
+                  <div className="rounded-2xl border border-cyan-400/20 bg-slate-950/70 p-2.5">
+                    <div className="text-[9px] uppercase tracking-[0.22em] text-cyan-200/70">Destaque da vez</div>
+                    <div className={`mt-1.5 rounded-2xl border border-white/10 bg-white/5 p-3 ${ultimaEquipe ? "animate-draw-card" : ""}`}>
                       {ultimaEquipe ? (
                         <>
                           <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-sm font-semibold uppercase tracking-[0.22em] text-fuchsia-200">{ultimaEquipe.grupoNome}</div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-fuchsia-200">{ultimaEquipe.grupoNome}</div>
                             {ultimaEquipe.cabecaChave && (
-                              <div className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-400/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">
-                                <Crown className="h-3 w-3" />
+                              <div className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-400/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.2em] text-amber-200">
+                                <Crown className="h-2.5 w-2.5" />
                                 Cabeça de chave
                               </div>
                             )}
                           </div>
-                          <div className="mt-3 text-3xl font-black leading-tight text-white sm:text-4xl">{ultimaEquipe.equipeNome}</div>
+                          <div className="mt-1.5 text-xl font-black leading-tight text-white sm:text-2xl">{ultimaEquipe.equipeNome}</div>
                           {ultimaEquipe.atletas.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-2">
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
                               {ultimaEquipe.atletas.map((atleta) => (
                                 <span
                                   key={atleta}
-                                  className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm text-slate-200"
+                                  className="rounded-full border border-white/10 bg-white/10 px-2 py-0.5 text-[11px] text-slate-200"
                                 >
                                   {atleta}
                                 </span>
                               ))}
                             </div>
                           )}
-                          <div className="mt-6 inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/20 px-4 py-1.5 text-sm font-semibold text-emerald-100">
+                          <div className="mt-2 inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-100">
                             Encaixada no {ultimaEquipe.grupoNome}
                           </div>
                         </>
                       ) : (
-                        <div className="flex min-h-[240px] flex-col items-center justify-center text-center">
-                          <Users className="h-12 w-12 text-slate-500" />
-                          <div className="mt-4 text-2xl font-black text-white">Pronto para sortear</div>
-                          <p className="mt-2 max-w-md text-sm text-slate-300">
-                            Embaralhe as equipes e revele uma por vez durante a live. A cada clique, a dupla entra com uma animação curta no grupo.
+                        <div className="flex min-h-[130px] flex-col items-center justify-center text-center">
+                          <Users className="h-8 w-8 text-slate-500" />
+                          <div className="mt-1.5 text-lg font-black text-white">Pronto para sortear</div>
+                          <p className="mt-0.5 max-w-md text-[11px] text-slate-300">
+                            Embaralhe as equipes e revele uma por vez durante a live.
                           </p>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-white/10 bg-slate-950/70 p-5">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Próxima revelação</div>
-                        <div className="mt-1 text-lg font-bold text-white">{proximaEquipe?.equipeNome || "Todas reveladas"}</div>
+                        <div className="text-[9px] uppercase tracking-[0.22em] text-slate-400">Próxima revelação</div>
+                        <div className="mt-0.5 text-sm font-bold text-white">{proximaEquipe?.equipeNome || "Todas reveladas"}</div>
                       </div>
-                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm font-semibold text-slate-200">
+                      <div className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-200">
                         {revelados}/{sorteio?.itens.length ?? 0}
                       </div>
                     </div>
 
-                    <div className="mt-4 space-y-3">
-                      {(sorteio?.itens.slice(revelados, revelados + 5) ?? []).map((item, index) => (
+                    <div className="mt-2.5 space-y-1.5">
+                      {(sorteio?.itens.slice(revelados, revelados + 4) ?? []).map((item, index) => (
                         <div
                           key={item.equipeId}
-                          className={`rounded-2xl border px-4 py-3 transition ${
+                          className={`rounded-xl border px-2.5 py-1.5 transition ${
                             index === 0
                               ? "border-cyan-300/40 bg-cyan-400/10 text-white"
                               : "border-white/10 bg-white/5 text-slate-300"
@@ -727,13 +727,13 @@ export default function AdminCategoriaSorteioPage() {
                             <div className="flex min-w-0 items-center gap-2">
                               {item.cabecaChave && (
                                 <span className="inline-flex shrink-0 items-center rounded-full border border-amber-300/40 bg-amber-400/15 p-0.5 text-amber-200">
-                                  <Crown className="h-3 w-3" />
+                                  <Crown className="h-2.5 w-2.5" />
                                 </span>
                               )}
-                              <div className="font-semibold truncate">{item.equipeNome}</div>
+                              <div className="font-semibold truncate text-xs">{item.equipeNome}</div>
                             </div>
                             <div
-                              className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] ${
                                 index === 0 ? "bg-white/15 text-cyan-100" : "bg-white/10 text-slate-400"
                               }`}
                             >
@@ -743,8 +743,8 @@ export default function AdminCategoriaSorteioPage() {
                         </div>
                       ))}
                       {(!sorteio || sorteioCompleto) && (
-                        <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-5 text-center text-sm text-emerald-100">
-                          Sorteio fechado. Agora voce pode mostrar o resultado final e gravar os grupos.
+                        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-2.5 text-center text-[11px] text-emerald-100">
+                          Sorteio fechado. Agora voce pode gravar os grupos.
                         </div>
                       )}
                     </div>
@@ -752,32 +752,32 @@ export default function AdminCategoriaSorteioPage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-5 xl:grid-cols-5">
                 {resultadoAtual.map((grupo) => (
                   <div
                     key={grupo.nome}
-                    className="rounded-[24px] border border-white/10 bg-white/5 p-3.5 shadow-xl backdrop-blur"
+                    className="rounded-2xl border border-white/10 bg-white/5 p-2 shadow-lg backdrop-blur"
                   >
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center justify-between gap-2">
                       <div>
-                        <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Grupo</div>
-                        <h2 className="mt-1 text-xl font-black text-white">{grupo.nome}</h2>
+                        <div className="text-[9px] uppercase tracking-[0.2em] text-slate-400">Grupo</div>
+                        <h2 className="mt-0.5 text-sm font-black text-white">{grupo.nome}</h2>
                       </div>
-                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
+                      <div className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-200">
                         {grupo.equipes.length}/{grupo.esperado}
                       </div>
                     </div>
 
-                    <div className="mt-3 space-y-2.5">
+                    <div className="mt-1.5 space-y-1">
                       {grupo.equipes.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-white/15 px-3 py-6 text-center text-xs text-slate-500">
+                        <div className="rounded-xl border border-dashed border-white/15 px-2 py-2.5 text-center text-[10px] text-slate-500">
                           Aguardando revelação
                         </div>
                       ) : (
                         grupo.equipes.map((equipe) => (
                           <div
                             key={equipe.equipeId}
-                            className={`rounded-2xl border px-3 py-2.5 transition ${
+                            className={`rounded-xl border px-2 py-1 transition ${
                               ultimoRevealId === equipe.equipeId
                                 ? "animate-slot-glow border-cyan-300/50 bg-cyan-400/15"
                                 : (equipe as any).cabecaChave
@@ -785,13 +785,13 @@ export default function AdminCategoriaSorteioPage() {
                                   : "border-white/10 bg-slate-950/40"
                             }`}
                           >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
                               {(equipe as any).cabecaChave && (
                                 <span className="inline-flex shrink-0 items-center rounded-full border border-amber-300/40 bg-amber-300/20 p-0.5 text-amber-200">
-                                  <Crown className="h-3 w-3" />
+                                  <Crown className="h-2.5 w-2.5" />
                                 </span>
                               )}
-                              <div className="text-sm font-bold text-white truncate">{equipe.equipeNome}</div>
+                              <div className="text-[11px] font-bold text-white truncate">{equipe.equipeNome}</div>
                             </div>
                           </div>
                         ))
@@ -802,18 +802,18 @@ export default function AdminCategoriaSorteioPage() {
               </div>
             </section>
 
-            <aside className="space-y-4">
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur">
-                <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Pool da live</div>
-                <div className="mt-1 text-base font-bold text-white">Equipes aptas para o sorteio</div>
-                <div className="mt-3 max-h-[520px] space-y-1.5 overflow-y-auto pr-1">
+            <aside className="space-y-2.5">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-2.5 shadow-xl backdrop-blur">
+                <div className="text-[9px] uppercase tracking-[0.22em] text-slate-400">Pool da live</div>
+                <div className="mt-0.5 text-xs font-bold text-white">Equipes aptas para o sorteio</div>
+                <div className="mt-1.5 max-h-[440px] space-y-1 overflow-y-auto pr-0.5">
                   {equipesAprovadas.map((equipe) => {
                     const foiRevelada = Boolean(sorteio?.itens.find((item) => item.equipeId === equipe.equipeId && item.ordem <= revelados));
                     const ehCabeca = cabecasChaveIds.includes(equipe.equipeId) || Boolean(sorteio?.itens.find((item) => item.equipeId === equipe.equipeId && item.cabecaChave));
                     return (
                       <div
                         key={equipe.equipeId}
-                        className={`rounded-xl border px-3 py-2 transition ${
+                        className={`rounded-lg border px-2 py-1 transition ${
                           foiRevelada
                             ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
                             : ehCabeca
@@ -821,15 +821,15 @@ export default function AdminCategoriaSorteioPage() {
                               : "border-white/10 bg-slate-950/40 text-slate-200"
                         }`}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           {ehCabeca && (
                             <span className="inline-flex shrink-0 items-center rounded-full border border-amber-300/40 bg-amber-300/20 p-0.5 text-amber-200">
-                              <Crown className="h-3 w-3" />
+                              <Crown className="h-2.5 w-2.5" />
                             </span>
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className="text-sm font-semibold leading-tight truncate">{equipe.equipeNome}</div>
-                            {equipe.atletas.length > 0 && <div className="mt-0.5 text-[11px] leading-snug text-slate-400 truncate">{equipe.atletas.join(" • ")}</div>}
+                            <div className="text-[11px] font-semibold leading-tight truncate">{equipe.equipeNome}</div>
+                            {equipe.atletas.length > 0 && <div className="mt-0.5 text-[9px] leading-snug text-slate-400 truncate">{equipe.atletas.join(" • ")}</div>}
                           </div>
                         </div>
                       </div>
@@ -838,12 +838,12 @@ export default function AdminCategoriaSorteioPage() {
                 </div>
               </div>
 
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur">
-                <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Observações</div>
-                <ul className="mt-3 space-y-2 text-xs text-slate-300">
-                  <li>Use a tela operacional para ajustar formato, quantidade de grupos e demais regras.</li>
-                  <li>Esta tela foi pensada para a transmissão, com revelação por dupla e visual limpo.</li>
-                  <li>Os grupos só entram de fato no sistema quando você clicar em gravar.</li>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-2.5 shadow-xl backdrop-blur">
+                <div className="text-[9px] uppercase tracking-[0.22em] text-slate-400">Observações</div>
+                <ul className="mt-1.5 space-y-1 text-[10px] text-slate-300">
+                  <li>Use a tela operacional para ajustar formato, grupos e regras.</li>
+                  <li>Esta tela é para a transmissão ao vivo.</li>
+                  <li>Os grupos são gravados quando você clicar em "Gravar grupos".</li>
                 </ul>
               </div>
             </aside>
