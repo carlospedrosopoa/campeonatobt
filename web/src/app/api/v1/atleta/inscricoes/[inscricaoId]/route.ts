@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, partidas, torneios, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { validarGeneroInscricao } from "@/services/inscricoes.service";
 
@@ -239,6 +239,7 @@ export async function PUT(
     return NextResponse.json({ error: "Um dos atletas já está inscrito nesta categoria" }, { status: 400 });
   }
 
+  const antigaEquipeId = ins.equipeId;
   await db.transaction(async (tx) => {
     const [novaEquipe] = await tx
       .insert(equipes)
@@ -255,6 +256,40 @@ export async function PUT(
     ]);
 
     await tx.update(inscricoes).set({ equipeId: novaEquipe.id }).where(eq(inscricoes.id, id));
+
+    if (antigaEquipeId && antigaEquipeId !== novaEquipe.id) {
+      await tx
+        .update(partidas)
+        .set({ equipeAId: novaEquipe.id })
+        .where(
+          and(
+            eq(partidas.torneioId, ins.torneioId),
+            eq(partidas.categoriaId, ins.categoriaId),
+            eq(partidas.equipeAId, antigaEquipeId)
+          )
+        );
+      await tx
+        .update(partidas)
+        .set({ equipeBId: novaEquipe.id })
+        .where(
+          and(
+            eq(partidas.torneioId, ins.torneioId),
+            eq(partidas.categoriaId, ins.categoriaId),
+            eq(partidas.equipeBId, antigaEquipeId)
+          )
+        );
+      await tx
+        .update(grupoEquipes)
+        .set({ equipeId: novaEquipe.id })
+        .from(grupos)
+        .where(
+          and(
+            eq(grupos.id, grupoEquipes.grupoId),
+            eq(grupos.categoriaId, ins.categoriaId),
+            eq(grupoEquipes.equipeId, antigaEquipeId)
+          )
+        );
+    }
 
     await tx
       .delete(inscricaoPagamentos)

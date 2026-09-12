@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
@@ -768,9 +768,44 @@ export class InscricoesService {
       throw new Error("Um dos atletas já está inscrito nesta categoria");
     }
 
+    const antigaEquipeId = ins.equipeId;
     const novaEquipeId = await this.criarEquipeComIntegrantes(ins.torneioId, undefined, integranteIds);
     await db.update(equipes).set({ capitaoUsuarioId }).where(eq(equipes.id, novaEquipeId));
     await db.update(inscricoes).set({ equipeId: novaEquipeId }).where(eq(inscricoes.id, inscricaoId));
+
+    if (antigaEquipeId && antigaEquipeId !== novaEquipeId) {
+      await db
+        .update(partidas)
+        .set({ equipeAId: novaEquipeId })
+        .where(
+          and(
+            eq(partidas.torneioId, ins.torneioId),
+            eq(partidas.categoriaId, ins.categoriaId),
+            eq(partidas.equipeAId, antigaEquipeId)
+          )
+        );
+      await db
+        .update(partidas)
+        .set({ equipeBId: novaEquipeId })
+        .where(
+          and(
+            eq(partidas.torneioId, ins.torneioId),
+            eq(partidas.categoriaId, ins.categoriaId),
+            eq(partidas.equipeBId, antigaEquipeId)
+          )
+        );
+      await db
+        .update(grupoEquipes)
+        .set({ equipeId: novaEquipeId })
+        .from(grupos)
+        .where(
+          and(
+            eq(grupos.id, grupoEquipes.grupoId),
+            eq(grupos.categoriaId, ins.categoriaId),
+            eq(grupoEquipes.equipeId, antigaEquipeId)
+          )
+        );
+    }
 
     if (dados.status) {
       await db.update(inscricoes).set({ status: dados.status }).where(eq(inscricoes.id, inscricaoId));
