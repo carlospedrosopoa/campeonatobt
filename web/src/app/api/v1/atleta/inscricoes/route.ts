@@ -7,7 +7,7 @@ import { inscricoesService } from "@/services/inscricoes.service";
 import { torneioResultadosService } from "@/services/torneio-resultados.service";
 import { playGetUsuarioLogado } from "@/services/playnaquadra-client";
 import { extractPlayIdentity } from "@/services/playnaquadra-session.service";
-import { categoriaConfigService } from "@/services/categoria-config.service";
+import { categoriaConfigService, tipoParticipacaoEhDupla, tipoParticipacaoEhIndividual } from "@/services/categoria-config.service";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
@@ -191,7 +191,12 @@ export async function POST(request: NextRequest) {
   const categoria = cat[0];
   if (!categoria) return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
   const categoriaConfig = await categoriaConfigService.obterOuDefault(categoriaId);
-  const tipoParticipacao = categoriaConfig.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
+  const tipoParticipacao =
+    categoriaConfig.tipoParticipacao === "SIMPLES"
+      ? "SIMPLES"
+      : categoriaConfig.tipoParticipacao === "DUPLAS_SORTEADAS"
+        ? "DUPLAS_SORTEADAS"
+        : "DUPLAS";
   const exigeDupla = tipoParticipacao === "DUPLAS";
   if (exigeDupla && (!parceiroNome || !parceiroEmail || !parceiroPlayAtletaId)) {
     return NextResponse.json({ error: "Selecione um parceiro com perfil no Play na Quadra" }, { status: 400 });

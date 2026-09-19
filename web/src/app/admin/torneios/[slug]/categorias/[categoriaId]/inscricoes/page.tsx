@@ -19,8 +19,16 @@ type Categoria = {
 };
 
 type CategoriaConfig = {
-  tipoParticipacao?: "DUPLAS" | "SIMPLES";
+  tipoParticipacao?: "DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES";
 };
+
+function categoriaEhIndividual(tipoParticipacao: CategoriaConfig["tipoParticipacao"] | undefined | null): boolean {
+  return tipoParticipacao === "SIMPLES" || tipoParticipacao === "DUPLAS_SORTEADAS";
+}
+
+function categoriaEhDuplasSorteadas(tipoParticipacao: CategoriaConfig["tipoParticipacao"] | undefined | null): boolean {
+  return tipoParticipacao === "DUPLAS_SORTEADAS";
+}
 
 type Inscricao = {
   id: string;
@@ -80,7 +88,7 @@ export default function AdminCategoriaInscricoesPage() {
   const [torneioTemplateInscricaoUrl, setTorneioTemplateInscricaoUrl] = useState<string | null>(null);
   const [torneioSuperCampeonato, setTorneioSuperCampeonato] = useState(false);
   const [torneioCamisetaOpcoes, setTorneioCamisetaOpcoes] = useState<string[]>([]);
-  const [tipoParticipacao, setTipoParticipacao] = useState<"DUPLAS" | "SIMPLES">("DUPLAS");
+  const [tipoParticipacao, setTipoParticipacao] = useState<"DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES">("DUPLAS");
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -127,7 +135,7 @@ export default function AdminCategoriaInscricoesPage() {
     status: "APROVADA" as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA",
   });
 
-  const categoriaEhSimples = tipoParticipacao === "SIMPLES";
+  const categoriaEhSimples = categoriaEhIndividual(tipoParticipacao);
   const labelCapitaoAtletaA = form.atletaANome.trim() || "Atleta 1";
   const labelCapitaoAtletaB = form.atletaBNome.trim() || "Atleta 2";
   const podeSalvar = useMemo(() => {
@@ -191,7 +199,13 @@ export default function AdminCategoriaInscricoesPage() {
 
       if (resConfig.ok) {
         const config = (await resConfig.json().catch(() => null)) as CategoriaConfig | null;
-        setTipoParticipacao(config?.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS");
+        setTipoParticipacao(
+          config?.tipoParticipacao === "SIMPLES"
+            ? "SIMPLES"
+            : config?.tipoParticipacao === "DUPLAS_SORTEADAS"
+              ? "DUPLAS_SORTEADAS"
+              : "DUPLAS"
+        );
       } else {
         setTipoParticipacao("DUPLAS");
       }
@@ -792,7 +806,15 @@ export default function AdminCategoriaInscricoesPage() {
       {mostraForm && (
         <form onSubmit={onSubmit} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="font-semibold text-slate-900">{editandoInscricao ? "Editar inscrição" : "Nova inscrição"}</div>
+            <div>
+              <div className="font-semibold text-slate-900">{editandoInscricao ? "Editar inscrição" : "Nova inscrição"}</div>
+              {categoriaEhDuplasSorteadas(tipoParticipacao) && (
+                <div className="mt-1 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+                  <Users className="h-3.5 w-3.5" />
+                  Duplas sorteadas: inscrição individual com 1 atleta apenas. A formação das duplas será feita posteriormente no sorteio.
+                </div>
+              )}
+            </div>
             <button type="button" onClick={fecharForm} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
               <X className="h-4 w-4" />
               Fechar
@@ -808,7 +830,11 @@ export default function AdminCategoriaInscricoesPage() {
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
               />
               <div className="text-xs text-slate-500">
-                {categoriaEhSimples ? "Se vazio, será usado o nome do atleta." : "Se vazio, será gerado automaticamente como Nome1/Nome2."}
+                {categoriaEhDuplasSorteadas(tipoParticipacao)
+                  ? "Ignorado por enquanto — nome da equipe será definido após a formação da dupla no sorteio."
+                  : categoriaEhSimples
+                    ? "Se vazio, será usado o nome do atleta."
+                    : "Se vazio, será gerado automaticamente como Nome1/Nome2."}
               </div>
             </div>
 

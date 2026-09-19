@@ -10,7 +10,15 @@ import {
 } from "@/lib/regras-partida";
 
 export type CategoriaFormato = "GRUPOS" | "MATA_MATA" | "LIGA";
-export type CategoriaTipoParticipacao = "DUPLAS" | "SIMPLES";
+export type CategoriaTipoParticipacao = "DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES";
+
+export function tipoParticipacaoEhIndividual(tipo: CategoriaTipoParticipacao | undefined | null): boolean {
+  return tipo === "SIMPLES" || tipo === "DUPLAS_SORTEADAS";
+}
+
+export function tipoParticipacaoEhDupla(tipo: CategoriaTipoParticipacao | undefined | null): boolean {
+  return tipo === "DUPLAS" || tipo === "DUPLAS_SORTEADAS";
+}
 
 export type MataMataEstrutura =
   | "PADRAO"
@@ -82,7 +90,12 @@ function criarConfigPadrao(esporte?: { slug?: string | null; nome?: string | nul
 function normalizeConfig(input: any): CategoriaConfigV1 {
   const versao = 1;
   const formato: CategoriaFormato = input?.formato === "MATA_MATA" || input?.formato === "LIGA" ? input.formato : "GRUPOS";
-  const tipoParticipacao: CategoriaTipoParticipacao = input?.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
+  const tipoParticipacao: CategoriaTipoParticipacao =
+    input?.tipoParticipacao === "SIMPLES"
+      ? "SIMPLES"
+      : input?.tipoParticipacao === "DUPLAS_SORTEADAS"
+        ? "DUPLAS_SORTEADAS"
+        : "DUPLAS";
 
   const tamanhoAlvo =
     typeof input?.grupos?.tamanhoAlvo === "number" && Number.isFinite(input.grupos.tamanhoAlvo) && input.grupos.tamanhoAlvo > 1

@@ -23,7 +23,7 @@ type Categoria = {
 type CategoriaConfig = {
   versao: 1;
   formato: "GRUPOS" | "MATA_MATA" | "LIGA";
-  tipoParticipacao?: "DUPLAS" | "SIMPLES";
+  tipoParticipacao?: "DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES";
   grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean; disputaTerceiroLugar?: boolean };
@@ -1990,7 +1990,12 @@ export default function AdminCategoriaJogosPage() {
                     p
                       ? {
                           ...p,
-                          tipoParticipacao: e.target.value === "SIMPLES" ? "SIMPLES" : "DUPLAS",
+                          tipoParticipacao:
+                            e.target.value === "SIMPLES"
+                              ? "SIMPLES"
+                              : e.target.value === "DUPLAS_SORTEADAS"
+                                ? "DUPLAS_SORTEADAS"
+                                : "DUPLAS",
                         }
                       : p
                   )
@@ -1998,9 +2003,10 @@ export default function AdminCategoriaJogosPage() {
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
               >
                 <option value="DUPLAS">Duplas</option>
+                <option value="DUPLAS_SORTEADAS">Duplas Sorteadas (inscrição individual)</option>
                 <option value="SIMPLES">Simples</option>
               </select>
-              <div className="text-xs text-slate-500">Define se a categoria aceita 2 atletas por equipe ou apenas 1.</div>
+              <div className="text-xs text-slate-500">Define se a categoria aceita 2 atletas por equipe, 1 atleta individual (simples), ou inscrições individuais que serão sorteadas em duplas depois.</div>
             </div>
 
             <div className="space-y-2 md:col-span-2">

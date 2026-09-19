@@ -31,6 +31,7 @@ type Torneio = {
     dataHorario: string | null;
     inscritos: number;
     inscricoesAbertas?: boolean;
+    tipoParticipacao?: "DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES";
   }[];
 };
 
@@ -605,6 +606,11 @@ export default function AtletaTorneiosPage() {
     return modalCategoria.torneio.categorias.find((c) => c.id === modalCategoria.categoriaId) ?? null;
   }, [modalCategoria]);
 
+  const categoriaModalEhIndividual =
+    categoriaSelecionadaModal?.tipoParticipacao === "SIMPLES" ||
+    categoriaSelecionadaModal?.tipoParticipacao === "DUPLAS_SORTEADAS";
+  const categoriaModalEhDuplasSorteadas = categoriaSelecionadaModal?.tipoParticipacao === "DUPLAS_SORTEADAS";
+
   const parceiroSelecionadoValido = Boolean(
     parceiroSelecionado?.nome &&
       parceiroSelecionado?.email &&
@@ -613,7 +619,9 @@ export default function AtletaTorneiosPage() {
 
   const camisetaObrigatoria = Boolean((modalCategoria?.torneio.camisetaOpcoes?.length || 0) > 0);
   const camisetaSelecionadaValida = !camisetaObrigatoria || Boolean(camisetaSelecionada.trim());
-  const podeConfirmarNovaInscricao = Boolean(parceiroSelecionadoValido && camisetaSelecionadaValida && !salvando);
+  const podeConfirmarNovaInscricao = categoriaModalEhIndividual
+    ? Boolean(camisetaSelecionadaValida && !salvando)
+    : Boolean(parceiroSelecionadoValido && camisetaSelecionadaValida && !salvando);
   const valorCategoriaModal =
     !modalCategoria || !categoriaSelecionadaModal
       ? null
@@ -1104,26 +1112,38 @@ export default function AtletaTorneiosPage() {
                     {categoriaSelecionadaModal?.dataHorario && (
                       <div className="mt-1 text-xs text-slate-600">{formatDataHora(categoriaSelecionadaModal.dataHorario)}</div>
                     )}
+                    {categoriaModalEhDuplasSorteadas && (
+                      <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-100">
+                        <Trophy className="h-3.5 w-3.5" />
+                        Duplas sorteadas: sua inscrição é individual. A dupla será formada posteriormente no sorteio.
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Valor</div>
                     <div className="mt-1 font-semibold text-slate-900">{valorCategoriaModal || "-"}</div>
-                    <div className="mt-1 text-xs text-slate-600">O parceiro precisa ter perfil confirmado no Play para seguir.</div>
+                    {!categoriaModalEhIndividual && (
+                      <div className="mt-1 text-xs text-slate-600">O parceiro precisa ter perfil confirmado no Play para seguir.</div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">Nome da dupla (opcional)</label>
-                  <input
-                    value={equipeNome}
-                    onChange={(e) => setEquipeNome(e.target.value)}
-                    placeholder="Ex: Os Invencíveis"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  />
+              {!categoriaModalEhDuplasSorteadas && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      {categoriaModalEhIndividual ? "Nome da equipe (opcional)" : "Nome da dupla (opcional)"}
+                    </label>
+                    <input
+                      value={equipeNome}
+                      onChange={(e) => setEquipeNome(e.target.value)}
+                      placeholder="Ex: Os Invencíveis"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {(modalCategoria.torneio.camisetaOpcoes?.length || 0) > 0 && (
                 <div className="space-y-2">
@@ -1148,24 +1168,26 @@ export default function AtletaTorneiosPage() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Buscar parceiro</label>
-                <input
-                  value={buscaParceiro}
-                  onChange={(e) => {
-                    setBuscaParceiro(e.target.value);
-                    setParceiroSelecionado(null);
-                  }}
-                  placeholder="Digite nome ou telefone (mín. 2 caracteres)"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                />
-                {carregandoParceiros && <div className="text-sm text-gray-600">Buscando parceiros com perfil válido...</div>}
-                {!parceiroSelecionado && !carregandoParceiros && (
-                  <div className="text-xs text-gray-500">Selecione um atleta da lista para confirmar a dupla antes de enviar.</div>
-                )}
-              </div>
+              {!categoriaModalEhIndividual && (
+                <>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Buscar parceiro</label>
+                    <input
+                      value={buscaParceiro}
+                      onChange={(e) => {
+                        setBuscaParceiro(e.target.value);
+                        setParceiroSelecionado(null);
+                      }}
+                      placeholder="Digite nome ou telefone (mín. 2 caracteres)"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    />
+                    {carregandoParceiros && <div className="text-sm text-gray-600">Buscando parceiros com perfil válido...</div>}
+                    {!parceiroSelecionado && !carregandoParceiros && (
+                      <div className="text-xs text-gray-500">Selecione um atleta da lista para confirmar a dupla antes de enviar.</div>
+                    )}
+                  </div>
 
-              {parceiroSelecionado ? (
+                  {parceiroSelecionado ? (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex items-start justify-between gap-3">
                   <div className="min-w-0 flex items-start gap-3">
                     {parceiroSelecionado.fotoUrl ? (
@@ -1245,11 +1267,17 @@ export default function AtletaTorneiosPage() {
               ) : buscaParceiro.trim().length >= 2 && !carregandoParceiros ? (
                 <div className="text-sm text-gray-600">Nenhum atleta encontrado.</div>
               ) : null}
+                </>
+              )}
 
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-                {parceiroSelecionadoValido
-                  ? `Tudo pronto: você vai inscrever a categoria ${categoriaSelecionadaModal?.nome ?? "selecionada"} com ${parceiroSelecionado?.nome}.`
-                  : "Falta selecionar um parceiro da lista para liberar a confirmação da inscrição."}
+                {categoriaModalEhDuplasSorteadas
+                  ? camisetaSelecionadaValida
+                    ? `Tudo pronto: você vai se inscrever individualmente na categoria ${categoriaSelecionadaModal?.nome ?? "selecionada"}. As duplas serão sorteadas posteriormente.`
+                    : "Selecione a camiseta do torneio para liberar a confirmação."
+                  : parceiroSelecionadoValido
+                    ? `Tudo pronto: você vai inscrever a categoria ${categoriaSelecionadaModal?.nome ?? "selecionada"} com ${parceiroSelecionado?.nome}.`
+                    : "Falta selecionar um parceiro da lista para liberar a confirmação da inscrição."}
               </div>
 
               <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
@@ -1265,7 +1293,7 @@ export default function AtletaTorneiosPage() {
                   type="button"
                   onClick={async () => {
                     try {
-                      if (!parceiroSelecionado?.id || !parceiroSelecionado.email) {
+                      if (!categoriaModalEhIndividual && (!parceiroSelecionado?.id || !parceiroSelecionado.email)) {
                         setErroModal("Selecione um parceiro com perfil no Play na Quadra");
                         return;
                       }
@@ -1276,20 +1304,23 @@ export default function AtletaTorneiosPage() {
                       setSalvando(true);
                       setErroModal(null);
                       setFlashOk(null);
+                      const body: any = {
+                        categoriaId: modalCategoria.categoriaId,
+                        equipeNome: equipeNome.trim() || null,
+                        camisetaOpcao: camisetaSelecionada.trim() || null,
+                      };
+                      if (!categoriaModalEhIndividual && parceiroSelecionado) {
+                        body.parceiro = {
+                          playnaquadraAtletaId: parceiroSelecionado.playnaquadraAtletaId || parceiroSelecionado.id,
+                          nome: parceiroSelecionado.nome,
+                          email: parceiroSelecionado.email,
+                          telefone: parceiroSelecionado.telefone || null,
+                        };
+                      }
                       const res = await fetch("/api/v1/atleta/inscricoes", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          categoriaId: modalCategoria.categoriaId,
-                          equipeNome: equipeNome.trim() || null,
-                          camisetaOpcao: camisetaSelecionada.trim() || null,
-                          parceiro: {
-                            playnaquadraAtletaId: parceiroSelecionado.playnaquadraAtletaId || parceiroSelecionado.id,
-                            nome: parceiroSelecionado.nome,
-                            email: parceiroSelecionado.email,
-                            telefone: parceiroSelecionado.telefone || null,
-                          },
-                        }),
+                        body: JSON.stringify(body),
                       });
                       const data = (await res.json().catch(() => null)) as any;
                       if (!res.ok) throw new Error(data?.error || "Falha ao criar inscrição");

@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { categoriaConfigService } from "@/services/categoria-config.service";
+import { categoriaConfigService, tipoParticipacaoEhDupla, tipoParticipacaoEhIndividual } from "@/services/categoria-config.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playAtualizarGeneroAtleta, playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
 
@@ -301,7 +301,12 @@ export class InscricoesService {
     }
 
     const config = await categoriaConfigService.obterOuDefault(categoriaId);
-    const tipoParticipacao = config.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
+    const tipoParticipacao =
+      config.tipoParticipacao === "SIMPLES"
+        ? "SIMPLES"
+        : config.tipoParticipacao === "DUPLAS_SORTEADAS"
+          ? "DUPLAS_SORTEADAS"
+          : "DUPLAS";
     return { categoria, tipoParticipacao };
   }
 
@@ -314,8 +319,13 @@ export class InscricoesService {
         .where(eq(categorias.id, categoriaId))
         .limit(1),
     ]);
-    const tipoParticipacao = config.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS";
-    const ehSimples = tipoParticipacao === "SIMPLES";
+    const tipoParticipacao =
+      config.tipoParticipacao === "SIMPLES"
+        ? "SIMPLES"
+        : config.tipoParticipacao === "DUPLAS_SORTEADAS"
+          ? "DUPLAS_SORTEADAS"
+          : "DUPLAS";
+    const ehSimples = tipoParticipacaoEhIndividual(tipoParticipacao);
     const torneioId = catRow[0]?.torneioId;
 
     const rows = await db

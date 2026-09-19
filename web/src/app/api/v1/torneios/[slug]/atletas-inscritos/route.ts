@@ -1,10 +1,10 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, torneioAtletaPrefs, usuarios } from "@/db/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { buscarCamisetaAtletaNoPlay } from "@/services/playnaquadra-camiseta";
-import { categoriaConfigService } from "@/services/categoria-config.service";
+import { categoriaConfigService, tipoParticipacaoEhIndividual } from "@/services/categoria-config.service";
 import type { CategoriaTipoParticipacao } from "@/services/categoria-config.service";
 
 function primeiroNome(nome: string) {
@@ -148,7 +148,14 @@ export async function GET(
   await Promise.all(
     categoriaIdsUnicos.map(async (catId) => {
       const cfg = await categoriaConfigService.obterOuDefault(catId);
-      tiposPorCategoria.set(catId, cfg.tipoParticipacao === "SIMPLES" ? "SIMPLES" : "DUPLAS");
+      tiposPorCategoria.set(
+        catId,
+        cfg.tipoParticipacao === "SIMPLES"
+          ? "SIMPLES"
+          : cfg.tipoParticipacao === "DUPLAS_SORTEADAS"
+            ? "DUPLAS_SORTEADAS"
+            : "DUPLAS"
+      );
     })
   );
 
@@ -262,7 +269,7 @@ export async function GET(
     const cat = byCategoria.get(primeiro.categoriaId);
     if (!cat) continue;
 
-    const ehSimples = cat.tipoParticipacao === "SIMPLES";
+    const ehSimples = tipoParticipacaoEhIndividual(cat.tipoParticipacao);
 
     if (ehSimples) {
       let selecionado: RowAtleta | null = null;
