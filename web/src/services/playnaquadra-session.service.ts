@@ -48,7 +48,34 @@ export function extractPlayIdentity(me: any, tokenPlay: string) {
   const telefone =
     (((me?.whatsapp as string | undefined) ?? (me?.telefone as string | undefined) ?? (jwtPayload?.whatsapp as string | undefined) ?? "") as string).trim();
 
-  return { atletaId, email, nome: nome.trim(), telefone };
+  function normalizeGeneroInline(value: unknown): string | null {
+    const normalized = String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+    if (!normalized) return null;
+    if (["m", "masculino", "male", "homem"].includes(normalized)) return "MASCULINO";
+    if (["f", "feminino", "female", "mulher"].includes(normalized)) return "FEMININO";
+    return null;
+  }
+
+  const generoRaw =
+    (me?.genero as unknown) ??
+    (me?.sexo as unknown) ??
+    (me?.gender as unknown) ??
+    (me?.atleta?.genero as unknown) ??
+    (me?.atleta?.sexo as unknown) ??
+    (me?.user?.genero as unknown) ??
+    (me?.user?.sexo as unknown) ??
+    (me?.usuario?.genero as unknown) ??
+    (me?.usuario?.sexo as unknown) ??
+    (jwtPayload?.genero as unknown) ??
+    (jwtPayload?.sexo as unknown) ??
+    null;
+  const genero = normalizeGeneroInline(generoRaw) || null;
+
+  return { atletaId, email, nome: nome.trim(), telefone, genero };
 }
 
 export async function createOrUpdateAtletaFromPlayToken(params: { tokenPlay: string; me: any }) {

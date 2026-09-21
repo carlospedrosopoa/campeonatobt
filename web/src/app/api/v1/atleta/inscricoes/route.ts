@@ -257,11 +257,18 @@ export async function POST(request: NextRequest) {
   const atletaUser = atleta[0];
   if (!atletaUser) return NextResponse.json({ error: "Usuário atleta não encontrado" }, { status: 404 });
 
-  let atletaLogado = {
+  let atletaLogado: {
+    nome: string;
+    email: string;
+    telefone?: string | undefined;
+    playnaquadraAtletaId: string | null;
+    genero?: string | null;
+  } = {
     nome: atletaUser.nome,
     email: atletaUser.email,
     telefone: atletaUser.telefone ?? undefined,
     playnaquadraAtletaId: atletaUser.playnaquadraAtletaId ?? null,
+    genero: null,
   };
 
   const tokenPlay = request.cookies.get("play_token")?.value || "";
@@ -275,6 +282,7 @@ export async function POST(request: NextRequest) {
           email: identity.email || atletaLogado.email,
           telefone: identity.telefone || atletaLogado.telefone,
           playnaquadraAtletaId: identity.atletaId || atletaLogado.playnaquadraAtletaId,
+          genero: identity.genero || atletaLogado.genero,
         };
       }
     } catch {
@@ -296,6 +304,7 @@ export async function POST(request: NextRequest) {
         email: atletaLogado.email,
         telefone: atletaLogado.telefone,
         playnaquadraAtletaId: atletaLogado.playnaquadraAtletaId,
+        genero: atletaLogado.genero ?? null,
         camisetaOpcao: match,
       },
       atletaB: exigeDupla

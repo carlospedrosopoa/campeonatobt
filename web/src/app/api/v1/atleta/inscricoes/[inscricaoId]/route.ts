@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { validarGeneroInscricao } from "@/services/inscricoes.service";
+import { extractPlayIdentity } from "@/services/playnaquadra-session.service";
+import { playGetUsuarioLogado } from "@/services/playnaquadra-client";
 
 async function upsertAtleta(dados: {
   nome: string;
@@ -158,6 +160,7 @@ export async function PUT(
   const parceiroNome = typeof parceiro?.nome === "string" ? parceiro.nome.trim() : "";
   const parceiroEmail = typeof parceiro?.email === "string" ? parceiro.email.trim().toLowerCase() : "";
   const parceiroTelefone = typeof parceiro?.telefone === "string" ? parceiro.telefone.trim() : "";
+  const parceiroGenero = (typeof parceiro?.genero === "string" ? parceiro.genero : "").trim() || null;
   const parceiroPlayId =
     (typeof parceiro?.playnaquadraAtletaId === "string" ? parceiro.playnaquadraAtletaId.trim() : "") ||
     (typeof parceiro?.id === "string" ? parceiro.id.trim() : "");
@@ -208,17 +211,33 @@ export async function PUT(
   const parceiroAtualId = ids.find((x) => x !== meuId) ?? null;
   if (!parceiroAtualId) return NextResponse.json({ error: "Falha ao identificar parceiro atual" }, { status: 400 });
 
+  let atletaLogadoGenero: string | null = null;
+  const tokenPlay = request.cookies.get("play_token")?.value || "";
+  if (tokenPlay) {
+    try {
+      const meRes = await playGetUsuarioLogado(tokenPlay);
+      if (meRes.res.ok) {
+        const identity = extractPlayIdentity(meRes.data, tokenPlay);
+        atletaLogadoGenero = identity.genero || null;
+      }
+    } catch {
+      // Se a sessão do Play não responder, segue sem gênero informado (ainda tem fallback por busca).
+    }
+  }
+
   await validarGeneroInscricao({
     categoriaGenero: ins.categoriaGenero,
     atletaA: {
       nome: auth.user.nome,
       email: auth.user.email,
       playnaquadraAtletaId: auth.user.playnaquadraAtletaId ?? null,
+      genero: atletaLogadoGenero,
     },
     atletaB: {
       nome: parceiroNome,
       email: parceiroEmail,
       playnaquadraAtletaId: parceiroPlayId,
+      genero: parceiroGenero,
     },
   });
 

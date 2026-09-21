@@ -81,44 +81,26 @@ function normalizeGeneroAtleta(value: unknown): GeneroAtleta | null {
 
 function extractPlayAtletaGenero(payload: any) {
   const source = payload && typeof payload === "object" ? payload : {};
-  const nested = [source.atleta, source.usuario, source.user, source.profile].filter((item) => item && typeof item === "object");
+  const nested = [source.atleta, source.usuario, source.user, source.profile, source.data, source.dados, source.result, source.body, source.content].filter((item) => item && typeof item === "object");
+  const nested2D = nested.flatMap((item: any) => [item?.atleta, item?.usuario, item?.user, item?.profile, item?.data, item?.dados].filter(Boolean));
+  const all = [source, ...nested, ...nested2D];
+  const pick = (keys: string[]) => all.flatMap((item: any) => keys.map((k) => item?.[k])).find((v) => v !== undefined && v !== null && String(v).trim() !== "") ?? null;
+
   const nome = String(
-    source.nome ||
-      nested.map((item: any) => item?.nome).find(Boolean) ||
-      nested.map((item: any) => item?.name).find(Boolean) ||
-      ""
+    pick(["nome", "name", "fullName", "nomeCompleto"]) || ""
   ).trim();
   const email = normalizeEmail(
-    source.email ||
-      nested.map((item: any) => item?.email).find(Boolean) ||
-      ""
+    pick(["email", "emailAddress", "e-mail"]) || ""
   );
   const telefone = String(
-    source.telefone ||
-      nested.map((item: any) => item?.telefone).find(Boolean) ||
-      nested.map((item: any) => item?.whatsapp).find(Boolean) ||
-      ""
+    pick(["telefone", "whatsapp", "telefoneCelular", "celular", "phone", "phoneNumber"]) || ""
   ).trim() || null;
   const playnaquadraAtletaId =
     String(
-      source.id ||
-        source._id ||
-        source.atletaId ||
-        source.usuarioId ||
-        source.atleta?.id ||
-        source.atleta?._id ||
-        ""
+      pick(["id", "_id", "atletaId", "usuarioId"]) || ""
     ).trim() || null;
   const genero = normalizeGeneroAtleta(
-    source.genero ||
-      source.sexo ||
-      source.gender ||
-      source.atleta?.genero ||
-      source.atleta?.sexo ||
-      source.usuario?.genero ||
-      source.usuario?.sexo ||
-      source.user?.genero ||
-      source.user?.sexo
+    pick(["genero", "sexo", "gender", "sex", "tipoGenero", "generoAtleta"])
   );
 
   return {
