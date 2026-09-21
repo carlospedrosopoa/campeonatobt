@@ -192,18 +192,22 @@ export async function GET(request: NextRequest) {
 
   const syncedUser = await syncUserFromPlay(user);
 
-  let generoFinal: GeneroAtleta | null | undefined = syncedUser.genero || null;
-  if (!generoFinal) {
-    try {
-      const resGenero = await resolverGeneroAtleta({
-        nome: syncedUser.nome,
-        email: syncedUser.email,
-        telefone: syncedUser.telefone,
-        playnaquadraAtletaId: syncedUser.playnaquadraAtletaId,
-      });
-      if (resGenero?.genero) generoFinal = resGenero.genero;
-    } catch {}
-  }
+  // Sempre rodar resolverGeneroAtleta (cascata: blindagem → carlaoBtOnline PRIORIDADE 1 → Play busca → playGetById)
+  // Mesmo que Play já tenha retornado um gênero, pois o Play pode estar desatualizado/errado.
+  // O carlaobtonline é a fonte da verdade do gênero do atleta.
+  let generoFinal: GeneroAtleta | null | undefined = null;
+  try {
+    const resGenero = await resolverGeneroAtleta({
+      nome: syncedUser.nome,
+      email: syncedUser.email,
+      telefone: syncedUser.telefone,
+      playnaquadraAtletaId: syncedUser.playnaquadraAtletaId,
+      genero: syncedUser.genero || null,
+    });
+    if (resGenero?.genero) generoFinal = resGenero.genero;
+  } catch {}
+
+  if (!generoFinal) generoFinal = syncedUser.genero || null;
 
   const respostaFinal: MeRow = { ...syncedUser, genero: generoFinal };
 

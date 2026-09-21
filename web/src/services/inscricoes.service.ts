@@ -381,14 +381,14 @@ export async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   }
 
   const perfil = await buscarPerfilPlayLocal();
-  let generoFinal = perfil.genero || generoCarlaoBtOnline || null;
+  let generoFinal = generoCarlaoBtOnline || perfil.genero || null;
   const generoParaSincronizar = generoFinal;
 
   if (generoParaSincronizar) {
     const idAtualizar = perfil.playnaquadraAtletaId || playId;
     if (idAtualizar) {
       try {
-        if (perfil.genero !== generoParaSincronizar) {
+        if ((!perfil.genero || perfil.genero !== generoParaSincronizar) && generoCarlaoBtOnline) {
           await playAtualizarGeneroAtleta({
             token,
             atletaId: idAtualizar,
