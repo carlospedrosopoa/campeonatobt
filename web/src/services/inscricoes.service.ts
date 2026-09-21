@@ -216,19 +216,66 @@ export async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   const playId = String(params.playnaquadraAtletaId || "").trim();
   const debugAtleta = ` [email=${email || "vazio"} id=${playId || "vazio"}]`;
   const generoInformadoParam = normalizeGeneroAtleta(params.genero);
+  const temDadosParaPesquisarCarlao = !!email || !!phone || !!nome || !!playId;
 
   // =========================================================================
-  // BLINDAGEM TOTAL: SE params.genero VEIO VÁLIDO (MASCULINO/FEMINIMO)
-  // CONFIAMOS NA FONTE E RETORNAMOS DIRETO (nem consultamos APIs externas).
-  // A sincronização com Play é feita em BEST-EFFORT depois.
+  // PRIORIDADE 1 ABSOLUTA: carlaoBtOnline (fonte da verdade do gênero).
+  // Se tivermos email/nome/telefone/playId para pesquisar, CONSULTAMOS PRIMEIRO
+  // e o resultado dele sobrescreve TUDO (inclusive params.genero que pode vir
+  // errado do Play, ex: Edi Mattos = FEMININO no Play mas MASCULINO no carlaoBT).
+  // =========================================================================
+  let generoCarlaoBtOnline: GeneroAtleta | null = null;
+  if (temDadosParaPesquisarCarlao) {
+    try {
+      generoCarlaoBtOnline = await carlaoBtOnlineBuscarGeneroAtleta({ email, telefone: phone, nome });
+    } catch (err) {
+      console.warn("[resolverGeneroAtleta] carlaoBtOnline falhou (continuando com fallbacks):", err);
+    }
+  }
+
+  if (generoCarlaoBtOnline) {
+    // Encontrou no carlaoBtOnline: esta é a VERDADE. Retorna imediatamente,
+    // sincronizando best-effort no Play para corrigir o gênero errado de lá.
+    let resolvedPlayId = playId;
+    let resolvedNome = params.nome || email || "atleta";
+    try {
+      const token = await getPlayAdminToken();
+      if (!resolvedPlayId && (email || phone || nome)) {
+        const found = await localizarPlayIdOuGenero({ token, email, phone, nome });
+        resolvedPlayId = found.playnaquadraAtletaId || resolvedPlayId;
+        resolvedNome = found.nome || resolvedNome;
+      }
+      if (resolvedPlayId) {
+        const byId = await playGetAtletaById({ token, atletaId: resolvedPlayId }).catch(() => null as any);
+        if (byId?.res?.ok) {
+          const perfilGenero = extractPlayAtletaGenero(byId.data).genero;
+          if (!perfilGenero || perfilGenero !== generoCarlaoBtOnline) {
+            await playAtualizarGeneroAtleta({
+              token,
+              atletaId: resolvedPlayId,
+              genero: generoCarlaoBtOnline,
+            }).catch(() => null);
+          }
+        }
+      }
+    } catch (syncErr) {
+      console.warn("[resolverGeneroAtleta] Sync Play (carlaoBT → Play) falhou, mas gênero já está confirmado:", syncErr);
+    }
+
+    return {
+      nome: resolvedNome || params.nome || email || "atleta",
+      genero: generoCarlaoBtOnline,
+    };
+  }
+
+  // =========================================================================
+  // PRIORIDADE 2: BLINDAGEM params.genero — se veio válido E carlaoBtOnline
+  // não teve retorno (ou não tinha dados para pesquisar), confiamos na fonte.
   // =========================================================================
   if (generoInformadoParam) {
     let resolvedPlayId = playId;
     let resolvedNome = params.nome || email || "atleta";
-    let needsSync = true;
 
-    // Se NÃO temos playId mas temos email/telefone, tentamos LOCALIZAR no Play
-    // para poder sincronizar o gênero do perfil de lá também (best-effort).
     if (!resolvedPlayId && (email || phone || nome)) {
       try {
         const token = await getPlayAdminToken();
@@ -240,7 +287,6 @@ export async function resolverGeneroAtleta(params: AtletaGeneroInput) {
       }
     }
 
-    // Best-effort: sincroniza no Play se tivermos playId e o gênero divergir (NÃO BLOQUEIA)
     if (resolvedPlayId) {
       try {
         const token = await getPlayAdminToken();
@@ -267,15 +313,10 @@ export async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   }
 
   // =========================================================================
-  // FIM DA BLINDAGEM: params.genero NÃO veio válido. Precisamos descobrir.
+  // PRIORIDADE 3: Fallback Play admin token (localizar via busca + byId)
+  // carlaoBtOnline não teve resultado, params.genero não veio válido.
   // =========================================================================
   const token = await getPlayAdminToken();
-  let generoCarlaoBtOnline: GeneroAtleta | null = null;
-  try {
-    generoCarlaoBtOnline = await carlaoBtOnlineBuscarGeneroAtleta({ email, telefone: phone, nome });
-  } catch (err) {
-    console.warn("[resolverGeneroAtleta] carlaoBtOnline falhou (continuando com Play):", err);
-  }
 
   async function buscarPerfilPlayLocal() {
     let searchFallbackGenero: GeneroAtleta | null = null;
