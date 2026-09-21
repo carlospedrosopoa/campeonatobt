@@ -294,7 +294,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "O parceiro precisa ser diferente de você" }, { status: 400 });
   }
 
-  // Fallback final de gênero via carlaobtonline (melhor esforço)
+  // Fallback final de gênero via carlaobtonline (melhor esforço) — atleta logado + parceiro
   let parceiroGeneroFinal: "MASCULINO" | "FEMININO" | null = null;
   try {
     const baseClean = (raw: string) => {
@@ -334,7 +334,15 @@ export async function POST(request: NextRequest) {
         }
       };
 
-      // Atleta logado
+      // ==============================
+      // ATLETA LOGADO (Edi Mattos)
+      // ==============================
+      // 1. Tenta campo enviado pelo front no body
+      const generoAtletaLogadoBody = normGen(typeof body?.generoAtletaLogado === "string" ? body.generoAtletaLogado : null);
+      if (generoAtletaLogadoBody && !atletaLogado.genero) {
+        atletaLogado = { ...atletaLogado, genero: generoAtletaLogadoBody };
+      }
+      // 2. Se ainda null, consulta carlaobtonline (MAIS IMPORTANTE — resolve de vez)
       if (!atletaLogado.genero) {
         const e = normEmail(atletaLogado.email);
         const f = normPhone(atletaLogado.telefone);

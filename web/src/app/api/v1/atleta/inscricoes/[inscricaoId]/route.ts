@@ -265,7 +265,15 @@ export async function PUT(
         }
       };
 
-      // Atleta logado (PUT)
+      // ==============================
+      // ATLETA LOGADO (PUT)
+      // ==============================
+      // 1. Campo via body (appatleta pode enviar explicitamente)
+      const generoAtletaLogadoBody = normGen(typeof body?.generoAtletaLogado === "string" ? body.generoAtletaLogado : null);
+      if (generoAtletaLogadoBody && !atletaLogadoGenero) {
+        atletaLogadoGenero = generoAtletaLogadoBody;
+      }
+      // 2. carlaobtonline (garantia final)
       if (!atletaLogadoGenero) {
         const e = normEmail(auth.user.email);
         const f = normPhone((auth.user as any).telefone);
