@@ -89,7 +89,7 @@ async function carlaoBtOnlineBuscarGenero(params: { email?: string | null; telef
       const list = await search(phone.slice(-8));
       const g = matchGenero(list, (item) => {
         const ip = normalizePhone(item.telefone || item.whatsapp || item.fone);
-        return (ip && phone && ip === phone) || (ip && phone && ip.endsWith(phone.slice(-8)));
+        return Boolean((ip && phone && ip === phone) || (ip && phone && ip.endsWith(phone.slice(-8))));
       });
       if (g) return g;
     }
@@ -105,13 +105,13 @@ async function carlaoBtOnlineBuscarGenero(params: { email?: string | null; telef
             .toLowerCase()
             .replace(/\s+/g, " "),
         }))
-        .filter((x) => x.norm)
-        .map((x) => ({
+        .filter((x: { norm: string }) => Boolean(x.norm))
+        .map((x: { norm: string; item: any }) => ({
           ...x,
           score: x.norm === nome ? 100 : nome && x.norm && (x.norm.includes(nome) || nome.includes(x.norm)) ? 40 : 0,
         }))
-        .filter((x) => x.score >= 40)
-        .sort((a, b) => b.score - a.score);
+        .filter((x: { score: number }) => x.score >= 40)
+        .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
       const g = normalizeGeneroInline(ranked[0]?.item?.genero);
       if (g) return g;
     }

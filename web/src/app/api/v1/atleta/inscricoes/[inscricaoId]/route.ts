@@ -268,7 +268,7 @@ export async function PUT(
       // Atleta logado (PUT)
       if (!atletaLogadoGenero) {
         const e = normEmail(auth.user.email);
-        const f = normPhone(auth.user.telefone);
+        const f = normPhone((auth.user as any).telefone);
         const nome = String(auth.user.nome || "")
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
