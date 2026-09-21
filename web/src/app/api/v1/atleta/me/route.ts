@@ -5,6 +5,7 @@ import { usuarios } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
+import { resolverGeneroAtleta, type GeneroAtleta } from "@/services/inscricoes.service";
 
 type MeRow = {
   id: string;
@@ -14,6 +15,7 @@ type MeRow = {
   perfil: string;
   playnaquadraAtletaId: string | null;
   fotoUrl: string | null;
+  genero?: GeneroAtleta | null;
 };
 
 type PlayCandidate = {
@@ -22,6 +24,7 @@ type PlayCandidate = {
   email: string;
   telefone: string | null;
   fotoUrl: string | null;
+  genero?: GeneroAtleta | null;
 };
 
 function normalizeEmail(value?: string | null) {
@@ -47,6 +50,8 @@ function extractPlayCandidate(item: any): PlayCandidate | null {
   const email = normalizeEmail(item?.email || item?.usuario?.email || item?.atleta?.email || "");
   const telefone = String(item?.telefone || item?.usuario?.telefone || item?.atleta?.telefone || "").trim() || null;
   const fotoUrl = String(item?.fotoUrl || item?.foto_url || item?.usuario?.fotoUrl || item?.atleta?.fotoUrl || "").trim() || null;
+  const generoRaw = String(item?.genero || item?.usuario?.genero || item?.atleta?.genero || "").trim().toUpperCase();
+  const genero: GeneroAtleta | null = (generoRaw === "MASCULINO" || generoRaw === "FEMININO") ? generoRaw : null;
 
   if (!playnaquadraAtletaId && !nome && !email) return null;
 
@@ -56,6 +61,7 @@ function extractPlayCandidate(item: any): PlayCandidate | null {
     email,
     telefone,
     fotoUrl,
+    genero,
   };
 }
 
@@ -153,7 +159,11 @@ async function syncUserFromPlay(user: MeRow): Promise<MeRow> {
         fotoUrl: usuarios.fotoUrl,
       });
 
-    return updated[0] || user;
+    const merged: MeRow = {
+      ...(updated[0] || user),
+      genero: best?.genero || user.genero || null,
+    };
+    return merged;
   } catch {
     return user;
   }
@@ -181,7 +191,23 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
 
   const syncedUser = await syncUserFromPlay(user);
-  return NextResponse.json(syncedUser, { headers: { "Cache-Control": "no-store", Vary: "Authorization" } });
+
+  let generoFinal: GeneroAtleta | null | undefined = syncedUser.genero || null;
+  if (!generoFinal) {
+    try {
+      const resGenero = await resolverGeneroAtleta({
+        nome: syncedUser.nome,
+        email: syncedUser.email,
+        telefone: syncedUser.telefone,
+        playnaquadraAtletaId: syncedUser.playnaquadraAtletaId,
+      });
+      if (resGenero?.genero) generoFinal = resGenero.genero;
+    } catch {}
+  }
+
+  const respostaFinal: MeRow = { ...syncedUser, genero: generoFinal };
+
+  return NextResponse.json(respostaFinal, { headers: { "Cache-Control": "no-store", Vary: "Authorization" } });
 }
 
 export async function PUT(request: NextRequest) {
