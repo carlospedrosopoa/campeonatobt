@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth-request";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { validarGeneroInscricao } from "@/services/inscricoes.service";
+import { validarGeneroInscricao, resolverGeneroAtleta } from "@/services/inscricoes.service";
 import { extractPlayIdentity } from "@/services/playnaquadra-session.service";
 import { playGetUsuarioLogado } from "@/services/playnaquadra-client";
 
@@ -156,6 +156,10 @@ export async function PUT(
   const body = (await request.json().catch(() => null)) as any;
   const equipeNome = typeof body?.equipeNome === "string" ? body.equipeNome.trim() : "";
   const parceiro = body?.parceiro as any;
+  const atletaLogadoNomeBody = (body?.atletaLogadoNome as string | undefined)?.trim() || null;
+  const atletaLogadoEmailBody = (body?.atletaLogadoEmail as string | undefined)?.trim().toLowerCase() || null;
+  const atletaLogadoTelefoneBody = (body?.atletaLogadoTelefone as string | undefined)?.trim() || null;
+  const generoAtletaLogadoBodyRaw = typeof body?.generoAtletaLogado === "string" ? body.generoAtletaLogado.trim() : null;
 
   const parceiroNome = typeof parceiro?.nome === "string" ? parceiro.nome.trim() : "";
   const parceiroEmail = typeof parceiro?.email === "string" ? parceiro.email.trim().toLowerCase() : "";
@@ -226,151 +230,35 @@ export async function PUT(
     }
   }
 
-  // Fallback final de gênero via carlaobtonline (melhor esforço) - PUT
+  // Resolve gênero do atleta logado e parceiro usando resolverGeneroAtleta com fallbacks cascata
   try {
-    const baseClean = (raw: string) => {
-      let b = (raw || "").trim();
-      if (b.endsWith("/")) b = b.slice(0, -1);
-      if (b.endsWith("/api")) b = b.slice(0, -4);
-      return b;
-    };
-    const base = baseClean(process.env.CARLAOBTONLINE_API_URL || process.env.NEXT_PUBLIC_CARLAOBTONLINE_API_URL || "");
-    const secret = (process.env.CAMPEONATOBT_INTEGRATION_TOKEN || process.env.INTEGRATION_CARLAOBTONLINE_TOKEN || "").trim();
-    if (base && secret) {
-      const normEmail = (v?: string | null) => String(v || "").trim().toLowerCase();
-      const normPhone = (v?: string | null) => String(v || "").replace(/\D/g, "");
-      const normGen = (v: any): "MASCULINO" | "FEMININO" | null => {
-        const s = String(v || "")
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .trim()
-          .toLowerCase();
-        if (!s) return null;
-        if (["m", "masculino", "male", "homem"].includes(s)) return "MASCULINO";
-        if (["f", "feminino", "female", "mulher"].includes(s)) return "FEMININO";
-        return null;
-      };
-      const searchCarlao = async (q: string): Promise<any[]> => {
-        try {
-          const res = await fetch(`${base}/api/atleta/para-selecao?busca=${encodeURIComponent(q)}`, {
-            method: "GET",
-            headers: { Authorization: `Bearer ${secret}`, "x-integration-token": secret },
-            cache: "no-store",
-          });
-          if (!res.ok) return [];
-          const data = await res.json().catch(() => null) as any;
-          return Array.isArray(data) ? data : Array.isArray(data?.atletas) ? data.atletas : [];
-        } catch {
-          return [];
-        }
-      };
+    // ===== ATLETA LOGADO (PUT) =====
+    const resAtleta = await resolverGeneroAtleta({
+      nome: atletaLogadoNomeBody || auth.user.nome,
+      email: atletaLogadoEmailBody || auth.user.email,
+      telefone: atletaLogadoTelefoneBody || (auth.user as any).telefone,
+      playnaquadraAtletaId: auth.user.playnaquadraAtletaId ?? null,
+      genero: generoAtletaLogadoBodyRaw || atletaLogadoGenero,
+    });
+    if (resAtleta?.genero) {
+      atletaLogadoGenero = resAtleta.genero;
+    }
 
-      // ==============================
-      // ATLETA LOGADO (PUT)
-      // ==============================
-      // 1. Campo via body (appatleta pode enviar explicitamente)
-      const generoAtletaLogadoBody = normGen(typeof body?.generoAtletaLogado === "string" ? body.generoAtletaLogado : null);
-      if (generoAtletaLogadoBody && !atletaLogadoGenero) {
-        atletaLogadoGenero = generoAtletaLogadoBody;
-      }
-      // 2. carlaobtonline (garantia final)
-      if (!atletaLogadoGenero) {
-        const e = normEmail(auth.user.email);
-        const f = normPhone((auth.user as any).telefone);
-        const nome = String(auth.user.nome || "")
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, " ");
-        let g: "MASCULINO" | "FEMININO" | null = null;
-        if (e) {
-          const list = await searchCarlao(e);
-          const m = list.find((it) => normEmail(it.email) === e);
-          g = normGen(m?.genero);
-        }
-        if (!g && f) {
-          const list = await searchCarlao(f.slice(-8));
-          const m = list.find((it) => {
-            const ip = normPhone(it.telefone || it.whatsapp || it.fone);
-            return (ip && f && ip === f) || (ip && f && ip.endsWith(f.slice(-8)));
-          });
-          g = normGen(m?.genero);
-        }
-        if (!g && nome) {
-          const list = await searchCarlao(nome);
-          const ranked = list
-            .map((it: any) => ({
-              it,
-              n: String(it.nome || "")
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .trim()
-                .toLowerCase()
-                .replace(/\s+/g, " "),
-            }))
-            .filter((x) => x.n)
-            .map((x) => ({
-              ...x,
-              sc: x.n === nome ? 100 : nome && x.n && (x.n.includes(nome) || nome.includes(x.n)) ? 40 : 0,
-            }))
-            .filter((x) => x.sc >= 40)
-            .sort((a, b) => b.sc - a.sc);
-          g = normGen(ranked[0]?.it?.genero);
-        }
-        if (g) atletaLogadoGenero = g;
-      }
-
-      // Parceiro (PUT)
-      if (!parceiroGeneroAtualizado) {
-        const e = normEmail(parceiroEmail);
-        const f = normPhone(parceiroTelefone);
-        const nome = String(parceiroNome || "")
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, " ");
-        let g: "MASCULINO" | "FEMININO" | null = null;
-        if (e) {
-          const list = await searchCarlao(e);
-          const m = list.find((it) => normEmail(it.email) === e);
-          g = normGen(m?.genero);
-        }
-        if (!g && f) {
-          const list = await searchCarlao(f.slice(-8));
-          const m = list.find((it) => {
-            const ip = normPhone(it.telefone || it.whatsapp || it.fone);
-            return (ip && f && ip === f) || (ip && f && ip.endsWith(f.slice(-8)));
-          });
-          g = normGen(m?.genero);
-        }
-        if (!g && nome) {
-          const list = await searchCarlao(nome);
-          const ranked = list
-            .map((it: any) => ({
-              it,
-              n: String(it.nome || "")
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .trim()
-                .toLowerCase()
-                .replace(/\s+/g, " "),
-            }))
-            .filter((x) => x.n)
-            .map((x) => ({
-              ...x,
-              sc: x.n === nome ? 100 : nome && x.n && (x.n.includes(nome) || nome.includes(x.n)) ? 40 : 0,
-            }))
-            .filter((x) => x.sc >= 40)
-            .sort((a, b) => b.sc - a.sc);
-          g = normGen(ranked[0]?.it?.genero);
-        }
-        if (g) parceiroGeneroAtualizado = g;
+    // ===== PARCEIRO (PUT) =====
+    if (!parceiroGeneroAtualizado) {
+      const resParceiro = await resolverGeneroAtleta({
+        nome: parceiroNome,
+        email: parceiroEmail,
+        telefone: parceiroTelefone,
+        playnaquadraAtletaId: parceiroPlayId,
+        genero: parceiroGenero,
+      });
+      if (resParceiro?.genero) {
+        parceiroGeneroAtualizado = resParceiro.genero;
       }
     }
   } catch {
-    // fallback best-effort: não bloqueia
+    // Melhor esforço: não bloqueia fluxo
   }
 
   await validarGeneroInscricao({

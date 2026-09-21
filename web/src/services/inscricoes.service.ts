@@ -154,8 +154,8 @@ function normalizeOption(value?: string | null) {
 }
 
 type GeneroCategoria = "MASCULINO" | "FEMININO" | "MISTO";
-type GeneroAtleta = "MASCULINO" | "FEMININO";
-type AtletaGeneroInput = {
+export type GeneroAtleta = "MASCULINO" | "FEMININO";
+export type AtletaGeneroInput = {
   nome?: string | null;
   email?: string | null;
   telefone?: string | null;
@@ -209,7 +209,7 @@ function extractPlayAtletaGenero(payload: any) {
   };
 }
 
-async function resolverGeneroAtleta(params: AtletaGeneroInput) {
+export async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   const email = normalizeEmail(params.email);
   const phone = normalizePhone(params.telefone);
   const nome = normalizeSearchName(params.nome);
