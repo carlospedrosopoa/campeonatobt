@@ -5,6 +5,103 @@ import { categoriaConfigService, tipoParticipacaoEhDupla, tipoParticipacaoEhIndi
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playAtualizarGeneroAtleta, playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
 
+function cleanBaseUrl(raw: string) {
+  let base = (raw || "").trim();
+  if (base.endsWith("/")) base = base.slice(0, -1);
+  if (base.endsWith("/api")) base = base.slice(0, -4);
+  return base;
+}
+
+async function carlaoBtOnlineBuscarGeneroAtleta(params: { email?: string | null; telefone?: string | null; nome?: string | null }): Promise<GeneroAtleta | null> {
+  const base = cleanBaseUrl(process.env.CARLAOBTONLINE_API_URL || process.env.NEXT_PUBLIC_CARLAOBTONLINE_API_URL || "");
+  const secret = (process.env.CAMPEONATOBT_INTEGRATION_TOKEN || process.env.INTEGRATION_CARLAOBTONLINE_TOKEN || "").trim();
+  const email = normalizeEmail(params.email);
+  const phone = normalizePhone(params.telefone);
+  const nome = normalizeSearchName(params.nome);
+  if (!base || !secret) return null;
+  if (!email && !phone && !nome) return null;
+  try {
+    // Tenta por email primeiro (mais acurácia)
+    if (email) {
+      const url = `${base}/api/atleta/para-selecao?busca=${encodeURIComponent(email)}`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "x-integration-token": secret,
+        },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => null) as any;
+        const list = Array.isArray(data) ? data : Array.isArray(data?.atletas) ? data.atletas : [];
+        const match = list.find((item: any) => {
+          const itemEmail = normalizeEmail(item.email);
+          return itemEmail && itemEmail === email;
+        }) as any;
+        const genero = normalizeGeneroAtleta(match?.genero);
+        if (genero) return genero;
+      }
+    }
+    // Fallback por telefone
+    if (phone) {
+      const url = `${base}/api/atleta/para-selecao?busca=${encodeURIComponent(phone.slice(-8))}`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "x-integration-token": secret,
+        },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => null) as any;
+        const list = Array.isArray(data) ? data : Array.isArray(data?.atletas) ? data.atletas : [];
+        const match = list.find((item: any) => {
+          const itemPhone = normalizePhone(item.telefone || item.whatsapp || item.fone);
+          return (itemPhone && phone && itemPhone === phone) || (itemPhone && phone && itemPhone.endsWith(phone.slice(-8)));
+        }) as any;
+        const genero = normalizeGeneroAtleta(match?.genero);
+        if (genero) return genero;
+      }
+    }
+    // Fallback por nome
+    if (nome) {
+      const url = `${base}/api/atleta/para-selecao?busca=${encodeURIComponent(nome)}`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "x-integration-token": secret,
+        },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => null) as any;
+        const list = Array.isArray(data) ? data : Array.isArray(data?.atletas) ? data.atletas : [];
+        const ranked = list
+          .map((item: any) => ({
+            item,
+            nomeN: normalizeSearchName(item.nome),
+            score:
+              normalizeSearchName(item.nome) === nome
+                ? 100
+                : nome && normalizeSearchName(item.nome) && (normalizeSearchName(item.nome).includes(nome) || nome.includes(normalizeSearchName(item.nome)))
+                  ? 40
+                  : 0,
+          }))
+          .filter((x) => x.score >= 40)
+          .sort((a, b) => b.score - a.score);
+        const genero = normalizeGeneroAtleta(ranked[0]?.item?.genero);
+        if (genero) return genero;
+      }
+    }
+  } catch (err) {
+    console.warn("[carlaoBtOnlineBuscarGeneroAtleta] Erro ao buscar gênero no carlaobtonline (fallback):", err);
+  }
+  return null;
+}
+
 type AtletaInscricaoDTO = {
   nome: string;
   email: string;
@@ -119,8 +216,17 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   const nome = normalizeSearchName(params.nome);
   const playId = String(params.playnaquadraAtletaId || "").trim();
   const debugAtleta = ` [email=${email || "vazio"} id=${playId || "vazio"}]`;
+  const generoInformadoParam = normalizeGeneroAtleta(params.genero);
+
+  // 1. PRIORIDADE MÁXIMA: Consulta o CARLAOBTONLINE (fonte da verdade confirmada)
+  //    Se temos gênero vindo do carlaobtonline, usamos como se fosse o generoInformado
+  const generoCarlaoBtOnline = await carlaoBtOnlineBuscarGeneroAtleta({ email, telefone: phone, nome });
+  const generoInformado = generoInformadoParam || generoCarlaoBtOnline;
 
   async function buscarPerfilPlay() {
+    let searchFallbackGenero: GeneroAtleta | null = null;
+    let searchFallbackAtletaId: string | null = null;
+
     if (playId) {
       const byId = await playGetAtletaById({ token, atletaId: playId });
       if (!byId.res.ok) {
@@ -128,12 +234,21 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
           throw new Error(`Falha ao validar o perfil de ${params.nome || email || "atleta"} no Play na Quadra${debugAtleta}`);
         }
       } else {
-        return extractPlayAtletaGenero(byId.data);
+        const extracted = extractPlayAtletaGenero(byId.data);
+        if (extracted.genero) {
+          return extracted;
+        }
+        // byId ok mas sem gênero — guarda atletaId e segue para busca por email
+        searchFallbackAtletaId = extracted.playnaquadraAtletaId || playId;
+        searchFallbackGenero = extracted.genero;
       }
     }
 
     if (!email) {
       if (!phone && !nome) {
+        if (searchFallbackGenero && searchFallbackAtletaId) {
+          return { playnaquadraAtletaId: searchFallbackAtletaId, nome: null, email: null, telefone: null, genero: searchFallbackGenero };
+        }
         throw new Error(`Não foi possível validar o gênero de ${params.nome || "um atleta"}: email não informado`);
       }
     }
@@ -181,9 +296,24 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
       })
       .sort((a, b) => b.score - a.score);
 
-    const exactMatch = ranked[0]?.item ?? null;
-    const exactScore = ranked[0]?.score ?? 0;
+    const searchMatch = ranked[0]?.item ?? null;
+    const searchScore = ranked[0]?.score ?? 0;
+
+    // Caso 1: Tinha playId, mas playGetAtletaById não tinha gênero. Se achou na busca o MESMO id com gênero, usa!
+    if (searchFallbackAtletaId && searchMatch?.playnaquadraAtletaId === searchFallbackAtletaId && searchMatch.genero) {
+      return searchMatch;
+    }
+    // Caso 2: Tinha playId sem gênero, mas na busca achou OUTRO id com match forte e gênero — usa a busca como fallback confiável
+    if (searchFallbackAtletaId && !searchFallbackGenero && searchMatch?.genero && searchScore >= 80) {
+      return searchMatch;
+    }
+    // Caso 3: Não tinha playId, depende exclusivamente da busca
+    const exactMatch = searchMatch;
+    const exactScore = searchScore;
     if (!exactMatch?.playnaquadraAtletaId || exactScore <= 0) {
+      if (searchFallbackAtletaId) {
+        return { playnaquadraAtletaId: searchFallbackAtletaId, nome: null, email: null, telefone: null, genero: searchFallbackGenero };
+      }
       throw new Error(`Não foi possível localizar o perfil de ${params.nome || email} no Play na Quadra para validar o gênero${debugAtleta}`);
     }
 
@@ -194,38 +324,56 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
       }
       throw new Error(`Falha ao validar o perfil de ${params.nome || email} no Play na Quadra${debugAtleta}`);
     }
-
-    return extractPlayAtletaGenero(byId.data);
+    const byIdExtracted = extractPlayAtletaGenero(byId.data);
+    if (byIdExtracted.genero) return byIdExtracted;
+    // byId não tinha gênero mas a busca TINHA — usa o gênero da busca
+    if (exactMatch.genero) return { ...byIdExtracted, genero: exactMatch.genero };
+    return byIdExtracted;
   }
 
-  const generoInformado = normalizeGeneroAtleta(params.genero);
   const perfil = await buscarPerfilPlay();
 
-  if (generoInformado) {
-    if (!perfil.playnaquadraAtletaId) {
+  // 2. Fallback final: Se Play ainda retornar null para gênero, mas temos generoCarlaoBtOnline, usa e tenta sincronizar
+  let generoFinal = perfil.genero || generoCarlaoBtOnline || null;
+  const generoParaSincronizar = generoInformado || generoFinal;
+
+  if (generoParaSincronizar) {
+    if (!perfil.playnaquadraAtletaId && !playId) {
+      // Se não temos ID do Play mas temos generoParaSincronizar e params.genero do appatleta, confia nele
+      if (generoParaSincronizar) {
+        return {
+          nome: perfil.nome || params.nome || email || "atleta",
+          genero: generoParaSincronizar,
+        };
+      }
       throw new Error(`Não foi possível localizar o perfil de ${params.nome || email || "atleta"} no Play na Quadra para atualizar o gênero`);
     }
-
-    if (perfil.genero !== generoInformado) {
-      const atualizado = await playAtualizarGeneroAtleta({
-        token,
-        atletaId: perfil.playnaquadraAtletaId,
-        genero: generoInformado,
-      });
-      if (!atualizado.res.ok) {
-        throw new Error(`Falha ao atualizar o gênero de ${perfil.nome || params.nome || email || "atleta"} no Play na Quadra`);
+    const idAtualizar = perfil.playnaquadraAtletaId || playId;
+    if (idAtualizar) {
+      // Melhor esforço: tenta sincronizar no Play, mas NÃO bloqueia se falhar (já temos a informação confiável)
+      try {
+        if (perfil.genero !== generoParaSincronizar) {
+          await playAtualizarGeneroAtleta({
+            token,
+            atletaId: idAtualizar,
+            genero: generoParaSincronizar,
+          });
+        }
+      } catch (syncErr) {
+        console.warn("[resolverGeneroAtleta] Não foi possível sincronizar gênero no Play (prosseguindo com generoParaSincronizar):", syncErr);
       }
     }
 
     return {
       nome: perfil.nome || params.nome || email || "atleta",
-      genero: generoInformado,
+      genero: generoParaSincronizar,
     };
   }
 
+  // Sem gênero nenhum — confia no perfil
   return {
     nome: perfil.nome || params.nome || email || "atleta",
-    genero: perfil.genero,
+    genero: generoFinal,
   };
 }
 
