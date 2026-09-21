@@ -90,8 +90,8 @@ async function carlaoBtOnlineBuscarGeneroAtleta(params: { email?: string | null;
                   ? 40
                   : 0,
           }))
-          .filter((x) => x.score >= 40)
-          .sort((a, b) => b.score - a.score);
+          .filter((x: { score: number }) => x.score >= 40)
+          .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
         const genero = normalizeGeneroAtleta(ranked[0]?.item?.genero);
         if (genero) return genero;
       }
