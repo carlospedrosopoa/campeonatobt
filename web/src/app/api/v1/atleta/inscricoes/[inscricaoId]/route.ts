@@ -212,6 +212,7 @@ export async function PUT(
   if (!parceiroAtualId) return NextResponse.json({ error: "Falha ao identificar parceiro atual" }, { status: 400 });
 
   let atletaLogadoGenero: string | null = null;
+  let parceiroGeneroAtualizado: string | null = parceiroGenero;
   const tokenPlay = request.cookies.get("play_token")?.value || "";
   if (tokenPlay) {
     try {
@@ -223,6 +224,145 @@ export async function PUT(
     } catch {
       // Se a sessão do Play não responder, segue sem gênero informado (ainda tem fallback por busca).
     }
+  }
+
+  // Fallback final de gênero via carlaobtonline (melhor esforço) - PUT
+  try {
+    const baseClean = (raw: string) => {
+      let b = (raw || "").trim();
+      if (b.endsWith("/")) b = b.slice(0, -1);
+      if (b.endsWith("/api")) b = b.slice(0, -4);
+      return b;
+    };
+    const base = baseClean(process.env.CARLAOBTONLINE_API_URL || process.env.NEXT_PUBLIC_CARLAOBTONLINE_API_URL || "");
+    const secret = (process.env.CAMPEONATOBT_INTEGRATION_TOKEN || process.env.INTEGRATION_CARLAOBTONLINE_TOKEN || "").trim();
+    if (base && secret) {
+      const normEmail = (v?: string | null) => String(v || "").trim().toLowerCase();
+      const normPhone = (v?: string | null) => String(v || "").replace(/\D/g, "");
+      const normGen = (v: any): "MASCULINO" | "FEMININO" | null => {
+        const s = String(v || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim()
+          .toLowerCase();
+        if (!s) return null;
+        if (["m", "masculino", "male", "homem"].includes(s)) return "MASCULINO";
+        if (["f", "feminino", "female", "mulher"].includes(s)) return "FEMININO";
+        return null;
+      };
+      const searchCarlao = async (q: string): Promise<any[]> => {
+        try {
+          const res = await fetch(`${base}/api/atleta/para-selecao?busca=${encodeURIComponent(q)}`, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${secret}`, "x-integration-token": secret },
+            cache: "no-store",
+          });
+          if (!res.ok) return [];
+          const data = await res.json().catch(() => null) as any;
+          return Array.isArray(data) ? data : Array.isArray(data?.atletas) ? data.atletas : [];
+        } catch {
+          return [];
+        }
+      };
+
+      // Atleta logado (PUT)
+      if (!atletaLogadoGenero) {
+        const e = normEmail(auth.user.email);
+        const f = normPhone(auth.user.telefone);
+        const nome = String(auth.user.nome || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, " ");
+        let g: "MASCULINO" | "FEMININO" | null = null;
+        if (e) {
+          const list = await searchCarlao(e);
+          const m = list.find((it) => normEmail(it.email) === e);
+          g = normGen(m?.genero);
+        }
+        if (!g && f) {
+          const list = await searchCarlao(f.slice(-8));
+          const m = list.find((it) => {
+            const ip = normPhone(it.telefone || it.whatsapp || it.fone);
+            return (ip && f && ip === f) || (ip && f && ip.endsWith(f.slice(-8)));
+          });
+          g = normGen(m?.genero);
+        }
+        if (!g && nome) {
+          const list = await searchCarlao(nome);
+          const ranked = list
+            .map((it: any) => ({
+              it,
+              n: String(it.nome || "")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, " "),
+            }))
+            .filter((x) => x.n)
+            .map((x) => ({
+              ...x,
+              sc: x.n === nome ? 100 : nome && x.n && (x.n.includes(nome) || nome.includes(x.n)) ? 40 : 0,
+            }))
+            .filter((x) => x.sc >= 40)
+            .sort((a, b) => b.sc - a.sc);
+          g = normGen(ranked[0]?.it?.genero);
+        }
+        if (g) atletaLogadoGenero = g;
+      }
+
+      // Parceiro (PUT)
+      if (!parceiroGeneroAtualizado) {
+        const e = normEmail(parceiroEmail);
+        const f = normPhone(parceiroTelefone);
+        const nome = String(parceiroNome || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, " ");
+        let g: "MASCULINO" | "FEMININO" | null = null;
+        if (e) {
+          const list = await searchCarlao(e);
+          const m = list.find((it) => normEmail(it.email) === e);
+          g = normGen(m?.genero);
+        }
+        if (!g && f) {
+          const list = await searchCarlao(f.slice(-8));
+          const m = list.find((it) => {
+            const ip = normPhone(it.telefone || it.whatsapp || it.fone);
+            return (ip && f && ip === f) || (ip && f && ip.endsWith(f.slice(-8)));
+          });
+          g = normGen(m?.genero);
+        }
+        if (!g && nome) {
+          const list = await searchCarlao(nome);
+          const ranked = list
+            .map((it: any) => ({
+              it,
+              n: String(it.nome || "")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, " "),
+            }))
+            .filter((x) => x.n)
+            .map((x) => ({
+              ...x,
+              sc: x.n === nome ? 100 : nome && x.n && (x.n.includes(nome) || nome.includes(x.n)) ? 40 : 0,
+            }))
+            .filter((x) => x.sc >= 40)
+            .sort((a, b) => b.sc - a.sc);
+          g = normGen(ranked[0]?.it?.genero);
+        }
+        if (g) parceiroGeneroAtualizado = g;
+      }
+    }
+  } catch {
+    // fallback best-effort: não bloqueia
   }
 
   await validarGeneroInscricao({
@@ -237,7 +377,7 @@ export async function PUT(
       nome: parceiroNome,
       email: parceiroEmail,
       playnaquadraAtletaId: parceiroPlayId,
-      genero: parceiroGenero,
+      genero: parceiroGeneroAtualizado,
     },
   });
 

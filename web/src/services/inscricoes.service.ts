@@ -210,7 +210,6 @@ function extractPlayAtletaGenero(payload: any) {
 }
 
 async function resolverGeneroAtleta(params: AtletaGeneroInput) {
-  const token = await getPlayAdminToken();
   const email = normalizeEmail(params.email);
   const phone = normalizePhone(params.telefone);
   const nome = normalizeSearchName(params.nome);
@@ -218,12 +217,67 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   const debugAtleta = ` [email=${email || "vazio"} id=${playId || "vazio"}]`;
   const generoInformadoParam = normalizeGeneroAtleta(params.genero);
 
-  // 1. PRIORIDADE MÁXIMA: Consulta o CARLAOBTONLINE (fonte da verdade confirmada)
-  //    Se temos gênero vindo do carlaobtonline, usamos como se fosse o generoInformado
-  const generoCarlaoBtOnline = await carlaoBtOnlineBuscarGeneroAtleta({ email, telefone: phone, nome });
-  const generoInformado = generoInformadoParam || generoCarlaoBtOnline;
+  // =========================================================================
+  // BLINDAGEM TOTAL: SE params.genero VEIO VÁLIDO (MASCULINO/FEMINIMO)
+  // CONFIAMOS NA FONTE E RETORNAMOS DIRETO (nem consultamos APIs externas).
+  // A sincronização com Play é feita em BEST-EFFORT depois.
+  // =========================================================================
+  if (generoInformadoParam) {
+    let resolvedPlayId = playId;
+    let resolvedNome = params.nome || email || "atleta";
+    let needsSync = true;
 
-  async function buscarPerfilPlay() {
+    // Se NÃO temos playId mas temos email/telefone, tentamos LOCALIZAR no Play
+    // para poder sincronizar o gênero do perfil de lá também (best-effort).
+    if (!resolvedPlayId && (email || phone || nome)) {
+      try {
+        const token = await getPlayAdminToken();
+        const found = await localizarPlayIdOuGenero({ token, email, phone, nome });
+        resolvedPlayId = found.playnaquadraAtletaId || resolvedPlayId;
+        resolvedNome = found.nome || resolvedNome;
+      } catch (e) {
+        // não importa, continuamos com o generoInformadoParam
+      }
+    }
+
+    // Best-effort: sincroniza no Play se tivermos playId e o gênero divergir (NÃO BLOQUEIA)
+    if (resolvedPlayId) {
+      try {
+        const token = await getPlayAdminToken();
+        const byId = await playGetAtletaById({ token, atletaId: resolvedPlayId }).catch(() => null as any);
+        if (byId?.res?.ok) {
+          const perfilGenero = extractPlayAtletaGenero(byId.data).genero;
+          if (!perfilGenero || perfilGenero !== generoInformadoParam) {
+            await playAtualizarGeneroAtleta({
+              token,
+              atletaId: resolvedPlayId,
+              genero: generoInformadoParam,
+            }).catch(() => null);
+          }
+        }
+      } catch (syncErr) {
+        console.warn("[resolverGeneroAtleta] Sync Play falhou, mas a inscrição prossegue com generoInformado (blindado):", syncErr);
+      }
+    }
+
+    return {
+      nome: resolvedNome || params.nome || email || "atleta",
+      genero: generoInformadoParam,
+    };
+  }
+
+  // =========================================================================
+  // FIM DA BLINDAGEM: params.genero NÃO veio válido. Precisamos descobrir.
+  // =========================================================================
+  const token = await getPlayAdminToken();
+  let generoCarlaoBtOnline: GeneroAtleta | null = null;
+  try {
+    generoCarlaoBtOnline = await carlaoBtOnlineBuscarGeneroAtleta({ email, telefone: phone, nome });
+  } catch (err) {
+    console.warn("[resolverGeneroAtleta] carlaoBtOnline falhou (continuando com Play):", err);
+  }
+
+  async function buscarPerfilPlayLocal() {
     let searchFallbackGenero: GeneroAtleta | null = null;
     let searchFallbackAtletaId: string | null = null;
 
@@ -238,7 +292,6 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
         if (extracted.genero) {
           return extracted;
         }
-        // byId ok mas sem gênero — guarda atletaId e segue para busca por email
         searchFallbackAtletaId = extracted.playnaquadraAtletaId || playId;
         searchFallbackGenero = extracted.genero;
       }
@@ -299,15 +352,12 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
     const searchMatch = ranked[0]?.item ?? null;
     const searchScore = ranked[0]?.score ?? 0;
 
-    // Caso 1: Tinha playId, mas playGetAtletaById não tinha gênero. Se achou na busca o MESMO id com gênero, usa!
     if (searchFallbackAtletaId && searchMatch?.playnaquadraAtletaId === searchFallbackAtletaId && searchMatch.genero) {
       return searchMatch;
     }
-    // Caso 2: Tinha playId sem gênero, mas na busca achou OUTRO id com match forte e gênero — usa a busca como fallback confiável
     if (searchFallbackAtletaId && !searchFallbackGenero && searchMatch?.genero && searchScore >= 80) {
       return searchMatch;
     }
-    // Caso 3: Não tinha playId, depende exclusivamente da busca
     const exactMatch = searchMatch;
     const exactScore = searchScore;
     if (!exactMatch?.playnaquadraAtletaId || exactScore <= 0) {
@@ -326,31 +376,17 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
     }
     const byIdExtracted = extractPlayAtletaGenero(byId.data);
     if (byIdExtracted.genero) return byIdExtracted;
-    // byId não tinha gênero mas a busca TINHA — usa o gênero da busca
     if (exactMatch.genero) return { ...byIdExtracted, genero: exactMatch.genero };
     return byIdExtracted;
   }
 
-  const perfil = await buscarPerfilPlay();
-
-  // 2. Fallback final: Se Play ainda retornar null para gênero, mas temos generoCarlaoBtOnline, usa e tenta sincronizar
+  const perfil = await buscarPerfilPlayLocal();
   let generoFinal = perfil.genero || generoCarlaoBtOnline || null;
-  const generoParaSincronizar = generoInformado || generoFinal;
+  const generoParaSincronizar = generoFinal;
 
   if (generoParaSincronizar) {
-    if (!perfil.playnaquadraAtletaId && !playId) {
-      // Se não temos ID do Play mas temos generoParaSincronizar e params.genero do appatleta, confia nele
-      if (generoParaSincronizar) {
-        return {
-          nome: perfil.nome || params.nome || email || "atleta",
-          genero: generoParaSincronizar,
-        };
-      }
-      throw new Error(`Não foi possível localizar o perfil de ${params.nome || email || "atleta"} no Play na Quadra para atualizar o gênero`);
-    }
     const idAtualizar = perfil.playnaquadraAtletaId || playId;
     if (idAtualizar) {
-      // Melhor esforço: tenta sincronizar no Play, mas NÃO bloqueia se falhar (já temos a informação confiável)
       try {
         if (perfil.genero !== generoParaSincronizar) {
           await playAtualizarGeneroAtleta({
@@ -360,7 +396,7 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
           });
         }
       } catch (syncErr) {
-        console.warn("[resolverGeneroAtleta] Não foi possível sincronizar gênero no Play (prosseguindo com generoParaSincronizar):", syncErr);
+        console.warn("[resolverGeneroAtleta] Sync Play falhou (fallback):", syncErr);
       }
     }
 
@@ -370,10 +406,61 @@ async function resolverGeneroAtleta(params: AtletaGeneroInput) {
     };
   }
 
-  // Sem gênero nenhum — confia no perfil
   return {
     nome: perfil.nome || params.nome || email || "atleta",
     genero: generoFinal,
+  };
+}
+
+async function localizarPlayIdOuGenero(params: { token: string; email: string; phone: string; nome: string }) {
+  const { token, email, phone, nome } = params;
+  const playIdRef: { value: string | null } = { value: null };
+  const nomeRef: { value: string | null } = { value: null };
+  const generoRef: { value: GeneroAtleta | null } = { value: null };
+
+  const queries = Array.from(
+    new Set(
+      [email, phone, phone.length >= 8 ? phone.slice(-8) : "", nome].filter((v) => String(v || "").trim().length >= 2)
+    )
+  );
+
+  for (const query of queries) {
+    try {
+      const result = await playBuscarAtletas({ token, q: query, limite: 10 });
+      if (!result.res.ok) continue;
+      const rawCandidates: any[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
+      const candidatos = rawCandidates.map((item) => extractPlayAtletaGenero(item));
+      const ranked = candidatos
+        .map((item) => {
+          let score = 0;
+          const cEmail = normalizeEmail(item.email);
+          const cPhone = normalizePhone(item.telefone);
+          const cNome = normalizeSearchName(item.nome);
+          if (email && cEmail === email) score += 120;
+          if (phone && cPhone === phone) score += 120;
+          if (phone && cPhone && cPhone.endsWith(phone.slice(-8))) score += 40;
+          if (nome && cNome === nome) score += 80;
+          if (nome && cNome && (cNome.includes(nome) || nome.includes(cNome))) score += 30;
+          if (item.playnaquadraAtletaId) score += 10;
+          return { item, score };
+        })
+        .sort((a, b) => b.score - a.score);
+      const top = ranked[0];
+      if (top && top.score >= 80) {
+        playIdRef.value = top.item.playnaquadraAtletaId;
+        nomeRef.value = top.item.nome;
+        generoRef.value = top.item.genero;
+        break;
+      }
+    } catch (e) {
+      // ignora
+    }
+  }
+
+  return {
+    playnaquadraAtletaId: playIdRef.value,
+    nome: nomeRef.value,
+    genero: generoRef.value,
   };
 }
 

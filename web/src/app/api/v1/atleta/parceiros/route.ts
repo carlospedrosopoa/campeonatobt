@@ -13,10 +13,112 @@ type PlayCandidate = {
   email: string;
   telefone: string | null;
   fotoUrl: string | null;
+  genero: "MASCULINO" | "FEMININO" | null;
 };
 
 function normalizeEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizePhone(value?: string | null) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeGeneroInline(value: unknown): "MASCULINO" | "FEMININO" | null {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return null;
+  if (["m", "masculino", "male", "homem"].includes(normalized)) return "MASCULINO";
+  if (["f", "feminino", "female", "mulher"].includes(normalized)) return "FEMININO";
+  return null;
+}
+
+function cleanBaseUrl(raw: string) {
+  let base = (raw || "").trim();
+  if (base.endsWith("/")) base = base.slice(0, -1);
+  if (base.endsWith("/api")) base = base.slice(0, -4);
+  return base;
+}
+
+async function carlaoBtOnlineBuscarGenero(params: { email?: string | null; telefone?: string | null; nome?: string | null }): Promise<"MASCULINO" | "FEMININO" | null> {
+  const base = cleanBaseUrl(process.env.CARLAOBTONLINE_API_URL || process.env.NEXT_PUBLIC_CARLAOBTONLINE_API_URL || "");
+  const secret = (process.env.CAMPEONATOBT_INTEGRATION_TOKEN || process.env.INTEGRATION_CARLAOBTONLINE_TOKEN || "").trim();
+  const email = normalizeEmail(params.email);
+  const phone = normalizePhone(params.telefone);
+  const nome = String(params.nome || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  if (!base || !secret) return null;
+  if (!email && !phone && !nome) return null;
+
+  const headers = {
+    Authorization: `Bearer ${secret}`,
+    "x-integration-token": secret,
+  };
+
+  async function search(query: string) {
+    try {
+      const url = `${base}/api/atleta/para-selecao?busca=${encodeURIComponent(query)}`;
+      const res = await fetch(url, { method: "GET", headers, cache: "no-store" });
+      if (!res.ok) return [] as any[];
+      const data = await res.json().catch(() => null) as any;
+      return Array.isArray(data) ? data : Array.isArray(data?.atletas) ? data.atletas : [];
+    } catch {
+      return [] as any[];
+    }
+  }
+
+  function matchGenero(list: any[], match: (item: any) => boolean): "MASCULINO" | "FEMININO" | null {
+    const item = list.find(match);
+    return normalizeGeneroInline(item?.genero);
+  }
+
+  try {
+    if (email) {
+      const list = await search(email);
+      const g = matchGenero(list, (item) => normalizeEmail(item.email) === email);
+      if (g) return g;
+    }
+    if (phone) {
+      const list = await search(phone.slice(-8));
+      const g = matchGenero(list, (item) => {
+        const ip = normalizePhone(item.telefone || item.whatsapp || item.fone);
+        return (ip && phone && ip === phone) || (ip && phone && ip.endsWith(phone.slice(-8)));
+      });
+      if (g) return g;
+    }
+    if (nome) {
+      const list = await search(nome);
+      const ranked = list
+        .map((item: any) => ({
+          item,
+          norm: String(item.nome || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, " "),
+        }))
+        .filter((x) => x.norm)
+        .map((x) => ({
+          ...x,
+          score: x.norm === nome ? 100 : nome && x.norm && (x.norm.includes(nome) || nome.includes(x.norm)) ? 40 : 0,
+        }))
+        .filter((x) => x.score >= 40)
+        .sort((a, b) => b.score - a.score);
+      const g = normalizeGeneroInline(ranked[0]?.item?.genero);
+      if (g) return g;
+    }
+  } catch (err) {
+    // best-effort, ignora
+  }
+  return null;
 }
 
 function extractPlayCandidate(item: unknown): PlayCandidate | null {
@@ -27,10 +129,29 @@ function extractPlayCandidate(item: unknown): PlayCandidate | null {
     String(source.id || source._id || source.atletaId || source.usuarioId || "").trim() || null;
   const usuario = source.usuario && typeof source.usuario === "object" ? (source.usuario as Record<string, any>) : null;
   const atleta = source.atleta && typeof source.atleta === "object" ? (source.atleta as Record<string, any>) : null;
-  const nome = String(source.nome || usuario?.nome || atleta?.nome || "").trim();
-  const email = normalizeEmail(source.email || usuario?.email || atleta?.email || "");
-  const telefone = String(source.telefone || usuario?.telefone || atleta?.telefone || "").trim() || null;
-  const fotoUrl = String(source.fotoUrl || source.foto_url || usuario?.fotoUrl || atleta?.fotoUrl || "").trim() || null;
+  const user = source.user && typeof source.user === "object" ? (source.user as Record<string, any>) : null;
+  const profile = source.profile && typeof source.profile === "object" ? (source.profile as Record<string, any>) : null;
+  const data = source.data && typeof source.data === "object" ? (source.data as Record<string, any>) : null;
+
+  const nome = String(source.nome || usuario?.nome || atleta?.nome || user?.nome || profile?.nome || data?.nome || "").trim();
+  const email = normalizeEmail(source.email || usuario?.email || atleta?.email || user?.email || profile?.email || data?.email || "");
+  const telefone = String(source.telefone || source.whatsapp || usuario?.telefone || usuario?.whatsapp || atleta?.telefone || atleta?.whatsapp || user?.telefone || profile?.telefone || data?.telefone || "").trim() || null;
+  const fotoUrl = String(source.fotoUrl || source.foto_url || source.foto || usuario?.fotoUrl || usuario?.foto_url || atleta?.fotoUrl || atleta?.foto_url || user?.fotoUrl || profile?.fotoUrl || data?.fotoUrl || "").trim() || null;
+  const genero = normalizeGeneroInline(
+    source.genero ||
+      source.sexo ||
+      source.gender ||
+      usuario?.genero ||
+      usuario?.sexo ||
+      atleta?.genero ||
+      atleta?.sexo ||
+      user?.genero ||
+      user?.sexo ||
+      profile?.genero ||
+      profile?.sexo ||
+      data?.genero ||
+      data?.sexo
+  );
 
   if (!playnaquadraAtletaId && !nome && !email) return null;
 
@@ -41,6 +162,7 @@ function extractPlayCandidate(item: unknown): PlayCandidate | null {
     email,
     telefone,
     fotoUrl,
+    genero,
   };
 }
 
@@ -73,7 +195,16 @@ export async function GET(request: NextRequest) {
     }
     if (result.res.ok) {
       const rawCandidates: unknown[] = Array.isArray(result.data?.atletas) ? result.data.atletas : Array.isArray(result.data) ? result.data : [];
-      const atletas = rawCandidates.map(extractPlayCandidate).filter(hasResolvedPlayProfile);
+      let atletas = rawCandidates.map(extractPlayCandidate).filter(hasResolvedPlayProfile);
+
+      // Best-effort: preenche genero null com carlaobtonline
+      atletas = await Promise.all(
+        atletas.map(async (cand) => {
+          if (cand.genero) return cand;
+          const g = await carlaoBtOnlineBuscarGenero({ email: cand.email, telefone: cand.telefone, nome: cand.nome });
+          return g ? { ...cand, genero: g } : cand;
+        })
+      );
 
       return NextResponse.json(
         { atletas, total: atletas.length },
@@ -96,6 +227,7 @@ export async function GET(request: NextRequest) {
     const rows = await db
       .select({
         id: usuarios.playnaquadraAtletaId,
+        playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
         nome: usuarios.nome,
         email: usuarios.email,
         telefone: usuarios.telefone,
@@ -105,7 +237,25 @@ export async function GET(request: NextRequest) {
       .where(where)
       .limit(limite);
 
-    return NextResponse.json({ atletas: rows, total: rows.length }, { headers: { "Cache-Control": "no-store", Vary: "Authorization" } });
+    let atletas: PlayCandidate[] = rows.map((r) => ({
+      id: (r.playnaquadraAtletaId as string | null) || "",
+      playnaquadraAtletaId: r.playnaquadraAtletaId as string | null,
+      nome: r.nome,
+      email: r.email,
+      telefone: r.telefone,
+      fotoUrl: r.fotoUrl,
+      genero: null,
+    }));
+
+    atletas = await Promise.all(
+      atletas.map(async (cand) => {
+        if (cand.genero) return cand;
+        const g = await carlaoBtOnlineBuscarGenero({ email: cand.email, telefone: cand.telefone, nome: cand.nome });
+        return g ? { ...cand, genero: g } : cand;
+      })
+    );
+
+    return NextResponse.json({ atletas, total: atletas.length }, { headers: { "Cache-Control": "no-store", Vary: "Authorization" } });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Erro ao buscar atletas" }, { status: 500 });
   }
