@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
       atletaNome: usuarios.nome,
       atletaEmail: usuarios.email,
       atletaTelefone: usuarios.telefone,
+      atletaFotoUrl: usuarios.fotoUrl,
       meuPago: inscricaoPagamentos.pago,
       meuPagamentoStatus: inscricaoPagamentos.status,
       meuValorDevido: inscricaoPagamentos.valorDevido,
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
       torneioPix: { chave: string | null; nome: string | null; cidade: string | null };
       meuPagamento: { pago: boolean; status: string; valorDevido: string | null };
       medalha: "OURO" | "PRATA" | null;
-      equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null }[] };
+      equipe: { id: string; nome: string | null; atletas: { id: string; nome: string; email: string; telefone: string | null; fotoUrl: string | null }[] };
     }
   >();
 
@@ -111,11 +112,11 @@ export async function GET(request: NextRequest) {
         equipe: {
           id: r.equipeId,
           nome: r.equipeNome,
-          atletas: [{ id: r.atletaId, nome: r.atletaNome, email: r.atletaEmail, telefone: r.atletaTelefone ?? null }],
+          atletas: [{ id: r.atletaId, nome: r.atletaNome, email: r.atletaEmail, telefone: r.atletaTelefone ?? null, fotoUrl: r.atletaFotoUrl ?? null }],
         },
       });
     } else {
-      current.equipe.atletas.push({ id: r.atletaId, nome: r.atletaNome, email: r.atletaEmail, telefone: r.atletaTelefone ?? null });
+      current.equipe.atletas.push({ id: r.atletaId, nome: r.atletaNome, email: r.atletaEmail, telefone: r.atletaTelefone ?? null, fotoUrl: r.atletaFotoUrl ?? null });
     }
   }
 
