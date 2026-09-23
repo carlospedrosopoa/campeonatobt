@@ -82,6 +82,7 @@ export async function GET(request: NextRequest) {
       minhaCamisetaOpcao: string | null;
       categoria: { id: string; nome: string; slug: string; valorInscricao: string | null };
       categoriaConcluida: boolean;
+      categoriaComInscricoesEncerradas: boolean;
       torneioPix: { chave: string | null; nome: string | null; cidade: string | null };
       meuPagamento: { pago: boolean; status: string; valorDevido: string | null };
       medalha: "OURO" | "PRATA" | null;
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
         minhaCamisetaOpcao: r.minhaCamisetaOpcao ?? null,
         categoria: { id: r.categoriaId, nome: r.categoriaNome, slug: r.categoriaSlug, valorInscricao: r.categoriaValorInscricao ?? null },
         categoriaConcluida: false,
+        categoriaComInscricoesEncerradas: false,
         torneioPix: { chave: r.torneioPixChave ?? null, nome: r.torneioPixNome ?? null, cidade: r.torneioPixCidade ?? null },
         meuPagamento: {
           pago: Boolean(r.meuPago) || r.meuPagamentoStatus === "PAGO",
@@ -122,6 +124,7 @@ export async function GET(request: NextRequest) {
 
   const result = Array.from(map.values());
   const torneioIds = Array.from(new Set(result.map((i) => i.torneio.id).filter(Boolean)));
+  const categoriaIds = Array.from(new Set(result.map((i) => i.categoria.id).filter(Boolean)));
   const podiosPorTorneio = await torneioResultadosService.listarPodiosPorTorneioIds(torneioIds);
   if (torneioIds.length > 0) {
     const torneiosComJogos = await db
@@ -134,10 +137,22 @@ export async function GET(request: NextRequest) {
       item.torneio.temJogosEmAndamento = started.has(item.torneio.id);
     }
   }
+  const categoriasComPartidas =
+    categoriaIds.length > 0
+      ? new Set(
+          (await db
+            .select({ categoriaId: partidas.categoriaId })
+            .from(partidas)
+            .where(inArray(partidas.categoriaId, categoriaIds))
+            .groupBy(partidas.categoriaId)
+          ).map((r) => r.categoriaId),
+        )
+      : new Set<string>();
   for (const item of result) {
     const podios = podiosPorTorneio.get(item.torneio.id) ?? [];
     const podioCategoria = podios.find((p) => p.categoriaId === item.categoria.id);
     item.categoriaConcluida = Boolean(podioCategoria?.campeaoEquipeId);
+    item.categoriaComInscricoesEncerradas = categoriasComPartidas.has(item.categoria.id);
     item.medalha = !podioCategoria
       ? null
       : item.equipe.id === podioCategoria.campeaoEquipeId
