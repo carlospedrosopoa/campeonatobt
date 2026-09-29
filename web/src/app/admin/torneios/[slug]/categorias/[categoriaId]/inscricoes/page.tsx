@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Banknote, Gamepad2, ImageIcon, Pencil, Plus, RefreshCw, Save, Settings, Trash2, Users, X } from "lucide-react";
+import { CategoriaHeader } from "@/components/admin/categoria-header";
 import { gerarCardDuplasInscritasAdmin, gerarCardInscricaoAdmin } from "@/lib/match-card-client";
 import { NomeAtletaSobrenome, NomeEquipeComSobrenome, separarPrimeiroUltimoNome } from "@/lib/nome-atleta";
 
@@ -685,91 +686,47 @@ export default function AdminCategoriaInscricoesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">{categoria ? `Inscrições — ${categoria.nome}` : "Inscrições"}</h1>
-          {categoria && (
-            <p className="text-sm text-slate-600">
-              {categoria.genero} •{" "}
-              {categoria.valorInscricao ? (
-                <>
-                  {Number(categoria.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}{" "}
-                  {categoriaEhSimples ? "por inscrição" : "por atleta"}{" "}
-                  {!categoriaEhSimples ? (
-                    <span className="text-slate-500">
-                      (dupla: {(Number(categoria.valorInscricao) * 2).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})
-                    </span>
-                  ) : null}
-                </>
-              ) : (
-                "Sem taxa"
-              )}{" "}
-              • {categoria.vagasMaximas ? `${categoria.vagasMaximas} vagas` : "Sem limite"}
-            </p>
-          )}
-
-          <div className="mt-4 inline-flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white p-1 sm:w-auto">
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/inscricoes`}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-medium text-white sm:flex-initial"
-            >
-              <Banknote className="h-4 w-4" />
-              Inscrições
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/configuracao`}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-initial"
-            >
-              <Settings className="h-4 w-4" />
-              Configuração
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-initial"
-            >
-              <Gamepad2 className="h-4 w-4" />
-              Jogos
-            </Link>
-          </div>
-        </div>
-
-        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto">
-          <button
-            type="button"
-            onClick={() => void gerarCardDivulgacaoInscritos()}
-            disabled={gerandoCardDivulgacao}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
-              gerandoCardDivulgacao ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-orange-500 text-white hover:bg-orange-600"
-            }`}
-          >
-            <ImageIcon className="h-4 w-4" />
-            {gerandoCardDivulgacao ? "Gerando card..." : "Card dos inscritos"}
-          </button>
-          <button
-            type="button"
-            onClick={onSincronizarFotos}
-            disabled={sincronizandoFotos}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
-              sincronizandoFotos ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-500"
-            }`}
-          >
-            <RefreshCw className={`h-4 w-4 ${sincronizandoFotos ? "animate-spin" : ""}`} />
-            {sincronizandoFotos ? "Sincronizando..." : "Atualizar fotos dos inscritos"}
-          </button>
-          <button
-            type="button"
-            onClick={abrirNova}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
-          >
-            <Plus className="h-4 w-4" />
-            Nova inscrição
-          </button>
-        </div>
-      </div>
+      <CategoriaHeader
+        slug={slug}
+        categoriaId={categoriaId}
+        categoria={categoria}
+        ativa="inscricoes"
+        porInscricao={categoriaEhSimples}
+        acoes={
+          <>
+              <button
+                type="button"
+                onClick={() => void gerarCardDivulgacaoInscritos()}
+                disabled={gerandoCardDivulgacao}
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+                  gerandoCardDivulgacao ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-orange-500 text-white hover:bg-orange-600"
+                }`}
+              >
+                <ImageIcon className="h-4 w-4" />
+                {gerandoCardDivulgacao ? "Gerando card..." : "Card dos inscritos"}
+              </button>
+              <button
+                type="button"
+                onClick={onSincronizarFotos}
+                disabled={sincronizandoFotos}
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+                  sincronizandoFotos ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-500"
+                }`}
+              >
+                <RefreshCw className={`h-4 w-4 ${sincronizandoFotos ? "animate-spin" : ""}`} />
+                {sincronizandoFotos ? "Sincronizando..." : "Atualizar fotos dos inscritos"}
+              </button>
+              <button
+                type="button"
+                onClick={abrirNova}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+              >
+                <Plus className="h-4 w-4" />
+                Nova inscrição
+              </button>
+          </>
+        }
+      />
 
       {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
       {sucesso && (
