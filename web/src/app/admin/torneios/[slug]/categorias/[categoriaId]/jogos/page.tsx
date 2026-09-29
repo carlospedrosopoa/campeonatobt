@@ -1,9 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Settings, Smartphone, Swords, TrendingUp, Trophy, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Banknote,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  Crown,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Gamepad2,
+  ImageIcon,
+  MapPin,
+  Network,
+  Pencil,
+  RefreshCw,
+  Save,
+  Settings,
+  Smartphone,
+  Swords,
+  TrendingUp,
+  Trophy,
+  Trash2,
+  X,
+} from "lucide-react";
+import { Alert, Badge, Button, Card, EmptyState, Menu } from "@/components/admin/ui";
+import { CategoriaHeader } from "@/components/admin/categoria-header";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
@@ -121,26 +149,26 @@ type ManualTieBreakGroup = {
   items: ManualTieBreakGroupItem[];
 };
 
+type FiltroStatusPartida = "TODOS" | "A_JOGAR" | "SEM_HORARIO" | "FINALIZADOS";
+
+function partidaFinalizada(p: { status: string }) {
+  return p.status === "FINALIZADA" || p.status === "WO";
+}
+
+function passaFiltroStatus(p: { status: string; dataHorario?: string | null }, filtro: FiltroStatusPartida) {
+  if (filtro === "TODOS") return true;
+  if (filtro === "FINALIZADOS") return partidaFinalizada(p);
+  if (filtro === "SEM_HORARIO") return p.status === "AGENDADA" && !p.dataHorario;
+  return p.status === "AGENDADA";
+}
+
 const getStatusBadge = (status: string, dataHorario?: string | null) => {
-  if (status === "AGENDADA" && !dataHorario) {
-    return (
-      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-100">
-        A definir
-      </span>
-    );
-  }
-  const styles: Record<string, string> = {
-    AGENDADA: "bg-blue-50 text-blue-700 border-blue-100",
-    FINALIZADA: "bg-green-50 text-green-700 border-green-100",
-    WO: "bg-red-50 text-red-700 border-red-100",
-    CANCELADA: "bg-slate-100 text-slate-500 border-slate-200",
-  };
-  const className = styles[status] || "bg-slate-50 text-slate-600 border-slate-100";
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${className}`}>
-      {status}
-    </span>
-  );
+  if (status === "AGENDADA" && !dataHorario) return <Badge tone="neutral">Sem horário</Badge>;
+  if (status === "AGENDADA") return <Badge tone="warning">A jogar</Badge>;
+  if (status === "FINALIZADA") return <Badge tone="success">Finalizado</Badge>;
+  if (status === "WO") return <Badge tone="danger">W.O.</Badge>;
+  if (status === "CANCELADA") return <Badge tone="neutral">Cancelada</Badge>;
+  return <Badge tone="neutral">{status}</Badge>;
 };
 
 function nomeGrupoPorIndice(index: number) {
@@ -222,6 +250,7 @@ export default function AdminCategoriaJogosPage() {
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [carregandoPartidas, setCarregandoPartidas] = useState(false);
   const [filtroAtletaId, setFiltroAtletaId] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatusPartida>("TODOS");
 
   const [resultadoFinal, setResultadoFinal] = useState<ResultadoFinal>(null);
 
@@ -886,100 +915,103 @@ export default function AdminCategoriaJogosPage() {
   }, [partidas]);
 
   function renderPartidaCard(p: Partida) {
+    const finalizada = partidaFinalizada(p);
+    const sets = (p.detalhesPlacar ?? []).slice().sort((a, b) => a.set - b.set);
+    const venceuA = Boolean(p.vencedorId) && p.vencedorId === p.equipeAId;
+    const venceuB = Boolean(p.vencedorId) && p.vencedorId === p.equipeBId;
+    const data = p.dataHorario ? new Date(p.dataHorario) : null;
+    const dataValida = data && !Number.isNaN(data.getTime()) ? data : null;
+    const hora = dataValida
+      ? dataValida.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
+      : null;
+    const dia = dataValida
+      ? dataValida.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" })
+      : null;
+    const local = p.arenaNome ? `${p.arenaNome}${p.quadra ? ` · Q${p.quadra}` : ""}` : p.quadra ? `Quadra ${p.quadra}` : null;
+
+    const linhaEquipe = (lado: "A" | "B") => {
+      const venceu = lado === "A" ? venceuA : venceuB;
+      const perdeu = finalizada && !venceu && Boolean(p.vencedorId);
+      return (
+        <div className="flex items-center justify-between gap-3">
+          <span className={`min-w-0 truncate text-sm leading-tight ${venceu ? "font-extrabold text-ink" : perdeu ? "font-semibold text-muted" : "font-semibold text-ink"}`}>
+            {lado === "A" ? (
+              <NomeEquipeComSobrenome atletas={p.equipeAAtletas} nomeEquipeFallback={p.equipeANome || p.equipeAId.slice(0, 8)} />
+            ) : (
+              <NomeEquipeComSobrenome atletas={p.equipeBAtletas} nomeEquipeFallback={p.equipeBNome || p.equipeBId.slice(0, 8)} />
+            )}
+          </span>
+          <span className={`flex shrink-0 gap-1 font-display text-[19px] font-bold tabular-nums ${perdeu ? "text-muted" : "text-ink"}`}>
+            {sets.length === 0 ? (
+              <span className="w-6 text-center text-[#b5b2aa]">–</span>
+            ) : (
+              sets.map((s) => {
+                const valor = lado === "A" ? s.a : s.b;
+                const tb = s.tiebreak ? (lado === "A" ? s.tbA : s.tbB) : undefined;
+                return (
+                  <span key={s.set} className="relative w-6 text-center">
+                    {valor}
+                    {tb !== undefined && tb !== null && <sup className="absolute -right-1 top-0 text-[10px] font-semibold text-muted">{tb}</sup>}
+                  </span>
+                );
+              })
+            )}
+          </span>
+        </div>
+      );
+    };
+
+    const iconBtn =
+      "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-sand-2 hover:text-ink [&_svg]:h-4 [&_svg]:w-4";
+
     return (
-      <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-              <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide text-slate-600">
-                {p.grupoNome ?? labelFasePartida(p.fase)}
-              </span>
-              {p.arenaNome ? (
-                <span className="flex items-center gap-1">
-                  {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome} className="h-4 w-4 rounded-full object-cover" /> : null}
-                  <MapPin className="h-3 w-3 text-slate-400" />
-                  {p.arenaNome}
-                  {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 text-slate-400">
-                  <MapPin className="h-3 w-3" />
-                  Local a definir
-                </span>
-              )}
-            </div>
-            {getStatusBadge(p.status, p.dataHorario)}
-          </div>
+      <div
+        key={p.id}
+        className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-4 gap-y-2 border-b border-sand-2 px-4 py-3 last:border-b-0 hover:bg-paper sm:px-5 md:grid-cols-[80px_minmax(0,1fr)_auto]"
+      >
+        <div className="min-w-0">
+          {hora ? (
+            <>
+              <div className="font-display text-xl font-bold leading-none tabular-nums text-ink">{hora}</div>
+              <div className="mt-1 truncate text-xs text-muted">{dia}</div>
+            </>
+          ) : (
+            <>
+              <div className="font-display text-xl font-bold leading-none text-[#8a4e00]">—</div>
+              <div className="mt-1 truncate text-xs font-bold text-[#8a4e00]">
+                {p.dataLimite ? `até ${formatDataHora(p.dataLimite)}` : "Sem horário"}
+              </div>
+            </>
+          )}
+        </div>
 
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div className="flex-1 text-right">
-              <div className="leading-tight"><NomeEquipeComSobrenome atletas={p.equipeAAtletas} nomeEquipeFallback={p.equipeANome || p.equipeAId.slice(0, 8)} /></div>
-            </div>
-
-            <div className="flex flex-col items-center justify-center min-w-[3rem]">
-              <span className="text-lg font-bold text-slate-900 font-mono tracking-tight bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                {formatPlacar(p.detalhesPlacar)}
-              </span>
-            </div>
-
-            <div className="flex-1 text-left">
-              <div className="leading-tight"><NomeEquipeComSobrenome atletas={p.equipeBAtletas} nomeEquipeFallback={p.equipeBNome || p.equipeBId.slice(0, 8)} /></div>
-            </div>
+        <div className="min-w-0 space-y-1">
+          {linhaEquipe("A")}
+          {linhaEquipe("B")}
+          <div className="flex items-center gap-1.5 pt-0.5 text-xs text-muted">
+            {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt="" className="h-4 w-4 rounded-full object-cover" /> : <MapPin className="h-3.5 w-3.5" />}
+            <span className="truncate">{local ?? "Local a definir"}</span>
+            {p.grupoNome && fasePartidas !== "GRUPOS" && <span className="truncate">· {p.grupoNome}</span>}
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
-          <div className="text-xs">
-            {p.dataHorario ? (
-              <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                {formatDataHora(p.dataHorario)}
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-amber-600 font-medium">
-                <Calendar className="h-3.5 w-3.5" />
-                {p.dataLimite ? `Limite: ${formatDataHora(p.dataLimite)}` : "Sem agendamento"}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
-            <button
-              type="button"
-              onClick={() => gerarCardPartida(p)}
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-              title="Gerar card da partida"
-            >
-              <ImageIcon className="h-4 w-4" />
+        <div className="col-span-2 flex items-center justify-end gap-1 md:col-span-1">
+          <span className="mr-auto md:mr-2">{getStatusBadge(p.status, p.dataHorario)}</span>
+          <PartidaHeadToHeadButton slug={slug} categoriaId={categoriaId} partidaId={p.id} compact />
+          <button type="button" onClick={() => gerarCardPartida(p)} className={iconBtn} title="Gerar card da partida" aria-label="Gerar card da partida">
+            <ImageIcon />
+          </button>
+          <button type="button" onClick={() => abrirAgendamento(p)} className={iconBtn} title="Agendar horário e quadra" aria-label="Agendar horário e quadra">
+            <Calendar />
+          </button>
+          {fasePartidas !== "GRUPOS" && p.status === "AGENDADA" && (
+            <button type="button" onClick={() => abrirAlterarConfronto(p)} className={iconBtn} title="Alterar confronto" aria-label="Alterar confronto">
+              <Pencil />
             </button>
-            <button
-              type="button"
-              onClick={() => abrirAgendamento(p)}
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-              title="Agendar"
-            >
-              <Calendar className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => startEditPartida(p)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
-            >
-              Lançar placar
-            </button>
-
-            {fasePartidas !== "GRUPOS" && p.status === "AGENDADA" && (
-              <button
-                type="button"
-                onClick={() => abrirAlterarConfronto(p)}
-                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                title="Alterar confronto"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            )}
-          </div>
+          )}
+          <Button size="sm" variant={finalizada ? "secondary" : "dark"} onClick={() => startEditPartida(p)} className="ml-1">
+            {finalizada ? "Editar placar" : "Lançar placar"}
+          </Button>
         </div>
       </div>
     );
@@ -1690,362 +1722,345 @@ export default function AdminCategoriaJogosPage() {
 
   if (redirecting) return <div className="text-sm text-slate-600">Redirecionando…</div>;
 
+  async function recalcularClassificacao() {
+    try {
+      setRecalculando(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" });
+      if (!res.ok) {
+        const msg = await res.json().catch(() => null);
+        throw new Error(msg?.error || "Falha ao recalcular classificação");
+      }
+      const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+      if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setRecalculando(false);
+    }
+  }
+
+  async function gerarProximaFase() {
+    try {
+      setGerandoProximaFase(true);
+      let proximaFaseDestino: string | null = null;
+      if (fasePartidas === "GRUPOS") {
+        const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-mata-mata`, { method: "POST" });
+        const payload = (await res.json().catch(() => null)) as any;
+        if (!res.ok) {
+          if (res.status === 409 && payload?.code === "TIE_BREAK_REQUIRED") {
+            setManualTieBreakGroups(Array.isArray(payload.tieGroups) ? payload.tieGroups : []);
+            setManualTieBreakOrder({});
+            setManualTieBreakOpen(true);
+            return;
+          }
+          throw new Error(payload?.error || "Falha ao gerar mata-mata");
+        }
+        proximaFaseDestino =
+          (payload?.proximaFase as string) ||
+          (payload?.primeiraFase as string) ||
+          (payload?.faseCriada as string) ||
+          null;
+        if (!proximaFaseDestino) {
+          const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+          if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+        }
+      } else {
+        const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-proxima-fase`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ faseAtual: fasePartidas }),
+        });
+        const payload = (await res.json().catch(() => null)) as any;
+        if (!res.ok) throw new Error(payload?.error || "Falha ao gerar próxima fase");
+        proximaFaseDestino = (payload?.faseCriada || payload?.faseAtualizada) as string | null;
+        if (!proximaFaseDestino) {
+          throw new Error("A próxima fase ainda não está pronta. Verifique se todos os jogos da fase atual estão finalizados.");
+        }
+      }
+      if (proximaFaseDestino) {
+        setFasePartidas(proximaFaseDestino as any);
+        await carregarPartidas(proximaFaseDestino as any);
+      } else {
+        await carregarPartidas();
+      }
+      await carregarResultadoFinal();
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setGerandoProximaFase(false);
+    }
+  }
+
+  const FASES_PARTIDA = [
+    { id: "GRUPOS", label: "Fase de grupos" },
+    { id: "OITAVAS", label: "Oitavas" },
+    { id: "QUARTAS", label: "Quartas" },
+    { id: "SEMI", label: "Semifinal" },
+    { id: "FINAL", label: "Final" },
+  ] as const;
+  const indiceFaseAtual = FASES_PARTIDA.findIndex((f) => f.id === fasePartidas);
+  const totalFase = partidas.length;
+  const finalizadasFase = partidas.filter(partidaFinalizada).length;
+  const progressoFase = totalFase > 0 ? Math.round((finalizadasFase / totalFase) * 100) : 0;
+  const contagemStatus: Record<FiltroStatusPartida, number> = {
+    TODOS: partidasFiltradas.length,
+    A_JOGAR: partidasFiltradas.filter((p) => passaFiltroStatus(p, "A_JOGAR")).length,
+    SEM_HORARIO: partidasFiltradas.filter((p) => passaFiltroStatus(p, "SEM_HORARIO")).length,
+    FINALIZADOS: partidasFiltradas.filter((p) => passaFiltroStatus(p, "FINALIZADOS")).length,
+  };
+  const visivel = (p: Partida) => passaFiltroStatus(p, filtroStatus);
+  const classificamPorGrupo = config?.classificacao?.porGrupo ?? 0;
+  const mostrarClassificacaoLateral = fasePartidas === "GRUPOS" && classificacao.length > 0;
+  const rotuloProximaFase = fasePartidas === "GRUPOS" ? "Gerar mata-mata" : "Gerar próxima fase";
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">{titulo}</h1>
-          {categoria && (
-            <p className="text-sm text-slate-600">
-              {categoria.genero} •{" "}
-              {categoria.valorInscricao ? (
-                <>
-                  {Number(categoria.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} por atleta{" "}
-                  <span className="text-slate-500">
-                    (dupla: {(Number(categoria.valorInscricao) * 2).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})
-                  </span>
-                </>
-              ) : (
-                "Sem taxa"
-              )}{" "}
-              • {categoria.vagasMaximas ? `${categoria.vagasMaximas} vagas` : "Sem limite"}
-            </p>
-          )}
+    <div className="space-y-5">
+      <CategoriaHeader
+        slug={slug}
+        categoriaId={categoriaId}
+        categoria={categoria}
+        ativa="jogos"
+        acoes={
+          <>
+            <Menu
+              items={[
+                {
+                  label: gerandoRelatorioJogos ? "Gerando PDF…" : "Tabela de jogos (PDF)",
+                  icon: <FileText />,
+                  onSelect: () => void gerarRelatorioJogos(),
+                  disabled: !categoria || gerandoRelatorioJogos,
+                },
+                {
+                  label: gerandoRelatorioClassificacao ? "Gerando…" : "Classificação com fotos (PNG)",
+                  icon: <Crown />,
+                  onSelect: () => void gerarRelatorioClassificacao(),
+                  disabled: classificacao.length === 0 || gerandoRelatorioClassificacao,
+                },
+                {
+                  label: gerandoPlanilhaContingencia ? "Gerando Excel…" : "Excel de contingência",
+                  icon: <FileSpreadsheet />,
+                  onSelect: () => void gerarPlanilhaContingencia(),
+                  disabled: !categoria || gerandoPlanilhaContingencia,
+                },
+              ]}
+              trigger={({ toggle }) => (
+                <Button onClick={toggle} icon={<Download />}>
+                  Exportar
+                  <ChevronDown className="!h-3.5 !w-3.5" />
+                </Button>
+              )}
+            />
+            <Button
+              variant="primary"
+              disabled={gerandoProximaFase || fasePartidas === "FINAL"}
+              onClick={() => void gerarProximaFase()}
+              title="Gera o mata-mata depois dos grupos, ou sincroniza a fase seguinte"
+            >
+              {gerandoProximaFase ? "Gerando…" : rotuloProximaFase}
+              <ChevronRight />
+            </Button>
+          </>
+        }
+      />
 
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-1">
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/inscricoes`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Banknote className="h-4 w-4" />
-              Inscrições
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/configuracao`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Settings className="h-4 w-4" />
-              Configuração
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}
-              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-            >
-              <Gamepad2 className="h-4 w-4" />
-              Jogos
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/chave`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Network className="h-4 w-4" />
-              Chave
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/arbitro`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Smartphone className="h-4 w-4" />
-              Árbitro
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/sorteio`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Crown className="h-4 w-4" />
-              Sorteio live
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
+      {erro && <Alert>{erro}</Alert>}
 
       {resultadoFinal && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Concluído</div>
-              <div className="text-lg font-bold text-slate-900">Resultado final</div>
-            </div>
-            <Trophy className="h-6 w-6 text-orange-500" />
+        <Card className="flex flex-col gap-4 overflow-hidden p-5 sm:flex-row sm:items-center">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-signal text-white">
+            <Trophy className="h-6 w-6" />
           </div>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-lg border border-slate-200 p-4">
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Campeão</div>
-              <div className="mt-1 flex items-center gap-2 font-semibold text-slate-900">
-                <Crown className="h-4 w-4 text-orange-500" />
-                {resultadoFinal.campeao}
-              </div>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-4">
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Vice</div>
-              <div className="mt-1 flex items-center gap-2 font-semibold text-slate-900">
-                <Swords className="h-4 w-4 text-slate-700" />
-                {resultadoFinal.vice}
-              </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-signal-strong">Categoria concluída</div>
+            <div className="mt-1 font-display text-2xl font-bold leading-tight text-ink">{resultadoFinal.campeao}</div>
+            <div className="text-[13px] text-ink-2">
+              Campeões · vice: <span className="font-semibold text-ink">{resultadoFinal.vice}</span>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-            <button
-              type="button"
-              disabled={!categoria || gerandoRelatorioJogos}
-              onClick={gerarRelatorioJogos}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar PDF da tabela de jogos agrupada por chave"
-            >
-              <FileText className="h-4 w-4" />
-              {gerandoRelatorioJogos ? "Gerando…" : "PDF tabela jogos"}
-            </button>
+      <Card className="flex items-stretch gap-1 overflow-x-auto p-1.5 [scrollbar-width:none]">
+        {FASES_PARTIDA.map((fase, idx) => {
+          const atual = fase.id === fasePartidas;
+          const passada = idx < indiceFaseAtual;
+          return (
+            <Fragment key={fase.id}>
+              {idx > 0 && <ChevronRight className="my-auto h-4 w-4 shrink-0 text-[#b5b2aa]" />}
+              <button
+                type="button"
+                onClick={() => setFasePartidas(fase.id)}
+                aria-pressed={atual}
+                className={`flex min-w-[150px] flex-1 items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors ${
+                  atual ? "bg-ocean-soft" : "hover:bg-sand"
+                }`}
+              >
+                <span
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ${
+                    atual ? "bg-ocean text-white" : passada ? "bg-ink text-white" : "border-[1.5px] border-[#b5b2aa] text-muted"
+                  }`}
+                >
+                  {fase.id === "FINAL" ? <Crown className="h-3.5 w-3.5" /> : idx + 1}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-sm ${atual ? "font-extrabold text-ink" : "font-bold text-ink-2"}`}>{fase.label}</span>
+                  <span className={`block truncate text-xs ${atual ? "font-semibold text-ocean-strong" : "text-muted"}`}>
+                    {atual ? (carregandoPartidas ? "Carregando…" : totalFase ? `${finalizadasFase} de ${totalFase} jogos` : "Sem jogos") : "Ver jogos"}
+                  </span>
+                </span>
+                {atual && totalFase > 0 && (
+                  <span className="hidden h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-white xl:block">
+                    <span className="block h-1.5 rounded-full bg-ocean" style={{ width: `${progressoFase}%` }} />
+                  </span>
+                )}
+              </button>
+            </Fragment>
+          );
+        })}
+      </Card>
 
-            <button
-              type="button"
-              disabled={classificacao.length === 0 || gerandoRelatorioClassificacao}
-              onClick={gerarRelatorioClassificacao}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar relatório de classificação com foto dos atletas (PNG imprimível)"
-            >
-              <Crown className="h-4 w-4" />
-              {gerandoRelatorioClassificacao ? "Gerando…" : "Classificação (PNG)"}
-            </button>
-
-            <button
-              type="button"
-              disabled={!categoria || gerandoPlanilhaContingencia}
-              onClick={gerarPlanilhaContingencia}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Gerar Excel offline para contingência com lançamento e classificação por chave"
-            >
-              <FileText className="h-4 w-4" />
-              {gerandoPlanilhaContingencia ? "Gerando…" : "Excel contingência"}
-            </button>
-
-            <button
-              type="button"
-              disabled={recalculando}
-              onClick={async () => {
-                try {
-                  setRecalculando(true);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" });
-                  if (!res.ok) {
-                    const msg = await res.json().catch(() => null);
-                    throw new Error(msg?.error || "Falha ao recalcular classificação");
-                  }
-                  const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
-                  if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
-                } catch (e: any) {
-                  setErro(e?.message || "Erro inesperado");
-                } finally {
-                  setRecalculando(false);
-                }
-              }}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-            >
+      <div className={mostrarClassificacaoLateral ? "grid grid-cols-1 items-start gap-5 xl:grid-cols-[400px_minmax(0,1fr)]" : "space-y-5"}>
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-extrabold text-ink">Classificação</h2>
+            <Button variant="ghost" size="sm" disabled={recalculando} onClick={() => void recalcularClassificacao()} icon={<RefreshCw className={recalculando ? "animate-spin" : ""} />}>
               {recalculando ? "Recalculando…" : "Recalcular"}
-            </button>
-
-            <button
-              type="button"
-              disabled={gerandoProximaFase || fasePartidas === "FINAL"}
-              onClick={async () => {
-                try {
-                  setGerandoProximaFase(true);
-                  let proximaFaseDestino: string | null = null;
-                  if (fasePartidas === "GRUPOS") {
-                    const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-mata-mata`, { method: "POST" });
-                    const payload = (await res.json().catch(() => null)) as any;
-                    if (!res.ok) {
-                      if (res.status === 409 && payload?.code === "TIE_BREAK_REQUIRED") {
-                        setManualTieBreakGroups(Array.isArray(payload.tieGroups) ? payload.tieGroups : []);
-                        setManualTieBreakOrder({});
-                        setManualTieBreakOpen(true);
-                        return;
-                      }
-                      throw new Error(payload?.error || "Falha ao gerar mata-mata");
-                    }
-                    proximaFaseDestino =
-                      (payload?.proximaFase as string) ||
-                      (payload?.primeiraFase as string) ||
-                      (payload?.faseCriada as string) ||
-                      null;
-                    if (!proximaFaseDestino) {
-                      const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
-                      if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
-                    }
-                  } else {
-                    const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-proxima-fase`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ faseAtual: fasePartidas }),
-                    });
-                    const payload = (await res.json().catch(() => null)) as any;
-                    if (!res.ok) throw new Error(payload?.error || "Falha ao gerar próxima fase");
-                    proximaFaseDestino = (payload?.faseCriada || payload?.faseAtualizada) as string | null;
-                    if (!proximaFaseDestino) {
-                      throw new Error("A próxima fase ainda não está pronta. Verifique se todos os jogos da fase atual estão finalizados.");
-                    }
-                  }
-                  if (proximaFaseDestino) {
-                    setFasePartidas(proximaFaseDestino as any);
-                    await carregarPartidas(proximaFaseDestino as any);
-                  } else {
-                    await carregarPartidas();
-                  }
-                  await carregarResultadoFinal();
-                } catch (e: any) {
-                  setErro(e?.message || "Erro inesperado");
-                } finally {
-                  setGerandoProximaFase(false);
-                }
-              }}
-              className="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-white px-3 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Força a geração (mata-mata após grupos) ou sincronização da fase seguinte"
-            >
-              {gerandoProximaFase ? "Gerando…" : fasePartidas === "GRUPOS" ? "Gerar mata-mata" : "Gerar próxima fase"}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
-
-
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Classificação</h2>
-            <p className="text-sm text-slate-600">Classificação por grupo.</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {classificacao.length === 0 ? (
-            <div className="text-sm text-slate-600">Nenhuma classificação disponível (gere grupos e/ou recalcule).</div>
+            <Card>
+              <EmptyState title="Sem classificação ainda" description="Gere os grupos na aba Configuração ou recalcule depois dos primeiros jogos." />
+            </Card>
           ) : (
-            classificacao.map((g) => (
-              <div key={g.grupoId} className="rounded-lg border border-slate-200 p-4">
-                <div className="font-semibold text-slate-900 mb-3">{g.grupoNome}</div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left text-slate-500 border-b border-slate-100">
-                        <th className="py-2 pr-3 font-medium">#</th>
-                        <th className="py-2 pr-3 font-medium">Equipe</th>
-                        <th className="py-2 pr-3 font-medium">P</th>
-                        <th className="py-2 pr-3 font-medium">J</th>
-                        <th className="py-2 pr-3 font-medium">V</th>
-                        <th className="py-2 pr-3 font-medium">GP</th>
-                        <th className="py-2 pr-3 font-medium">SP</th>
-                        <th className="py-2 pr-3 font-medium">SG</th>
-                        <th className="py-2 font-medium">AP%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {g.equipes.map((e, idx) => {
-                        const ap = e.jogosJogados > 0 ? Math.round((e.pontos / (e.jogosJogados * 3)) * 100) : 0;
-                        const rowClass =
-                          idx === 0
-                            ? "bg-gradient-to-r from-amber-50 to-white border-amber-100/60"
-                            : idx === 1
-                              ? "bg-gradient-to-r from-slate-50 to-white border-slate-100/60"
-                              : "";
-                        const sgClass = e.saldoGames >= 0 ? "text-green-700 font-semibold" : "text-red-700 font-semibold";
-                        const posClass =
-                          idx === 0
-                            ? "bg-amber-100 text-amber-800"
-                            : idx === 1
-                              ? "bg-slate-200 text-slate-700"
-                              : idx === 2
-                                ? "bg-orange-100 text-orange-800"
-                                : "bg-slate-100 text-slate-600";
-                        return (
-                          <tr key={e.equipeId} className={`border-b border-slate-50 ${rowClass}`}>
-                            <td className="py-2 pr-3">
-                              <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${posClass}`}>
-                                {idx + 1}
-                              </span>
-                            </td>
-                            <td className="py-2 pr-3">
-                              <div className="flex items-center gap-2">
-                                {Boolean(e.cabecaChave) && (
-                                  <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 p-0.5 text-amber-600" title="Cabeça de chave do grupo">
-                                    <Crown className="h-3.5 w-3.5" />
-                                  </span>
-                                )}
-                                <span className="truncate leading-tight">
-                                  <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
+            <div className={mostrarClassificacaoLateral ? "space-y-3" : "grid grid-cols-1 gap-3 md:grid-cols-2"}>
+              {classificacao.map((g) => {
+                const jogosGrupo = partidas.filter((p) => (p.grupoNome || "").trim() === (g.grupoNome || "").trim());
+                const jogosGrupoFinalizados = jogosGrupo.filter(partidaFinalizada).length;
+                return (
+                  <Card key={g.grupoId} className="px-4 py-3">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="font-extrabold text-ink">{g.grupoNome}</span>
+                      {jogosGrupo.length > 0 && (
+                        <span className="text-xs tabular-nums text-muted">
+                          {jogosGrupoFinalizados}/{jogosGrupo.length} jogos
+                        </span>
+                      )}
+                    </div>
+                    <table className="w-full text-[13px]">
+                      <thead>
+                        <tr className="text-[11px] font-bold text-muted">
+                          <th className="w-7 py-1.5 text-left" />
+                          <th className="py-1.5 text-left">Dupla</th>
+                          <th className="w-8 py-1.5 text-right" title="Pontos">P</th>
+                          <th className="w-8 py-1.5 text-right" title="Jogos">J</th>
+                          <th className="w-8 py-1.5 text-right" title="Vitórias">V</th>
+                          <th className="w-10 py-1.5 text-right" title="Saldo de games">SG</th>
+                          <th className="w-11 py-1.5 text-right" title="Aproveitamento">AP</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.equipes.map((e, idx) => {
+                          const ap = e.jogosJogados > 0 ? Math.round((e.pontos / (e.jogosJogados * 3)) * 100) : 0;
+                          const classifica = classificamPorGrupo > 0 ? idx < classificamPorGrupo : idx < 2;
+                          return (
+                            <tr key={e.equipeId} className="border-t border-sand-2">
+                              <td className="py-1.5">
+                                <span
+                                  className={`inline-flex h-5 w-5 items-center justify-center rounded-md text-[11px] font-extrabold ${
+                                    classifica ? "bg-[#e3f3ea] text-[#17663f]" : "bg-sand-2 text-ink-2"
+                                  }`}
+                                >
+                                  {idx + 1}
                                 </span>
-                              </div>
-                            </td>
-                            <td className="py-2 pr-3 font-semibold text-slate-900">{e.pontos}</td>
-                            <td className="py-2 pr-3 text-slate-700">{e.jogosJogados}</td>
-                            <td className="py-2 pr-3 text-slate-700">{e.jogosVencidos}</td>
-                            <td className="py-2 pr-3 text-slate-700">{e.gamesPro ?? 0}</td>
-                            <td className="py-2 pr-3 text-slate-700">{e.setsPro ?? 0}</td>
-                            <td className={`py-2 pr-3 ${sgClass}`}>{e.saldoGames}</td>
-                            <td className="py-2 text-slate-700">{ap}%</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))
+                              </td>
+                              <td className="max-w-0 py-1.5 pr-2">
+                                <div className="flex items-center gap-1.5">
+                                  {Boolean(e.cabecaChave) && (
+                                    <span title="Cabeça de chave do grupo" className="shrink-0 text-[#b7791f]">
+                                      <Crown className="h-3.5 w-3.5" />
+                                    </span>
+                                  )}
+                                  <span className="truncate font-semibold leading-tight text-ink">
+                                    <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-1.5 text-right font-extrabold tabular-nums text-ink">{e.pontos}</td>
+                              <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosJogados}</td>
+                              <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosVencidos}</td>
+                              <td className={`py-1.5 text-right font-bold tabular-nums ${e.saldoGames >= 0 ? "text-[#17663f]" : "text-[#a11f14]"}`}>
+                                {e.saldoGames > 0 ? `+${e.saldoGames}` : e.saldoGames}
+                              </td>
+                              <td className="py-1.5 text-right tabular-nums text-ink-2">{ap}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </Card>
+                );
+              })}
+            </div>
           )}
-        </div>
-      </div>
+        </section>
 
+        <section className="space-y-3">
+          <h2 className="text-base font-extrabold text-ink">Partidas</h2>
+          <Card className="overflow-hidden">
+            <div className="flex flex-col gap-3 border-b border-line px-4 py-3 lg:flex-row lg:items-center sm:px-5">
+              <div className="-mx-1 flex gap-0.5 overflow-x-auto rounded-[10px] bg-sand-2 p-[3px] [scrollbar-width:none]">
+                {(
+                  [
+                    { id: "TODOS", label: "Todos" },
+                    { id: "A_JOGAR", label: "A jogar" },
+                    { id: "SEM_HORARIO", label: "Sem horário" },
+                    { id: "FINALIZADOS", label: "Finalizados" },
+                  ] as const
+                ).map((f) => {
+                  const on = filtroStatus === f.id;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setFiltroStatus(f.id)}
+                      className={`shrink-0 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
+                        on ? "bg-white font-bold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "font-semibold text-ink-2 hover:text-ink"
+                      }`}
+                    >
+                      {f.label} <span className="tabular-nums">{contagemStatus[f.id]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2 lg:ml-auto">
+                <select
+                  value={filtroAtletaId}
+                  onChange={(e) => setFiltroAtletaId(e.target.value)}
+                  aria-label="Filtrar partidas por atleta"
+                  className="h-9 min-w-0 flex-1 rounded-[9px] border border-line bg-white px-2.5 text-[13px] text-ink outline-none focus:border-[#b5b2aa] lg:w-56 lg:flex-none"
+                >
+                  <option value="">Todos os atletas</option>
+                  {atletasFiltroOptions.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nome}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  onClick={() => carregarPartidas()}
+                  disabled={carregandoPartidas}
+                  aria-label="Atualizar partidas"
+                  title="Atualizar partidas"
+                  className="w-9 px-0"
+                >
+                  <RefreshCw className={carregandoPartidas ? "animate-spin" : ""} />
+                </Button>
+              </div>
+            </div>
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Partidas</h2>
-            <p className="text-sm text-slate-600">Lance placares conforme a regra da categoria.</p>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
-            <select
-              value={filtroAtletaId}
-              onChange={(e) => setFiltroAtletaId(e.target.value)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-              title="Filtrar partidas por atleta"
-            >
-              <option value="">Todos atletas</option>
-              {atletasFiltroOptions.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.nome}
-                </option>
-              ))}
-            </select>
-            <select
-              value={fasePartidas}
-              onChange={(e) => setFasePartidas(e.target.value as any)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-            >
-              <option value="GRUPOS">GRUPOS</option>
-              <option value="OITAVAS">OITAVAS</option>
-              <option value="QUARTAS">QUARTAS</option>
-              <option value="SEMI">SEMI</option>
-              <option value="FINAL">FINAL</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => carregarPartidas()}
-              disabled={carregandoPartidas}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              {carregandoPartidas ? "Atualizando…" : "Atualizar"}
-            </button>
-          </div>
-        </div>
-
+            <div className="px-4 empty:hidden sm:px-5 [&>*:last-child]:mb-4">
         {classificadosByes?.classificadosParaProximaFase && classificadosByes.classificadosParaProximaFase.length > 0 && fasePartidas !== "GRUPOS" && fasePartidas !== "FINAL" && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-white p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
@@ -2156,46 +2171,55 @@ export default function AdminCategoriaJogosPage() {
             </div>
           </div>
         )}
+            </div>
 
-          {partidasFiltradas.length === 0 ? (
-            <div className="py-10 text-center text-slate-500">
-              {classificadosByes?.proximaFase === fasePartidas
-                ? "Confrontos desta fase serão gerados após o término da fase anterior."
-                : "Nenhuma partida encontrada."}
-            </div>
-          ) : fasePartidas === "GRUPOS" ? (
-            <div className="mt-4 space-y-6">
-              {partidasAgrupadasPorGrupo.map((grupo) => (
-                <section key={grupo.grupoNome} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{grupo.grupoNome}</h3>
-                    <span className="text-xs font-medium text-slate-500">{grupo.partidas.length} jogo(s)</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {grupo.partidas.map((p) => renderPartidaCard(p))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          ) : fasePartidas === "FINAL" ? (
-            <div className="mt-4 space-y-6">
-              {partidasAgrupadasDecisivas.map((grupo) => (
-                <section key={grupo.titulo} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{grupo.titulo}</h3>
-                    <span className="text-xs font-medium text-slate-500">{grupo.partidas.length} jogo(s)</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {grupo.partidas.map((p) => renderPartidaCard(p))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {partidasFiltradas.map((p) => renderPartidaCard(p))}
-            </div>
-          )}
+            {partidasFiltradas.filter(visivel).length === 0 ? (
+              <EmptyState
+                icon={<Gamepad2 />}
+                title={
+                  classificadosByes?.proximaFase === fasePartidas && partidasFiltradas.length === 0
+                    ? "Confrontos gerados ao fim da fase anterior"
+                    : partidasFiltradas.length > 0
+                      ? "Nenhuma partida neste filtro"
+                      : "Nenhuma partida nesta fase"
+                }
+                description={partidasFiltradas.length > 0 ? "Troque o filtro de status ou de atleta." : undefined}
+              />
+            ) : fasePartidas === "GRUPOS" ? (
+              <div>
+                {partidasAgrupadasPorGrupo
+                  .map((grupo) => ({ ...grupo, partidas: grupo.partidas.filter(visivel) }))
+                  .filter((grupo) => grupo.partidas.length > 0)
+                  .map((grupo) => (
+                    <section key={grupo.grupoNome}>
+                      <div className="flex items-center justify-between border-b border-sand-2 bg-paper px-4 py-2 sm:px-5">
+                        <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-muted">{grupo.grupoNome}</span>
+                        <span className="text-xs text-muted">{grupo.partidas.length} jogo(s)</span>
+                      </div>
+                      {grupo.partidas.map((p) => renderPartidaCard(p))}
+                    </section>
+                  ))}
+              </div>
+            ) : fasePartidas === "FINAL" ? (
+              <div>
+                {partidasAgrupadasDecisivas
+                  .map((grupo) => ({ ...grupo, partidas: grupo.partidas.filter(visivel) }))
+                  .filter((grupo) => grupo.partidas.length > 0)
+                  .map((grupo) => (
+                    <section key={grupo.titulo}>
+                      <div className="flex items-center justify-between border-b border-sand-2 bg-paper px-4 py-2 sm:px-5">
+                        <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-muted">{grupo.titulo}</span>
+                        <span className="text-xs text-muted">{grupo.partidas.length} jogo(s)</span>
+                      </div>
+                      {grupo.partidas.map((p) => renderPartidaCard(p))}
+                    </section>
+                  ))}
+              </div>
+            ) : (
+              <div>{partidasFiltradas.filter(visivel).map((p) => renderPartidaCard(p))}</div>
+            )}
+          </Card>
+        </section>
       </div>
 
       {editPartidaId &&
@@ -2235,53 +2259,66 @@ export default function AdminCategoriaJogosPage() {
             { aKey: "s5a", bKey: "s5b" },
           ];
 
+          const regraResumo = [
+            melhorDe > 1 ? `melhor de ${melhorDe} sets` : "set único",
+            regrasBT?.gamesPorSet ? `${regrasBT.gamesPorSet} games` : null,
+            regrasBT && tbHabilitado ? `tie-break em ${tbEm}–${tbEm}` : null,
+            superTie ? "super tie decisivo" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          const localPartida = [
+            partida.arenaNome,
+            partida.quadra ? `Quadra ${partida.quadra}` : null,
+            partida.dataHorario ? formatDataHora(partida.dataHorario) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          const inputPlacarCls =
+            "h-14 w-full rounded-xl border-[1.5px] border-[#d9d5cc] bg-white text-center font-display text-3xl font-bold tabular-nums text-ink outline-none focus:border-ink focus:ring-2 focus:ring-signal/15 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+          const inputTbCls =
+            "h-11 w-full rounded-[10px] border-[1.5px] border-[#d9d5cc] bg-white text-center font-display text-xl font-bold tabular-nums text-ink outline-none focus:border-ink [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditPartidaId(null)}>
-              <div
-                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
+            <div className="fixed inset-0 z-50 flex justify-end bg-[rgba(22,24,29,0.5)]" onMouseDown={() => setEditPartidaId(null)}>
+              <aside
+                role="dialog"
+                aria-modal="true"
+                aria-label="Lançar placar"
+                className="flex h-full w-full max-w-[560px] flex-col bg-white shadow-[-12px_0_40px_rgba(0,0,0,0.18)]"
                 onMouseDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setEditPartidaId(null);
+                }}
               >
-                <div className="p-6 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs text-slate-500 uppercase tracking-wider">Lançar placar</div>
-                      <div className="text-lg font-bold text-slate-900 leading-tight">
-                        <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} tamanho="lg" /> <span className="text-slate-400 mx-2">vs</span>{" "}
-                        <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} tamanho="lg" />
-                      </div>
+                <header className="flex items-start justify-between gap-3 border-b border-line px-5 py-5 sm:px-6">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-signal-strong">Lançar placar</div>
+                    <div className="mt-1 font-display text-[26px] font-bold leading-tight text-ink">
+                      {partida.grupoNome ?? labelFasePartida(partida.fase)}
                     </div>
-                    <button type="button" onClick={() => setEditPartidaId(null)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-                      <X className="h-4 w-4" />
-                      Fechar
-                    </button>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
+                      {getStatusBadge(partida.status, partida.dataHorario)}
+                      <span>{localPartida || "Local e horário a definir"}</span>
+                    </div>
                   </div>
+                  <Button aria-label="Fechar" className="w-10 shrink-0 px-0" onClick={() => setEditPartidaId(null)}>
+                    <X />
+                  </Button>
+                </header>
 
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Link Foto</label>
-                        <input
-                          type="text"
-                          value={fotoUrl}
-                          onChange={(e) => setFotoUrl(e.target.value)}
-                          placeholder="https://..."
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Link Transmissão</label>
-                        <input
-                          type="text"
-                          value={transmissaoUrl}
-                          onChange={(e) => setTransmissaoUrl(e.target.value)}
-                          placeholder="https://..."
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                        />
-                      </div>
+                <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+                  <div className="grid grid-cols-[76px_minmax(0,1fr)_minmax(0,1fr)] items-end gap-3">
+                    <span />
+                    <div className="text-center text-sm font-extrabold leading-tight text-ink">
+                      <NomeEquipeComSobrenome atletas={partida.equipeAAtletas} nomeEquipeFallback={partida.equipeANome || partida.equipeAId.slice(0, 8)} />
+                    </div>
+                    <div className="text-center text-sm font-extrabold leading-tight text-ink">
+                      <NomeEquipeComSobrenome atletas={partida.equipeBAtletas} nomeEquipeFallback={partida.equipeBNome || partida.equipeBId.slice(0, 8)} />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="space-y-3">
                     {camposSets.slice(0, melhorDe).map((campo, index) => {
                       const mostrarTb = index === 0 ? showTb1 : index === 1 ? showTb2 : false;
                       const tbAKey = campo.tbAKey;
@@ -2295,40 +2332,45 @@ export default function AdminCategoriaJogosPage() {
 
                       return (
                         <div key={campo.aKey} className="space-y-2">
-                          <label className="text-sm font-medium text-slate-700">{label}</label>
-                          <div className="flex items-center gap-2">
+                          <div className="grid grid-cols-[76px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-3">
+                            <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-muted">{label}</span>
                             <input
                               value={formPlacar[campo.aKey]}
                               onChange={(e) => setFormPlacar((p) => ({ ...p, [campo.aKey]: e.target.value }))}
                               type="number"
-                              className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                              inputMode="numeric"
+                              aria-label={`${label} — dupla A`}
+                              autoFocus={index === 0}
+                              className={inputPlacarCls}
                             />
-                            <span className="text-slate-400">x</span>
                             <input
                               value={formPlacar[campo.bKey]}
                               onChange={(e) => setFormPlacar((p) => ({ ...p, [campo.bKey]: e.target.value }))}
                               type="number"
-                              className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                              inputMode="numeric"
+                              aria-label={`${label} — dupla B`}
+                              className={inputPlacarCls}
                             />
                           </div>
                           {mostrarTb && tbAKey && tbBKey ? (
-                            <div className="pt-2">
-                              <div className="text-xs text-slate-500 mb-1">Tie-break</div>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  value={formPlacar[tbAKey]}
-                                  onChange={(e) => setFormPlacar((p) => ({ ...p, [tbAKey]: e.target.value }))}
-                                  type="number"
-                                  className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                                />
-                                <span className="text-slate-400">x</span>
-                                <input
-                                  value={formPlacar[tbBKey]}
-                                  onChange={(e) => setFormPlacar((p) => ({ ...p, [tbBKey]: e.target.value }))}
-                                  type="number"
-                                  className="w-24 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                                />
-                              </div>
+                            <div className="grid grid-cols-[76px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-3">
+                              <span className="text-xs font-semibold text-muted">Tie-break</span>
+                              <input
+                                value={formPlacar[tbAKey]}
+                                onChange={(e) => setFormPlacar((p) => ({ ...p, [tbAKey]: e.target.value }))}
+                                type="number"
+                                inputMode="numeric"
+                                aria-label={`Tie-break ${label} — dupla A`}
+                                className={inputTbCls}
+                              />
+                              <input
+                                value={formPlacar[tbBKey]}
+                                onChange={(e) => setFormPlacar((p) => ({ ...p, [tbBKey]: e.target.value }))}
+                                type="number"
+                                inputMode="numeric"
+                                aria-label={`Tie-break ${label} — dupla B`}
+                                className={inputTbCls}
+                              />
                             </div>
                           ) : null}
                         </div>
@@ -2336,55 +2378,83 @@ export default function AdminCategoriaJogosPage() {
                     })}
                   </div>
 
-                  <div className="flex items-center justify-end gap-2">
-                    <button type="button" onClick={() => setEditPartidaId(null)} className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                      Cancelar
-                    </button>
-                    {(partida.status === "FINALIZADA" || partida.status === "WO") && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            setSalvandoPartida(true);
-                            setErro(null);
-                            const res = await fetch(
-                              `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partida.id}/cancelar-placar`,
-                              { method: "POST" }
-                            );
-                            const payload = (await res.json().catch(() => null)) as any;
-                            if (!res.ok) throw new Error(payload?.error || "Falha ao cancelar placar");
-                            if (fasePartidas === "GRUPOS") {
-                              await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" }).catch(() => null);
-                              const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
-                              if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
-                            }
-                            await carregarPartidas();
-                            await carregarResultadoFinal();
-                            setEditPartidaId(null);
-                          } catch (e: any) {
-                            setErro(e?.message || "Erro inesperado");
-                          } finally {
-                            setSalvandoPartida(false);
-                          }
-                        }}
-                        disabled={salvandoPartida}
-                        className="inline-flex items-center justify-center rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        Cancelar placar
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => salvarPlacar(partida)}
-                      disabled={salvandoPartida}
-                      className="inline-flex items-center justify-center gap-2 rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-                    >
-                      <Save className="h-4 w-4" />
-                      {salvandoPartida ? "Salvando…" : "Salvar placar"}
-                    </button>
-                  </div>
+                  {regraResumo && (
+                    <div className="rounded-[10px] bg-sand px-3 py-2.5 text-xs text-ink-2">
+                      Regra desta fase: <span className="font-semibold text-ink">{regraResumo}</span>
+                    </div>
+                  )}
+
+                  <details className="group rounded-[10px] border border-line">
+                    <summary className="cursor-pointer list-none px-3 py-2.5 text-[13px] font-bold text-ink-2 hover:text-ink">
+                      Foto e transmissão <span className="font-medium text-muted">(opcional)</span>
+                    </summary>
+                    <div className="grid grid-cols-1 gap-3 border-t border-line px-3 py-3">
+                      <label className="space-y-1">
+                        <span className="text-xs font-semibold text-muted">Link da foto</span>
+                        <input
+                          type="text"
+                          value={fotoUrl}
+                          onChange={(e) => setFotoUrl(e.target.value)}
+                          placeholder="https://..."
+                          className="h-10 w-full rounded-[10px] border border-[#d9d5cc] px-3 text-sm outline-none focus:border-[#b5b2aa]"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs font-semibold text-muted">Link da transmissão</span>
+                        <input
+                          type="text"
+                          value={transmissaoUrl}
+                          onChange={(e) => setTransmissaoUrl(e.target.value)}
+                          placeholder="https://..."
+                          className="h-10 w-full rounded-[10px] border border-[#d9d5cc] px-3 text-sm outline-none focus:border-[#b5b2aa]"
+                        />
+                      </label>
+                    </div>
+                  </details>
                 </div>
-              </div>
+
+                <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-paper px-5 py-4 sm:px-6">
+                  {(partida.status === "FINALIZADA" || partida.status === "WO") && (
+                    <Button
+                      variant="danger"
+                      className="mr-auto"
+                      onClick={async () => {
+                        try {
+                          setSalvandoPartida(true);
+                          setErro(null);
+                          const res = await fetch(
+                            `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partida.id}/cancelar-placar`,
+                            { method: "POST" }
+                          );
+                          const payload = (await res.json().catch(() => null)) as any;
+                          if (!res.ok) throw new Error(payload?.error || "Falha ao cancelar placar");
+                          if (fasePartidas === "GRUPOS") {
+                            await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/recalcular-classificacao`, { method: "POST" }).catch(() => null);
+                            const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+                            if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+                          }
+                          await carregarPartidas();
+                          await carregarResultadoFinal();
+                          setEditPartidaId(null);
+                        } catch (e: any) {
+                          setErro(e?.message || "Erro inesperado");
+                        } finally {
+                          setSalvandoPartida(false);
+                        }
+                      }}
+                      disabled={salvandoPartida}
+                    >
+                      Cancelar placar
+                    </Button>
+                  )}
+                  <Button variant="ghost" onClick={() => setEditPartidaId(null)}>
+                    Fechar
+                  </Button>
+                  <Button variant="primary" onClick={() => salvarPlacar(partida)} disabled={salvandoPartida} icon={<Save />}>
+                    {salvandoPartida ? "Salvando…" : "Salvar placar"}
+                  </Button>
+                </footer>
+              </aside>
             </div>
           );
         })()}

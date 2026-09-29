@@ -620,11 +620,7 @@ export default function AdminPainelQuadrasPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">Painel de quadras</h1>
+          <h1 className="font-display text-[32px] font-bold leading-none text-ink sm:text-[40px]">Painel de quadras</h1>
           <p className="text-sm text-slate-600">{painel?.torneio.nome || "Torneio"} • acompanhamento operacional dos jogos</p>
         </div>
         <div className="flex items-center gap-2">

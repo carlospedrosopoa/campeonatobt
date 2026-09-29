@@ -35,3 +35,6 @@ next-env.d.ts
 
 # Secrets
 web/google-cloud-credentials.json
+
+# Backups locais de banco (dumps Neon)
+backups/

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Banknote, Calendar, Clock, Crown, FileText, Gamepad2, ImageIcon, Info, MapPin, Network, Pencil, Save, Settings, Smartphone, Swords, Trophy, Trash2, X } from "lucide-react";
+import { CategoriaHeader } from "@/components/admin/categoria-header";
 import { gerarCardPartidaAdmin, gerarCardProgramacaoAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
@@ -1363,93 +1364,49 @@ export default function AdminCategoriaJogosSuperPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">{titulo}</h1>
-          {categoria && (
-            <p className="text-sm text-slate-600">
-              Critério: Pontos → Vitórias → Sets pró → Saldo de games (super tie não conta)
-            </p>
-          )}
-
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-1">
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/inscricoes`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Banknote className="h-4 w-4" />
-              Inscrições
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/configuracao`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Settings className="h-4 w-4" />
-              Configuração
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}
-              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-            >
-              <Gamepad2 className="h-4 w-4" />
-              Jogos
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/chave`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Network className="h-4 w-4" />
-              Chave
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos/arbitro`}
-              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Smartphone className="h-4 w-4" />
-              Árbitro
-            </Link>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <select
-            value={filtroAtletaId}
-            onChange={(e) => setFiltroAtletaId(e.target.value)}
-            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-            title="Filtrar partidas por atleta"
-          >
-            <option value="">Todos atletas</option>
-            {atletasFiltroOptions.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.nome}
-              </option>
-            ))}
-          </select>
-          <select
-            value={fase}
-            onChange={(e) => setFase(e.target.value as any)}
-            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-          >
-            <option value="GRUPOS">GRUPOS</option>
-            <option value="OITAVAS">OITAVAS</option>
-            <option value="QUARTAS">QUARTAS</option>
-            <option value="SEMI">SEMI</option>
-            <option value="FINAL">FINAL</option>
-          </select>
-          <button
-            type="button"
-            onClick={() => carregarPartidas()}
-            disabled={carregandoPartidas}
-            className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {carregandoPartidas ? "Atualizando…" : "Atualizar"}
-          </button>
-        </div>
-      </div>
+      <CategoriaHeader
+        slug={slug}
+        categoriaId={categoriaId}
+        categoria={categoria}
+        ativa="jogos"
+        resumo="Critério: Pontos → Vitórias → Sets pró → Saldo de games (super tie não conta)"
+        acoes={
+          <>
+              <select
+                value={filtroAtletaId}
+                onChange={(e) => setFiltroAtletaId(e.target.value)}
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                title="Filtrar partidas por atleta"
+              >
+                <option value="">Todos atletas</option>
+                {atletasFiltroOptions.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.nome}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={fase}
+                onChange={(e) => setFase(e.target.value as any)}
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+              >
+                <option value="GRUPOS">GRUPOS</option>
+                <option value="OITAVAS">OITAVAS</option>
+                <option value="QUARTAS">QUARTAS</option>
+                <option value="SEMI">SEMI</option>
+                <option value="FINAL">FINAL</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => carregarPartidas()}
+                disabled={carregandoPartidas}
+                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {carregandoPartidas ? "Atualizando…" : "Atualizar"}
+              </button>
+          </>
+        }
+      />
 
       {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
 

@@ -232,14 +232,7 @@ export default function AdminCobrancaInscricoesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <Link
-            href={`/admin/torneios/${slug}`}
-            className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">Cobrança de inscrições</h1>
+          <h1 className="font-display text-[32px] font-bold leading-none text-ink sm:text-[40px]">Cobrança de inscrições</h1>
           <p className="text-sm text-slate-600">
             {data?.torneio?.nome ? `${data.torneio.nome} • ` : ""}
             {totalAtletas} atletas • pendente total {formatCurrency(totalPendente)}

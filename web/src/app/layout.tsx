@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
+import { NavbarGate } from "@/components/layout/NavbarGate";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -19,7 +20,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
-        <Navbar />
+        <NavbarGate>
+          <Navbar />
+        </NavbarGate>
         <main className="flex-1">
           {children}
         </main>

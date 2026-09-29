@@ -305,12 +305,8 @@ export default function AdminNovoTorneioPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Link href="/admin/torneios" className="inline-flex items-center gap-2 hover:text-slate-900">
-              <ArrowLeft className="h-4 w-4" />
-              Voltar
-            </Link>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">Novo torneio</h1>
+          <h1 className="font-display text-[32px] font-bold leading-none text-ink sm:text-[40px]">Novo torneio</h1>
           <p className="text-sm text-slate-600">Cadastre as informações básicas do evento.</p>
         </div>
       </div>

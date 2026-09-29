@@ -18,3 +18,70 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Sistema visual "Quadra" do admin: tokens disponiveis como utilitarios (bg-sand, text-ink, bg-signal, font-display…) */
+@theme {
+  --font-display: var(--font-barlow), "Barlow Semi Condensed", ui-sans-serif, system-ui, sans-serif;
+
+  --color-sand: #f5f3ee;
+  --color-sand-2: #efede8;
+  --color-paper: #fbfaf7;
+  --color-line: #e4e1da;
+  --color-ink: #17181c;
+  --color-ink-2: #4a4d55;
+  --color-muted: #6b6f78;
+  --color-rail: #16181d;
+  --color-rail-2: #22252c;
+  --color-rail-3: #2e323a;
+  --color-signal: #d9480f;
+  --color-signal-strong: #b83d0b;
+  --color-signal-soft: #fdebdd;
+  --color-ocean: #0b6e99;
+  --color-ocean-strong: #0a5a7d;
+  --color-ocean-soft: #e1f0f7;
+}
+
+/*
+ * Escopo do admin: reaponta as escalas slate/orange/blue do Tailwind para a paleta Quadra.
+ * Assim todas as telas do admin (inclusive as que ainda usam classes antigas) ficam coerentes,
+ * sem afetar o site publico.
+ */
+.admin-theme {
+  --color-slate-50: #f7f5f1;
+  --color-slate-100: #efede8;
+  --color-slate-200: #e4e1da;
+  --color-slate-300: #d3cfc7;
+  --color-slate-400: #9a9ca3;
+  --color-slate-500: #6b6f78;
+  --color-slate-600: #4a4d55;
+  --color-slate-700: #33363d;
+  --color-slate-800: #22252c;
+  --color-slate-900: #17181c;
+  --color-slate-950: #0f1013;
+
+  --color-orange-50: #fef4ec;
+  --color-orange-100: #fdebdd;
+  --color-orange-200: #f9d2b6;
+  --color-orange-300: #f3b084;
+  --color-orange-400: #ea7a42;
+  --color-orange-500: #d9480f;
+  --color-orange-600: #b83d0b;
+  --color-orange-700: #9a3412;
+  --color-orange-800: #7c2d12;
+  --color-orange-900: #5f230e;
+
+  --color-blue-50: #eef6fa;
+  --color-blue-100: #e1f0f7;
+  --color-blue-200: #bfddeb;
+  --color-blue-300: #8cc3dc;
+  --color-blue-400: #4b9ec3;
+  --color-blue-500: #1581ae;
+  --color-blue-600: #0b6e99;
+  --color-blue-700: #0a5a7d;
+  --color-blue-800: #0b4a66;
+  --color-blue-900: #0c3d53;
+
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  color: var(--color-ink);
+  background: var(--color-sand);
+}

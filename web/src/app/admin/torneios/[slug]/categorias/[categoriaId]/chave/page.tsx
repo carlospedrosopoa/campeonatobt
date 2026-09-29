@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Banknote, Gamepad2, Network, Pencil, PlusCircle, RefreshCcw, Save, Settings } from "lucide-react";
+import { CategoriaHeader } from "@/components/admin/categoria-header";
 
 type Categoria = {
   id: string;
@@ -479,77 +480,44 @@ export default function AdminCategoriaChavePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">{categoria ? `Chave — ${categoria.nome}` : "Chave"}</h1>
-          <p className="text-sm text-slate-600">Acompanhamento do mata-mata em colunas.</p>
-
-          <div className="mt-4 inline-flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white p-1 sm:w-auto">
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/inscricoes`}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-initial"
-            >
-              <Banknote className="h-4 w-4" />
-              Inscrições
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/configuracao`}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-initial"
-            >
-              <Settings className="h-4 w-4" />
-              Configuração
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos`}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-initial"
-            >
-              <Gamepad2 className="h-4 w-4" />
-              Jogos
-            </Link>
-            <Link
-              href={`/admin/torneios/${slug}/categorias/${categoriaId}/chave`}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-medium text-white sm:flex-initial"
-            >
-              <Network className="h-4 w-4" />
-              Chave
-            </Link>
-          </div>
-        </div>
-
-        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-          <button
-            type="button"
-            disabled={atualizando}
-            onClick={async () => {
-              try {
-                setAtualizando(true);
-                const [isSuper, classRows] = await Promise.all([carregarTorneioSuper(), carregarClassificacao()]);
-                setSuperCampeonato(isSuper);
-                setClassificacao(classRows);
-                await carregarChave();
-              } finally {
-                setAtualizando(false);
-              }
-            }}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 lg:w-auto"
-          >
-            <RefreshCcw className="h-4 w-4" />
-            {atualizando ? "Atualizando…" : "Atualizar"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void abrirMontagemManual("OITAVAS")}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 lg:w-auto"
-          >
-            <PlusCircle className="h-4 w-4" />
-            Montar fase manual
-          </button>
-        </div>
-      </div>
+      <CategoriaHeader
+        slug={slug}
+        categoriaId={categoriaId}
+        categoria={categoria}
+        ativa="chave"
+        resumo="Acompanhamento do mata-mata em colunas."
+        acoes={
+          <>
+              <button
+                type="button"
+                disabled={atualizando}
+                onClick={async () => {
+                  try {
+                    setAtualizando(true);
+                    const [isSuper, classRows] = await Promise.all([carregarTorneioSuper(), carregarClassificacao()]);
+                    setSuperCampeonato(isSuper);
+                    setClassificacao(classRows);
+                    await carregarChave();
+                  } finally {
+                    setAtualizando(false);
+                  }
+                }}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 lg:w-auto"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                {atualizando ? "Atualizando…" : "Atualizar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void abrirMontagemManual("OITAVAS")}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 lg:w-auto"
+              >
+                <PlusCircle className="h-4 w-4" />
+                Montar fase manual
+              </button>
+          </>
+        }
+      />
 
       {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
 

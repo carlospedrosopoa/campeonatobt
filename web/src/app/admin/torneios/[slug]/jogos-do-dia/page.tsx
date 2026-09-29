@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, FileText, ImageIcon, Loader2, MapPin, Pencil, RefreshCw, Save, Users, X } from "lucide-react";
+import { Calendar, FileText, ImageIcon, Loader2, MapPin, MoreHorizontal, Pencil, RefreshCw, Save, Users, X } from "lucide-react";
+import { Alert, Badge, Button, Card, EmptyState, Menu, PageHeader } from "@/components/admin/ui";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { isRegrasBeachTennisSets, isRegrasVoleiSets, type RegrasPartidaConfig, type RegrasPartidaSets } from "@/lib/regras-partida";
 
@@ -66,18 +66,11 @@ function fotoSrc(url?: string | null) {
 }
 
 const getStatusBadge = (status: string) => {
-  const styles: Record<string, string> = {
-    AGENDADA: "bg-blue-50 text-blue-700 border-blue-100",
-    FINALIZADA: "bg-green-50 text-green-700 border-green-100",
-    WO: "bg-red-50 text-red-700 border-red-100",
-    CANCELADA: "bg-slate-100 text-slate-500 border-slate-200",
-  };
-  const className = styles[status] || "bg-slate-50 text-slate-600 border-slate-100";
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${className}`}>
-      {status}
-    </span>
-  );
+  if (status === "AGENDADA") return <Badge tone="warning">A jogar</Badge>;
+  if (status === "FINALIZADA") return <Badge tone="success">Finalizado</Badge>;
+  if (status === "WO") return <Badge tone="danger">W.O.</Badge>;
+  if (status === "CANCELADA") return <Badge tone="neutral">Cancelada</Badge>;
+  return <Badge tone="neutral">{status}</Badge>;
 };
 
 function ymdSaoPaulo(date = new Date()) {
@@ -108,6 +101,7 @@ export default function AdminJogosDoDiaPage() {
   const [atualizandoPlacares, setAtualizandoPlacares] = useState(false);
   const [dataSelecionada, setDataSelecionada] = useState(() => ymdSaoPaulo());
   const [atletasAtualizando, setAtletasAtualizando] = useState<Record<string, boolean>>({});
+  const [filtroJogosDia, setFiltroJogosDia] = useState<"TODOS" | "A_JOGAR" | "FINALIZADOS">("TODOS");
 
   const [editPartida, setEditPartida] = useState<Partida | null>(null);
   const [salvandoPlacar, setSalvandoPlacar] = useState(false);
@@ -656,230 +650,221 @@ export default function AdminJogosDoDiaPage() {
     }
   }
 
+  const finalizadaJdd = (p: Partida) => p.status === "FINALIZADA" || p.status === "WO";
+  const contagemJdd = {
+    TODOS: partidas.length,
+    A_JOGAR: partidas.filter((p) => p.status === "AGENDADA").length,
+    FINALIZADOS: partidas.filter(finalizadaJdd).length,
+  };
+  const partidasVisiveis = partidas.filter((p) =>
+    filtroJogosDia === "TODOS" ? true : filtroJogosDia === "FINALIZADOS" ? finalizadaJdd(p) : p.status === "AGENDADA",
+  );
+
+  const avatares = (atletas: Partida["equipeAAtletas"]) => (
+    <div className="flex shrink-0 -space-x-2">
+      {(atletas ?? []).slice(0, 2).map((a) => (
+        <button
+          key={a.id}
+          type="button"
+          onClick={() => atualizarFotoAtleta(a.id)}
+          disabled={Boolean(atletasAtualizando[a.id])}
+          title="Atualizar foto do Play Na Quadra"
+          className="relative h-8 w-8 rounded-full border-2 border-white bg-sand-2 disabled:opacity-60"
+        >
+          <img
+            src={fotoSrc(a.fotoUrl)}
+            onError={(e) => {
+              const el = e.currentTarget as HTMLImageElement;
+              el.src = avatarPlaceholder;
+            }}
+            className="h-full w-full rounded-full object-cover"
+            alt={a.nome}
+          />
+          {atletasAtualizando[a.id] && (
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-white/70">
+              <Loader2 className="h-4 w-4 animate-spin text-ink-2" />
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">Jogos do Dia</h1>
-          <p className="text-sm text-slate-600">
-            {torneio?.nome} • {datePtBrFromYmd(dataSelecionada)}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
-            <Calendar className="h-4 w-4 text-slate-500" />
-            <input
-              type="date"
-              value={dataSelecionada}
-              onChange={(e) => setDataSelecionada(e.target.value)}
-              className="bg-transparent outline-none text-slate-700"
+    <div className="space-y-5">
+      <PageHeader
+        title="Jogos do dia"
+        description={`${torneio?.nome ?? ""}${torneio?.nome ? " · " : ""}${datePtBrFromYmd(dataSelecionada)}`}
+        actions={
+          <>
+            <label className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-[#d9d5cc] bg-white px-3 text-sm">
+              <Calendar className="h-4 w-4 text-muted" />
+              <input
+                type="date"
+                value={dataSelecionada}
+                onChange={(e) => setDataSelecionada(e.target.value)}
+                aria-label="Data dos jogos"
+                className="bg-transparent text-ink outline-none"
+              />
+            </label>
+            <Menu
+              items={[
+                {
+                  label: sincronizandoFotos ? "Atualizando fotos…" : "Atualizar fotos dos atletas",
+                  icon: <Users />,
+                  onSelect: () => void sincronizarFotos(),
+                  disabled: sincronizandoFotos || partidas.length === 0 || carregando,
+                },
+                {
+                  label: gerandoRelatorio ? "Gerando…" : "Relatório do dia (imprimir/PNG)",
+                  icon: <FileText />,
+                  onSelect: () => void gerarRelatorioHTML(),
+                  disabled: gerandoRelatorio || partidas.length === 0,
+                },
+              ]}
+              trigger={({ toggle }) => (
+                <Button onClick={toggle} aria-label="Mais ações" className="w-10 px-0">
+                  <MoreHorizontal />
+                </Button>
+              )}
             />
-          </div>
-          <button
-            onClick={sincronizarFotos}
-            disabled={sincronizandoFotos || partidas.length === 0 || carregando}
-            className="inline-flex items-center gap-2 rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-          >
-            <Users className="h-4 w-4" />
-            {sincronizandoFotos ? "Atualizando fotos..." : "Atualizar fotos"}
-          </button>
-          <button
-            onClick={atualizarPlacares}
-            disabled={atualizandoPlacares || carregando}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${atualizandoPlacares ? 'animate-spin' : ''}`} />
-            {atualizandoPlacares ? "Atualizando placares..." : "Atualizar placar"}
-          </button>
-          <button
-            onClick={gerarRelatorioHTML}
-            disabled={gerandoRelatorio || partidas.length === 0}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <FileText className="h-4 w-4" />
-            {gerandoRelatorio ? "Gerando..." : "Gerar Relatório"}
-          </button>
-          <button
-            onClick={() => carregarDados(dataSelecionada)}
-            disabled={carregando}
-            className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${carregando ? 'animate-spin' : ''}`} />
-            Atualizar
-          </button>
-        </div>
+            <Button onClick={() => void atualizarPlacares()} disabled={atualizandoPlacares || carregando} icon={<RefreshCw className={atualizandoPlacares ? "animate-spin" : ""} />}>
+              {atualizandoPlacares ? "Atualizando…" : "Atualizar placares"}
+            </Button>
+            <Button
+              variant="dark"
+              onClick={() => carregarDados(dataSelecionada)}
+              disabled={carregando}
+              aria-label="Recarregar jogos"
+              title="Recarregar jogos"
+              className="w-10 px-0"
+            >
+              <RefreshCw className={carregando ? "animate-spin" : ""} />
+            </Button>
+          </>
+        }
+      />
+
+      {erro && <Alert>{erro}</Alert>}
+
+      <div className="flex gap-0.5 self-start overflow-x-auto rounded-[10px] bg-sand-2 p-[3px] [scrollbar-width:none] sm:inline-flex">
+        {(
+          [
+            { id: "TODOS", label: "Todos" },
+            { id: "A_JOGAR", label: "A jogar" },
+            { id: "FINALIZADOS", label: "Finalizados" },
+          ] as const
+        ).map((f) => {
+          const on = filtroJogosDia === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setFiltroJogosDia(f.id)}
+              className={`shrink-0 rounded-lg px-3.5 py-2 text-sm transition-colors ${
+                on ? "bg-white font-bold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "font-semibold text-ink-2 hover:text-ink"
+              }`}
+            >
+              {f.label} <span className="tabular-nums">{contagemJdd[f.id]}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
         {carregando ? (
-          Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-48 rounded-xl bg-slate-50 animate-pulse border border-slate-100" />
-          ))
-        ) : partidas.length === 0 ? (
-          <div className="col-span-full py-20 text-center bg-white rounded-xl border border-dashed border-slate-200">
-            <Calendar className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">Nenhum jogo agendado para esta data.</p>
-          </div>
+          Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-44 animate-pulse rounded-[14px] border border-line bg-white" />)
+        ) : partidasVisiveis.length === 0 ? (
+          <Card className="col-span-full">
+            <EmptyState
+              icon={<Calendar />}
+              title={partidas.length === 0 ? "Nenhum jogo agendado para esta data" : "Nenhum jogo neste filtro"}
+              description={partidas.length === 0 ? "Escolha outra data no seletor acima." : undefined}
+            />
+          </Card>
         ) : (
-          partidas.map((p) => (
-            <div key={p.id} className="group relative flex flex-col justify-between rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex flex-col gap-1">
-                    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-slate-600 w-fit">
-                      {p.categoriaNome}
-                    </span>
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                      {p.arenaNome ? (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-slate-400" />
-                          {p.arenaNome}
-                          {p.quadra && <span className="text-slate-400">• Q. {p.quadra}</span>}
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-slate-400">
-                          <MapPin className="h-3 w-3" />
-                          Local a definir
-                        </span>
-                      )}
+          partidasVisiveis.map((p) => {
+            const placar = textoPlacar(p);
+            const finalizada = finalizadaJdd(p);
+            const data = p.dataHorario ? new Date(p.dataHorario) : null;
+            const hora =
+              data && !Number.isNaN(data.getTime())
+                ? data.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
+                : null;
+            return (
+              <Card key={p.id} className="flex flex-col gap-3 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-display text-xl font-bold leading-none tabular-nums text-ink">{hora ?? "—"}</span>
+                      <span className="truncate text-xs font-bold text-ink-2">{p.categoriaNome}</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-1 text-xs text-muted">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">
+                        {p.arenaNome ? `${p.arenaNome}${p.quadra ? ` · Quadra ${p.quadra}` : ""}` : p.quadra ? `Quadra ${p.quadra}` : "Local a definir"}
+                      </span>
                     </div>
                   </div>
                   {getStatusBadge(p.status)}
                 </div>
 
-                <div className="flex items-center justify-between gap-4 mb-4">
-                  <div className="flex-1 text-center">
-                    <div className="flex items-center justify-center -space-x-2 mb-2">
-                      {(p.equipeAAtletas ?? []).slice(0, 2).map((a) => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          onClick={() => atualizarFotoAtleta(a.id)}
-                          disabled={Boolean(atletasAtualizando[a.id])}
-                          title="Atualizar foto do Play Na Quadra"
-                          className="relative h-9 w-9 rounded-full border-2 border-white bg-slate-100 shadow-sm disabled:opacity-60"
-                        >
-                          <img
-                            src={fotoSrc(a.fotoUrl)}
-                            onError={(e) => {
-                              const el = e.currentTarget as HTMLImageElement;
-                              el.src = avatarPlaceholder;
-                            }}
-                            className="h-full w-full rounded-full object-cover"
-                            alt={a.nome}
-                          />
-                          {atletasAtualizando[a.id] && (
-                            <span className="absolute inset-0 rounded-full bg-white/70 flex items-center justify-center">
-                              <Loader2 className="h-4 w-4 animate-spin text-slate-600" />
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="font-bold text-slate-900 leading-tight mb-1">
-                      {p.equipeANome || "A definir"}
-                    </div>
-                    <div className="text-[10px] text-slate-500 line-clamp-1">
-                      {p.equipeAAtletas?.map(a => a.nome).join(' / ')}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2.5">
+                    {avatares(p.equipeAAtletas)}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-extrabold leading-tight text-ink">{p.equipeANome || "A definir"}</div>
+                      <div className="truncate text-[11px] text-muted">{p.equipeAAtletas?.map((a) => a.nome).join(" / ")}</div>
                     </div>
                   </div>
-                  
-                  <div className="flex flex-col items-center justify-center min-w-[2.5rem]">
-                    {textoPlacar(p) ? (
-                      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-center min-w-[4.5rem]">
-                        <span className="block text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Placar</span>
-                        <div className="mt-1 space-y-0.5">
-                          {linhasPlacar(p).map((linha, index) => (
-                            <span key={`${p.id}-placar-${index}`} className="block text-xs font-bold leading-tight text-emerald-800">
-                              {linha}
-                            </span>
-                          ))}
+                  <div className="flex items-center gap-2.5">
+                    {avatares(p.equipeBAtletas)}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-extrabold leading-tight text-ink">{p.equipeBNome || "A definir"}</div>
+                      <div className="truncate text-[11px] text-muted">{p.equipeBAtletas?.map((a) => a.nome).join(" / ")}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {placar && (
+                  <div className="rounded-[10px] bg-sand px-3 py-2">
+                    <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-muted">Placar</span>
+                    <div className="mt-0.5 space-y-0.5">
+                      {linhasPlacar(p).map((linha, index) => (
+                        <div key={`${p.id}-placar-${index}`} className="font-display text-base font-bold leading-tight tabular-nums text-ink">
+                          {linha}
                         </div>
-                      </div>
-                    ) : (
-                      <span className="text-sm font-black text-slate-300 italic">VS</span>
-                    )}
-                  </div>
-
-                  <div className="flex-1 text-center">
-                    <div className="flex items-center justify-center -space-x-2 mb-2">
-                      {(p.equipeBAtletas ?? []).slice(0, 2).map((a) => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          onClick={() => atualizarFotoAtleta(a.id)}
-                          disabled={Boolean(atletasAtualizando[a.id])}
-                          title="Atualizar foto do Play Na Quadra"
-                          className="relative h-9 w-9 rounded-full border-2 border-white bg-slate-100 shadow-sm disabled:opacity-60"
-                        >
-                          <img
-                            src={fotoSrc(a.fotoUrl)}
-                            onError={(e) => {
-                              const el = e.currentTarget as HTMLImageElement;
-                              el.src = avatarPlaceholder;
-                            }}
-                            className="h-full w-full rounded-full object-cover"
-                            alt={a.nome}
-                          />
-                          {atletasAtualizando[a.id] && (
-                            <span className="absolute inset-0 rounded-full bg-white/70 flex items-center justify-center">
-                              <Loader2 className="h-4 w-4 animate-spin text-slate-600" />
-                            </span>
-                          )}
-                        </button>
                       ))}
                     </div>
-                    <div className="font-bold text-slate-900 leading-tight mb-1">
-                      {p.equipeBNome || "A definir"}
-                    </div>
-                    <div className="text-[10px] text-slate-500 line-clamp-1">
-                      {p.equipeBAtletas?.map(a => a.nome).join(' / ')}
-                    </div>
                   </div>
-                </div>
-              </div>
+                )}
 
-              <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
-                <div className="text-xs font-bold text-slate-700">
-                  {formatDataHora(p.dataHorario) || "Horário a definir"}
-                </div>
-                
-                <div className="flex items-center gap-2">
+                <div className="mt-auto flex items-center gap-2">
                   {p.status !== "CANCELADA" && (
-                    <button
-                      type="button"
+                    <Button
+                      variant={finalizada ? "secondary" : "primary"}
                       onClick={() => abrirModalPlacar(p)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm hover:bg-slate-800 transition-colors"
+                      icon={<Pencil />}
+                      className="h-11 flex-1"
                     >
-                      <Pencil className="h-3.5 w-3.5" />
-                      {textoPlacar(p) ? "Editar placar" : "Informar placar"}
-                    </button>
+                      {placar ? "Editar placar" : "Lançar placar"}
+                    </Button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => gerarCardPartida(p)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 shadow-sm hover:bg-slate-50 transition-colors"
-                  >
-                    <ImageIcon className="h-3.5 w-3.5" />
-                    Gerar Card
-                  </button>
+                  <Button onClick={() => gerarCardPartida(p)} aria-label="Gerar card da partida" title="Gerar card da partida" className="h-11 w-11 px-0">
+                    <ImageIcon />
+                  </Button>
                 </div>
-              </div>
-            </div>
-          ))
+              </Card>
+            );
+          })
         )}
       </div>
 
       {editPartida && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditPartida(null)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(22,24,29,0.5)] sm:items-center sm:p-4" onMouseDown={() => setEditPartida(null)}>
           <div
-            className="w-full max-w-lg rounded-xl bg-white shadow-xl"
+            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
             onMouseDown={(e) => {
               e.stopPropagation();
             }}
@@ -950,14 +935,14 @@ export default function AdminJogosDoDiaPage() {
                         <div key={campo.aKey} className="space-y-2">
                           <div className="grid grid-cols-3 gap-2 items-center">
                             <div className="text-xs font-bold text-slate-700">{label}</div>
-                            <input value={formPlacar[campo.aKey]} onChange={(e) => updatePlacarField(campo.aKey, e.target.value)} inputMode="numeric" className="rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-                            <input value={formPlacar[campo.bKey]} onChange={(e) => updatePlacarField(campo.bKey, e.target.value)} inputMode="numeric" className="rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
+                            <input value={formPlacar[campo.aKey]} onChange={(e) => updatePlacarField(campo.aKey, e.target.value)} inputMode="numeric" className="h-12 rounded-xl border-[1.5px] border-[#d9d5cc] px-2 text-center font-display text-2xl font-bold tabular-nums outline-none focus:border-ink" />
+                            <input value={formPlacar[campo.bKey]} onChange={(e) => updatePlacarField(campo.bKey, e.target.value)} inputMode="numeric" className="h-12 rounded-xl border-[1.5px] border-[#d9d5cc] px-2 text-center font-display text-2xl font-bold tabular-nums outline-none focus:border-ink" />
                           </div>
                           {mostrarTb && tbAKey && tbBKey ? (
                             <div className="grid grid-cols-3 gap-2 items-center">
                               <div className="text-[11px] font-semibold text-slate-500">Tie-break</div>
-                              <input value={formPlacar[tbAKey]} onChange={(e) => updatePlacarField(tbAKey, e.target.value)} inputMode="numeric" placeholder="TB" className="rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
-                              <input value={formPlacar[tbBKey]} onChange={(e) => updatePlacarField(tbBKey, e.target.value)} inputMode="numeric" placeholder="TB" className="rounded-md border border-slate-200 px-2 py-1 text-sm text-center" />
+                              <input value={formPlacar[tbAKey]} onChange={(e) => updatePlacarField(tbAKey, e.target.value)} inputMode="numeric" placeholder="TB" className="h-12 rounded-xl border-[1.5px] border-[#d9d5cc] px-2 text-center font-display text-2xl font-bold tabular-nums outline-none focus:border-ink" />
+                              <input value={formPlacar[tbBKey]} onChange={(e) => updatePlacarField(tbBKey, e.target.value)} inputMode="numeric" placeholder="TB" className="h-12 rounded-xl border-[1.5px] border-[#d9d5cc] px-2 text-center font-display text-2xl font-bold tabular-nums outline-none focus:border-ink" />
                             </div>
                           ) : null}
                         </div>
