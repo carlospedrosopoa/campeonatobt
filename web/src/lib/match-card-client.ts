@@ -21,6 +21,8 @@ type GerarCardParams = {
   torneioNome: string;
   categoriaNome: string;
   cardApenasComFotos?: boolean;
+  /** modelo do card escolhido no torneio (NOVO | CLASSICO) */
+  layout?: string | null;
   templateUrl?: string | null;
   syncFotosUrl?: string | null;
   salvarNoGcs?: boolean;
@@ -42,6 +44,8 @@ type InscricaoCardInfo = {
 
 type GerarCardInscricaoParams = {
   torneioNome: string;
+  /** modelo do card escolhido no torneio (NOVO | CLASSICO) */
+  layout?: string | null;
   categoriaNome: string;
   templateUrl?: string | null;
   syncFotosUrl?: string | null;
@@ -1197,9 +1201,10 @@ export async function gerarCardDuplasInscritasAdmin(params: GerarCardDuplasInscr
 
 // ---------------------------------------------------------------------------
 // Layout "novo" dos cards de jogo e de inscricao (2026-09).
-// O layout classico continua acima; para voltar a ele:
-//   - todos os usuarios: NEXT_PUBLIC_CARD_LAYOUT=classico
-//   - so no navegador atual: localStorage.setItem("cardLayout", "classico")
+// O layout classico continua acima. Qual usar, em ordem de prioridade:
+//   1. localStorage "cardLayout" (teste no navegador atual)
+//   2. campo "Modelo dos cards" do torneio (params.layout)
+//   3. NEXT_PUBLIC_CARD_LAYOUT=classico (padrao geral)
 // O conteudo fica entre MARGEM_TOPO e MARGEM_BASE: acima fica a arte do template,
 // abaixo os patrocinadores (que tambem vem no template).
 // ---------------------------------------------------------------------------
@@ -1211,22 +1216,23 @@ const MARGEM_BASE = 1660;
 const COR_DESTAQUE = "#35c9e0";
 const COR_FUNDO_BLOCO = "rgba(6,18,28,0.74)";
 
-function usarLayoutClassico() {
+function usarLayoutClassico(layoutTorneio?: string | null) {
   try {
     const local = window.localStorage.getItem("cardLayout");
     if (local) return local.toLowerCase() === "classico";
   } catch {
     // localStorage indisponivel: segue a variavel de ambiente
   }
+  if (layoutTorneio) return layoutTorneio.toUpperCase() === "CLASSICO";
   return (process.env.NEXT_PUBLIC_CARD_LAYOUT || "").toLowerCase() === "classico";
 }
 
 export async function gerarCardPartidaAdmin(params: GerarCardParams) {
-  return usarLayoutClassico() ? gerarCardPartidaClassico(params) : gerarCardPartidaNovo(params);
+  return usarLayoutClassico(params.layout) ? gerarCardPartidaClassico(params) : gerarCardPartidaNovo(params);
 }
 
 export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) {
-  return usarLayoutClassico() ? gerarCardInscricaoClassico(params) : gerarCardInscricaoNovo(params);
+  return usarLayoutClassico(params.layout) ? gerarCardInscricaoClassico(params) : gerarCardInscricaoNovo(params);
 }
 
 type FontesCard = { titulo: string; texto: string };

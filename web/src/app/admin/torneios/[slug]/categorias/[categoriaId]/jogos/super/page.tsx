@@ -297,6 +297,7 @@ export default function AdminCategoriaJogosSuperPage() {
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
   const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
+  const [torneioLayoutCards, setTorneioLayoutCards] = useState<string | null>(null);
   const [torneioSuperCampeonatoFormato, setTorneioSuperCampeonatoFormato] = useState<"2_SET_SUPER_TIE" | "1_SET">("2_SET_SUPER_TIE");
   const [gerandoRelatorioClassificacao, setGerandoRelatorioClassificacao] = useState(false);
   const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
@@ -345,6 +346,7 @@ export default function AdminCategoriaJogosSuperPage() {
     setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
     setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
     setTorneioCardApenasComFotos(Boolean(t?.cardApenasComFotos));
+    setTorneioLayoutCards((t?.layoutCards as string | null | undefined) ?? null);
     setTorneioSuperCampeonatoFormato(t?.superCampeonatoFormato === "1_SET" ? "1_SET" : "2_SET_SUPER_TIE");
   }
 
@@ -948,6 +950,7 @@ export default function AdminCategoriaJogosSuperPage() {
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
         cardApenasComFotos: torneioCardApenasComFotos,
+        layout: torneioLayoutCards,
         templateUrl: torneioTemplateUrl,
         syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         salvarNoGcs: true,

@@ -25,6 +25,7 @@ type Torneio = {
   superCampeonato: boolean;
   superCampeonatoFormato: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos: boolean;
+  layoutCards: "NOVO" | "CLASSICO";
   oculto: boolean;
   inscricaoComIa: boolean;
   valorPrimeiraInscricao: string | null;
@@ -103,6 +104,7 @@ export default function AdminEditarDadosTorneioPage() {
     superCampeonato: false,
     superCampeonatoFormato: "2_SET_SUPER_TIE" as "2_SET_SUPER_TIE" | "1_SET",
     cardApenasComFotos: false,
+    layoutCards: "NOVO",
     oculto: false,
     inscricaoComIa: false,
     valorPrimeiraInscricao: "",
@@ -164,6 +166,7 @@ export default function AdminEditarDadosTorneioPage() {
           superCampeonato: Boolean(t.superCampeonato),
           superCampeonatoFormato: t.superCampeonatoFormato ?? "2_SET_SUPER_TIE",
           cardApenasComFotos: Boolean(t.cardApenasComFotos),
+          layoutCards: t.layoutCards === "CLASSICO" ? "CLASSICO" : "NOVO",
           oculto: Boolean(t.oculto),
           inscricaoComIa: Boolean(t.inscricaoComIa),
           valorPrimeiraInscricao: t.valorPrimeiraInscricao ?? "",
@@ -294,6 +297,7 @@ export default function AdminEditarDadosTorneioPage() {
         superCampeonato: form.modeloTorneio === "SUPERCAMPEONATO",
         superCampeonatoFormato: form.superCampeonatoFormato,
         cardApenasComFotos: form.cardApenasComFotos,
+        layoutCards: form.layoutCards,
         oculto: form.oculto,
         inscricaoComIa: form.inscricaoComIa,
         valorPrimeiraInscricao: form.valorPrimeiraInscricao?.trim() ? form.valorPrimeiraInscricao : null,
@@ -614,6 +618,20 @@ export default function AdminEditarDadosTorneioPage() {
                 Card apenas com fotos
               </label>
               <div className="text-xs text-slate-500">Quando marcado, o card do jogo não mostra categoria, data nem arena.</div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="layoutCards" className="text-sm font-medium text-slate-700">Modelo dos cards de divulgação</label>
+              <select
+                id="layoutCards"
+                value={form.layoutCards ?? "NOVO"}
+                onChange={(e) => setForm((prev) => ({ ...prev, layoutCards: e.target.value === "CLASSICO" ? "CLASSICO" : "NOVO" }))}
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+              >
+                <option value="NOVO">Novo — duplas em blocos, horário em destaque</option>
+                <option value="CLASSICO">Clássico — modelo anterior</option>
+              </select>
+              <div className="text-xs text-slate-500">Vale para os cards de jogo e de inscrição deste torneio.</div>
             </div>
 
             <div className="space-y-2">

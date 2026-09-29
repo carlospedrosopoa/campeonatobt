@@ -241,6 +241,7 @@ export const torneios = pgTable('torneios', {
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
   superCampeonatoFormato: superCampeonatoFormatoEnum('super_campeonato_formato').default('2_SET_SUPER_TIE'),
   cardApenasComFotos: boolean('card_apenas_com_fotos').default(false).notNull(),
+  layoutCards: text('layout_cards').$type<"NOVO" | "CLASSICO">().default('NOVO').notNull(),
   quadrasAtivas: integer('quadras_ativas').default(0).notNull(),
   painelQuadrasReservas: json('painel_quadras_reservas').$type<
     {
