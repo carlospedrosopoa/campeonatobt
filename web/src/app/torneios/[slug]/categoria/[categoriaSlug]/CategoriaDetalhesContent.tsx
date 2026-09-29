@@ -20,6 +20,7 @@ type Torneio = {
   status: string;
   bannerUrl: string | null;
   templateUrl?: string | null;
+  layoutCards?: string | null;
   esporteNome: string | null;
   superCampeonato?: boolean;
 };
@@ -108,6 +109,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
       torneioNome: torneio.nome,
       categoriaNome: categoria.nome,
       templateUrl: torneio.templateUrl ?? null,
+      layout: torneio.layoutCards ?? null,
       syncFotosUrl: `/api/public/torneios/${torneio.slug}/categorias/${categoria.id}/partidas/${p.id}/sincronizar-fotos`,
       partida: {
         id: p.id,

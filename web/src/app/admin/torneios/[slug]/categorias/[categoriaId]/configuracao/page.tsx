@@ -279,6 +279,7 @@ export default function AdminCategoriaJogosPage() {
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [torneioBannerUrl, setTorneioBannerUrl] = useState<string | null>(null);
   const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
+  const [torneioLayoutCards, setTorneioLayoutCards] = useState<string | null>(null);
   const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
   const [gerandoPlanilhaContingencia, setGerandoPlanilhaContingencia] = useState(false);
   const [gerandoRelatorioClassificacao, setGerandoRelatorioClassificacao] = useState(false);
@@ -493,6 +494,7 @@ export default function AdminCategoriaJogosPage() {
           setTorneioTemplateUrl((t?.templateUrl as string | null | undefined) ?? null);
           setTorneioBannerUrl((t?.bannerUrl as string | null | undefined) ?? null);
           setTorneioCardApenasComFotos(Boolean(t?.cardApenasComFotos));
+          setTorneioLayoutCards((t?.layoutCards as string | null | undefined) ?? null);
           if (t?.superCampeonato) {
             setRedirecting(true);
             const qs = typeof window !== "undefined" ? window.location.search : "";
@@ -1343,6 +1345,7 @@ export default function AdminCategoriaJogosPage() {
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
         cardApenasComFotos: torneioCardApenasComFotos,
+        layout: torneioLayoutCards,
         templateUrl: torneioTemplateUrl,
         syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         salvarNoGcs: true,

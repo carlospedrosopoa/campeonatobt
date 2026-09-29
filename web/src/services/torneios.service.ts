@@ -24,6 +24,11 @@ import { torneioAdministradoresService } from "@/services/torneio-administradore
 import { slugify } from "@/lib/utils";
 
 export type ModeloTorneio = "NORMAL" | "SUPERCAMPEONATO";
+export type LayoutCards = "NOVO" | "CLASSICO";
+
+function normalizeLayoutCards(value: unknown): LayoutCards {
+  return String(value ?? "").toUpperCase() === "NOVO" ? "NOVO" : "CLASSICO";
+}
 
 export type CriarTorneioDTO = {
   nome: string;
@@ -37,6 +42,7 @@ export type CriarTorneioDTO = {
   superCampeonato?: boolean;
   superCampeonatoFormato?: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos?: boolean;
+  layoutCards?: LayoutCards | null;
   quadrasAtivas?: number;
   oculto?: boolean;
   inscricaoComIa?: boolean;
@@ -141,6 +147,7 @@ export class TorneiosService {
         superCampeonato: torneios.superCampeonato,
         superCampeonatoFormato: torneios.superCampeonatoFormato,
         cardApenasComFotos: torneios.cardApenasComFotos,
+        layoutCards: torneios.layoutCards,
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
@@ -196,6 +203,7 @@ export class TorneiosService {
         modeloTorneio: torneios.modeloTorneio,
         superCampeonato: torneios.superCampeonato,
         cardApenasComFotos: torneios.cardApenasComFotos,
+        layoutCards: torneios.layoutCards,
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
@@ -245,6 +253,7 @@ export class TorneiosService {
         superCampeonato: torneios.superCampeonato,
         superCampeonatoFormato: torneios.superCampeonatoFormato,
         cardApenasComFotos: torneios.cardApenasComFotos,
+        layoutCards: torneios.layoutCards,
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
@@ -294,6 +303,7 @@ export class TorneiosService {
       superCampeonato: torneios.superCampeonato,
       superCampeonatoFormato: torneios.superCampeonatoFormato,
       cardApenasComFotos: torneios.cardApenasComFotos,
+        layoutCards: torneios.layoutCards,
       quadrasAtivas: torneios.quadrasAtivas,
       valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
       valorInscricaoAdicional: torneios.valorInscricaoAdicional,
@@ -354,6 +364,7 @@ export class TorneiosService {
           oculto: dados.oculto ?? false,
           inscricaoComIa: dados.inscricaoComIa ?? false,
           cardApenasComFotos: dados.cardApenasComFotos ?? false,
+          layoutCards: normalizeLayoutCards(dados.layoutCards),
           quadrasAtivas: Math.max(0, Math.min(20, Number(dados.quadrasAtivas ?? 0) || 0)),
           organizadorId,
           superCampeonato: modeloTorneio === "SUPERCAMPEONATO",
@@ -427,6 +438,7 @@ export class TorneiosService {
           superCampeonato: origem.superCampeonato,
           superCampeonatoFormato: origem.superCampeonatoFormato,
           cardApenasComFotos: origem.cardApenasComFotos,
+          layoutCards: origem.layoutCards,
           quadrasAtivas: origem.quadrasAtivas,
           painelQuadrasReservas: null,
           valorPrimeiraInscricao: origem.valorPrimeiraInscricao,
@@ -586,6 +598,7 @@ export class TorneiosService {
         pixNome: normalizeText(dados.pixNome),
         pixCidade: normalizeText(dados.pixCidade),
         camisetaOpcoes: normalizeStringArray((dados as any).camisetaOpcoes),
+        layoutCards: dados.layoutCards === undefined ? undefined : normalizeLayoutCards(dados.layoutCards),
         atualizadoEm: new Date(),
       })
       .where(eq(torneios.slug, slug))

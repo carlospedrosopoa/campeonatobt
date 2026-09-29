@@ -35,6 +35,7 @@ type Torneio = {
   nome: string;
   bannerUrl: string | null;
   templateUrl: string | null;
+  layoutCards?: string | null;
 };
 
 type PlacarForm = {
@@ -391,6 +392,7 @@ export default function AdminJogosDoDiaPage() {
         torneioNome: torneio?.nome || "Torneio",
         categoriaNome: p.categoriaNome || "Categoria",
         templateUrl: torneio?.templateUrl,
+        layout: torneio?.layoutCards ?? null,
         syncFotosUrl: `/api/public/torneios/${slug}/categorias/${p.categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         salvarNoGcs: true,
         uploadFolder: `campeonatos/cards/partidas/${slug}`,

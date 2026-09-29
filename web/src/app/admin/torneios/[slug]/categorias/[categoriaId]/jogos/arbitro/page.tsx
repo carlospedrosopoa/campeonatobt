@@ -219,6 +219,7 @@ export default function AdminCategoriaJogosArbitroPage() {
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [torneio, setTorneio] = useState<TorneioResumo | null>(null);
   const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
+  const [torneioLayoutCards, setTorneioLayoutCards] = useState<string | null>(null);
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [config, setConfig] = useState<CategoriaConfig | null>(null);
   const [classificacao, setClassificacao] = useState<GrupoClassificacao[]>([]);
@@ -296,6 +297,7 @@ export default function AdminCategoriaJogosArbitroPage() {
           superCampeonatoFormato: data?.superCampeonatoFormato === "1_SET" ? "1_SET" : "2_SET_SUPER_TIE",
         });
         setTorneioCardApenasComFotos(Boolean(data?.cardApenasComFotos));
+        setTorneioLayoutCards((data?.layoutCards as string | null | undefined) ?? null);
         setTorneioTemplateUrl(data?.templateUrl || null);
       }
 
@@ -721,6 +723,7 @@ export default function AdminCategoriaJogosArbitroPage() {
         torneioNome: torneio?.nome || "",
         categoriaNome: categoria?.nome || "Categoria",
         cardApenasComFotos: torneioCardApenasComFotos,
+        layout: torneioLayoutCards,
         templateUrl: torneioTemplateUrl,
         syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         salvarNoGcs: true,

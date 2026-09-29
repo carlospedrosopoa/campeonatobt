@@ -24,6 +24,7 @@ type CriarTorneioPayload = {
   superCampeonato?: boolean;
   superCampeonatoFormato?: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos?: boolean;
+  layoutCards?: "NOVO" | "CLASSICO";
   oculto?: boolean;
   inscricaoComIa?: boolean;
   valorPrimeiraInscricao?: string | null;
@@ -94,6 +95,7 @@ export default function AdminNovoTorneioPage() {
     superCampeonato: false,
     superCampeonatoFormato: "2_SET_SUPER_TIE",
     cardApenasComFotos: false,
+    layoutCards: "CLASSICO",
     oculto: false,
     inscricaoComIa: false,
     valorPrimeiraInscricao: "",
@@ -255,6 +257,7 @@ export default function AdminNovoTorneioPage() {
         superCampeonato: form.modeloTorneio === "SUPERCAMPEONATO",
         superCampeonatoFormato: form.superCampeonatoFormato,
         cardApenasComFotos: form.cardApenasComFotos,
+        layoutCards: form.layoutCards,
         oculto: form.oculto,
         inscricaoComIa: form.inscricaoComIa,
         valorPrimeiraInscricao: form.valorPrimeiraInscricao?.trim() ? form.valorPrimeiraInscricao : null,
@@ -506,6 +509,20 @@ export default function AdminNovoTorneioPage() {
               Card apenas com fotos
             </label>
             <div className="text-xs text-slate-500">Quando marcado, o card do jogo não mostra categoria, data nem arena.</div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="layoutCards" className="text-sm font-medium text-slate-700">Modelo dos cards de divulgação</label>
+            <select
+              id="layoutCards"
+              value={form.layoutCards ?? "CLASSICO"}
+              onChange={(e) => setForm((prev) => ({ ...prev, layoutCards: e.target.value === "NOVO" ? "NOVO" : "CLASSICO" }))}
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+            >
+              <option value="CLASSICO">Clássico — modelo atual</option>
+              <option value="NOVO">Novo — duplas em blocos, horário em destaque</option>
+            </select>
+            <div className="text-xs text-slate-500">Vale para os cards de jogo e de inscrição deste torneio.</div>
           </div>
 
           <div className="space-y-2">

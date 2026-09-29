@@ -87,6 +87,7 @@ export default function AdminCategoriaInscricoesPage() {
   const [categoriasTorneio, setCategoriasTorneio] = useState<Categoria[]>([]);
   const [torneioNome, setTorneioNome] = useState("Torneio");
   const [torneioTemplateInscricaoUrl, setTorneioTemplateInscricaoUrl] = useState<string | null>(null);
+  const [torneioLayoutCards, setTorneioLayoutCards] = useState<string | null>(null);
   const [torneioSuperCampeonato, setTorneioSuperCampeonato] = useState(false);
   const [torneioCamisetaOpcoes, setTorneioCamisetaOpcoes] = useState<string[]>([]);
   const [tipoParticipacao, setTipoParticipacao] = useState<"DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES">("DUPLAS");
@@ -177,6 +178,7 @@ export default function AdminCategoriaInscricoesPage() {
         if (t?.nome) setTorneioNome(String(t.nome));
         setTorneioSuperCampeonato(Boolean(t?.superCampeonato));
         setTorneioCamisetaOpcoes(Array.isArray(t?.camisetaOpcoes) ? t.camisetaOpcoes.map((item: unknown) => String(item)) : []);
+        setTorneioLayoutCards((t?.layoutCards as string | null | undefined) ?? null);
         setTorneioTemplateInscricaoUrl(
           (t?.templateInscricaoUrl as string | null | undefined) ??
             (t?.templateUrl as string | null | undefined) ??
@@ -227,6 +229,7 @@ export default function AdminCategoriaInscricoesPage() {
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
         templateUrl: torneioTemplateInscricaoUrl,
+        layout: torneioLayoutCards,
         salvarNoGcs: true,
         uploadFolder: `campeonatos/cards/inscricoes/${slug}`,
         ocultarProgramacao: torneioSuperCampeonato,

@@ -160,6 +160,7 @@ export default function AdminLancarPlacarMobilePage() {
   const [torneioSuperCampeonatoFormato, setTorneioSuperCampeonatoFormato] = useState<"2_SET_SUPER_TIE" | "1_SET">("2_SET_SUPER_TIE");
   const [torneioNome, setTorneioNome] = useState("");
   const [torneioCardApenasComFotos, setTorneioCardApenasComFotos] = useState(false);
+  const [torneioLayoutCards, setTorneioLayoutCards] = useState<string | null>(null);
   const [torneioTemplateUrl, setTorneioTemplateUrl] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -203,6 +204,7 @@ export default function AdminLancarPlacarMobilePage() {
         setTorneioSuperCampeonatoFormato(t?.superCampeonatoFormato === "1_SET" ? "1_SET" : "2_SET_SUPER_TIE");
         setTorneioNome(t?.nome || "");
         setTorneioCardApenasComFotos(Boolean(t?.cardApenasComFotos));
+        setTorneioLayoutCards((t?.layoutCards as string | null | undefined) ?? null);
         setTorneioTemplateUrl(t?.templateUrl || null);
       }
 
@@ -491,6 +493,7 @@ export default function AdminLancarPlacarMobilePage() {
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
         cardApenasComFotos: torneioCardApenasComFotos,
+        layout: torneioLayoutCards,
         templateUrl: torneioTemplateUrl,
         syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
         salvarNoGcs: true,
