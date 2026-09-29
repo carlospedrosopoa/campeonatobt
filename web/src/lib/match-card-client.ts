@@ -334,7 +334,7 @@ function fitTextSingleLine(ctx: CanvasRenderingContext2D, text: string, maxWidth
   return truncated.length < value.length ? `${truncated}...` : truncated;
 }
 
-export async function gerarCardPartidaAdmin(params: GerarCardParams) {
+async function gerarCardPartidaClassico(params: GerarCardParams) {
   const width = 1080;
   const height = 1920;
   const canvas = document.createElement("canvas");
@@ -698,7 +698,7 @@ export async function gerarCardProgramacaoAdmin(params: GerarCardProgramacaoPara
   return { url: uploadedUrl };
 }
 
-export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) {
+async function gerarCardInscricaoClassico(params: GerarCardInscricaoParams) {
   const width = 1080;
   const height = 1920;
   const canvas = document.createElement("canvas");
@@ -1193,4 +1193,513 @@ export async function gerarCardDuplasInscritasAdmin(params: GerarCardDuplasInscr
   }
 
   return { urls: uploadedUrls };
+}
+
+// ---------------------------------------------------------------------------
+// Layout "novo" dos cards de jogo e de inscricao (2026-09).
+// O layout classico continua acima; para voltar a ele:
+//   - todos os usuarios: NEXT_PUBLIC_CARD_LAYOUT=classico
+//   - so no navegador atual: localStorage.setItem("cardLayout", "classico")
+// O conteudo fica entre MARGEM_TOPO e MARGEM_BASE: acima fica a arte do template,
+// abaixo os patrocinadores (que tambem vem no template).
+// ---------------------------------------------------------------------------
+
+const CARD_W = 1080;
+const CARD_H = 1920;
+const MARGEM_TOPO = 600;
+const MARGEM_BASE = 1660;
+const COR_DESTAQUE = "#35c9e0";
+const COR_FUNDO_BLOCO = "rgba(6,18,28,0.74)";
+
+function usarLayoutClassico() {
+  try {
+    const local = window.localStorage.getItem("cardLayout");
+    if (local) return local.toLowerCase() === "classico";
+  } catch {
+    // localStorage indisponivel: segue a variavel de ambiente
+  }
+  return (process.env.NEXT_PUBLIC_CARD_LAYOUT || "").toLowerCase() === "classico";
+}
+
+export async function gerarCardPartidaAdmin(params: GerarCardParams) {
+  return usarLayoutClassico() ? gerarCardPartidaClassico(params) : gerarCardPartidaNovo(params);
+}
+
+export async function gerarCardInscricaoAdmin(params: GerarCardInscricaoParams) {
+  return usarLayoutClassico() ? gerarCardInscricaoClassico(params) : gerarCardInscricaoNovo(params);
+}
+
+type FontesCard = { titulo: string; texto: string };
+
+/** Usa as fontes do admin (Barlow Semi Condensed / Manrope) quando carregadas na pagina. */
+async function carregarFontesCard(): Promise<FontesCard> {
+  const fallback = "Arial, Helvetica, sans-serif";
+  let titulo = fallback;
+  let texto = fallback;
+  try {
+    const el = document.querySelector(".admin-theme") ?? document.body;
+    const cs = getComputedStyle(el);
+    const barlow = cs.getPropertyValue("--font-barlow").trim();
+    const manrope = cs.getPropertyValue("--font-manrope").trim();
+    if (barlow) titulo = `${barlow}, ${fallback}`;
+    if (manrope) texto = `${manrope}, ${fallback}`;
+    await Promise.all([document.fonts.load(`700 40px ${titulo}`), document.fonts.load(`800 40px ${texto}`)]);
+  } catch {
+    // segue com a fonte padrao
+  }
+  return { titulo, texto };
+}
+
+async function prepararCanvasCard(templateUrl?: string | null) {
+  const canvas = document.createElement("canvas");
+  canvas.width = CARD_W;
+  canvas.height = CARD_H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Não foi possível inicializar o canvas");
+  const template = templateUrl ? await carregarImagem(templateUrl) : null;
+  if (template) {
+    ctx.drawImage(template, 0, 0, CARD_W, CARD_H);
+  } else {
+    ctx.fillStyle = "#06121c";
+    ctx.fillRect(0, 0, CARD_W, CARD_H);
+  }
+  return { canvas, ctx };
+}
+
+function caminhoArredondado(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function desenharBloco(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, destaque = false) {
+  caminhoArredondado(ctx, x, y, w, h, 28);
+  ctx.fillStyle = COR_FUNDO_BLOCO;
+  ctx.fill();
+  ctx.lineWidth = destaque ? 4 : 2;
+  ctx.strokeStyle = destaque ? COR_DESTAQUE : "rgba(255,255,255,0.14)";
+  ctx.stroke();
+}
+
+/** Avatar do atleta: foto recortada em circulo ou iniciais em negrito, sempre com aro na cor de destaque. */
+function desenharAvatarNovo(
+  ctx: CanvasRenderingContext2D,
+  imagem: HTMLImageElement | null,
+  nome: string,
+  x: number,
+  y: number,
+  tamanho: number,
+  fontes: FontesCard,
+) {
+  const cx = x + tamanho / 2;
+  const cy = y + tamanho / 2;
+  const raio = tamanho / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, raio, 0, Math.PI * 2);
+  ctx.clip();
+  if (imagem) {
+    const escala = Math.max(tamanho / imagem.width, tamanho / imagem.height);
+    const w = imagem.width * escala;
+    const h = imagem.height * escala;
+    ctx.drawImage(imagem, cx - w / 2, cy - h / 2, w, h);
+  } else {
+    ctx.fillStyle = "#0b3a52";
+    ctx.fillRect(x, y, tamanho, tamanho);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `700 ${Math.round(tamanho * 0.38)}px ${fontes.titulo}`;
+    ctx.fillText(iniciaisNome(nome || "Atleta"), cx, cy + tamanho * 0.02);
+  }
+  ctx.restore();
+  ctx.lineWidth = Math.max(5, Math.round(tamanho * 0.028));
+  ctx.strokeStyle = COR_DESTAQUE;
+  ctx.beginPath();
+  ctx.arc(cx, cy, raio - ctx.lineWidth / 2, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** Diminui a fonte ate o texto caber; se ainda nao couber, corta com reticencias. */
+function textoCabendo(
+  ctx: CanvasRenderingContext2D,
+  texto: string,
+  fonteBase: (px: number) => string,
+  pxInicial: number,
+  pxMinimo: number,
+  larguraMax: number,
+) {
+  let px = pxInicial;
+  ctx.font = fonteBase(px);
+  while (px > pxMinimo && ctx.measureText(texto).width > larguraMax) {
+    px -= 2;
+    ctx.font = fonteBase(px);
+  }
+  return fitTextSingleLine(ctx, texto, larguraMax);
+}
+
+function carregarFotosAtletas(atletas: { nome: string; fotoUrl?: string | null }[]) {
+  // sem foto: nada de avatar externo, o gerador desenha as iniciais
+  return Promise.all(atletas.map((a) => (a.fotoUrl && a.fotoUrl.trim() ? carregarImagem(a.fotoUrl) : Promise.resolve(null))));
+}
+
+async function finalizarCard(
+  canvas: HTMLCanvasElement,
+  fileName: string,
+  opts: { salvarNoGcs?: boolean; uploadFolder?: string | null; pastaPadrao: string; persistFotoUrlApi?: string | null; download?: boolean },
+) {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
+  if (!blob) throw new Error("Falha ao gerar imagem do card");
+
+  let uploadedUrl: string | null = null;
+  if (opts.salvarNoGcs) {
+    const fd = new FormData();
+    fd.set("folder", (opts.uploadFolder || opts.pastaPadrao).trim());
+    try {
+      fd.set("file", new File([blob], fileName, { type: "image/png" }));
+    } catch {
+      fd.set("file", blob, fileName);
+    }
+    const res = await fetch("/api/upload/image", { method: "POST", body: fd, cache: "no-store" });
+    const data = (await res.json().catch(() => null)) as any;
+    if (!res.ok) throw new Error(data?.mensagem || data?.error || "Falha ao salvar imagem no GCS");
+    const url = String(data?.url || "").trim();
+    if (!url) throw new Error("Upload no GCS não retornou URL");
+    uploadedUrl = url;
+
+    if (opts.persistFotoUrlApi) {
+      const resPatch = await fetch(opts.persistFotoUrlApi, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fotoUrl: uploadedUrl }),
+        cache: "no-store",
+      });
+      if (!resPatch.ok) {
+        const msg = await resPatch.json().catch(() => null);
+        throw new Error(msg?.error || "Falha ao salvar URL do card na partida");
+      }
+    }
+  }
+
+  if (opts.download !== false) {
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadUrl);
+  }
+
+  return { url: uploadedUrl };
+}
+
+const ROTULO_FASE: Record<string, string> = {
+  GRUPOS: "Grupos",
+  OITAVAS: "Oitavas",
+  QUARTAS: "Quartas",
+  SEMI: "Semifinal",
+  FINAL: "Final",
+  TERCEIRO_LUGAR: "3º lugar",
+};
+
+async function gerarCardPartidaNovo(params: GerarCardParams) {
+  const { canvas, ctx } = await prepararCanvasCard(params.templateUrl);
+  const fontes = await carregarFontesCard();
+  const partida = params.partida;
+
+  const fotosSincronizadas = await sincronizarFotosPlaynaquadra(params.syncFotosUrl ?? null);
+  const comFotoSincronizada = (lista?: { id: string; nome: string; fotoUrl?: string | null }[]) =>
+    (lista ?? []).slice(0, 2).map((a) => ({ ...a, fotoUrl: fotosSincronizadas.get(a.id) ?? a.fotoUrl ?? null }));
+  const atletasA = comFotoSincronizada(partida.equipeAAtletas);
+  const atletasB = comFotoSincronizada(partida.equipeBAtletas);
+  const [fotosA, fotosB] = await Promise.all([carregarFotosAtletas(atletasA), carregarFotosAtletas(atletasB)]);
+
+  const sets = (partida.detalhesPlacar ?? []).slice().sort((a, b) => a.set - b.set);
+  const temPlacar = sets.length > 0 || Number(partida.placarA ?? 0) > 0 || Number(partida.placarB ?? 0) > 0;
+  let setsA = 0;
+  let setsB = 0;
+  for (const s of sets) {
+    if (s.a > s.b) setsA += 1;
+    else if (s.b > s.a) setsB += 1;
+    else if (s.tiebreak && s.tbA !== undefined && s.tbB !== undefined) {
+      if (s.tbA > s.tbB) setsA += 1;
+      else if (s.tbB > s.tbA) setsB += 1;
+    }
+  }
+  const pontosA = sets.length ? setsA : Number(partida.placarA ?? 0);
+  const pontosB = sets.length ? setsB : Number(partida.placarB ?? 0);
+  const vencedor: "A" | "B" | null = temPlacar && pontosA !== pontosB ? (pontosA > pontosB ? "A" : "B") : null;
+
+  const data = partida.dataHorario ? new Date(partida.dataHorario) : null;
+  const dataValida = data && !Number.isNaN(data.getTime()) ? data : null;
+  const local = [partida.quadra ? `Quadra ${partida.quadra}` : null, partida.arenaNome || null].filter(Boolean).join(" · ");
+
+  const margemX = 90;
+  const larguraUtil = CARD_W - margemX * 2;
+  let y = MARGEM_TOPO + 20;
+
+  if (!params.cardApenasComFotos) {
+    const fase = partida.fase ? ROTULO_FASE[partida.fase] ?? partida.fase : null;
+    const linhaTopo = [params.categoriaNome, partida.rodadaNome || fase].filter(Boolean).join(" · ").toUpperCase();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = COR_DESTAQUE;
+    ctx.fillText(textoCabendo(ctx, linhaTopo, (px) => `700 ${px}px ${fontes.titulo}`, 38, 26, larguraUtil), margemX, y);
+    y += 50;
+
+    let titulo: string;
+    let subtitulo: string;
+    if (temPlacar) {
+      titulo = "RESULTADO";
+      subtitulo = local;
+    } else if (dataValida) {
+      const dia = dataValida
+        .toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short" })
+        .replace(".", "")
+        .toUpperCase();
+      const hora = dataValida.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+      titulo = `${dia} ${hora}`;
+      const diaMes = dataValida.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
+      subtitulo = [diaMes, local].filter(Boolean).join(" · ");
+    } else {
+      titulo = "Horário em breve";
+      subtitulo = local || "A organização divulga quadra e horário";
+    }
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(textoCabendo(ctx, titulo, (px) => `700 ${px}px ${fontes.titulo}`, 150, 90, larguraUtil), margemX, y);
+    y += 158;
+    if (subtitulo) {
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillText(textoCabendo(ctx, subtitulo, (px) => `800 ${px}px ${fontes.texto}`, 40, 28, larguraUtil), margemX, y);
+    }
+  }
+
+  // Duplas: bloco A, VS, bloco B
+  const alturaBloco = 218;
+  const alturaVs = 76;
+  const blocoTopo = Math.max(y + 90, 900);
+  const tamanhoAvatar = 170;
+  type Atleta = { id: string; nome: string; fotoUrl?: string | null };
+  const blocos: Array<{ lado: "A" | "B"; atletas: Atleta[]; fotos: (HTMLImageElement | null)[]; nomeEquipe?: string | null; y: number }> = [
+    { lado: "A", atletas: atletasA, fotos: fotosA, nomeEquipe: partida.equipeANome, y: blocoTopo },
+    { lado: "B", atletas: atletasB, fotos: fotosB, nomeEquipe: partida.equipeBNome, y: blocoTopo + alturaBloco + alturaVs },
+  ];
+
+  for (const bloco of blocos) {
+    const venceu = vencedor === bloco.lado;
+    desenharBloco(ctx, margemX, bloco.y, larguraUtil, alturaBloco, venceu);
+
+    const atletas: Atleta[] = bloco.atletas.length ? bloco.atletas : [{ id: "", nome: bloco.nomeEquipe || "A definir", fotoUrl: null }];
+    const avatarY = bloco.y + (alturaBloco - tamanhoAvatar) / 2;
+    let avatarX = margemX + 30;
+    atletas.forEach((a, idx) => {
+      desenharAvatarNovo(ctx, bloco.fotos[idx] ?? null, a.nome, avatarX, avatarY, tamanhoAvatar, fontes);
+      avatarX += tamanhoAvatar - 34;
+    });
+
+    // placar por set a direita (quando houver)
+    let direita = margemX + larguraUtil - 30;
+    if (temPlacar) {
+      const valores = sets.length
+        ? sets.map((s) => String(bloco.lado === "A" ? s.a : s.b))
+        : [String(bloco.lado === "A" ? partida.placarA ?? 0 : partida.placarB ?? 0)];
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.font = `700 92px ${fontes.titulo}`;
+      ctx.fillStyle = venceu ? COR_DESTAQUE : "rgba(255,255,255,0.55)";
+      for (let i = valores.length - 1; i >= 0; i -= 1) {
+        ctx.fillText(valores[i], direita, bloco.y + alturaBloco / 2 + 4);
+        direita -= ctx.measureText(valores[i]).width + 26;
+      }
+      direita -= 10;
+    }
+
+    const nomesX = avatarX + 34 + 26;
+    const larguraNomes = Math.max(120, direita - nomesX);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffffff";
+    const nomes = atletas.map((a) => nomePrimeiroEUltimo(a.nome));
+    const centroY = bloco.y + alturaBloco / 2;
+    if (nomes.length === 1) {
+      ctx.fillText(textoCabendo(ctx, nomes[0], (px) => `700 ${px}px ${fontes.titulo}`, 52, 32, larguraNomes), nomesX, centroY);
+    } else {
+      ctx.fillText(textoCabendo(ctx, nomes[0], (px) => `700 ${px}px ${fontes.titulo}`, 48, 30, larguraNomes), nomesX, centroY - 28);
+      ctx.fillText(textoCabendo(ctx, nomes[1], (px) => `700 ${px}px ${fontes.titulo}`, 48, 30, larguraNomes), nomesX, centroY + 28);
+    }
+  }
+
+  // VS entre os blocos
+  const vsY = blocoTopo + alturaBloco + alturaVs / 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(margemX, vsY);
+  ctx.lineTo(CARD_W / 2 - 60, vsY);
+  ctx.moveTo(CARD_W / 2 + 60, vsY);
+  ctx.lineTo(margemX + larguraUtil, vsY);
+  ctx.stroke();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = COR_DESTAQUE;
+  ctx.font = `italic 700 64px ${fontes.titulo}`;
+  ctx.fillText("VS", CARD_W / 2, vsY + 2);
+
+  const fileName = `card-${slugify(params.torneioNome)}-${slugify(params.categoriaNome)}-${partida.id}.png`;
+  return finalizarCard(canvas, fileName, {
+    salvarNoGcs: params.salvarNoGcs,
+    uploadFolder: params.uploadFolder,
+    pastaPadrao: "cards/partidas",
+    persistFotoUrlApi: params.persistFotoUrlApi,
+    download: params.download,
+  });
+}
+
+async function gerarCardInscricaoNovo(params: GerarCardInscricaoParams) {
+  const { canvas, ctx } = await prepararCanvasCard(params.templateUrl);
+  const fontes = await carregarFontesCard();
+
+  const fotosSincronizadas = await sincronizarFotosPlaynaquadra(params.syncFotosUrl ?? null);
+  const atletas = (params.inscricao.atletas ?? [])
+    .slice(0, 2)
+    .map((a) => ({ ...a, fotoUrl: fotosSincronizadas.get(a.id) ?? a.fotoUrl ?? null }));
+  const fotos = await carregarFotosAtletas(atletas);
+  const ehTipo2 = params.tipoCardInscricao === "TIPO_2";
+
+  // Selo + categoria
+  const selo = atletas.length === 1 ? "INSCRIÇÃO CONFIRMADA" : "DUPLA CONFIRMADA";
+  ctx.font = `700 46px ${fontes.titulo}`;
+  const seloW = ctx.measureText(selo).width + 72;
+  const seloH = 72;
+  const seloY = MARGEM_TOPO + 20;
+  caminhoArredondado(ctx, (CARD_W - seloW) / 2, seloY, seloW, seloH, seloH / 2);
+  ctx.fillStyle = COR_DESTAQUE;
+  ctx.fill();
+  ctx.fillStyle = "#06121c";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(selo, CARD_W / 2, seloY + seloH / 2 + 2);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.textBaseline = "top";
+  ctx.fillText(
+    textoCabendo(ctx, params.categoriaNome || "Categoria", (px) => `700 ${px}px ${fontes.titulo}`, 84, 52, CARD_W - 160),
+    CARD_W / 2,
+    seloY + seloH + 22,
+  );
+
+  // Fotos com nome embaixo
+  const tamanhoAvatar = ehTipo2 ? 340 : 300;
+  const espaco = ehTipo2 ? 60 : 90;
+  const qtd = Math.max(1, atletas.length);
+  const totalW = qtd * tamanhoAvatar + (qtd - 1) * espaco;
+  const fotosY = seloY + seloH + 140;
+  let x = (CARD_W - totalW) / 2;
+  const larguraNome = tamanhoAvatar + espaco - 10;
+  for (let i = 0; i < qtd; i += 1) {
+    const atleta = atletas[i] ?? { nome: params.inscricao.equipeNome || "Atleta", fotoUrl: null };
+    desenharAvatarNovo(ctx, fotos[i] ?? null, atleta.nome, x, fotosY, tamanhoAvatar, fontes);
+    const { primeiroNome, ultimoNome } = separarPrimeiroUltimoNome(atleta.nome || "Atleta");
+    const cx = x + tamanhoAvatar / 2;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(textoCabendo(ctx, primeiroNome, (px) => `700 ${px}px ${fontes.titulo}`, 54, 34, larguraNome), cx, fotosY + tamanhoAvatar + 20);
+    if (ultimoNome) {
+      ctx.fillStyle = "rgba(255,255,255,0.72)";
+      ctx.fillText(textoCabendo(ctx, ultimoNome, (px) => `700 ${px}px ${fontes.texto}`, 32, 22, larguraNome), cx, fotosY + tamanhoAvatar + 80);
+    }
+    x += tamanhoAvatar + espaco;
+  }
+
+  const y = fotosY + tamanhoAvatar + 150;
+  const margemX = 90;
+  const larguraUtil = CARD_W - margemX * 2;
+
+  // Programacao das categorias (tipo 1) — limitada ao espaco livre acima dos patrocinadores
+  const categoriaAtualNormalizada = normalizeCardText(params.categoriaNome);
+  const programacao =
+    params.ocultarProgramacao || ehTipo2
+      ? []
+      : (params.categoriasProgramacao ?? []).slice().sort((a, b) => {
+          const ta = a.dataHorario ? new Date(a.dataHorario).getTime() : Number.POSITIVE_INFINITY;
+          const tb = b.dataHorario ? new Date(b.dataHorario).getTime() : Number.POSITIVE_INFINITY;
+          if (ta !== tb) return ta - tb;
+          return (a.nome || "").localeCompare(b.nome || "");
+        });
+
+  if (programacao.length > 0) {
+    const tituloH = 56;
+    const linhaH = 54;
+    const colunas = programacao.length === 1 ? 1 : 2;
+    const linhasDisponiveis = Math.max(1, Math.floor((MARGEM_BASE - y - tituloH - 20) / linhaH));
+    const maxItens = linhasDisponiveis * colunas;
+    const idxAtual = programacao.findIndex(
+      (c) => c.id === params.inscricao.categoriaId || normalizeCardText(c.nome) === categoriaAtualNormalizada,
+    );
+    const inicio = idxAtual >= maxItens ? idxAtual - maxItens + 1 : 0;
+    const itens = programacao.slice(inicio, inicio + maxItens);
+    const linhas = colunas === 1 ? itens.length : Math.ceil(itens.length / colunas);
+    const alturaBox = tituloH + linhas * linhaH + 20;
+    desenharBloco(ctx, margemX, y, larguraUtil, alturaBox);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.font = `700 30px ${fontes.titulo}`;
+    ctx.fillText("PROGRAMAÇÃO DAS CATEGORIAS", CARD_W / 2, y + tituloH / 2 + 4);
+
+    const colunaW = (larguraUtil - 40 - (colunas - 1) * 16) / colunas;
+    itens.forEach((cat, index) => {
+      const col = colunas === 1 ? 0 : Math.floor(index / linhas);
+      const lin = colunas === 1 ? index : index % linhas;
+      const cx0 = margemX + 20 + col * (colunaW + 16);
+      const cy0 = y + tituloH + lin * linhaH;
+      const atual = cat.id === params.inscricao.categoriaId || normalizeCardText(cat.nome) === categoriaAtualNormalizada;
+      if (atual) {
+        caminhoArredondado(ctx, cx0, cy0 + 4, colunaW, linhaH - 8, 12);
+        ctx.fillStyle = "rgba(53,201,224,0.22)";
+        ctx.fill();
+      }
+      const quando = formatarDataProgramacao(cat.dataHorario);
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "left";
+      ctx.fillStyle = atual ? "#ffffff" : "rgba(255,255,255,0.88)";
+      ctx.fillText(
+        textoCabendo(ctx, cat.nome || "Categoria", (px) => `800 ${px}px ${fontes.texto}`, 22, 16, colunaW - 150),
+        cx0 + 14,
+        cy0 + linhaH / 2,
+      );
+      ctx.textAlign = "right";
+      ctx.fillStyle = atual ? COR_DESTAQUE : "rgba(255,255,255,0.65)";
+      ctx.font = `700 20px ${fontes.texto}`;
+      ctx.fillText(`${quando.data} ${quando.hora}`, cx0 + colunaW - 14, cy0 + linhaH / 2);
+    });
+  } else if (params.inscricao.categoriaDataHorario) {
+    const quando = formatarDataProgramacao(params.inscricao.categoriaDataHorario);
+    const alturaBox = 96;
+    if (y + alturaBox <= MARGEM_BASE) {
+      desenharBloco(ctx, margemX, y, larguraUtil, alturaBox);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `800 36px ${fontes.texto}`;
+      ctx.fillText(`Jogos da categoria: ${quando.data} às ${quando.hora}`, CARD_W / 2, y + alturaBox / 2);
+    }
+  }
+
+  const fileName = `inscricao-${slugify(params.torneioNome)}-${slugify(params.categoriaNome)}-${params.inscricao.id}.png`;
+  return finalizarCard(canvas, fileName, {
+    salvarNoGcs: params.salvarNoGcs,
+    uploadFolder: params.uploadFolder,
+    pastaPadrao: "cards/inscricoes",
+    download: params.download,
+  });
 }
