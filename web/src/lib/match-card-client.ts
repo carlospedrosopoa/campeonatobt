@@ -1204,7 +1204,7 @@ export async function gerarCardDuplasInscritasAdmin(params: GerarCardDuplasInscr
 // O layout classico continua acima. Qual usar, em ordem de prioridade:
 //   1. localStorage "cardLayout" (teste no navegador atual)
 //   2. campo "Modelo dos cards" do torneio (params.layout)
-//   3. NEXT_PUBLIC_CARD_LAYOUT=classico (padrao geral)
+//   3. NEXT_PUBLIC_CARD_LAYOUT=novo (padrao geral; sem nada, usa o classico)
 // O conteudo fica entre MARGEM_TOPO e MARGEM_BASE: acima fica a arte do template,
 // abaixo os patrocinadores (que tambem vem no template).
 // ---------------------------------------------------------------------------
@@ -1224,7 +1224,7 @@ function usarLayoutClassico(layoutTorneio?: string | null) {
     // localStorage indisponivel: segue a variavel de ambiente
   }
   if (layoutTorneio) return layoutTorneio.toUpperCase() === "CLASSICO";
-  return (process.env.NEXT_PUBLIC_CARD_LAYOUT || "").toLowerCase() === "classico";
+  return (process.env.NEXT_PUBLIC_CARD_LAYOUT || "").toLowerCase() !== "novo";
 }
 
 export async function gerarCardPartidaAdmin(params: GerarCardParams) {

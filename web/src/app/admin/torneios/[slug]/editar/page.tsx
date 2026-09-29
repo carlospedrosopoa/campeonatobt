@@ -104,7 +104,7 @@ export default function AdminEditarDadosTorneioPage() {
     superCampeonato: false,
     superCampeonatoFormato: "2_SET_SUPER_TIE" as "2_SET_SUPER_TIE" | "1_SET",
     cardApenasComFotos: false,
-    layoutCards: "NOVO",
+    layoutCards: "CLASSICO",
     oculto: false,
     inscricaoComIa: false,
     valorPrimeiraInscricao: "",
@@ -166,7 +166,7 @@ export default function AdminEditarDadosTorneioPage() {
           superCampeonato: Boolean(t.superCampeonato),
           superCampeonatoFormato: t.superCampeonatoFormato ?? "2_SET_SUPER_TIE",
           cardApenasComFotos: Boolean(t.cardApenasComFotos),
-          layoutCards: t.layoutCards === "CLASSICO" ? "CLASSICO" : "NOVO",
+          layoutCards: t.layoutCards === "NOVO" ? "NOVO" : "CLASSICO",
           oculto: Boolean(t.oculto),
           inscricaoComIa: Boolean(t.inscricaoComIa),
           valorPrimeiraInscricao: t.valorPrimeiraInscricao ?? "",
@@ -624,12 +624,12 @@ export default function AdminEditarDadosTorneioPage() {
               <label htmlFor="layoutCards" className="text-sm font-medium text-slate-700">Modelo dos cards de divulgação</label>
               <select
                 id="layoutCards"
-                value={form.layoutCards ?? "NOVO"}
-                onChange={(e) => setForm((prev) => ({ ...prev, layoutCards: e.target.value === "CLASSICO" ? "CLASSICO" : "NOVO" }))}
+                value={form.layoutCards ?? "CLASSICO"}
+                onChange={(e) => setForm((prev) => ({ ...prev, layoutCards: e.target.value === "NOVO" ? "NOVO" : "CLASSICO" }))}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
               >
+                <option value="CLASSICO">Clássico — modelo atual</option>
                 <option value="NOVO">Novo — duplas em blocos, horário em destaque</option>
-                <option value="CLASSICO">Clássico — modelo anterior</option>
               </select>
               <div className="text-xs text-slate-500">Vale para os cards de jogo e de inscrição deste torneio.</div>
             </div>

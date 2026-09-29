@@ -27,7 +27,7 @@ export type ModeloTorneio = "NORMAL" | "SUPERCAMPEONATO";
 export type LayoutCards = "NOVO" | "CLASSICO";
 
 function normalizeLayoutCards(value: unknown): LayoutCards {
-  return String(value ?? "").toUpperCase() === "CLASSICO" ? "CLASSICO" : "NOVO";
+  return String(value ?? "").toUpperCase() === "NOVO" ? "NOVO" : "CLASSICO";
 }
 
 export type CriarTorneioDTO = {
