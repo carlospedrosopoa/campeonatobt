@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, Gamepad2, Network, Pencil, PlusCircle, RefreshCcw, Save, Settings } from "lucide-react";
+import { ArrowLeft, Banknote, CalendarClock, Gamepad2, ImageIcon, Network, Pencil, PlusCircle, RefreshCcw, Save, Settings, X } from "lucide-react";
+import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { CategoriaHeader } from "@/components/admin/categoria-header";
 
 type Categoria = {
@@ -57,7 +58,48 @@ type Partida = {
   placarA: number;
   placarB: number;
   detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
+  rodadaNome?: string | null;
+  rodadaNumero?: number | null;
+  arenaId?: string | null;
+  arenaNome?: string | null;
+  quadra?: string | null;
+  dataHorario?: string | null;
+  dataLimite?: string | null;
+  fotoUrl?: string | null;
+  equipeAAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
+  equipeBAtletas?: { id: string; nome: string; fotoUrl?: string | null }[];
 };
+
+function toLocalDateInput(value: string | null | undefined) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+function toLocalDateTimeInput(value: string | null | undefined) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function resumoAgenda(p: Partida) {
+  const partes: string[] = [];
+  if (p.dataHorario) {
+    const d = new Date(p.dataHorario);
+    if (!Number.isNaN(d.getTime())) {
+      partes.push(
+        d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+      );
+    }
+  }
+  if (p.quadra) partes.push(`Quadra ${p.quadra}`);
+  if (p.arenaNome) partes.push(p.arenaNome);
+  return partes.join(" · ");
+}
 
 function partidaIniciada(p: Partida) {
   if (p.status !== "AGENDADA") return true;
@@ -129,6 +171,21 @@ export default function AdminCategoriaChavePage() {
   const [substituicaoEquipeDestinoId, setSubstituicaoEquipeDestinoId] = useState("");
   const [substituindoEquipe, setSubstituindoEquipe] = useState(false);
   const [modoManutencaoConfronto, setModoManutencaoConfronto] = useState(false);
+  const [torneioInfo, setTorneioInfo] = useState<{
+    nome: string;
+    templateUrl: string | null;
+    cardApenasComFotos: boolean;
+    layoutCards: string | null;
+  }>({ nome: "Torneio", templateUrl: null, cardApenasComFotos: false, layoutCards: null });
+  const [gerandoCardId, setGerandoCardId] = useState<string | null>(null);
+  const [editAgendamentoId, setEditAgendamentoId] = useState<string | null>(null);
+  const [arenas, setArenas] = useState<{ id: string; nome: string }[]>([]);
+  const [carregandoArenas, setCarregandoArenas] = useState(false);
+  const [agendaArenaId, setAgendaArenaId] = useState("");
+  const [agendaQuadra, setAgendaQuadra] = useState("");
+  const [agendaDataHorario, setAgendaDataHorario] = useState("");
+  const [agendaDataLimite, setAgendaDataLimite] = useState("");
+  const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
   const [montagemAberta, setMontagemAberta] = useState(false);
   const [faseMontagem, setFaseMontagem] = useState<FaseColuna>("OITAVAS");
   const [limparPosterioresMontagem, setLimparPosterioresMontagem] = useState(true);
@@ -176,6 +233,12 @@ export default function AdminCategoriaChavePage() {
     const res = await fetch(`/api/v1/torneios/${slug}`, { cache: "no-store" });
     if (!res.ok) return false;
     const t = (await res.json()) as any;
+    setTorneioInfo({
+      nome: String(t?.nome || "Torneio"),
+      templateUrl: (t?.templateUrl as string | null | undefined) ?? null,
+      cardApenasComFotos: Boolean(t?.cardApenasComFotos),
+      layoutCards: (t?.layoutCards as string | null | undefined) ?? null,
+    });
     return Boolean(t?.superCampeonato);
   }
 
@@ -359,6 +422,141 @@ export default function AdminCategoriaChavePage() {
       .map(([id, nome]) => ({ id, nome }))
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [partidaEditando, jogosPorFase]);
+
+  function atualizarPartidaLocal(id: string, patch: Partial<Partida>) {
+    setJogosPorFase((prev) => {
+      const next = { ...prev };
+      for (const k of Object.keys(next) as Fase[]) next[k] = next[k].map((it) => (it.id === id ? { ...it, ...patch } : it));
+      return next;
+    });
+  }
+
+  async function gerarCardPartida(p: Partida) {
+    try {
+      setErro(null);
+      if ((p.fotoUrl || "").trim()) {
+        window.open(p.fotoUrl as string, "_blank");
+        return;
+      }
+      setGerandoCardId(p.id);
+      const result = await gerarCardPartidaAdmin({
+        torneioNome: torneioInfo.nome,
+        categoriaNome: categoria?.nome || "Categoria",
+        cardApenasComFotos: torneioInfo.cardApenasComFotos,
+        layout: torneioInfo.layoutCards,
+        templateUrl: torneioInfo.templateUrl,
+        syncFotosUrl: `/api/public/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/sincronizar-fotos`,
+        salvarNoGcs: true,
+        uploadFolder: `campeonatos/cards/partidas/${slug}`,
+        persistFotoUrlApi: `/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}`,
+        partida: {
+          id: p.id,
+          fase: p.fase,
+          placarA: p.placarA ?? 0,
+          placarB: p.placarB ?? 0,
+          detalhesPlacar: p.detalhesPlacar ?? null,
+          rodadaNome: p.rodadaNome ?? null,
+          rodadaNumero: p.rodadaNumero ?? null,
+          dataHorario: p.dataHorario ?? null,
+          arenaNome: p.arenaNome ?? null,
+          quadra: p.quadra ?? null,
+          equipeANome: p.equipeANome ?? null,
+          equipeAAtletas: p.equipeAAtletas ?? [],
+          equipeBNome: p.equipeBNome ?? null,
+          equipeBAtletas: p.equipeBAtletas ?? [],
+        },
+      });
+      const url = (result?.url || "").trim();
+      if (url) atualizarPartidaLocal(p.id, { fotoUrl: url });
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível gerar o card da partida");
+    } finally {
+      setGerandoCardId(null);
+    }
+  }
+
+  async function abrirAgendamento(p: Partida) {
+    setEditAgendamentoId(p.id);
+    setAgendaArenaId(p.arenaId ?? "");
+    setAgendaQuadra((p.quadra ?? "").toString());
+    setAgendaDataHorario(toLocalDateTimeInput(p.dataHorario ?? null));
+    setAgendaDataLimite(toLocalDateInput(p.dataLimite ?? null));
+    if (arenas.length > 0) return;
+    try {
+      setCarregandoArenas(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/arenas`, { cache: "no-store" });
+      if (!res.ok) return;
+      const rows = (await res.json()) as any[];
+      setArenas(
+        rows
+          .map((a) => ({ id: a.id as string, nome: (a.nome as string) ?? "" }))
+          .filter((a) => a.id && a.nome)
+          .sort((a, b) => a.nome.localeCompare(b.nome))
+      );
+    } finally {
+      setCarregandoArenas(false);
+    }
+  }
+
+  async function salvarAgendamento(partidaId: string) {
+    try {
+      setSalvandoAgendamento(true);
+      setErro(null);
+      if (agendaDataHorario.trim() && !agendaArenaId) throw new Error("Selecione uma arena para agendar a partida");
+      const toIsoDateTime = (v: string) => (v.trim() ? new Date(v).toISOString() : null);
+      const toIsoDate = (v: string) => (v.trim() ? new Date(`${v}T00:00:00`).toISOString() : null);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${partidaId}/agendamento`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          arenaId: agendaArenaId || null,
+          quadra: agendaQuadra.trim() || null,
+          dataHorario: toIsoDateTime(agendaDataHorario),
+          dataLimite: toIsoDate(agendaDataLimite),
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao salvar agendamento");
+      await carregarChave();
+      setEditAgendamentoId(null);
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoAgendamento(false);
+    }
+  }
+
+  function renderAcoesJogo(p: Partida, variante: "mobile" | "desktop") {
+    const agenda = resumoAgenda(p);
+    const btn =
+      "inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+    return (
+      <div className={variante === "mobile" ? "mt-3 space-y-2" : "mt-3 space-y-2"}>
+        <div className={`flex items-center gap-1.5 text-xs ${agenda ? "text-slate-600" : "text-amber-700"}`}>
+          <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{agenda || "Sem data e horário"}</span>
+        </div>
+        <div className={variante === "mobile" ? "grid grid-cols-2 gap-2" : "flex flex-wrap justify-end gap-2"}>
+          <button type="button" onClick={() => void gerarCardPartida(p)} disabled={gerandoCardId === p.id} className={btn}>
+            <ImageIcon className="h-3.5 w-3.5" />
+            {gerandoCardId === p.id ? "Gerando…" : "Card"}
+          </button>
+          <button type="button" onClick={() => void abrirAgendamento(p)} className={btn}>
+            <CalendarClock className="h-3.5 w-3.5" />
+            Agendar
+          </button>
+          <button
+            type="button"
+            onClick={() => void abrirAlterarConfronto(p)}
+            className={variante === "mobile" ? `${btn} col-span-2` : btn}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Alterar confronto
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   async function abrirAlterarConfronto(p: Partida) {
     setEditConfrontoId(p.id);
@@ -559,16 +757,7 @@ export default function AdminCategoriaChavePage() {
                           </div>
                         </div>
 
-                        {!p.id.startsWith("placeholder:") ? (
-                          <button
-                            type="button"
-                            onClick={() => void abrirAlterarConfronto(p)}
-                            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            Alterar confronto
-                          </button>
-                        ) : null}
+                        {!p.id.startsWith("placeholder:") ? renderAcoesJogo(p, "mobile") : null}
                       </div>
                     );
                   })}
@@ -595,16 +784,7 @@ export default function AdminCategoriaChavePage() {
                               </div>
                             </div>
 
-                            {!p.id.startsWith("placeholder:") ? (
-                              <button
-                                type="button"
-                                onClick={() => void abrirAlterarConfronto(p)}
-                                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                                Alterar confronto
-                              </button>
-                            ) : null}
+                            {!p.id.startsWith("placeholder:") ? renderAcoesJogo(p, "mobile") : null}
                           </div>
                         );
                       })}
@@ -649,18 +829,7 @@ export default function AdminCategoriaChavePage() {
                             <div className="text-sm font-semibold text-slate-900">{p.status === "AGUARDANDO" ? "-" : formatPlacar(p.detalhesPlacar)}</div>
                           </div>
                         </div>
-                        {!p.id.startsWith("placeholder:") ? (
-                          <div className="mt-3 flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => void abrirAlterarConfronto(p)}
-                              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              Alterar confronto
-                            </button>
-                          </div>
-                        ) : null}
+                        {!p.id.startsWith("placeholder:") ? renderAcoesJogo(p, "desktop") : null}
                       </div>
                     );
                   })}
@@ -682,18 +851,7 @@ export default function AdminCategoriaChavePage() {
                                 <div className="text-sm font-semibold text-slate-900">{p.status === "AGUARDANDO" ? "-" : formatPlacar(p.detalhesPlacar)}</div>
                               </div>
                             </div>
-                            {!p.id.startsWith("placeholder:") ? (
-                              <div className="mt-3 flex justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() => void abrirAlterarConfronto(p)}
-                                  className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                  Alterar confronto
-                                </button>
-                              </div>
-                            ) : null}
+                            {!p.id.startsWith("placeholder:") ? renderAcoesJogo(p, "desktop") : null}
                           </div>
                         );
                       })}
@@ -705,6 +863,85 @@ export default function AdminCategoriaChavePage() {
           })}
         </div>
       </div>
+
+      {editAgendamentoId &&
+        (() => {
+          const partida = (Object.values(jogosPorFase) as Partida[][]).flat().find((p) => p.id === editAgendamentoId);
+          if (!partida) return null;
+          const campo =
+            "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10 disabled:opacity-50";
+          return (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onMouseDown={() => setEditAgendamentoId(null)}>
+              <div
+                className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border border-slate-200 bg-white shadow-lg sm:rounded-xl"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="space-y-4 p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs uppercase tracking-wider text-slate-500">Agendamento · {nomeFase(partida.fase)}</div>
+                      <div className="text-lg font-bold leading-tight text-slate-900">
+                        {partida.equipeANome || "A definir"} <span className="mx-1 text-slate-400">vs</span> {partida.equipeBNome || "A definir"}
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setEditAgendamentoId(null)} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
+                      <X className="h-4 w-4" />
+                      Fechar
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Arena</span>
+                      <select value={agendaArenaId} onChange={(e) => setAgendaArenaId(e.target.value)} disabled={carregandoArenas} className={campo}>
+                        <option value="">{arenas.length === 0 ? "Nenhuma arena disponível" : "Selecione uma arena"}</option>
+                        {arenas.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.nome}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="block text-xs text-slate-500">
+                        Cadastre arenas em <Link href={`/admin/torneios/${slug}/arenas`} className="underline">Arenas</Link>.
+                      </span>
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Quadra (opcional)</span>
+                      <input value={agendaQuadra} onChange={(e) => setAgendaQuadra(e.target.value)} placeholder="Ex: Quadra 1" className={campo} />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Data e horário agendados</span>
+                      <input value={agendaDataHorario} onChange={(e) => setAgendaDataHorario(e.target.value)} type="datetime-local" step={60} className={campo} />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Data limite</span>
+                      <input value={agendaDataLimite} onChange={(e) => setAgendaDataLimite(e.target.value)} type="date" className={campo} />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditAgendamentoId(null)}
+                      className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void salvarAgendamento(partida.id)}
+                      disabled={salvandoAgendamento}
+                      className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      <Save className="h-4 w-4" />
+                      {salvandoAgendamento ? "Salvando…" : "Salvar"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {partidaEditando ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditConfrontoId(null)}>
