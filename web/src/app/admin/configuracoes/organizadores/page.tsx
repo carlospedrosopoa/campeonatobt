@@ -50,7 +50,7 @@ export default function AdminOrganizersPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Organizers</h1>
+          <h1 className="font-display text-[32px] font-bold leading-none text-ink sm:text-[40px]">Organizadores</h1>
           <p className="text-sm text-slate-600">Cadastre e faça manutenção dos organizadores da plataforma.</p>
         </div>
         <Link

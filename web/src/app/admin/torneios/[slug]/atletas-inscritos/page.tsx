@@ -305,11 +305,7 @@ export default function AdminAtletasInscritosPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">Relação de inscritos</h1>
+          <h1 className="font-display text-[32px] font-bold leading-none text-ink sm:text-[40px]">Relação de inscritos</h1>
           <p className="text-sm text-slate-600">
             {data?.torneio?.nome || "Torneio"} • {totalAtletas} atleta(s) • {totalDuplas} dupla(s)
           </p>

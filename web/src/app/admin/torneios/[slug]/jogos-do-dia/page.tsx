@@ -660,11 +660,7 @@ export default function AdminJogosDoDiaPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <Link href={`/admin/torneios/${slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">Jogos do Dia</h1>
+          <h1 className="font-display text-[32px] font-bold leading-none text-ink sm:text-[40px]">Jogos do Dia</h1>
           <p className="text-sm text-slate-600">
             {torneio?.nome} • {datePtBrFromYmd(dataSelecionada)}
           </p>

@@ -129,7 +129,7 @@ export default function AdminEditarApoiadorPage() {
         <Link href={`/admin/torneios/${slug}/apoiadores`} className="text-slate-600 hover:text-slate-900">
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900">Editar Apoiador</h1>
+        <h1 className="font-display text-[32px] font-bold leading-none text-ink sm:text-[40px]">Editar Apoiador</h1>
       </div>
 
       {erro && <div className="text-red-600 bg-red-50 p-3 rounded-md">{erro}</div>}

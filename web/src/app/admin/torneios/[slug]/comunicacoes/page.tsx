@@ -193,14 +193,7 @@ export default function AdminTorneioComunicacoesPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <Link
-            href={`/admin/torneios/${slug}`}
-            className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao torneio
-          </Link>
-          <h1 className="mt-2 flex items-center gap-2 text-2xl font-bold text-slate-900">
+          <h1 className="font-display text-[32px] font-bold leading-none text-ink sm:text-[40px] flex items-center gap-2">
             <MessageSquare className="h-6 w-6 text-blue-600" />
             Comunicações
           </h1>

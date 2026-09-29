@@ -61,7 +61,7 @@ export default function AdminConfiguracoesPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Configurações</h1>
+          <h1 className="font-display text-[32px] font-bold leading-none text-ink sm:text-[40px]">Configurações</h1>
           <p className="text-sm text-slate-600">Integrações e parâmetros da plataforma.</p>
         </div>
         <button
