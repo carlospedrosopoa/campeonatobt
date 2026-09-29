@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Settings, Smartphone, Swords, TrendingUp, Trophy, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Settings, Smartphone, Swords, TrendingUp, Trophy, Trash2, X, ChevronDown, ChevronRight } from "lucide-react";
 import { CategoriaHeader } from "@/components/admin/categoria-header";
+import { Alert, Button, Card } from "@/components/admin/ui";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { abrirTabelaJogosPdfPorChaves } from "@/lib/jogos-tabela-pdf-client";
 import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-excel-client";
@@ -281,6 +282,26 @@ export default function AdminCategoriaJogosPage() {
   const [gerandoRelatorioJogos, setGerandoRelatorioJogos] = useState(false);
   const [gerandoPlanilhaContingencia, setGerandoPlanilhaContingencia] = useState(false);
   const [gerandoRelatorioClassificacao, setGerandoRelatorioClassificacao] = useState(false);
+  const [configSalvaJson, setConfigSalvaJson] = useState<string | null>(null);
+  const [equipesAprovadasQtd, setEquipesAprovadasQtd] = useState<number | null>(null);
+
+  // quantidade de inscricoes aprovadas, para o resumo da divisao em grupos
+  useEffect(() => {
+    let ativo = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/inscricoes`, { cache: "no-store" });
+        if (!res.ok) return;
+        const rows = ((await res.json().catch(() => null)) ?? []) as Inscricao[];
+        if (ativo) setEquipesAprovadasQtd(rows.filter((item) => item.status === "APROVADA").length);
+      } catch {
+        // resumo e opcional
+      }
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, [slug, categoriaId]);
 
   function moverEquipeManualTieBreak(params: { groupKey: string; equipeId: string; delta: number }) {
     setManualTieBreakOrder((prev) => {
@@ -414,7 +435,11 @@ export default function AdminCategoriaJogosPage() {
       fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" }),
     ]);
 
-    if (resConfig.ok) setConfig((await resConfig.json()) as CategoriaConfig);
+    if (resConfig.ok) {
+      const configCarregada = (await resConfig.json()) as CategoriaConfig;
+      setConfig(configCarregada);
+      setConfigSalvaJson(JSON.stringify(configCarregada));
+    }
     if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
   }
 
@@ -1691,6 +1716,131 @@ export default function AdminCategoriaJogosPage() {
 
   if (redirecting) return <div className="text-sm text-slate-600">Redirecionando…</div>;
 
+  async function salvarConfiguracao() {
+    if (!config) return;
+    try {
+      setSalvandoConfig(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      if (!res.ok) {
+        const msg = await res.json().catch(() => null);
+        throw new Error(msg?.error || "Falha ao salvar configuração");
+      }
+      setConfigSalvaJson(JSON.stringify(config));
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setSalvandoConfig(false);
+    }
+  }
+
+  async function gerarGruposEJogos() {
+    if (!config) return;
+    try {
+      setGerandoGrupos(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-grupos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      if (!res.ok) {
+        const msg = await res.json().catch(() => null);
+        throw new Error(msg?.error || "Falha ao gerar grupos");
+      }
+      const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
+      if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
+      setFasePartidas("GRUPOS");
+      await carregarPartidas("GRUPOS");
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setGerandoGrupos(false);
+    }
+  }
+
+  async function gerarMataMataConfig() {
+    try {
+      setGerandoMataMata(true);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-mata-mata`, { method: "POST" });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) {
+        if (payload?.code === "TIE_BREAK_REQUIRED" && Array.isArray(payload?.tieGroups)) {
+          const groups = payload.tieGroups as ManualTieBreakGroup[];
+          setManualTieBreakGroups(groups);
+          setManualTieBreakOrder(Object.fromEntries(groups.map((g) => [g.key, g.items.map((i) => i.equipeId)])));
+          setManualTieBreakOpen(true);
+          return;
+        }
+        throw new Error(payload?.error || "Falha ao gerar mata-mata");
+      }
+      if (payload?.fase) {
+        setFasePartidas(payload.fase);
+        await carregarPartidas(payload.fase);
+      } else {
+        await carregarPartidas();
+      }
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setGerandoMataMata(false);
+    }
+  }
+
+  const configAlterada = Boolean(config && configSalvaJson !== null && JSON.stringify(config) !== configSalvaJson);
+  const formatoAtual = config?.formato ?? "GRUPOS";
+  const usaGrupos = formatoAtual !== "MATA_MATA";
+  const usaClassificacao = formatoAtual === "GRUPOS";
+  const usaMataMata = formatoAtual !== "LIGA";
+  const grupoUnico = config?.grupos?.modo === "MANUAL" && config?.grupos?.quantidade === 1;
+  const temRegrasPorFase = Object.keys(config?.regrasPartidaPorFase ?? {}).length > 0;
+
+  const resumoGrupos = (() => {
+    if (!config || equipesAprovadasQtd === null || !usaGrupos) return null;
+    if (equipesAprovadasQtd < 2) return `${equipesAprovadasQtd} inscrição(ões) aprovada(s) — são necessárias ao menos 2 para montar grupos.`;
+    const qtd = calcularQuantidadeGruposEsperada(equipesAprovadasQtd, config);
+    const tamanhos = calcularTamanhosEsperados(equipesAprovadasQtd, qtd);
+    const min = Math.min(...tamanhos);
+    const max = Math.max(...tamanhos);
+    const tamanhoTxt = min === max ? `de ${min}` : `de ${min} a ${max}`;
+    const partes = [`${equipesAprovadasQtd} aprovadas`, `${qtd} grupo${qtd > 1 ? "s" : ""} ${tamanhoTxt}`];
+    if (usaClassificacao) {
+      const classificados = qtd * (config.classificacao?.porGrupo ?? 2) + (config.classificacao?.melhoresTerceiros ?? 0);
+      partes.push(`${classificados} classificados para o mata-mata`);
+    }
+    return partes.join(" → ");
+  })();
+
+  const OPCOES_FORMATO = [
+    { id: "GRUPOS", titulo: "Grupos + mata-mata", desc: "Fase de grupos e depois chave eliminatória." },
+    { id: "LIGA", titulo: "Liga", desc: "Todos contra todos, vence quem somar mais." },
+    { id: "MATA_MATA", titulo: "Só mata-mata", desc: "Chave eliminatória direta, sem grupos." },
+  ] as const;
+  const OPCOES_PARTICIPACAO = [
+    { id: "DUPLAS", titulo: "Duplas", desc: "Inscrição já com a dupla formada." },
+    { id: "DUPLAS_SORTEADAS", titulo: "Duplas sorteadas", desc: "Inscrição individual; duplas sorteadas depois." },
+    { id: "SIMPLES", titulo: "Simples", desc: "Um atleta por equipe." },
+  ] as const;
+
+  const secaoCls = "rounded-[14px] border border-line bg-white";
+  const campoCls =
+    "h-10 w-full rounded-[10px] border border-[#d9d5cc] bg-white px-3 text-sm text-ink outline-none focus:border-[#b5b2aa] focus:ring-2 focus:ring-signal/15";
+  const opcaoCls = (ativo: boolean) =>
+    `flex w-full flex-col items-start gap-0.5 rounded-xl border px-3.5 py-3 text-left transition-colors ${
+      ativo ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-[#b5b2aa]"
+    }`;
+  const tituloSecao = (numero: number, titulo: string, desc?: string) => (
+    <div className="flex items-start gap-3 border-b border-line px-4 py-4 sm:px-5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sand-2 text-xs font-extrabold text-ink-2">{numero}</span>
+      <div className="min-w-0">
+        <h2 className="text-base font-extrabold text-ink">{titulo}</h2>
+        {desc && <p className="mt-0.5 text-[13px] text-muted">{desc}</p>}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <CategoriaHeader
@@ -1700,478 +1850,462 @@ export default function AdminCategoriaJogosPage() {
         ativa="configuracao"
       />
 
-      {erro && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>}
+      {erro && <Alert>{erro}</Alert>}
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Dinâmica da categoria</h2>
-            <p className="text-sm text-slate-600">Defina grupos, classificados e gere chaves.</p>
-          </div>
-        </div>
+      {!config ? (
+        <Card className="p-6 text-sm text-muted">Carregando configuração…</Card>
+      ) : (
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="space-y-5">
+            {/* 1. Quem joga e como */}
+            <section className={secaoCls}>
+              {tituloSecao(1, "Quem joga e como", "Tipo de inscrição e formato da disputa.")}
+              <div className="space-y-5 px-4 py-4 sm:px-5">
+                <div className="space-y-2">
+                  <div className="text-[13px] font-bold text-ink">Tipo de participação</div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {OPCOES_PARTICIPACAO.map((op) => {
+                      const ativo = (config.tipoParticipacao ?? "DUPLAS") === op.id;
+                      return (
+                        <button
+                          key={op.id}
+                          type="button"
+                          aria-pressed={ativo}
+                          onClick={() => setConfig((p) => (p ? { ...p, tipoParticipacao: op.id } : p))}
+                          className={opcaoCls(ativo)}
+                        >
+                          <span className="text-sm font-extrabold">{op.titulo}</span>
+                          <span className={`text-xs ${ativo ? "text-white/75" : "text-muted"}`}>{op.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-        {config ? (
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Formato</label>
-              <select
-                value={config.formato}
-                onChange={(e) => setConfig((p) => (p ? { ...p, formato: e.target.value as any } : p))}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
-              >
-                <option value="GRUPOS">GRUPOS</option>
-                <option value="LIGA">LIGA</option>
-                <option value="MATA_MATA">MATA_MATA</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Regra do jogo</label>
-              <select
-                value={regraJogoSelecionada}
-                onChange={(e) => {
-                  const regrasPartida = buildRegrasPartidaPreset(e.target.value);
-                  setConfig((p) => (p ? { ...p, regrasPartida } : p));
-                }}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
-              >
-                {ehVoleiPraia ? (
-                  <option value={REGRA_JOGO_VOLEI_PRAIA}>Vôlei de praia: 2 sets até 21 + 3º set até 15</option>
-                ) : (
-                  <>
-                    <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
-                    <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
-                    <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
-                    <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
-                    <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie até 10</option>
-                    <option value="VOLEI_3_21">Vôlei melhor de 3 até 21</option>
-                    <option value="VOLEI_3_25">Vôlei melhor de 3 até 25</option>
-                    <option value="VOLEI_5_25">Vôlei melhor de 5 até 25</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Grupos</label>
-              <select
-                value={config.grupos?.modo === "MANUAL" && config.grupos?.quantidade === 1 ? "UNICO" : "AUTO"}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "UNICO") {
-                    setConfig((p) =>
-                      p
-                        ? {
-                            ...p,
-                            grupos: {
-                              ...(p.grupos ?? { modo: "AUTO", tamanhoAlvo: 4 }),
-                              modo: "MANUAL",
-                              quantidade: 1,
-                            },
-                          }
-                        : p
-                    );
-                  } else {
-                    setConfig((p) =>
-                      p
-                        ? {
-                            ...p,
-                            grupos: {
-                              ...(p.grupos ?? { modo: "AUTO", tamanhoAlvo: 4 }),
-                              modo: "AUTO",
-                              quantidade: undefined,
-                            },
-                          }
-                        : p
-                    );
-                  }
-                }}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
-              >
-                <option value="AUTO">Auto</option>
-                <option value="UNICO">Grupo único</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Tamanho alvo do grupo</label>
-              <select
-                value={config.grupos?.tamanhoAlvo ?? 4}
-                onChange={(e) =>
-                  setConfig((p) =>
-                    p ? { ...p, grupos: { ...(p.grupos ?? { modo: "AUTO", tamanhoAlvo: 4 }), tamanhoAlvo: Number(e.target.value) as any } } : p
-                  )
-                }
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
-              >
-                <option value={3}>3</option>
-                <option value={4}>4</option>
-                <option value={5}>5</option>
-                <option value={6}>6</option>
-                <option value={7}>7</option>
-                <option value={8}>8</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Classificam por grupo</label>
-              <input
-                value={config.classificacao?.porGrupo ?? 2}
-                onChange={(e) => setConfig((p) => (p ? { ...p, classificacao: { ...(p.classificacao ?? { porGrupo: 2 }), porGrupo: Number(e.target.value) } } : p))}
-                type="number"
-                min={1}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Melhores terceiros</label>
-              <input
-                value={config.classificacao?.melhoresTerceiros ?? 0}
-                onChange={(e) =>
-                  setConfig((p) =>
-                    p ? { ...p, classificacao: { ...(p.classificacao ?? { porGrupo: 2 }), melhoresTerceiros: Number(e.target.value) || 0 } } : p
-                  )
-                }
-                type="number"
-                min={0}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-slate-700">Estrutura do mata-mata</label>
-              <select
-                value={config.mataMata?.estrutura ?? "PADRAO"}
-                onChange={(e) =>
-                  setConfig((p) =>
-                    p
-                      ? {
-                          ...p,
-                          mataMata: {
-                            ...(p.mataMata ?? {}),
-                            estrutura: e.target.value as
-                              | "PADRAO"
-                              | "SUPER_CAMPEONATO_6"
-                              | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
-                              | "GRUPOS_8_CRUZAMENTO_PADRAO"
-                              | "GRUPOS_10_CRUZAMENTO_PADRAO",
-                          },
-                        }
-                      : p
-                  )
-                }
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
-              >
-                <option value="PADRAO">Padrão do sistema</option>
-                <option value="GRUPOS_10_CRUZAMENTO_PADRAO">10 classificados (5 chaves x 2) com cruzamento padrão entre chaves</option>
-                <option value="GRUPOS_8_CRUZAMENTO_PADRAO">8 classificados com cruzamento padrão entre chaves</option>
-                <option value="GRUPOS_6_MELHORES_PRIMEIROS_BYE">6 classificados com 2 melhores primeiros direto na semifinal</option>
-              </select>
-              <div className="text-xs text-slate-500">
-                Use a opção de 8 classificados para 4 chaves com cruzamento padrão nas quartas, ou a de 6 classificados quando os 2 melhores líderes precisarem entrar direto na semifinal.
-              </div>
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-slate-700">Re-seed entre fases do mata-mata</label>
-              <select
-                value={
-                  config.mataMata?.habilitarReseed === true
-                    ? "true"
-                    : config.mataMata?.habilitarReseed === false
-                      ? "false"
-                      : "auto"
-                }
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setConfig((p) =>
-                    p
-                      ? ({
-                          ...p,
-                          mataMata: {
-                            estrutura: (p.mataMata?.estrutura ?? "PADRAO") as
-                              | "PADRAO"
-                              | "SUPER_CAMPEONATO_6"
-                              | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
-                              | "GRUPOS_8_CRUZAMENTO_PADRAO"
-                              | "GRUPOS_10_CRUZAMENTO_PADRAO",
-                            quantidadeClassificados: p.mataMata?.quantidadeClassificados,
-                            ...(p.mataMata ?? {}),
-                            habilitarReseed:
-                              val === "true" ? true :
-                              val === "false" ? false :
-                              undefined,
-                          },
-                        } satisfies CategoriaConfig)
-                      : p
-                  );
-                }}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
-              >
-                <option value="auto">Automático (re-seed só se houver byes)</option>
-                <option value="true">Sempre usar re-seed por rank</option>
-                <option value="false">Nunca usar re-seed (bracket tradicional)</option>
-              </select>
-              <p className="text-xs text-slate-500">
-                Automático: com chave cheia (ex: 8 classificados) não faz re-seed e usa avanço normal de bracket. Com byes (ex: 6 classificados) faz re-seed por rank.
-              </p>
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-slate-700">Tipo de participação</label>
-              <select
-                value={config.tipoParticipacao ?? "DUPLAS"}
-                onChange={(e) =>
-                  setConfig((p) =>
-                    p
-                      ? {
-                          ...p,
-                          tipoParticipacao:
-                            e.target.value === "SIMPLES"
-                              ? "SIMPLES"
-                              : e.target.value === "DUPLAS_SORTEADAS"
-                                ? "DUPLAS_SORTEADAS"
-                                : "DUPLAS",
-                        }
-                      : p
-                  )
-                }
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
-              >
-                <option value="DUPLAS">Duplas</option>
-                <option value="DUPLAS_SORTEADAS">Duplas Sorteadas (inscrição individual)</option>
-                <option value="SIMPLES">Simples</option>
-              </select>
-              <div className="text-xs text-slate-500">Define se a categoria aceita 2 atletas por equipe, 1 atleta individual (simples), ou inscrições individuais que serão sorteadas em duplas depois.</div>
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-slate-700">Finais</label>
-              <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                <span>Disputa de 3º lugar</span>
-                <input
-                  type="checkbox"
-                  checked={config.fase2?.disputaTerceiroLugar === true}
-                  onChange={(e) =>
-                    setConfig((p) =>
-                      p
-                        ? {
-                            ...p,
-                            fase2: {
-                              ...(p.fase2 ?? { habilitada: true, temFinal: true, disputaTerceiroLugar: false }),
-                              disputaTerceiroLugar: e.target.checked,
-                            },
-                          }
-                        : p
-                    )
-                  }
-                  className="h-4 w-4 rounded border-slate-300"
-                />
-              </label>
-              <div className="text-xs text-slate-500">Quando ativada, a semifinal gera final e 3º lugar automaticamente.</div>
-            </div>
-
-            <div className="space-y-3 md:col-span-6 pt-2 border-t border-slate-100">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-slate-800">Regras por fase</div>
-                  <div className="text-xs text-slate-500">
-                    Deixe em "Padrão" para usar a regra do jogo acima. Quando configurada, a regra específica da fase (ou a de mata-mata para oitavas/quartas/semi/final) prevalece.
+                <div className="space-y-2">
+                  <div className="text-[13px] font-bold text-ink">Formato</div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {OPCOES_FORMATO.map((op) => {
+                      const ativo = config.formato === op.id;
+                      return (
+                        <button
+                          key={op.id}
+                          type="button"
+                          aria-pressed={ativo}
+                          onClick={() => setConfig((p) => (p ? { ...p, formato: op.id } : p))}
+                          className={opcaoCls(ativo)}
+                        >
+                          <span className="text-sm font-extrabold">{op.titulo}</span>
+                          <span className={`text-xs ${ativo ? "text-white/75" : "text-muted"}`}>{op.desc}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {([
-                  { key: "GRUPOS", label: "Grupos", hint: "Fase de grupos / liga" },
-                  { key: "MATA_MATA", label: "Mata-mata (genérico)", hint: "Oitavas, quartas, semi, final, 3º lugar" },
-                  { key: "SEMI", label: "Semifinal", hint: "Apenas semi" },
-                  { key: "FINAL", label: "Final", hint: "Apenas a grande final" },
-                ] as Array<{ key: FasePartida; label: string; hint: string }>).map((item) => {
-                  const regraAtual = config?.regrasPartidaPorFase?.[item.key] ?? null;
-                  const presetAtual = regraAtual ? getRegraJogoValue(regraAtual as any) : "PADRAO";
-                  return (
-                    <div key={item.key} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-700">{item.label}</div>
-                        <div className="text-[11px] leading-tight text-slate-500">{item.hint}</div>
-                      </div>
-                      <select
-                        value={presetAtual}
-                        onChange={(e) => {
-                          const valor = e.target.value;
-                          setConfig((p) => {
-                            if (!p) return p;
-                            const atual: RegrasPartidaPorFase = { ...(p.regrasPartidaPorFase ?? {}) };
-                            if (valor === "PADRAO") {
-                              delete atual[item.key];
-                            } else {
-                              atual[item.key] = buildRegrasPartidaPreset(valor);
-                            }
-                            const temChaves = Object.keys(atual).length > 0;
-                            return {
-                              ...p,
-                              regrasPartidaPorFase: temChaves ? atual : undefined,
-                            };
-                          });
-                        }}
-                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                      >
-                        <option value="PADRAO">Padrão (usa regra do jogo)</option>
-                        {!ehVoleiPraia && (
-                          <>
-                            <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
-                            <option value="1SET_6_SEM_TB">1 set até 6 sem tie</option>
-                            <option value="1SET_5_SEM_TB">1 set até 5 sem tie</option>
-                            <option value="2SETS_SUPER10">2 sets até 6 + super tie 10</option>
-                            <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie 10</option>
-                          </>
-                        )}
-                        <option value="VOLEI_3_21">Vôlei md3 até 21</option>
-                        <option value="VOLEI_3_25">Vôlei md3 até 25</option>
-                        {!ehVoleiPraia && <option value="VOLEI_5_25">Vôlei md5 até 25</option>}
-                      </select>
-                    </div>
-                  );
-                })}
+            </section>
+
+            {/* 2. Regra do jogo */}
+            <section className={secaoCls}>
+              {tituloSecao(2, "Regra do jogo", "Como cada partida é disputada.")}
+              <div className="space-y-4 px-4 py-4 sm:px-5">
+                <label className="block max-w-xl space-y-1.5">
+                  <span className="text-[13px] font-bold text-ink">Regra padrão</span>
+                  <select
+                    value={regraJogoSelecionada}
+                    onChange={(e) => {
+                      const regrasPartida = buildRegrasPartidaPreset(e.target.value);
+                      setConfig((p) => (p ? { ...p, regrasPartida } : p));
+                    }}
+                    className={campoCls}
+                  >
+                    {ehVoleiPraia ? (
+                      <option value={REGRA_JOGO_VOLEI_PRAIA}>Vôlei de praia: 2 sets até 21 + 3º set até 15</option>
+                    ) : (
+                      <>
+                        <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
+                        <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
+                        <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
+                        <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
+                        <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie até 10</option>
+                        <option value="VOLEI_3_21">Vôlei melhor de 3 até 21</option>
+                        <option value="VOLEI_3_25">Vôlei melhor de 3 até 25</option>
+                        <option value="VOLEI_5_25">Vôlei melhor de 5 até 25</option>
+                      </>
+                    )}
+                  </select>
+                </label>
+
+                <details open={temRegrasPorFase || undefined} className="group rounded-xl border border-line">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3">
+                    <span>
+                      <span className="block text-[13px] font-bold text-ink">Regra diferente por fase</span>
+                      <span className="block text-xs text-muted">
+                        {temRegrasPorFase
+                          ? `${Object.keys(config.regrasPartidaPorFase ?? {}).length} fase(s) com regra própria`
+                          : "Opcional — ex.: final com 2 sets e super tie"}
+                      </span>
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="grid grid-cols-1 gap-3 border-t border-line px-3.5 py-3.5 sm:grid-cols-2">
+                    {([
+                      { key: "GRUPOS", label: "Grupos", hint: "Fase de grupos / liga" },
+                      { key: "MATA_MATA", label: "Mata-mata (geral)", hint: "Oitavas, quartas, semi, final, 3º lugar" },
+                      { key: "SEMI", label: "Semifinal", hint: "Apenas a semi" },
+                      { key: "FINAL", label: "Final", hint: "Apenas a grande final" },
+                    ] as Array<{ key: FasePartida; label: string; hint: string }>).map((item) => {
+                      const regraAtual = config?.regrasPartidaPorFase?.[item.key] ?? null;
+                      const presetAtual = regraAtual ? getRegraJogoValue(regraAtual as any) : "PADRAO";
+                      return (
+                        <label key={item.key} className="block space-y-1.5">
+                          <span className="block text-[13px] font-bold text-ink">
+                            {item.label} <span className="font-medium text-muted">· {item.hint}</span>
+                          </span>
+                          <select
+                            value={presetAtual}
+                            onChange={(e) => {
+                              const valor = e.target.value;
+                              setConfig((p) => {
+                                if (!p) return p;
+                                const atual: RegrasPartidaPorFase = { ...(p.regrasPartidaPorFase ?? {}) };
+                                if (valor === "PADRAO") {
+                                  delete atual[item.key];
+                                } else {
+                                  atual[item.key] = buildRegrasPartidaPreset(valor);
+                                }
+                                const temChaves = Object.keys(atual).length > 0;
+                                return {
+                                  ...p,
+                                  regrasPartidaPorFase: temChaves ? atual : undefined,
+                                };
+                              });
+                            }}
+                            className={campoCls}
+                          >
+                            <option value="PADRAO">Igual à regra padrão</option>
+                            {!ehVoleiPraia && (
+                              <>
+                                <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
+                                <option value="1SET_6_SEM_TB">1 set até 6 sem tie</option>
+                                <option value="1SET_5_SEM_TB">1 set até 5 sem tie</option>
+                                <option value="2SETS_SUPER10">2 sets até 6 + super tie 10</option>
+                                <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie 10</option>
+                              </>
+                            )}
+                            <option value="VOLEI_3_21">Vôlei md3 até 21</option>
+                            <option value="VOLEI_3_25">Vôlei md3 até 25</option>
+                            {!ehVoleiPraia && <option value="VOLEI_5_25">Vôlei md5 até 25</option>}
+                          </select>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </details>
               </div>
+            </section>
+
+            {/* 3. Grupos */}
+            <section className={secaoCls}>
+              {tituloSecao(3, "Grupos", usaGrupos ? "Como as inscrições são divididas." : undefined)}
+              {!usaGrupos ? (
+                <p className="px-4 py-4 text-[13px] text-muted sm:px-5">Não se aplica ao formato Só mata-mata.</p>
+              ) : (
+                <div className="space-y-4 px-4 py-4 sm:px-5">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <span className="block text-[13px] font-bold text-ink">Divisão</span>
+                      <div className="flex gap-0.5 rounded-[10px] bg-sand-2 p-[3px]">
+                        {[
+                          { id: "AUTO", label: "Automática" },
+                          { id: "UNICO", label: "Grupo único" },
+                        ].map((op) => {
+                          const ativo = (op.id === "UNICO") === grupoUnico;
+                          return (
+                            <button
+                              key={op.id}
+                              type="button"
+                              aria-pressed={ativo}
+                              onClick={() =>
+                                setConfig((p) =>
+                                  p
+                                    ? {
+                                        ...p,
+                                        grupos: {
+                                          ...(p.grupos ?? { modo: "AUTO", tamanhoAlvo: 4 }),
+                                          modo: op.id === "UNICO" ? "MANUAL" : "AUTO",
+                                          quantidade: op.id === "UNICO" ? 1 : undefined,
+                                        },
+                                      }
+                                    : p
+                                )
+                              }
+                              className={`flex-1 rounded-lg px-3 py-2 text-[13px] transition-colors ${
+                                ativo ? "bg-white font-bold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "font-semibold text-ink-2 hover:text-ink"
+                              }`}
+                            >
+                              {op.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <label className="block space-y-1.5">
+                      <span className="block text-[13px] font-bold text-ink">Tamanho alvo do grupo</span>
+                      <select
+                        value={config.grupos?.tamanhoAlvo ?? 4}
+                        onChange={(e) =>
+                          setConfig((p) =>
+                            p ? { ...p, grupos: { ...(p.grupos ?? { modo: "AUTO", tamanhoAlvo: 4 }), tamanhoAlvo: Number(e.target.value) as any } } : p
+                          )
+                        }
+                        className={campoCls}
+                      >
+                        {[3, 4, 5, 6, 7, 8].map((n) => (
+                          <option key={n} value={n}>
+                            {n} por grupo
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {usaClassificacao && (
+                      <>
+                        <label className="block space-y-1.5">
+                          <span className="block text-[13px] font-bold text-ink">Classificam por grupo</span>
+                          <input
+                            value={config.classificacao?.porGrupo ?? 2}
+                            onChange={(e) =>
+                              setConfig((p) => (p ? { ...p, classificacao: { ...(p.classificacao ?? { porGrupo: 2 }), porGrupo: Number(e.target.value) } } : p))
+                            }
+                            type="number"
+                            min={1}
+                            className={campoCls}
+                          />
+                        </label>
+                        <label className="block space-y-1.5">
+                          <span className="block text-[13px] font-bold text-ink">Melhores terceiros</span>
+                          <input
+                            value={config.classificacao?.melhoresTerceiros ?? 0}
+                            onChange={(e) =>
+                              setConfig((p) =>
+                                p ? { ...p, classificacao: { ...(p.classificacao ?? { porGrupo: 2 }), melhoresTerceiros: Number(e.target.value) || 0 } } : p
+                              )
+                            }
+                            type="number"
+                            min={0}
+                            className={campoCls}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+
+                  {resumoGrupos && (
+                    <div className="rounded-[10px] bg-ocean-soft px-3.5 py-2.5 text-[13px] font-semibold text-ocean-strong">{resumoGrupos}</div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* 4. Mata-mata */}
+            <section className={secaoCls}>
+              {tituloSecao(4, "Mata-mata", usaMataMata ? "Montagem da chave eliminatória." : undefined)}
+              {!usaMataMata ? (
+                <p className="px-4 py-4 text-[13px] text-muted sm:px-5">Não se aplica ao formato Liga.</p>
+              ) : (
+                <div className="space-y-4 px-4 py-4 sm:px-5">
+                  <label className="block space-y-1.5">
+                    <span className="block text-[13px] font-bold text-ink">Estrutura</span>
+                    <select
+                      value={config.mataMata?.estrutura ?? "PADRAO"}
+                      onChange={(e) =>
+                        setConfig((p) =>
+                          p
+                            ? {
+                                ...p,
+                                mataMata: {
+                                  ...(p.mataMata ?? {}),
+                                  estrutura: e.target.value as
+                                    | "PADRAO"
+                                    | "SUPER_CAMPEONATO_6"
+                                    | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
+                                    | "GRUPOS_8_CRUZAMENTO_PADRAO"
+                                    | "GRUPOS_10_CRUZAMENTO_PADRAO",
+                                },
+                              }
+                            : p
+                        )
+                      }
+                      className={campoCls}
+                    >
+                      <option value="PADRAO">Padrão do sistema</option>
+                      <option value="GRUPOS_10_CRUZAMENTO_PADRAO">10 classificados (5 chaves x 2) com cruzamento padrão entre chaves</option>
+                      <option value="GRUPOS_8_CRUZAMENTO_PADRAO">8 classificados com cruzamento padrão entre chaves</option>
+                      <option value="GRUPOS_6_MELHORES_PRIMEIROS_BYE">6 classificados com 2 melhores primeiros direto na semifinal</option>
+                    </select>
+                    <span className="block text-xs text-muted">
+                      8 classificados: 4 chaves com cruzamento padrão nas quartas. 6 classificados: os 2 melhores líderes entram direto na semifinal.
+                    </span>
+                  </label>
+
+                  {usaClassificacao && (
+                    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+                      <span>
+                        <span className="block text-[13px] font-bold text-ink">Disputa de 3º lugar</span>
+                        <span className="block text-xs text-muted">A semifinal gera a final e o jogo de 3º lugar automaticamente.</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={config.fase2?.disputaTerceiroLugar === true}
+                        onChange={(e) =>
+                          setConfig((p) =>
+                            p
+                              ? {
+                                  ...p,
+                                  fase2: {
+                                    ...(p.fase2 ?? { habilitada: true, temFinal: true, disputaTerceiroLugar: false }),
+                                    disputaTerceiroLugar: e.target.checked,
+                                  },
+                                }
+                              : p
+                          )
+                        }
+                        className="h-5 w-5 shrink-0 accent-[#d9480f]"
+                      />
+                    </label>
+                  )}
+
+                  <details className="group rounded-xl border border-line">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3">
+                      <span className="text-[13px] font-bold text-ink">
+                        Avançado <span className="font-medium text-muted">· re-seed entre fases</span>
+                      </span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="space-y-1.5 border-t border-line px-3.5 py-3.5">
+                      <select
+                        aria-label="Re-seed entre fases do mata-mata"
+                        value={
+                          config.mataMata?.habilitarReseed === true ? "true" : config.mataMata?.habilitarReseed === false ? "false" : "auto"
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setConfig((p) =>
+                            p
+                              ? ({
+                                  ...p,
+                                  mataMata: {
+                                    estrutura: (p.mataMata?.estrutura ?? "PADRAO") as
+                                      | "PADRAO"
+                                      | "SUPER_CAMPEONATO_6"
+                                      | "GRUPOS_6_MELHORES_PRIMEIROS_BYE"
+                                      | "GRUPOS_8_CRUZAMENTO_PADRAO"
+                                      | "GRUPOS_10_CRUZAMENTO_PADRAO",
+                                    quantidadeClassificados: p.mataMata?.quantidadeClassificados,
+                                    ...(p.mataMata ?? {}),
+                                    habilitarReseed: val === "true" ? true : val === "false" ? false : undefined,
+                                  },
+                                } satisfies CategoriaConfig)
+                              : p
+                          );
+                        }}
+                        className={campoCls}
+                      >
+                        <option value="auto">Automático (re-seed só se houver byes)</option>
+                        <option value="true">Sempre usar re-seed por rank</option>
+                        <option value="false">Nunca usar re-seed (bracket tradicional)</option>
+                      </select>
+                      <p className="text-xs text-muted">
+                        Automático: com chave cheia (ex.: 8 classificados) segue o avanço normal da chave; com byes (ex.: 6 classificados) reordena por ranking.
+                      </p>
+                    </div>
+                  </details>
+                </div>
+              )}
+            </section>
+
+            {/* 5. Desempate */}
+            <section className={secaoCls}>
+              {tituloSecao(5, "Critérios de desempate", "Aplicados nesta ordem na classificação dos grupos.")}
+              <div className="flex flex-wrap items-center gap-1.5 px-4 py-4 sm:px-5">
+                {["Vitórias", "Saldo de games", "Confronto direto (entre 2)", "Games pró", "Sorteio"].map((c, idx, arr) => (
+                  <Fragment key={c}>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-sand-2 px-3 py-1 text-[13px] font-semibold text-ink">
+                      <span className="text-xs font-extrabold text-muted">{idx + 1}</span>
+                      {c}
+                    </span>
+                    {idx < arr.length - 1 && <ChevronRight className="h-3.5 w-3.5 text-muted" />}
+                  </Fragment>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <aside className="space-y-5 xl:sticky xl:top-24">
+            <section className={secaoCls}>
+              <div className="border-b border-line px-4 py-4 sm:px-5">
+                <h2 className="text-base font-extrabold text-ink">Montagem da categoria</h2>
+                <p className="mt-0.5 text-[13px] text-muted">Use depois de salvar a configuração.</p>
+              </div>
+              <div className="space-y-2 px-4 py-4 sm:px-5">
+                {configAlterada && (
+                  <div className="rounded-[10px] bg-[#fdf1dc] px-3 py-2.5 text-xs font-semibold text-[#6b3d00]">
+                    Há alterações não salvas. A montagem usa a configuração salva.
+                  </div>
+                )}
+                <Button variant="primary" className="w-full" disabled={gerandoGrupos || !config} onClick={() => void gerarGruposEJogos()}>
+                  {gerandoGrupos ? "Gerando…" : "Gerar grupos e jogos"}
+                </Button>
+                <Button
+                  className="w-full"
+                  disabled={!config || carregandoMontagemGrupos}
+                  onClick={abrirMontagemManualGrupos}
+                  title="Definir manualmente em qual grupo cada dupla ficará"
+                >
+                  {carregandoMontagemGrupos ? "Carregando…" : "Montar grupos manualmente"}
+                </Button>
+                <Button
+                  className="w-full"
+                  disabled={classificacao.length < 2 || salvandoTrocaGrupos}
+                  onClick={abrirTrocaEntreGrupos}
+                  title="Trocar duas duplas entre grupos e regerar os jogos"
+                >
+                  Trocar duplas entre grupos
+                </Button>
+                <Button className="w-full" disabled={gerandoMataMata} onClick={() => void gerarMataMataConfig()}>
+                  {gerandoMataMata ? "Gerando…" : "Gerar mata-mata"}
+                </Button>
+              </div>
+            </section>
+
+            <section className="rounded-[14px] border border-red-200 bg-white">
+              <div className="px-4 py-4 sm:px-5">
+                <h2 className="text-base font-extrabold text-red-800">Zona de risco</h2>
+                <p className="mt-0.5 text-[13px] text-muted">Exclui todos os jogos, grupos e rodadas. As inscrições são mantidas.</p>
+                <Button variant="danger" className="mt-3 w-full" disabled={resetando} onClick={resetarJogos} icon={<Trash2 />}>
+                  {resetando ? "Apagando…" : "Apagar jogos e grupos"}
+                </Button>
+              </div>
+            </section>
+          </aside>
+
+          <div className="sticky bottom-4 z-20 xl:col-span-2">
+            <div className="flex flex-col gap-3 rounded-[14px] border border-line bg-white/95 px-4 py-3 shadow-[0_8px_28px_rgba(23,24,28,0.14)] backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className={`h-2 w-2 rounded-full ${configAlterada ? "bg-[#e0a526]" : "bg-[#1e7f4f]"}`} />
+                <span className={configAlterada ? "font-bold text-ink" : "text-muted"}>
+                  {configAlterada ? "Alterações não salvas" : "Configuração salva"}
+                </span>
+              </div>
+              <Button variant="primary" disabled={!config || salvandoConfig} onClick={() => void salvarConfiguracao()} icon={<Save />}>
+                {salvandoConfig ? "Salvando…" : "Salvar configuração"}
+              </Button>
             </div>
           </div>
-        ) : (
-          <div className="text-sm text-slate-600">Carregando configuração…</div>
-        )}
-
-        <div className="flex flex-col gap-3">
-          <div className="text-xs text-slate-500">Desempate padrão: VITORIAS → SALDO_GAMES → CONFRONTO_DIRETO (ENTRE 2) → GAMES_PRO → SORTEIO</div>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-            <button
-              type="button"
-              disabled={!config || salvandoConfig}
-              onClick={async () => {
-                if (!config) return;
-                try {
-                  setSalvandoConfig(true);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/config`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(config),
-                  });
-                  if (!res.ok) {
-                    const msg = await res.json().catch(() => null);
-                    throw new Error(msg?.error || "Falha ao salvar configuração");
-                  }
-                } catch (e: any) {
-                  setErro(e?.message || "Erro inesperado");
-                } finally {
-                  setSalvandoConfig(false);
-                }
-              }}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-            >
-              <Save className="h-4 w-4" />
-              {salvandoConfig ? "Salvando…" : "Salvar config"}
-            </button>
-
-            <button
-              type="button"
-              disabled={gerandoGrupos || !config}
-              onClick={async () => {
-                if (!config) return;
-                try {
-                  setGerandoGrupos(true);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-grupos`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(config),
-                  });
-                  if (!res.ok) {
-                    const msg = await res.json().catch(() => null);
-                    throw new Error(msg?.error || "Falha ao gerar grupos");
-                  }
-                  const resClass = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/classificacao`, { cache: "no-store" });
-                  if (resClass.ok) setClassificacao((await resClass.json()) as GrupoClassificacao[]);
-                  setFasePartidas("GRUPOS");
-                  await carregarPartidas("GRUPOS");
-                } catch (e: any) {
-                  setErro(e?.message || "Erro inesperado");
-                } finally {
-                  setGerandoGrupos(false);
-                }
-              }}
-              className="inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-2.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50 sm:px-4 sm:text-sm"
-            >
-              {gerandoGrupos ? "Gerando…" : "Gerar grupos/jogos"}
-            </button>
-
-            <button
-              type="button"
-              disabled={!config || carregandoMontagemGrupos}
-              onClick={abrirMontagemManualGrupos}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Definir manualmente em qual grupo cada dupla ficará"
-            >
-              {carregandoMontagemGrupos ? "Carregando…" : "Montar grupos manual"}
-            </button>
-
-            <button
-              type="button"
-              disabled={classificacao.length < 2 || salvandoTrocaGrupos}
-              onClick={abrirTrocaEntreGrupos}
-              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4 sm:text-sm"
-              title="Trocar duas duplas entre grupos e regerar os jogos"
-            >
-              Trocar duplas grupos
-            </button>
-
-            <button
-              type="button"
-              disabled={gerandoMataMata}
-              onClick={async () => {
-                try {
-                  setGerandoMataMata(true);
-                  const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/gerar-mata-mata`, { method: "POST" });
-                  const payload = (await res.json().catch(() => null)) as any;
-                  if (!res.ok) {
-                    if (payload?.code === "TIE_BREAK_REQUIRED" && Array.isArray(payload?.tieGroups)) {
-                      const groups = payload.tieGroups as ManualTieBreakGroup[];
-                      setManualTieBreakGroups(groups);
-                      setManualTieBreakOrder(
-                        Object.fromEntries(groups.map((g) => [g.key, g.items.map((i) => i.equipeId)]))
-                      );
-                      setManualTieBreakOpen(true);
-                      return;
-                    }
-                    throw new Error(payload?.error || "Falha ao gerar mata-mata");
-                  }
-                  if (payload?.fase) {
-                    setFasePartidas(payload.fase);
-                    await carregarPartidas(payload.fase);
-                  } else {
-                    await carregarPartidas();
-                  }
-                } catch (e: any) {
-                  setErro(e?.message || "Erro inesperado");
-                } finally {
-                  setGerandoMataMata(false);
-                }
-              }}
-              className="inline-flex items-center justify-center rounded-md bg-orange-500 px-3 py-2.5 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50 sm:px-4 sm:text-sm"
-            >
-              {gerandoMataMata ? "Gerando…" : "Gerar mata-mata"}
-            </button>
-
-            <button
-              type="button"
-              disabled={resetando}
-              onClick={resetarJogos}
-              className="inline-flex items-center justify-center rounded-md border border-red-200 bg-white px-3 py-2.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 sm:ml-2 sm:px-4 sm:text-sm"
-              title="Excluir todos os jogos e grupos"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
         </div>
-      </div>
+      )}
 
       {trocaGruposOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setTrocaGruposOpen(false)}>
