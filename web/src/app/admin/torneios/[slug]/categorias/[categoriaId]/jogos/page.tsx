@@ -1920,91 +1920,89 @@ export default function AdminCategoriaJogosPage() {
       </Card>
 
       <div className={mostrarClassificacaoLateral ? "grid grid-cols-1 items-start gap-5 xl:grid-cols-[400px_minmax(0,1fr)]" : "space-y-5"}>
-        {(mostrarClassificacaoLateral || fasePartidas === "GRUPOS") && (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-extrabold text-ink">Classificação</h2>
-              <Button variant="ghost" size="sm" disabled={recalculando} onClick={() => void recalcularClassificacao()} icon={<RefreshCw className={recalculando ? "animate-spin" : ""} />}>
-                {recalculando ? "Recalculando…" : "Recalcular"}
-              </Button>
-            </div>
-            {classificacao.length === 0 ? (
-              <Card>
-                <EmptyState title="Sem classificação ainda" description="Gere os grupos na aba Configuração ou recalcule depois dos primeiros jogos." />
-              </Card>
-            ) : (
-              <div className={mostrarClassificacaoLateral ? "space-y-3" : "grid grid-cols-1 gap-3 md:grid-cols-2"}>
-                {classificacao.map((g) => {
-                  const jogosGrupo = partidas.filter((p) => (p.grupoNome || "").trim() === (g.grupoNome || "").trim());
-                  const jogosGrupoFinalizados = jogosGrupo.filter(partidaFinalizada).length;
-                  return (
-                    <Card key={g.grupoId} className="px-4 py-3">
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="font-extrabold text-ink">{g.grupoNome}</span>
-                        {jogosGrupo.length > 0 && (
-                          <span className="text-xs tabular-nums text-muted">
-                            {jogosGrupoFinalizados}/{jogosGrupo.length} jogos
-                          </span>
-                        )}
-                      </div>
-                      <table className="w-full text-[13px]">
-                        <thead>
-                          <tr className="text-[11px] font-bold text-muted">
-                            <th className="w-7 py-1.5 text-left" />
-                            <th className="py-1.5 text-left">Dupla</th>
-                            <th className="w-8 py-1.5 text-right" title="Pontos">P</th>
-                            <th className="w-8 py-1.5 text-right" title="Jogos">J</th>
-                            <th className="w-8 py-1.5 text-right" title="Vitórias">V</th>
-                            <th className="w-10 py-1.5 text-right" title="Saldo de games">SG</th>
-                            <th className="w-11 py-1.5 text-right" title="Aproveitamento">AP</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {g.equipes.map((e, idx) => {
-                            const ap = e.jogosJogados > 0 ? Math.round((e.pontos / (e.jogosJogados * 3)) * 100) : 0;
-                            const classifica = classificamPorGrupo > 0 ? idx < classificamPorGrupo : idx < 2;
-                            return (
-                              <tr key={e.equipeId} className="border-t border-sand-2">
-                                <td className="py-1.5">
-                                  <span
-                                    className={`inline-flex h-5 w-5 items-center justify-center rounded-md text-[11px] font-extrabold ${
-                                      classifica ? "bg-[#e3f3ea] text-[#17663f]" : "bg-sand-2 text-ink-2"
-                                    }`}
-                                  >
-                                    {idx + 1}
-                                  </span>
-                                </td>
-                                <td className="max-w-0 py-1.5 pr-2">
-                                  <div className="flex items-center gap-1.5">
-                                    {Boolean(e.cabecaChave) && (
-                                      <span title="Cabeça de chave do grupo" className="shrink-0 text-[#b7791f]">
-                                        <Crown className="h-3.5 w-3.5" />
-                                      </span>
-                                    )}
-                                    <span className="truncate font-semibold leading-tight text-ink">
-                                      <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-extrabold text-ink">Classificação</h2>
+            <Button variant="ghost" size="sm" disabled={recalculando} onClick={() => void recalcularClassificacao()} icon={<RefreshCw className={recalculando ? "animate-spin" : ""} />}>
+              {recalculando ? "Recalculando…" : "Recalcular"}
+            </Button>
+          </div>
+          {classificacao.length === 0 ? (
+            <Card>
+              <EmptyState title="Sem classificação ainda" description="Gere os grupos na aba Configuração ou recalcule depois dos primeiros jogos." />
+            </Card>
+          ) : (
+            <div className={mostrarClassificacaoLateral ? "space-y-3" : "grid grid-cols-1 gap-3 md:grid-cols-2"}>
+              {classificacao.map((g) => {
+                const jogosGrupo = partidas.filter((p) => (p.grupoNome || "").trim() === (g.grupoNome || "").trim());
+                const jogosGrupoFinalizados = jogosGrupo.filter(partidaFinalizada).length;
+                return (
+                  <Card key={g.grupoId} className="px-4 py-3">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="font-extrabold text-ink">{g.grupoNome}</span>
+                      {jogosGrupo.length > 0 && (
+                        <span className="text-xs tabular-nums text-muted">
+                          {jogosGrupoFinalizados}/{jogosGrupo.length} jogos
+                        </span>
+                      )}
+                    </div>
+                    <table className="w-full text-[13px]">
+                      <thead>
+                        <tr className="text-[11px] font-bold text-muted">
+                          <th className="w-7 py-1.5 text-left" />
+                          <th className="py-1.5 text-left">Dupla</th>
+                          <th className="w-8 py-1.5 text-right" title="Pontos">P</th>
+                          <th className="w-8 py-1.5 text-right" title="Jogos">J</th>
+                          <th className="w-8 py-1.5 text-right" title="Vitórias">V</th>
+                          <th className="w-10 py-1.5 text-right" title="Saldo de games">SG</th>
+                          <th className="w-11 py-1.5 text-right" title="Aproveitamento">AP</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.equipes.map((e, idx) => {
+                          const ap = e.jogosJogados > 0 ? Math.round((e.pontos / (e.jogosJogados * 3)) * 100) : 0;
+                          const classifica = classificamPorGrupo > 0 ? idx < classificamPorGrupo : idx < 2;
+                          return (
+                            <tr key={e.equipeId} className="border-t border-sand-2">
+                              <td className="py-1.5">
+                                <span
+                                  className={`inline-flex h-5 w-5 items-center justify-center rounded-md text-[11px] font-extrabold ${
+                                    classifica ? "bg-[#e3f3ea] text-[#17663f]" : "bg-sand-2 text-ink-2"
+                                  }`}
+                                >
+                                  {idx + 1}
+                                </span>
+                              </td>
+                              <td className="max-w-0 py-1.5 pr-2">
+                                <div className="flex items-center gap-1.5">
+                                  {Boolean(e.cabecaChave) && (
+                                    <span title="Cabeça de chave do grupo" className="shrink-0 text-[#b7791f]">
+                                      <Crown className="h-3.5 w-3.5" />
                                     </span>
-                                  </div>
-                                </td>
-                                <td className="py-1.5 text-right font-extrabold tabular-nums text-ink">{e.pontos}</td>
-                                <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosJogados}</td>
-                                <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosVencidos}</td>
-                                <td className={`py-1.5 text-right font-bold tabular-nums ${e.saldoGames >= 0 ? "text-[#17663f]" : "text-[#a11f14]"}`}>
-                                  {e.saldoGames > 0 ? `+${e.saldoGames}` : e.saldoGames}
-                                </td>
-                                <td className="py-1.5 text-right tabular-nums text-ink-2">{ap}%</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        )}
+                                  )}
+                                  <span className="truncate font-semibold leading-tight text-ink">
+                                    <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-1.5 text-right font-extrabold tabular-nums text-ink">{e.pontos}</td>
+                              <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosJogados}</td>
+                              <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosVencidos}</td>
+                              <td className={`py-1.5 text-right font-bold tabular-nums ${e.saldoGames >= 0 ? "text-[#17663f]" : "text-[#a11f14]"}`}>
+                                {e.saldoGames > 0 ? `+${e.saldoGames}` : e.saldoGames}
+                              </td>
+                              <td className="py-1.5 text-right tabular-nums text-ink-2">{ap}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         <section className="space-y-3">
           <h2 className="text-base font-extrabold text-ink">Partidas</h2>
