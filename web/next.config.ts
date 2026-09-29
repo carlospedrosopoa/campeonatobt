@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Fixa a raiz: um package-lock.json em pasta acima faz o Turbopack inferir a raiz errada
+  turbopack: {
+    root: __dirname,
+  },
   images: {
     remotePatterns: [
       {
