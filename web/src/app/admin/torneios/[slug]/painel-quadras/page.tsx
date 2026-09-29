@@ -1021,7 +1021,7 @@ export default function AdminPainelQuadrasPage() {
 
       {quadraSelecionada && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs uppercase tracking-wider text-slate-500">Alocar partida</div>
@@ -1111,7 +1111,7 @@ export default function AdminPainelQuadrasPage() {
 
       {quadraReservaSelecionada && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs uppercase tracking-wider text-slate-500">Reservar chave na quadra</div>
@@ -1188,7 +1188,7 @@ export default function AdminPainelQuadrasPage() {
 
       {quadraProximoJogoSelecionada && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs uppercase tracking-wider text-slate-500">Definir próximo jogo</div>
@@ -1274,7 +1274,7 @@ export default function AdminPainelQuadrasPage() {
 
       {editPartida && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="w-full max-w-4xl rounded-xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-4xl rounded-xl bg-white p-6 shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs uppercase tracking-wider text-slate-500">Finalizar jogo</div>

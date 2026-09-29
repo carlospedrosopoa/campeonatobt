@@ -2600,7 +2600,7 @@ export default function AdminCategoriaJogosSuperPage() {
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditRodadaId(null)}>
               <div
-                className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-lg"
+                className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-lg max-h-[90dvh] overflow-y-auto overscroll-contain"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="p-6 space-y-4">
@@ -2689,7 +2689,7 @@ export default function AdminCategoriaJogosSuperPage() {
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditConfrontoId(null)}>
               <div
-                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
+                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85dvh] overflow-y-auto"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="p-6 space-y-4">
@@ -2828,7 +2828,7 @@ export default function AdminCategoriaJogosSuperPage() {
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditAgendamentoId(null)}>
               <div
-                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
+                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85dvh] overflow-y-auto"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="p-6 space-y-4">
@@ -2969,7 +2969,7 @@ export default function AdminCategoriaJogosSuperPage() {
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditPartidaId(null)}>
               <div
-                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
+                className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85dvh] overflow-y-auto"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="p-6 space-y-4">

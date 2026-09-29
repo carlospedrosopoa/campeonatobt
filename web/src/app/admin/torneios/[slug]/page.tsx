@@ -980,7 +980,7 @@ export default function AdminTorneioDashboardPage() {
       {categoriaParaExcluir && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={fecharModalExcluirCategoria}>
           <div
-            className="w-full max-w-xl rounded-2xl border border-red-200 bg-white shadow-2xl"
+            className="w-full max-w-xl rounded-2xl border border-red-200 bg-white shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="border-b border-red-100 bg-red-50 px-6 py-5">
@@ -1069,7 +1069,7 @@ export default function AdminTorneioDashboardPage() {
       {categoriaParaClonar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={fecharModalClonarCategoria}>
           <div
-            className="w-full max-w-xl rounded-2xl border border-orange-200 bg-white shadow-2xl"
+            className="w-full max-w-xl rounded-2xl border border-orange-200 bg-white shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="border-b border-orange-100 bg-orange-50 px-6 py-5">
@@ -1191,7 +1191,7 @@ export default function AdminTorneioDashboardPage() {
       {torneioParaClonar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={fecharModalClonarTorneio}>
           <div
-            className="w-full max-w-2xl rounded-2xl border border-orange-200 bg-white shadow-2xl"
+            className="w-full max-w-2xl rounded-2xl border border-orange-200 bg-white shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="border-b border-orange-100 bg-orange-50 px-6 py-5">

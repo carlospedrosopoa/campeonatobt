@@ -2313,7 +2313,7 @@ export default function AdminCategoriaJogosPage() {
       {trocaGruposOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setTrocaGruposOpen(false)}>
           <div
-            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg"
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[90dvh] overflow-y-auto overscroll-contain"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="p-6 space-y-4">
@@ -2419,7 +2419,7 @@ export default function AdminCategoriaJogosPage() {
       {manualTieBreakOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setManualTieBreakOpen(false)}>
           <div
-            className="w-full max-w-4xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
+            className="w-full max-w-4xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85dvh] overflow-y-auto"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="p-6 space-y-5">
@@ -2605,7 +2605,7 @@ export default function AdminCategoriaJogosPage() {
       {montagemGruposOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setMontagemGruposOpen(false)}>
           <div
-            className="w-full max-w-5xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85vh] overflow-y-auto"
+            className="w-full max-w-5xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[85dvh] overflow-y-auto"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="p-6 space-y-5">

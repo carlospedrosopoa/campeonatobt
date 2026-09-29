@@ -866,7 +866,7 @@ export default function AdminJogosDoDiaPage() {
       {editPartida && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(22,24,29,0.5)] sm:items-center sm:p-4" onMouseDown={() => setEditPartida(null)}>
           <div
-            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
+            className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
             onMouseDown={(e) => {
               e.stopPropagation();
             }}

@@ -873,7 +873,7 @@ export default function AdminCategoriaChavePage() {
           return (
             <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onMouseDown={() => setEditAgendamentoId(null)}>
               <div
-                className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border border-slate-200 bg-white shadow-lg sm:rounded-xl"
+                className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border border-slate-200 bg-white shadow-lg sm:rounded-xl"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="space-y-4 p-6">
@@ -946,7 +946,7 @@ export default function AdminCategoriaChavePage() {
       {partidaEditando ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={() => setEditConfrontoId(null)}>
           <div
-            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[88vh] overflow-y-auto"
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[88dvh] overflow-y-auto"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="border-b border-slate-200 px-6 py-4">
@@ -1143,7 +1143,7 @@ export default function AdminCategoriaChavePage() {
       {montagemAberta ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={fecharMontagemManual}>
           <div
-            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[88vh] overflow-y-auto"
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-lg max-h-[88dvh] overflow-y-auto"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="border-b border-slate-200 px-6 py-4">

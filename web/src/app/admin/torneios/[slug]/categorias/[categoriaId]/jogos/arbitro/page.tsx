@@ -1013,7 +1013,7 @@ export default function AdminCategoriaJogosArbitroPage() {
       {partidaEditando ? (
         <div className="fixed inset-0 z-50 flex items-end bg-black/50 sm:items-center sm:justify-center" onMouseDown={fecharModal}>
           <div
-            className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-t-3xl bg-white shadow-xl sm:rounded-3xl"
+            className="flex max-h-[92dvh] w-full max-w-2xl flex-col rounded-t-3xl bg-white shadow-xl sm:rounded-3xl"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4">
@@ -1128,7 +1128,7 @@ export default function AdminCategoriaJogosArbitroPage() {
 
       {partidaAgendando ? (
         <div className="fixed inset-0 z-50 flex items-end bg-black/50 sm:items-center sm:justify-center">
-          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-t-3xl bg-white shadow-xl sm:rounded-3xl">
+          <div className="flex max-h-[92dvh] w-full max-w-2xl flex-col rounded-t-3xl bg-white shadow-xl sm:rounded-3xl">
             <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4">
               <div className="min-w-0">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Agendar jogo</div>

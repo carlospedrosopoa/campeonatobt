@@ -762,7 +762,7 @@ export default function AdminLancarPlacarMobilePage() {
           const melhorDe = torneioSuperCampeonatoFormato === "1_SET" ? 1 : 3;
           return (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
-              <div className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl border-t sm:border border-slate-200 bg-white shadow-xl max-h-[88vh] overflow-y-auto">
+              <div className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl border-t sm:border border-slate-200 bg-white shadow-xl max-h-[88dvh] overflow-y-auto">
                 <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-3 flex items-center justify-between gap-2 z-10">
                   <div className="min-w-0">
                     <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Placar</div>
@@ -877,7 +877,7 @@ export default function AdminLancarPlacarMobilePage() {
           if (!partida) return null;
           return (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
-              <div className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl border-t sm:border border-slate-200 bg-white shadow-xl max-h-[88vh] overflow-y-auto">
+              <div className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl border-t sm:border border-slate-200 bg-white shadow-xl max-h-[88dvh] overflow-y-auto">
                 <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-3 flex items-center justify-between gap-2 z-10">
                   <div className="min-w-0">
                     <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Agendar</div>
