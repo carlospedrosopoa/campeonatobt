@@ -3,8 +3,43 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Calendar, Copy, DollarSign, ExternalLink, FileUp, Gamepad2, Handshake, ImageIcon, List, MapPin, MessageSquare, Pencil, Plus, Save, Smartphone, Ticket, Trash2, Users, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Calendar,
+  ChevronRight,
+  Copy,
+  DollarSign,
+  ExternalLink,
+  FileUp,
+  Gamepad2,
+  ImageIcon,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Save,
+  Settings2,
+  Smartphone,
+  Ticket,
+  Trash2,
+  X,
+} from "lucide-react";
 import { gerarCardProgramacaoTorneioAdmin } from "@/lib/match-card-client";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  GENERO_LABEL,
+  LinkButton,
+  Menu,
+  PageHeader,
+  StatCard,
+  TorneioStatusBadge,
+} from "@/components/admin/ui";
+import { periodoTorneio } from "@/components/admin/torneio-destaque";
 
 type Torneio = {
   id: string;
@@ -574,536 +609,372 @@ export default function AdminTorneioDashboardPage() {
     }
   }
 
+  const inputCls =
+    "h-10 w-full rounded-[10px] border border-[#d9d5cc] bg-white px-3 text-sm text-ink outline-none focus:border-[#b5b2aa] focus:ring-2 focus:ring-signal/15";
+
+  const categoriasLotadas = categorias.filter((c) => {
+    const ocupadas = Math.max(0, (c.inscricoesTotal ?? 0) - (c.inscricoesRecusadas ?? 0));
+    return Boolean(c.vagasMaximas && c.vagasMaximas > 0 && ocupadas >= c.vagasMaximas);
+  });
+  const categoriasSemHorario = categorias.filter((c) => !c.dataHorario);
+  const pendentes = stats?.inscricoesPendentes ?? 0;
+  const filaEspera = stats?.inscricoesFilaEspera ?? 0;
+  const alertas: Array<{ texto: string; href?: string; onClick?: () => void; tom: "signal" | "warning" | "neutral" }> = [];
+  if (pendentes > 0) alertas.push({ texto: `${pendentes} inscrição(ões) aguardando aprovação`, href: `/admin/torneios/${slugAtual}/atletas-inscritos`, tom: "signal" });
+  if (filaEspera > 0) alertas.push({ texto: `${filaEspera} na fila de espera`, href: `/admin/torneios/${slugAtual}/atletas-inscritos`, tom: "warning" });
+  if (categoriasLotadas.length > 0)
+    alertas.push({ texto: `${categoriasLotadas.length} categoria(s) lotada(s): ${categoriasLotadas.map((c) => c.nome).join(", ")}`, tom: "neutral" });
+  if (categoriasSemHorario.length > 0)
+    alertas.push({ texto: `${categoriasSemHorario.length} categoria(s) sem data/horário definidos`, tom: "neutral" });
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <Link href="/admin/torneios" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-2">{torneio ? torneio.nome : "Torneio"}</h1>
-          <p className="text-sm text-slate-600">Dashboard e gerenciamento de categorias.</p>
-        </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:w-auto">
-          <Link
-            href={`/admin/torneios/${slugAtual}/editar`}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Editar dados
-          </Link>
-          <button
-            type="button"
-            onClick={abrirClonarTorneio}
-            disabled={!torneio || Boolean(clonandoTorneioId)}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <Copy className="h-4 w-4" />
-            {clonandoTorneioId === torneio?.id ? "Clonando..." : "Clonar torneio"}
-          </button>
-          <Link
-            href={`/admin/torneios/${slugAtual}/arenas`}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <MapPin className="h-4 w-4" />
-            Arenas
-          </Link>
-          <Link
-            href={`/admin/torneios/${slugAtual}/apoiadores`}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <Handshake className="h-4 w-4" />
-            Apoiadores
-          </Link>
-          {torneio && (
-            <>
-              <Link
-                href={`/admin/torneios/${slugAtual}/atletas-inscritos`}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <Users className="h-4 w-4" />
-                Atletas
-              </Link>
-              <Link
-                href={`/admin/torneios/${slugAtual}/cobranca`}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <DollarSign className="h-4 w-4" />
-                Cobrança
-              </Link>
-              <Link
-                href={`/admin/torneios/${slugAtual}/comunicacoes`}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <MessageSquare className="h-4 w-4" />
-                Comunicações
-              </Link>
-              <Link
-                href={`/admin/torneios/${slugAtual}/jogos-do-dia`}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <Calendar className="h-4 w-4" />
-                Jogos do dia
-              </Link>
-          <Link
-            href={`/admin/torneios/${slugAtual}/painel-quadras`}
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <Gamepad2 className="h-4 w-4" />
-            Painel de quadras
-          </Link>
-              <Link
-                href={`/admin/torneios/${slugAtual}/importar-supercampeonato`}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <FileUp className="h-4 w-4" />
-                Importar Excel
-              </Link>
-              <Link
-                href={`/torneios/${torneio.slug}`}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Público
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="Visão geral"
+        description={
+          torneio ? (
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <TorneioStatusBadge status={torneio.status} />
+              <span className="font-semibold text-ink">{torneio.nome}</span>
+              <span className="text-muted">·</span>
+              <span>{periodoTorneio(torneio)}</span>
+              {torneio.local && (
+                <>
+                  <span className="text-muted">·</span>
+                  <span>{torneio.local}</span>
+                </>
+              )}
+            </span>
+          ) : undefined
+        }
+        actions={
+          <>
+            <Menu
+              items={[
+                { label: "Editar dados do torneio", icon: <Settings2 />, href: `/admin/torneios/${slugAtual}/editar` },
+                {
+                  label: clonandoTorneioId === torneio?.id ? "Clonando…" : "Clonar torneio",
+                  icon: <Copy />,
+                  onSelect: abrirClonarTorneio,
+                  disabled: !torneio || Boolean(clonandoTorneioId),
+                },
+                { label: "Importar Excel", icon: <FileUp />, href: `/admin/torneios/${slugAtual}/importar-supercampeonato` },
+                "separator",
+                { label: "Página pública", icon: <ExternalLink />, href: `/torneios/${slugAtual}`, external: true },
+              ]}
+              trigger={({ toggle }) => (
+                <Button onClick={toggle} aria-label="Mais ações do torneio" className="w-10 px-0">
+                  <MoreHorizontal />
+                </Button>
+              )}
+            />
+            <Button
+              disabled={gerandoCardProgramacao || categorias.length === 0}
+              onClick={() => void gerarCardProgramacaoTorneio()}
+              title={categorias.length === 0 ? "Cadastre ao menos 1 categoria para gerar o card" : "Gerar card da programação (categorias e horários)"}
+              icon={<ImageIcon />}
+            >
+              {gerandoCardProgramacao ? "Gerando…" : "Card da programação"}
+            </Button>
+            <Button variant="primary" onClick={abrirNovaCategoria} icon={<Plus />}>
+              Nova categoria
+            </Button>
+          </>
+        }
+      />
 
       {carregando && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-slate-600">Carregando…</div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-[108px] animate-pulse rounded-[14px] border border-line bg-white" />
+          ))}
+        </div>
       )}
 
-      {!carregando && !torneio && erro && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 text-red-600">{erro}</div>
-      )}
+      {!carregando && !torneio && erro && <Alert>{erro}</Alert>}
 
       {!carregando && torneio && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider">Categorias</div>
-                  <div className="text-2xl font-bold text-slate-900">{stats?.categoriasTotal ?? categorias.length}</div>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <List className="h-5 w-5 text-blue-600" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider">Inscrições</div>
-                  <div className="text-2xl font-bold text-slate-900">{stats?.inscricoesTotal ?? 0}</div>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-orange-50 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-orange-600" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider">Pendentes</div>
-                  <div className="text-2xl font-bold text-slate-900">{stats?.inscricoesPendentes ?? 0}</div>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-slate-600" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider">Aprovadas</div>
-                  <div className="text-2xl font-bold text-slate-900">{stats?.inscricoesAprovadas ?? 0}</div>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-green-50 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-green-600" />
-                </div>
-              </div>
-            </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatCard label="Inscrições" value={stats?.inscricoesTotal ?? 0} hint={`${categorias.length} categoria(s)`} />
+            <StatCard
+              label="Aguardando aprovação"
+              value={pendentes}
+              tone={pendentes > 0 ? "signal" : "default"}
+              hint={
+                pendentes > 0 ? (
+                  <Link href={`/admin/torneios/${slugAtual}/atletas-inscritos`} className="text-signal-strong hover:underline">
+                    Revisar agora
+                  </Link>
+                ) : (
+                  "Tudo em dia"
+                )
+              }
+            />
+            <StatCard label="Aprovadas" value={stats?.inscricoesAprovadas ?? 0} hint="Confirmadas nas categorias" />
+            <StatCard label="Fila de espera" value={filaEspera} hint={`${stats?.inscricoesRecusadas ?? 0} recusada(s)`} />
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Categorias</h2>
-                <p className="text-sm text-slate-600">Crie e edite as categorias do torneio.</p>
-              </div>
-              <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-                <button
-                  type="button"
-                  disabled={gerandoCardProgramacao || categorias.length === 0}
-                  onClick={() => void gerarCardProgramacaoTorneio()}
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  title={categorias.length === 0 ? "Cadastre ao menos 1 categoria para gerar o card" : "Gerar card da programação (categorias e horários)"}
-                >
-                  <ImageIcon className="h-4 w-4" />
-                  {gerandoCardProgramacao ? "Gerando…" : "Card programação"}
-                </button>
-                <button
-                  type="button"
-                  onClick={abrirNovaCategoria}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                  <Plus className="h-4 w-4" />
-                  Nova categoria
-                </button>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <Card id="categorias" className="scroll-mt-24 overflow-hidden">
+              <CardHeader
+                title="Categorias"
+                description="Abra os jogos, acompanhe as inscrições e ajuste cada categoria."
+                actions={
+                  <Button size="sm" onClick={abrirNovaCategoria} icon={<Plus />}>
+                    Adicionar
+                  </Button>
+                }
+              />
 
-            {erroCategorias && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erroCategorias}</div>
-            )}
+              {erroCategorias && <Alert className="m-4">{erroCategorias}</Alert>}
 
-            {mostraFormCategoria && (
-              <form onSubmit={onSalvarCategoria} className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="font-semibold text-slate-900">
-                    {editandoCategoriaId ? "Editar categoria" : "Nova categoria"}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={cancelarCategoria}
-                    className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
-                  >
-                    <X className="h-4 w-4" />
-                    Fechar
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Nome *</label>
-                    <input
-                      value={formCategoria.nome}
-                      onChange={(e) => setFormCategoria((p) => ({ ...p, nome: e.target.value }))}
-                      placeholder="Ex: Mista C"
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                    />
+              {mostraFormCategoria && (
+                <form onSubmit={onSalvarCategoria} className="space-y-4 border-b border-line bg-paper px-4 py-5 sm:px-5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-extrabold text-ink">{editandoCategoriaId ? "Editar categoria" : "Nova categoria"}</div>
+                    <Button variant="ghost" size="sm" onClick={cancelarCategoria} icon={<X />}>
+                      Fechar
+                    </Button>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Gênero *</label>
-                    <select
-                      value={formCategoria.genero}
-                      onChange={(e) => setFormCategoria((p) => ({ ...p, genero: e.target.value as Categoria["genero"] }))}
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
-                    >
-                      <option value="MASCULINO">MASCULINO</option>
-                      <option value="FEMININO">FEMININO</option>
-                      <option value="MISTO">MISTO</option>
-                    </select>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <label className="space-y-1.5">
+                      <span className="text-[13px] font-semibold text-ink">Nome *</span>
+                      <input
+                        value={formCategoria.nome}
+                        onChange={(e) => setFormCategoria((p) => ({ ...p, nome: e.target.value }))}
+                        placeholder="Ex: Mista C"
+                        className={inputCls}
+                      />
+                    </label>
+
+                    <label className="space-y-1.5">
+                      <span className="text-[13px] font-semibold text-ink">Gênero *</span>
+                      <select
+                        value={formCategoria.genero}
+                        onChange={(e) => setFormCategoria((p) => ({ ...p, genero: e.target.value as Categoria["genero"] }))}
+                        className={inputCls}
+                      >
+                        <option value="MASCULINO">Masculino</option>
+                        <option value="FEMININO">Feminino</option>
+                        <option value="MISTO">Misto</option>
+                      </select>
+                    </label>
+
+                    <label className="space-y-1.5">
+                      <span className="text-[13px] font-semibold text-ink">Valor por atleta</span>
+                      <input
+                        value={formCategoria.valorInscricao}
+                        onChange={(e) => setFormCategoria((p) => ({ ...p, valorInscricao: e.target.value }))}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0,00"
+                        className={inputCls}
+                      />
+                    </label>
+
+                    <label className="space-y-1.5">
+                      <span className="text-[13px] font-semibold text-ink">Vagas máximas</span>
+                      <input
+                        value={formCategoria.vagasMaximas}
+                        onChange={(e) => setFormCategoria((p) => ({ ...p, vagasMaximas: e.target.value }))}
+                        type="number"
+                        step="1"
+                        min="0"
+                        placeholder="32"
+                        className={inputCls}
+                      />
+                    </label>
+
+                    <label className="space-y-1.5">
+                      <span className="text-[13px] font-semibold text-ink">Data/Hora da categoria</span>
+                      <input
+                        value={formCategoria.dataHorario}
+                        onChange={(e) => setFormCategoria((p) => ({ ...p, dataHorario: e.target.value }))}
+                        type="datetime-local"
+                        className={inputCls}
+                      />
+                    </label>
+
+                    <label className="space-y-1.5">
+                      <span className="text-[13px] font-semibold text-ink">Modelo do card de inscrição</span>
+                      <select
+                        value={formCategoria.tipoCardInscricao}
+                        onChange={(e) => setFormCategoria((p) => ({ ...p, tipoCardInscricao: e.target.value as "TIPO_1" | "TIPO_2" }))}
+                        className={inputCls}
+                      >
+                        <option value="TIPO_1">Tipo 1 — Padrão (com programação)</option>
+                        <option value="TIPO_2">Tipo 2 — Fotos maiores e centralizadas</option>
+                      </select>
+                      <span className="block text-xs text-muted">
+                        Tipo 1 exibe a programação das categorias. Tipo 2 prioriza fotos maiores e centralizadas.
+                      </span>
+                    </label>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Valor por atleta</label>
-                    <input
-                      value={formCategoria.valorInscricao}
-                      onChange={(e) => setFormCategoria((p) => ({ ...p, valorInscricao: e.target.value }))}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0,00"
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                    />
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button onClick={cancelarCategoria}>Cancelar</Button>
+                    <Button type="submit" variant="primary" disabled={!podeSalvarCategoria || salvandoCategoria} icon={<Save />}>
+                      {salvandoCategoria ? "Salvando…" : "Salvar categoria"}
+                    </Button>
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Vagas máximas</label>
-                    <input
-                      value={formCategoria.vagasMaximas}
-                      onChange={(e) => setFormCategoria((p) => ({ ...p, vagasMaximas: e.target.value }))}
-                      type="number"
-                      step="1"
-                      min="0"
-                      placeholder="32"
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Data/Hora da categoria</label>
-                    <input
-                      value={formCategoria.dataHorario}
-                      onChange={(e) => setFormCategoria((p) => ({ ...p, dataHorario: e.target.value }))}
-                      type="datetime-local"
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Modelo do card de inscrição</label>
-                    <select
-                      value={formCategoria.tipoCardInscricao}
-                      onChange={(e) => setFormCategoria((p) => ({ ...p, tipoCardInscricao: e.target.value as "TIPO_1" | "TIPO_2" }))}
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 bg-white"
-                    >
-                      <option value="TIPO_1">Tipo 1 — Padrão (com programação)</option>
-                      <option value="TIPO_2">Tipo 2 — Fotos maiores e centralizadas</option>
-                    </select>
-                    <div className="text-xs text-slate-500">
-                      Tipo 1 exibe a programação das categorias abaixo. Tipo 2 prioriza fotos maiores e mais centralizadas.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-                  <button
-                    type="button"
-                    onClick={cancelarCategoria}
-                    className="inline-flex w-full items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!podeSalvarCategoria || salvandoCategoria}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50 sm:w-auto"
-                  >
-                    <Save className="h-4 w-4" />
-                    {salvandoCategoria ? "Salvando…" : "Salvar categoria"}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            <div className="md:hidden space-y-3">
-              {categorias.length === 0 && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                  Nenhuma categoria cadastrada.
-                </div>
+                </form>
               )}
 
-              {categorias.map((cat) => {
-                const ocupadas = Math.max(0, (cat.inscricoesTotal ?? 0) - (cat.inscricoesRecusadas ?? 0));
-                const totalVagas = cat.vagasMaximas;
-                const percent =
-                  totalVagas && totalVagas > 0 ? Math.min(100, Math.round((ocupadas / totalVagas) * 100)) : null;
-                const barColor =
-                  percent === null
-                    ? "bg-slate-200"
-                    : percent >= 100
-                      ? "bg-red-500"
-                      : percent >= 80
-                        ? "bg-orange-500"
-                        : "bg-green-500";
-
-                return (
-                  <div key={cat.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-base font-semibold text-slate-900">{cat.nome}</div>
-                        <div className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">{cat.genero}</div>
-                      </div>
-                      <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                        {cat.valorInscricao
-                          ? Number(cat.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-                          : "Sem taxa"}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <div className="rounded-xl bg-slate-50 px-3 py-2">
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Data/Hora</div>
-                        <div className="mt-1 text-slate-800">{formatDataHora(cat.dataHorario) || "-"}</div>
-                      </div>
-                      <div className="rounded-xl bg-slate-50 px-3 py-2">
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Vagas</div>
-                        <div className="mt-1 text-slate-800">{totalVagas ? `${ocupadas}/${totalVagas}` : "Sem limite"}</div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 space-y-1">
-                      <div className="flex items-center justify-between text-xs text-slate-600">
-                        <span>{ocupadas} inscr.</span>
-                        <span>{totalVagas ? `${percent ?? 0}% ocupado` : "Livre"}</span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div className={`h-2 ${barColor}`} style={{ width: `${percent ?? 35}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <Link
-                        href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/inscricoes`}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700"
-                      >
-                        <Ticket className="h-4 w-4" />
-                        Inscrições
-                      </Link>
-                      <Link
-                        href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/jogos`}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700"
-                      >
-                        <Gamepad2 className="h-4 w-4" />
-                        Jogos
-                      </Link>
-                      <Link
-                        href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/jogos/arbitro`}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700"
-                      >
-                        <Smartphone className="h-4 w-4" />
-                        Árbitro
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => abrirEditarCategoria(cat)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => abrirClonarCategoria(cat)}
-                        disabled={Boolean(clonandoCategoriaId)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
-                      >
-                        <Copy className="h-4 w-4" />
-                        {clonandoCategoriaId === cat.id ? "Clonando..." : "Clonar"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onExcluirCategoria(cat.id)}
-                        disabled={excluindoCategoriaId === cat.id}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs font-semibold text-red-700 disabled:opacity-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        {excluindoCategoriaId === cat.id ? "Excluindo…" : "Excluir"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-slate-500 border-b border-slate-100">
-                    <th className="py-3 pr-4 font-medium">Nome</th>
-                    <th className="py-3 pr-4 font-medium">Gênero</th>
-                    <th className="py-3 pr-4 font-medium">Taxa (por atleta)</th>
-                    <th className="py-3 pr-4 font-medium">Data/Hora</th>
-                    <th className="py-3 pr-4 font-medium">Vagas</th>
-                    <th className="py-3 text-right font-medium">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {categorias.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-500">
-                        Nenhuma categoria cadastrada.
-                      </td>
-                    </tr>
-                  )}
-
+              {categorias.length === 0 ? (
+                <EmptyState
+                  icon={<Ticket />}
+                  title="Nenhuma categoria cadastrada"
+                  description="Crie as categorias para abrir as inscrições e montar os jogos."
+                  action={
+                    <Button variant="primary" onClick={abrirNovaCategoria} icon={<Plus />}>
+                      Nova categoria
+                    </Button>
+                  }
+                />
+              ) : (
+                <ul>
                   {categorias.map((cat) => {
                     const ocupadas = Math.max(0, (cat.inscricoesTotal ?? 0) - (cat.inscricoesRecusadas ?? 0));
                     const totalVagas = cat.vagasMaximas;
-                    const percent =
-                      totalVagas && totalVagas > 0 ? Math.min(100, Math.round((ocupadas / totalVagas) * 100)) : null;
-                    const barColor =
-                      percent === null
-                        ? "bg-slate-200"
-                        : percent >= 100
-                          ? "bg-red-500"
-                          : percent >= 80
-                            ? "bg-orange-500"
-                            : "bg-green-500";
+                    const percent = totalVagas && totalVagas > 0 ? Math.min(100, Math.round((ocupadas / totalVagas) * 100)) : null;
+                    const barColor = percent === null ? "bg-[#d3cfc7]" : percent >= 100 ? "bg-signal" : percent >= 80 ? "bg-[#e0a526]" : "bg-[#1e7f4f]";
+                    const base = `/admin/torneios/${slugAtual}/categorias/${cat.id}`;
 
                     return (
-                      <tr key={cat.id} className="border-b border-slate-50 hover:bg-slate-50/70">
-                        <td className="py-4 pr-4 font-medium text-slate-900">{cat.nome}</td>
-                        <td className="py-4 pr-4 text-slate-700">{cat.genero}</td>
-                        <td className="py-4 pr-4 text-slate-700">
-                          {cat.valorInscricao ? Number(cat.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "-"}
-                        </td>
-                        <td className="py-4 pr-4 text-slate-700">{formatDataHora(cat.dataHorario) || "-"}</td>
-                        <td className="py-4 pr-4 text-slate-700">
-                          <div className="space-y-1 min-w-[180px]">
-                            <div className="flex items-center justify-between text-xs text-slate-600">
-                              <span>{ocupadas} inscr.</span>
-                              <span>{totalVagas ? `${ocupadas}/${totalVagas}` : "Sem limite"}</span>
-                            </div>
-                            {totalVagas ? (
-                              <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                                <div className={`h-2 ${barColor}`} style={{ width: `${percent ?? 0}%` }} />
-                              </div>
-                            ) : (
-                              <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                                <div className="h-2 bg-slate-200" style={{ width: "35%" }} />
-                              </div>
+                      <li
+                        key={cat.id}
+                        className="grid grid-cols-1 gap-3 border-b border-sand-2 px-4 py-4 last:border-b-0 sm:px-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto] lg:items-center lg:gap-6"
+                      >
+                        <Link href={`${base}/jogos`} className="group min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate text-[15px] font-extrabold text-ink group-hover:underline group-hover:underline-offset-4">
+                              {cat.nome}
+                            </span>
+                            {(cat.inscricoesPendentes ?? 0) > 0 && (
+                              <Badge tone="signal">{cat.inscricoesPendentes} pendente(s)</Badge>
                             )}
                           </div>
-                        </td>
-                        <td className="py-4 text-right">
-                          <div className="inline-flex items-center gap-2">
-                            <Link
-                              href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/inscricoes`}
-                              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              <Ticket className="h-4 w-4" />
-                              Inscrições
-                            </Link>
-                            <Link
-                              href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/jogos`}
-                              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              <Gamepad2 className="h-4 w-4" />
-                              Jogos
-                            </Link>
-                            <Link
-                              href={`/admin/torneios/${slugAtual}/categorias/${cat.id}/jogos/arbitro`}
-                              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              <Smartphone className="h-4 w-4" />
-                              Árbitro
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => abrirEditarCategoria(cat)}
-                              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Editar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => abrirClonarCategoria(cat)}
-                              disabled={Boolean(clonandoCategoriaId)}
-                              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                            >
-                              <Copy className="h-4 w-4" />
-                              {clonandoCategoriaId === cat.id ? "Clonando..." : "Clonar"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onExcluirCategoria(cat.id)}
-                              disabled={excluindoCategoriaId === cat.id}
-                              className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              {excluindoCategoriaId === cat.id ? "Excluindo…" : "Excluir"}
-                            </button>
+                          <div className="mt-0.5 truncate text-xs text-muted">
+                            {GENERO_LABEL[cat.genero] ?? cat.genero}
+                            {cat.dataHorario ? ` · ${formatDataHora(cat.dataHorario)}` : " · sem horário"}
+                            {" · "}
+                            {cat.valorInscricao
+                              ? `${Number(cat.valorInscricao).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} por atleta`
+                              : "sem taxa"}
                           </div>
-                        </td>
-                      </tr>
+                        </Link>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold tabular-nums text-ink">
+                              {totalVagas ? `${ocupadas}/${totalVagas}` : ocupadas} inscrições
+                            </span>
+                            <span className="text-muted">{totalVagas ? `${percent ?? 0}%` : "Sem limite"}</span>
+                          </div>
+                          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-sand-2">
+                            <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${totalVagas ? percent ?? 0 : 100}%`, opacity: totalVagas ? 1 : 0.35 }} />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <LinkButton href={`${base}/jogos`} size="sm" icon={<Gamepad2 />} className="flex-1 lg:flex-none">
+                            Jogos
+                          </LinkButton>
+                          <LinkButton href={`${base}/inscricoes`} size="sm" icon={<Ticket />} className="flex-1 lg:flex-none">
+                            Inscrições
+                          </LinkButton>
+                          <Menu
+                            items={[
+                              { label: "Modo árbitro", icon: <Smartphone />, href: `${base}/jogos/arbitro` },
+                              { label: "Editar categoria", icon: <Pencil />, onSelect: () => abrirEditarCategoria(cat) },
+                              {
+                                label: clonandoCategoriaId === cat.id ? "Clonando…" : "Clonar categoria",
+                                icon: <Copy />,
+                                onSelect: () => abrirClonarCategoria(cat),
+                                disabled: Boolean(clonandoCategoriaId),
+                              },
+                              "separator",
+                              {
+                                label: excluindoCategoriaId === cat.id ? "Excluindo…" : "Excluir categoria",
+                                icon: <Trash2 />,
+                                danger: true,
+                                onSelect: () => void onExcluirCategoria(cat.id),
+                                disabled: excluindoCategoriaId === cat.id,
+                              },
+                            ]}
+                            trigger={({ toggle }) => (
+                              <Button size="sm" variant="ghost" onClick={toggle} aria-label={`Mais ações de ${cat.nome}`} className="w-9 px-0">
+                                <MoreHorizontal />
+                              </Button>
+                            )}
+                          />
+                        </div>
+                      </li>
                     );
                   })}
-                </tbody>
-              </table>
+                </ul>
+              )}
+            </Card>
+
+            <div className="flex flex-col gap-5">
+              <Card className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 text-base font-extrabold text-ink">
+                  <AlertTriangle className="h-[18px] w-[18px] text-signal-strong" />
+                  Precisa de atenção
+                </div>
+                {alertas.length === 0 ? (
+                  <p className="mt-3 text-[13px] text-muted">Nenhuma pendência no momento.</p>
+                ) : (
+                  <div className="mt-3 flex flex-col gap-2">
+                    {alertas.map((a, idx) => {
+                      const cls = `flex items-center justify-between gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-semibold ${
+                        a.tom === "signal" ? "bg-signal-soft text-[#7c2d12]" : a.tom === "warning" ? "bg-[#fdf1dc] text-[#6b3d00]" : "bg-sand-2 text-ink-2"
+                      }`;
+                      return a.href ? (
+                        <Link key={idx} href={a.href} className={`${cls} hover:brightness-[0.98]`}>
+                          <span>{a.texto}</span>
+                          <ChevronRight className="h-4 w-4 shrink-0" />
+                        </Link>
+                      ) : (
+                        <div key={idx} className={cls}>
+                          <span>{a.texto}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+
+              <Card className="overflow-hidden">
+                <div className="px-4 pt-4 text-base font-extrabold text-ink sm:px-5">Operação do dia</div>
+                <nav className="p-2">
+                  {[
+                    { href: `/admin/torneios/${slugAtual}/jogos-do-dia`, label: "Jogos do dia", desc: "Agenda por data e quadra", icon: <Calendar /> },
+                    { href: `/admin/torneios/${slugAtual}/painel-quadras`, label: "Painel de quadras", desc: "Acompanhamento ao vivo", icon: <Gamepad2 /> },
+                    { href: `/admin/torneios/${slugAtual}/cobranca`, label: "Cobrança", desc: "Pagamentos das inscrições", icon: <DollarSign /> },
+                    { href: `/admin/torneios/${slugAtual}/comunicacoes`, label: "Comunicações", desc: "Mensagens aos atletas", icon: <MessageSquare /> },
+                  ].map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="flex items-center gap-3 rounded-[10px] px-3 py-2.5 hover:bg-sand [&>span>svg]:h-[18px] [&>span>svg]:w-[18px]"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sand-2 text-ink-2">{item.icon}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-ink">{item.label}</span>
+                        <span className="block text-xs text-muted">{item.desc}</span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-muted" />
+                    </Link>
+                  ))}
+                </nav>
+              </Card>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {categoriaParaExcluir && (
