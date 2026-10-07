@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export type MenuItem =
@@ -30,7 +30,33 @@ export function Menu({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [posicao, setPosicao] = useState<CSSProperties>({});
   const ref = useRef<HTMLDivElement>(null);
+
+  // Posicao fixa calculada a partir do botao: o menu nao e cortado por cartoes com overflow
+  // e abre para cima quando nao ha espaco embaixo (ex.: ultima linha de uma lista).
+  function calcularPosicao() {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const alturaEstimada = items.length * 40 + 16;
+    const espacoAbaixo = window.innerHeight - r.bottom;
+    const paraCima = espacoAbaixo < alturaEstimada + 12 && r.top > espacoAbaixo;
+    setPosicao({
+      position: "fixed",
+      top: paraCima ? undefined : r.bottom + 6,
+      bottom: paraCima ? window.innerHeight - r.top + 6 : undefined,
+      left: align === "start" ? Math.max(8, r.left) : undefined,
+      right: align === "end" ? Math.max(8, window.innerWidth - r.right) : undefined,
+      maxHeight: Math.max(160, (paraCima ? r.top : espacoAbaixo) - 16),
+      overflowY: "auto",
+    });
+  }
+
+  function alternar() {
+    if (!open) calcularPosicao();
+    setOpen((v) => !v);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -40,23 +66,32 @@ export function Menu({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
+    function onMover(e: Event) {
+      // rolar a propria lista do menu nao fecha
+      if (e.target instanceof Node && ref.current?.contains(e.target)) return;
+      setOpen(false);
+    }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onMover);
+    window.addEventListener("scroll", onMover, true);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onMover);
+      window.removeEventListener("scroll", onMover, true);
     };
   }, [open]);
 
   return (
     <div ref={ref} className={cn("relative inline-flex", className)}>
-      {trigger({ open, toggle: () => setOpen((v) => !v) })}
+      {trigger({ open, toggle: alternar })}
       {open && (
         <div
           role="menu"
+          style={posicao}
           className={cn(
-            "absolute top-[calc(100%+6px)] z-40 min-w-[220px] overflow-hidden rounded-xl border border-line bg-white p-1 shadow-[0_12px_32px_rgba(23,24,28,0.14)]",
-            align === "end" ? "right-0" : "left-0",
+            "z-50 min-w-[220px] rounded-xl border border-line bg-white p-1 shadow-[0_12px_32px_rgba(23,24,28,0.14)]",
           )}
         >
           {items.map((item, idx) => {
