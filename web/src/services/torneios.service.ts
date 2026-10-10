@@ -25,6 +25,17 @@ import { slugify } from "@/lib/utils";
 
 export type ModeloTorneio = "NORMAL" | "SUPERCAMPEONATO";
 export type LayoutCards = "NOVO" | "CLASSICO";
+export type CheckinModo = "QR" | "BOTAO" | "AMBOS";
+
+function normalizeTolerancia(value: unknown): number {
+  const n = Math.trunc(Number(value));
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, 120) : 15;
+}
+
+function normalizeCheckinModo(value: unknown): CheckinModo {
+  const v = String(value ?? "").toUpperCase();
+  return v === "QR" || v === "BOTAO" ? v : "AMBOS";
+}
 
 function normalizeLayoutCards(value: unknown): LayoutCards {
   return String(value ?? "").toUpperCase() === "NOVO" ? "NOVO" : "CLASSICO";
@@ -43,6 +54,8 @@ export type CriarTorneioDTO = {
   superCampeonatoFormato?: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos?: boolean;
   layoutCards?: LayoutCards | null;
+  toleranciaAtrasoMin?: number | null;
+  checkinModo?: CheckinModo | null;
   quadrasAtivas?: number;
   oculto?: boolean;
   inscricaoComIa?: boolean;
@@ -148,6 +161,8 @@ export class TorneiosService {
         superCampeonatoFormato: torneios.superCampeonatoFormato,
         cardApenasComFotos: torneios.cardApenasComFotos,
         layoutCards: torneios.layoutCards,
+        toleranciaAtrasoMin: torneios.toleranciaAtrasoMin,
+        checkinModo: torneios.checkinModo,
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
@@ -204,6 +219,8 @@ export class TorneiosService {
         superCampeonato: torneios.superCampeonato,
         cardApenasComFotos: torneios.cardApenasComFotos,
         layoutCards: torneios.layoutCards,
+        toleranciaAtrasoMin: torneios.toleranciaAtrasoMin,
+        checkinModo: torneios.checkinModo,
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
@@ -254,6 +271,8 @@ export class TorneiosService {
         superCampeonatoFormato: torneios.superCampeonatoFormato,
         cardApenasComFotos: torneios.cardApenasComFotos,
         layoutCards: torneios.layoutCards,
+        toleranciaAtrasoMin: torneios.toleranciaAtrasoMin,
+        checkinModo: torneios.checkinModo,
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
@@ -304,6 +323,8 @@ export class TorneiosService {
       superCampeonatoFormato: torneios.superCampeonatoFormato,
       cardApenasComFotos: torneios.cardApenasComFotos,
         layoutCards: torneios.layoutCards,
+        toleranciaAtrasoMin: torneios.toleranciaAtrasoMin,
+        checkinModo: torneios.checkinModo,
       quadrasAtivas: torneios.quadrasAtivas,
       valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
       valorInscricaoAdicional: torneios.valorInscricaoAdicional,
@@ -365,6 +386,8 @@ export class TorneiosService {
           inscricaoComIa: dados.inscricaoComIa ?? false,
           cardApenasComFotos: dados.cardApenasComFotos ?? false,
           layoutCards: normalizeLayoutCards(dados.layoutCards),
+          toleranciaAtrasoMin: normalizeTolerancia(dados.toleranciaAtrasoMin),
+          checkinModo: normalizeCheckinModo(dados.checkinModo),
           quadrasAtivas: Math.max(0, Math.min(20, Number(dados.quadrasAtivas ?? 0) || 0)),
           organizadorId,
           superCampeonato: modeloTorneio === "SUPERCAMPEONATO",
@@ -439,6 +462,8 @@ export class TorneiosService {
           superCampeonatoFormato: origem.superCampeonatoFormato,
           cardApenasComFotos: origem.cardApenasComFotos,
           layoutCards: origem.layoutCards,
+          toleranciaAtrasoMin: origem.toleranciaAtrasoMin,
+          checkinModo: origem.checkinModo,
           quadrasAtivas: origem.quadrasAtivas,
           painelQuadrasReservas: null,
           valorPrimeiraInscricao: origem.valorPrimeiraInscricao,
@@ -599,6 +624,8 @@ export class TorneiosService {
         pixCidade: normalizeText(dados.pixCidade),
         camisetaOpcoes: normalizeStringArray((dados as any).camisetaOpcoes),
         layoutCards: dados.layoutCards === undefined ? undefined : normalizeLayoutCards(dados.layoutCards),
+        toleranciaAtrasoMin: dados.toleranciaAtrasoMin === undefined ? undefined : normalizeTolerancia(dados.toleranciaAtrasoMin),
+        checkinModo: dados.checkinModo === undefined ? undefined : normalizeCheckinModo(dados.checkinModo),
         atualizadoEm: new Date(),
       })
       .where(eq(torneios.slug, slug))

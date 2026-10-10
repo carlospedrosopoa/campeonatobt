@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, CalendarClock, Gamepad2, ImageIcon, Network, Pencil, PlusCircle, RefreshCcw, Save, Settings, X } from "lucide-react";
+import { ArrowLeft, Banknote, CalendarClock, ClipboardCheck, Gamepad2, ImageIcon, Network, Pencil, PlusCircle, RefreshCcw, Save, Settings, X } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
+import { ProntidaoBadge, useProntidao } from "@/components/admin/presenca/prontidao";
+import { ConferenciaPresenca } from "@/components/admin/presenca/conferencia-presenca";
 import { CategoriaHeader } from "@/components/admin/categoria-header";
 
 type Categoria = {
@@ -401,6 +403,17 @@ export default function AdminCategoriaChavePage() {
 
   const jogosTerceiroLugar = jogosPorFase.TERCEIRO_LUGAR ?? [];
 
+  const [conferenciaId, setConferenciaId] = useState<string | null>(null);
+  const idsAgendadasChave = useMemo(
+    () =>
+      (Object.values(jogosPorFase) as Partida[][])
+        .flat()
+        .filter((p) => p.status === "AGENDADA" && !p.id.startsWith("placeholder:"))
+        .map((p) => p.id),
+    [jogosPorFase],
+  );
+  const { prontidao, recarregarProntidao } = useProntidao(slug, idsAgendadasChave);
+
   const partidaEditando = useMemo(() => {
     if (!editConfrontoId) return null;
     return (Object.values(jogosPorFase).flat() as Partida[]).find((p) => p.id === editConfrontoId) ?? null;
@@ -535,12 +548,19 @@ export default function AdminCategoriaChavePage() {
         <div className={`flex items-center gap-1.5 text-xs ${agenda ? "text-slate-600" : "text-amber-700"}`}>
           <CalendarClock className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{agenda || "Sem data e horário"}</span>
+          {p.status === "AGENDADA" && <ProntidaoBadge p={prontidao[p.id]} className="ml-auto shrink-0" />}
         </div>
         <div className={variante === "mobile" ? "grid grid-cols-2 gap-2" : "flex flex-wrap justify-end gap-2"}>
           <button type="button" onClick={() => void gerarCardPartida(p)} disabled={gerandoCardId === p.id} className={btn}>
             <ImageIcon className="h-3.5 w-3.5" />
             {gerandoCardId === p.id ? "Gerando…" : "Card"}
           </button>
+          {p.status === "AGENDADA" && (
+            <button type="button" onClick={() => setConferenciaId(p.id)} className={variante === "mobile" ? `${btn} col-span-2` : btn}>
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              Presença
+            </button>
+          )}
           <button type="button" onClick={() => void abrirAgendamento(p)} className={btn}>
             <CalendarClock className="h-3.5 w-3.5" />
             Agendar
@@ -863,6 +883,15 @@ export default function AdminCategoriaChavePage() {
           })}
         </div>
       </div>
+
+      {conferenciaId && (
+        <ConferenciaPresenca
+          slug={slug}
+          partidaId={conferenciaId}
+          onClose={() => setConferenciaId(null)}
+          onAlterou={() => void recarregarProntidao()}
+        />
+      )}
 
       {editAgendamentoId &&
         (() => {

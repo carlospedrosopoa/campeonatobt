@@ -31,6 +31,7 @@ export type PainelQuadrasPartida = {
   quadra: string | null;
   dataHorario: string | null;
   iniciadoEm: string | null;
+  chamadoEm?: string | null;
   finalizadoEm: string | null;
   equipeAId: string;
   equipeBId: string;
@@ -155,6 +156,7 @@ export class PainelQuadrasService {
         dataHorario: partidas.dataHorario,
         iniciadoEm: partidas.iniciadoEm,
         finalizadoEm: partidas.finalizadoEm,
+        chamadoEm: partidas.chamadoEm,
         equipeAId: partidas.equipeAId,
         equipeBId: partidas.equipeBId,
         placarA: partidas.placarA,
@@ -206,6 +208,7 @@ export class PainelQuadrasService {
         quadra: row.quadra ?? null,
         dataHorario: row.dataHorario ? new Date(row.dataHorario).toISOString() : null,
         iniciadoEm: row.iniciadoEm ? new Date(row.iniciadoEm).toISOString() : null,
+        chamadoEm: row.chamadoEm ? new Date(row.chamadoEm).toISOString() : null,
         finalizadoEm: row.finalizadoEm ? new Date(row.finalizadoEm).toISOString() : null,
         equipeAId: row.equipeAId,
         equipeBId: row.equipeBId,
@@ -506,6 +509,7 @@ export class PainelQuadrasService {
       .set({
         quadra,
         arenaId: params.arenaId ?? null,
+        chamadoEm: partida.quadra === quadra && partida.chamadoEm ? partida.chamadoEm : new Date(),
         ...(deveInvalidarCard ? { fotoUrl: null } : {}),
         atualizadoEm: new Date(),
       })
@@ -537,6 +541,7 @@ export class PainelQuadrasService {
       .set({
         quadra: null,
         arenaId: null,
+        chamadoEm: null,
         ...(deveInvalidarCard ? { fotoUrl: null } : {}),
         atualizadoEm: new Date(),
       })
@@ -797,6 +802,7 @@ export class PainelQuadrasService {
         dataHorario: partidas.dataHorario,
         status: partidas.status,
         fotoUrl: partidas.fotoUrl,
+        chamadoEm: partidas.chamadoEm,
         equipeAId: partidas.equipeAId,
         equipeBId: partidas.equipeBId,
       })

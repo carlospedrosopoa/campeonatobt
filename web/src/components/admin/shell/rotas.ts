@@ -6,6 +6,7 @@ export const SECOES_TORNEIO: Record<string, string> = {
   cobranca: "Cobrança",
   comunicacoes: "Comunicações",
   "jogos-do-dia": "Jogos do dia",
+  "lista-chamada": "Lista de chamada",
   "painel-quadras": "Painel de quadras",
   "importar-supercampeonato": "Importar Excel",
 };

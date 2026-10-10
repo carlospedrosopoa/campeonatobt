@@ -241,6 +241,8 @@ export const torneios = pgTable('torneios', {
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
   superCampeonatoFormato: superCampeonatoFormatoEnum('super_campeonato_formato').default('2_SET_SUPER_TIE'),
   cardApenasComFotos: boolean('card_apenas_com_fotos').default(false).notNull(),
+  toleranciaAtrasoMin: integer('tolerancia_atraso_min').default(15).notNull(),
+  checkinModo: text('checkin_modo').$type<"QR" | "BOTAO" | "AMBOS">().default('AMBOS').notNull(),
   layoutCards: text('layout_cards').$type<"NOVO" | "CLASSICO">().default('CLASSICO').notNull(),
   quadrasAtivas: integer('quadras_ativas').default(0).notNull(),
   painelQuadrasReservas: json('painel_quadras_reservas').$type<
@@ -461,6 +463,7 @@ export const partidas = pgTable('partidas', {
   quadra: text('quadra'),
   dataHorario: timestamp('data_horario'),
   dataLimite: timestamp('data_limite'),
+  chamadoEm: timestamp('chamado_em'),
   iniciadoEm: timestamp('iniciado_em'),
   finalizadoEm: timestamp('finalizado_em'),
   observacoes: text('observacoes'),
@@ -545,3 +548,18 @@ export const parceiroConvitesWhatsapp = pgTable('parceiro_convites_whatsapp', {
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });
+
+
+// Confirmacao de presenca: um registro por atleta por dia de torneio
+export const presencas = pgTable('presencas', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  torneioId: uuid('torneio_id').references(() => torneios.id, { onDelete: 'cascade' }).notNull(),
+  usuarioId: uuid('usuario_id').references(() => usuarios.id).notNull(),
+  data: date('data').notNull(),
+  status: text('status').$type<"PRESENTE" | "AUSENTE">().default('PRESENTE').notNull(),
+  origem: text('origem').$type<"QR" | "APP" | "PARCEIRO" | "ARBITRO" | "ADMIN" | "WHATSAPP">().notNull(),
+  registradoPor: uuid('registrado_por').references(() => usuarios.id),
+  registradoEm: timestamp('registrado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique('presencas_torneio_usuario_data_unique').on(t.torneioId, t.usuarioId, t.data),
+}));
