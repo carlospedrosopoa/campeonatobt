@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Calendar,
   ChevronDown,
+  ClipboardCheck,
   ChevronUp,
   Clock,
   ImageIcon,
@@ -28,6 +29,8 @@ import {
 } from "@/lib/regras-partida";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { NomeEquipeComSobrenome } from "@/lib/nome-atleta";
+import { ProntidaoBadge, useProntidao } from "@/components/admin/presenca/prontidao";
+import { ConferenciaPresenca } from "@/components/admin/presenca/conferencia-presenca";
 
 type Categoria = {
   id: string;
@@ -428,6 +431,10 @@ export default function AdminCategoriaJogosArbitroPage() {
       .sort((a, b) => a[0].localeCompare(b[0], "pt-BR", { numeric: true, sensitivity: "base" }))
       .map(([titulo, jogos]) => ({ titulo, partidas: jogos }));
   }, [fase, partidasFiltradas]);
+
+  const [conferenciaId, setConferenciaId] = useState<string | null>(null);
+  const idsAgendadas = useMemo(() => partidasFiltradas.filter((p) => p.status === "AGENDADA").map((p) => p.id), [partidasFiltradas]);
+  const { prontidao, recarregarProntidao } = useProntidao(slug, idsAgendadas);
 
   const classificacaoFiltrada = useMemo(() => {
     if (!filtroGrupoId) return classificacao;
@@ -953,6 +960,20 @@ export default function AdminCategoriaJogosArbitroPage() {
                           </div>
                         </div>
 
+                        {partida.status === "AGENDADA" && (
+                          <button
+                            type="button"
+                            onClick={() => setConferenciaId(partida.id)}
+                            className="mb-3 flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left hover:bg-slate-50"
+                          >
+                            <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-800">
+                              <ClipboardCheck className="h-4 w-4" />
+                              Conferir presença
+                            </span>
+                            <ProntidaoBadge p={prontidao[partida.id]} />
+                          </button>
+                        )}
+
                         <div className="space-y-2">
                           <div className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 ${partida.vencedorId === partida.equipeAId ? "bg-green-50" : "bg-slate-50"}`}>
                             <div className="min-w-0 flex-1 text-sm font-semibold text-slate-900">{nomeEquipe(partida, "A")}</div>
@@ -1219,6 +1240,20 @@ export default function AdminCategoriaJogosArbitroPage() {
           </div>
         </div>
       ) : null}
+
+      {conferenciaId && (
+        <ConferenciaPresenca
+          slug={slug}
+          partidaId={conferenciaId}
+          onClose={() => setConferenciaId(null)}
+          onAlterou={() => void recarregarProntidao()}
+          onSugerirWO={() => {
+            const alvo = partidas.find((x) => x.id === conferenciaId);
+            setConferenciaId(null);
+            if (alvo) startEditPartida(alvo);
+          }}
+        />
+      )}
     </div>
   );
 }

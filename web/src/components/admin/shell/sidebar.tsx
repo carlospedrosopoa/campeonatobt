@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   ArrowLeft,
   CalendarDays,
+  ClipboardCheck,
   DollarSign,
   ExternalLink,
   FileUp,
@@ -172,6 +173,9 @@ export function SidebarConteudo({
           </NavItem>
           <NavItem href={`${base}/painel-quadras`} icon={<Gamepad2 />} active={rota.secao === "painel-quadras"} onNavigate={onNavigate}>
             Painel de quadras
+          </NavItem>
+          <NavItem href={`${base}/lista-chamada`} icon={<ClipboardCheck />} active={rota.secao === "lista-chamada"} onNavigate={onNavigate}>
+            Lista de chamada
           </NavItem>
         </Secao>
 

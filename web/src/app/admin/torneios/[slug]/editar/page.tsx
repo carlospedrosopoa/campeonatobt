@@ -26,6 +26,8 @@ type Torneio = {
   superCampeonatoFormato: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos: boolean;
   layoutCards: "NOVO" | "CLASSICO";
+  toleranciaAtrasoMin?: number;
+  checkinModo?: "QR" | "BOTAO" | "AMBOS";
   oculto: boolean;
   inscricaoComIa: boolean;
   valorPrimeiraInscricao: string | null;
@@ -105,6 +107,8 @@ export default function AdminEditarDadosTorneioPage() {
     superCampeonatoFormato: "2_SET_SUPER_TIE" as "2_SET_SUPER_TIE" | "1_SET",
     cardApenasComFotos: false,
     layoutCards: "CLASSICO",
+    toleranciaAtrasoMin: 15,
+    checkinModo: "AMBOS" as "QR" | "BOTAO" | "AMBOS",
     oculto: false,
     inscricaoComIa: false,
     valorPrimeiraInscricao: "",
@@ -167,6 +171,8 @@ export default function AdminEditarDadosTorneioPage() {
           superCampeonatoFormato: t.superCampeonatoFormato ?? "2_SET_SUPER_TIE",
           cardApenasComFotos: Boolean(t.cardApenasComFotos),
           layoutCards: t.layoutCards === "NOVO" ? "NOVO" : "CLASSICO",
+          toleranciaAtrasoMin: typeof t.toleranciaAtrasoMin === "number" ? t.toleranciaAtrasoMin : 15,
+          checkinModo: t.checkinModo === "QR" || t.checkinModo === "BOTAO" ? t.checkinModo : "AMBOS",
           oculto: Boolean(t.oculto),
           inscricaoComIa: Boolean(t.inscricaoComIa),
           valorPrimeiraInscricao: t.valorPrimeiraInscricao ?? "",
@@ -298,6 +304,8 @@ export default function AdminEditarDadosTorneioPage() {
         superCampeonatoFormato: form.superCampeonatoFormato,
         cardApenasComFotos: form.cardApenasComFotos,
         layoutCards: form.layoutCards,
+        toleranciaAtrasoMin: form.toleranciaAtrasoMin,
+        checkinModo: form.checkinModo,
         oculto: form.oculto,
         inscricaoComIa: form.inscricaoComIa,
         valorPrimeiraInscricao: form.valorPrimeiraInscricao?.trim() ? form.valorPrimeiraInscricao : null,
@@ -632,6 +640,35 @@ export default function AdminEditarDadosTorneioPage() {
                 <option value="NOVO">Novo — duplas em blocos, horário em destaque</option>
               </select>
               <div className="text-xs text-slate-500">Vale para os cards de jogo e de inscrição deste torneio.</div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="toleranciaAtrasoMin" className="text-sm font-medium text-slate-700">Tolerância de atraso (minutos)</label>
+              <input
+                id="toleranciaAtrasoMin"
+                type="number"
+                min={0}
+                max={120}
+                value={form.toleranciaAtrasoMin ?? 15}
+                onChange={(e) => setForm((prev) => ({ ...prev, toleranciaAtrasoMin: Number(e.target.value) }))}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+              />
+              <div className="text-xs text-slate-500">Conta a partir da chamada do jogo para a quadra. Ao estourar, o sistema só sugere W.O.</div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="checkinModo" className="text-sm font-medium text-slate-700">Check-in do atleta</label>
+              <select
+                id="checkinModo"
+                value={form.checkinModo ?? "AMBOS"}
+                onChange={(e) => setForm((prev) => ({ ...prev, checkinModo: e.target.value as "QR" | "BOTAO" | "AMBOS" }))}
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+              >
+                <option value="AMBOS">QR da entrada ou botão no app</option>
+                <option value="QR">Só pelo QR da entrada</option>
+                <option value="BOTAO">Só pelo botão no app</option>
+              </select>
+              <div className="text-xs text-slate-500">Vale para o check-in feito pelo próprio atleta. O árbitro sempre pode marcar presença na lista de chamada.</div>
             </div>
 
             <div className="space-y-2">

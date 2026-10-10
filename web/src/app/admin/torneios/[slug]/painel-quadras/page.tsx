@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Calendar, CheckCircle2, Gamepad2, ListOrdered, Lock, MapPin, Play, RefreshCw, Save, Timer, Undo2, Unlock, X } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle2, ClipboardCheck, Gamepad2, ListOrdered, Lock, MapPin, Megaphone, Play, RefreshCw, Save, Timer, Undo2, Unlock, X } from "lucide-react";
+import { ProntidaoBadge, estaPronto, useProntidao, useTolerancia } from "@/components/admin/presenca/prontidao";
+import { ConferenciaPresenca } from "@/components/admin/presenca/conferencia-presenca";
 import { isRegrasBeachTennisSets, isRegrasVoleiSets, type RegrasPartidaConfig, type RegrasPartidaSets } from "@/lib/regras-partida";
 
 type Arena = {
@@ -24,6 +26,7 @@ type PartidaPainel = {
   quadra: string | null;
   dataHorario: string | null;
   iniciadoEm: string | null;
+  chamadoEm?: string | null;
   finalizadoEm: string | null;
   equipeAId: string;
   equipeBId: string;
@@ -148,6 +151,22 @@ function isMesmaChave(
   return partida.categoriaId === chave.categoriaId && partida.fase === chave.fase && (partida.grupoId ?? null) === (chave.grupoId ?? null);
 }
 
+function ToleranciaChamada({ chamadoEm, toleranciaMin }: { chamadoEm?: string | null; toleranciaMin: number }) {
+  const t = useTolerancia(chamadoEm, toleranciaMin);
+  if (!t) return null;
+  return (
+    <div className={`rounded-md px-3 py-2 text-sm font-semibold ${t.estourou ? "bg-red-50 text-red-700" : "bg-orange-50 text-orange-800"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span>{t.estourou ? "Tolerância estourada" : "Chamado · tolerância restante"}</span>
+        <span className="font-display text-xl font-bold tabular-nums">{t.texto}</span>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white">
+        <div className={`h-1.5 rounded-full ${t.estourou ? "bg-red-500" : "bg-orange-500"}`} style={{ width: `${Math.round(t.fracaoUsada * 100)}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPainelQuadrasPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
@@ -228,6 +247,46 @@ export default function AdminPainelQuadrasPage() {
   const fila = painel?.fila ?? [];
   const quadras = painel?.quadras ?? [];
   const temQuadraLivre = quadras.some((quadra) => !quadra.partidaAtual);
+  const [conferenciaId, setConferenciaId] = useState<string | null>(null);
+  const [chamandoProximo, setChamandoProximo] = useState(false);
+  const idsProntidao = useMemo(
+    () => [...fila.map((p) => p.id), ...quadras.map((q) => (q.partidaAtual?.status === "AGENDADA" ? q.partidaAtual.id : "")).filter(Boolean)],
+    [fila, quadras],
+  );
+  const { prontidao, toleranciaMin, recarregarProntidao } = useProntidao(slug, idsProntidao, painel);
+  // prontos primeiro; dentro de cada grupo mantem a ordem do painel (horario previsto)
+  const filaOrdenada = useMemo(
+    () => fila.map((p, i) => ({ p, i })).sort((a, b) => Number(estaPronto(prontidao[b.p.id])) - Number(estaPronto(prontidao[a.p.id])) || a.i - b.i).map((x) => x.p),
+    [fila, prontidao],
+  );
+
+  async function chamarProximoPronto() {
+    const livre = quadras.find((q) => !q.partidaAtual && q.filaPartidas.some((p) => estaPronto(prontidao[p.id])));
+    if (!livre) {
+      setErro(temQuadraLivre ? "Nenhum jogo da fila está com todos os atletas presentes." : "Todas as quadras estão ocupadas.");
+      return;
+    }
+    const elegiveis = new Set(livre.filaPartidas.map((p) => p.id));
+    const partida = filaOrdenada.find((p) => elegiveis.has(p.id) && estaPronto(prontidao[p.id]));
+    if (!partida) return;
+    try {
+      setChamandoProximo(true);
+      setErro(null);
+      const arenas = painel?.arenas ?? [];
+      const res = await fetch(`/api/v1/torneios/${slug}/painel-quadras/partidas/${partida.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "alocar", quadraNumero: livre.numero, arenaId: partida.arenaId ?? (arenas.length === 1 ? arenas[0].id : null) }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Falha ao chamar o jogo");
+      await carregarPainel();
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setChamandoProximo(false);
+    }
+  }
 
   const partidaSelecionada = useMemo(
     () => fila.find((partida) => partida.id === partidaSelecionadaId) ?? null,
@@ -633,6 +692,16 @@ export default function AdminPainelQuadrasPage() {
             <RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} />
             Atualizar
           </button>
+          <button
+            type="button"
+            onClick={() => void chamarProximoPronto()}
+            disabled={chamandoProximo || !temQuadraLivre || !fila.some((p) => estaPronto(prontidao[p.id]))}
+            title="Coloca o próximo jogo com todos os atletas presentes na primeira quadra livre"
+            className="inline-flex items-center gap-2 rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+          >
+            <Megaphone className="h-4 w-4" />
+            {chamandoProximo ? "Chamando…" : "Chamar próximo jogo pronto"}
+          </button>
         </div>
       </div>
 
@@ -835,6 +904,13 @@ export default function AdminPainelQuadrasPage() {
                       </div>
                     </div>
 
+                    {partida.status === "AGENDADA" && (
+                      <div className="space-y-2">
+                        <ProntidaoBadge p={prontidao[partida.id]} />
+                        <ToleranciaChamada chamadoEm={prontidao[partida.id]?.chamadoEm ?? partida.chamadoEm} toleranciaMin={toleranciaMin} />
+                      </div>
+                    )}
+
                     {quadra.proximaPartidaManual && (
                       <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                         <div className="font-semibold">Próximo jogo desta quadra</div>
@@ -889,6 +965,14 @@ export default function AdminPainelQuadrasPage() {
                       )}
                       {partida.status === "AGENDADA" && (
                         <>
+                          <button
+                            type="button"
+                            onClick={() => setConferenciaId(partida.id)}
+                            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <ClipboardCheck className="h-4 w-4" />
+                            Conferir presença
+                          </button>
                           <button
                             type="button"
                             disabled={Boolean(operando[partida.id])}
@@ -959,7 +1043,7 @@ export default function AdminPainelQuadrasPage() {
                 Nenhum jogo aguardando na fila.
               </div>
             ) : (
-              fila.map((partida) => (
+              filaOrdenada.map((partida) => (
                 <div key={partida.id} className="rounded-lg border border-slate-100 px-4 py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-2">
@@ -984,7 +1068,17 @@ export default function AdminPainelQuadrasPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{partida.status}</div>
+                    <div className="flex flex-col items-end gap-2">
+                      <ProntidaoBadge p={prontidao[partida.id]} />
+                      <button
+                        type="button"
+                        onClick={() => setConferenciaId(partida.id)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <ClipboardCheck className="h-3.5 w-3.5" />
+                        Presença
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -1376,6 +1470,22 @@ export default function AdminPainelQuadrasPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {conferenciaId && (
+        <ConferenciaPresenca
+          slug={slug}
+          partidaId={conferenciaId}
+          onClose={() => setConferenciaId(null)}
+          onAlterou={() => void recarregarProntidao()}
+          onIniciar={
+            quadras.some((q) => q.partidaAtual?.id === conferenciaId)
+              ? async () => {
+                  await operarPartida(conferenciaId, "iniciar");
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );

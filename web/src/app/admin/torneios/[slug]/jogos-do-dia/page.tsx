@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Calendar, FileText, ImageIcon, Loader2, MapPin, MoreHorizontal, Pencil, RefreshCw, Save, Users, X } from "lucide-react";
+import { Calendar, ClipboardCheck, FileText, ImageIcon, Loader2, MapPin, MoreHorizontal, Pencil, RefreshCw, Save, Users, X } from "lucide-react";
+import { ProntidaoBadge, useProntidao } from "@/components/admin/presenca/prontidao";
+import { ConferenciaPresenca } from "@/components/admin/presenca/conferencia-presenca";
 import { Alert, Badge, Button, Card, EmptyState, Menu, PageHeader } from "@/components/admin/ui";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { isRegrasBeachTennisSets, isRegrasVoleiSets, type RegrasPartidaConfig, type RegrasPartidaSets } from "@/lib/regras-partida";
@@ -103,6 +105,9 @@ export default function AdminJogosDoDiaPage() {
   const [dataSelecionada, setDataSelecionada] = useState(() => ymdSaoPaulo());
   const [atletasAtualizando, setAtletasAtualizando] = useState<Record<string, boolean>>({});
   const [filtroJogosDia, setFiltroJogosDia] = useState<"TODOS" | "A_JOGAR" | "FINALIZADOS">("TODOS");
+  const [conferenciaId, setConferenciaId] = useState<string | null>(null);
+  const idsPartidasDia = useMemo(() => partidas.filter((p) => p.status === "AGENDADA").map((p) => p.id), [partidas]);
+  const { prontidao, recarregarProntidao } = useProntidao(slug, idsPartidasDia);
 
   const [editPartida, setEditPartida] = useState<Partida | null>(null);
   const [salvandoPlacar, setSalvandoPlacar] = useState(false);
@@ -809,7 +814,10 @@ export default function AdminJogosDoDiaPage() {
                       </span>
                     </div>
                   </div>
-                  {getStatusBadge(p.status)}
+                  <div className="flex flex-col items-end gap-1">
+                    {getStatusBadge(p.status)}
+                    {p.status === "AGENDADA" && <ProntidaoBadge p={prontidao[p.id]} />}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -853,6 +861,11 @@ export default function AdminJogosDoDiaPage() {
                       {placar ? "Editar placar" : "Lançar placar"}
                     </Button>
                   )}
+                  {p.status === "AGENDADA" && (
+                    <Button onClick={() => setConferenciaId(p.id)} aria-label="Conferir presença" title="Conferir presença" className="h-11 w-11 px-0">
+                      <ClipboardCheck />
+                    </Button>
+                  )}
                   <Button onClick={() => gerarCardPartida(p)} aria-label="Gerar card da partida" title="Gerar card da partida" className="h-11 w-11 px-0">
                     <ImageIcon />
                   </Button>
@@ -862,6 +875,20 @@ export default function AdminJogosDoDiaPage() {
           })
         )}
       </div>
+
+      {conferenciaId && (
+        <ConferenciaPresenca
+          slug={slug}
+          partidaId={conferenciaId}
+          onClose={() => setConferenciaId(null)}
+          onAlterou={() => void recarregarProntidao()}
+          onSugerirWO={() => {
+            const alvo = partidas.find((x) => x.id === conferenciaId);
+            setConferenciaId(null);
+            if (alvo) abrirModalPlacar(alvo);
+          }}
+        />
+      )}
 
       {editPartida && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(22,24,29,0.5)] sm:items-center sm:p-4" onMouseDown={() => setEditPartida(null)}>
