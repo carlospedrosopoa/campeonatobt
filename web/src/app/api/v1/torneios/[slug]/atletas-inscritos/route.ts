@@ -269,7 +269,9 @@ export async function GET(
     const cat = byCategoria.get(primeiro.categoriaId);
     if (!cat) continue;
 
-    const ehSimples = tipoParticipacaoEhIndividual(cat.tipoParticipacao);
+    // duplas sorteadas ja formadas no sorteio listam os dois atletas
+    const duplaJaFormada = cat.tipoParticipacao === "DUPLAS_SORTEADAS" && atletasDaInscricao.length > 1;
+    const ehSimples = tipoParticipacaoEhIndividual(cat.tipoParticipacao) && !duplaJaFormada;
 
     if (ehSimples) {
       let selecionado: RowAtleta | null = null;

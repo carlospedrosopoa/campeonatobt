@@ -728,7 +728,9 @@ export class InscricoesService {
 
     const result = Array.from(map.values());
     for (const item of result) {
-      if (ehSimples) {
+      // em duplas sorteadas, depois do sorteio a inscricao ja tem os dois atletas: exibe como dupla
+      const duplaJaFormada = tipoParticipacao === "DUPLAS_SORTEADAS" && item.equipe.atletas.length > 1;
+      if (ehSimples && !duplaJaFormada) {
         const capitãoId = item.equipe.capitaoUsuarioId;
         let atletasOriginaisExibicao: Atleta[] = item.equipe.atletas.slice();
         let preferenciaAtletaSimplesId: string | null = null;
@@ -973,13 +975,22 @@ export class InscricoesService {
     const { categoria, tipoParticipacao } = await this.obterContextoCategoria(dados.categoriaId, dados.torneioId);
     const atletaAEmail = dados.atletaA.email.trim().toLowerCase();
     const atletaBEmail = dados.atletaB?.email?.trim().toLowerCase() || "";
-    const exigeDupla = tipoParticipacao === "DUPLAS";
+    // duplas sorteadas: depois do sorteio a inscricao tem dois atletas e a edicao precisa manter os dois
+    let duplaSorteadaFormada = false;
+    if (tipoParticipacao === "DUPLAS_SORTEADAS" && ins.equipeId) {
+      const integrantes = await db
+        .select({ usuarioId: equipeIntegrantes.usuarioId })
+        .from(equipeIntegrantes)
+        .where(eq(equipeIntegrantes.equipeId, ins.equipeId));
+      duplaSorteadaFormada = integrantes.length > 1;
+    }
+    const exigeDupla = tipoParticipacao === "DUPLAS" || duplaSorteadaFormada;
     if (!atletaAEmail) throw new Error("Email do atleta é obrigatório");
     if (exigeDupla && !atletaBEmail) throw new Error("Dados dos dois atletas são obrigatórios");
     if (exigeDupla && atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
 
     await validarGeneroInscricao({
-      individualSorteada: tipoParticipacao === "DUPLAS_SORTEADAS",
+      individualSorteada: tipoParticipacao === "DUPLAS_SORTEADAS" && !duplaSorteadaFormada,
       categoriaGenero: categoria?.genero,
       atletaA: {
         nome: dados.atletaA.nome,
