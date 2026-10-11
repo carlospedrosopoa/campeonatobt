@@ -62,7 +62,7 @@ type Categoria = {
   id: string;
   torneioId: string;
   nome: string;
-  genero: "MASCULINO" | "FEMININO" | "MISTO";
+  genero: "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE";
   valorInscricao: string | null;
   vagasMaximas: number | null;
   dataHorario: string | null;
@@ -759,6 +759,7 @@ export default function AdminTorneioDashboardPage() {
                         <option value="MASCULINO">Masculino</option>
                         <option value="FEMININO">Feminino</option>
                         <option value="MISTO">Misto</option>
+                        <option value="LIVRE">Livre (masculina, feminina ou mista)</option>
                       </select>
                     </label>
 

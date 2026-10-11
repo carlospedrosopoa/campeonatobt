@@ -34,7 +34,7 @@ export async function POST(
     const nome = (body?.nome as string | undefined)?.trim();
     const categoriaOrigemId = (body?.categoriaOrigemId as string | undefined)?.trim();
     const manterInscricoes = body?.manterInscricoes === true;
-    const genero = body?.genero as "MASCULINO" | "FEMININO" | "MISTO" | undefined;
+    const genero = body?.genero as "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE" | undefined;
     const valorInscricao = body?.valorInscricao as string | number | undefined;
     const vagasMaximas = body?.vagasMaximas as number | null | undefined;
     const dataHorarioRaw = body?.dataHorario as string | null | undefined;

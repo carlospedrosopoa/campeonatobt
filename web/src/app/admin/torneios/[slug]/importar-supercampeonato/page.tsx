@@ -8,7 +8,7 @@ import { ArrowLeft, FileUp, RefreshCw, Save } from "lucide-react";
 type Categoria = {
   id: string;
   nome: string;
-  genero: "MASCULINO" | "FEMININO" | "MISTO";
+  genero: "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE";
 };
 
 type AtletaRef = { nomeOriginal: string; nomeNormalizado: string };
@@ -210,7 +210,7 @@ export default function AdminImportarSuperCampeonatoPage() {
   const [modoCategoria, setModoCategoria] = useState<"EXISTENTE" | "NOVA">("EXISTENTE");
   const [categoriaId, setCategoriaId] = useState("");
   const [categoriaNome, setCategoriaNome] = useState("");
-  const [categoriaGenero, setCategoriaGenero] = useState<"MASCULINO" | "FEMININO" | "MISTO">("MISTO");
+  const [categoriaGenero, setCategoriaGenero] = useState<"MASCULINO" | "FEMININO" | "MISTO" | "LIVRE">("MISTO");
 
   const [mapeamento, setMapeamento] = useState<Record<string, { playAtletaId: string; nome?: string; email?: string }>>({});
   const [importando, setImportando] = useState(false);
@@ -408,6 +408,7 @@ export default function AdminImportarSuperCampeonatoPage() {
                     <option value="MASCULINO">MASCULINO</option>
                     <option value="FEMININO">FEMININO</option>
                     <option value="MISTO">MISTO</option>
+                    <option value="LIVRE">LIVRE</option>
                   </select>
                 </div>
               </div>

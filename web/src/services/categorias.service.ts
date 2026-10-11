@@ -20,7 +20,7 @@ import { inscricoesService } from "@/services/inscricoes.service";
 export type CriarCategoriaDTO = {
   torneioId: string;
   nome: string;
-  genero: "MASCULINO" | "FEMININO" | "MISTO";
+  genero: "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE";
   valorInscricao?: string | number | null;
   vagasMaximas?: number | null;
   dataHorario?: Date | null;
@@ -29,7 +29,7 @@ export type CriarCategoriaDTO = {
 
 export type AtualizarCategoriaDTO = {
   nome?: string;
-  genero?: "MASCULINO" | "FEMININO" | "MISTO";
+  genero?: "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE";
   valorInscricao?: string | number | null;
   vagasMaximas?: number | null;
   dataHorario?: Date | null;

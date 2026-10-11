@@ -168,7 +168,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const payload = (payloadRaw ? JSON.parse(payloadRaw) : null) as any;
     const categoriaId = typeof payload?.categoriaId === "string" ? payload.categoriaId.trim() : "";
     const categoriaNome = typeof payload?.categoriaNome === "string" ? payload.categoriaNome.trim() : "";
-    const categoriaGenero = payload?.categoriaGenero as "MASCULINO" | "FEMININO" | "MISTO" | undefined;
+    const categoriaGenero = payload?.categoriaGenero as "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE" | undefined;
     const mapeamento = (payload?.mapeamento as Record<string, { playAtletaId: string } | undefined>) ?? {};
 
     const arrayBuffer = await file.arrayBuffer();
