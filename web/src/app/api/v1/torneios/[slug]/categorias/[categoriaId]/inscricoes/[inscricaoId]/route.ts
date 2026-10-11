@@ -94,7 +94,7 @@ export async function PATCH(
         genero: atletaA.genero ?? null,
       },
       atletaB:
-        exigeDupla && atletaB
+        atletaB?.nome && atletaB?.email
           ? {
               nome: atletaB.nome || "",
               email: atletaB.email || "",

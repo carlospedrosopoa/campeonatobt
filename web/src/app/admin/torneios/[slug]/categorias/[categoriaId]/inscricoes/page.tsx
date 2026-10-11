@@ -139,12 +139,14 @@ export default function AdminCategoriaInscricoesPage() {
   });
 
   const categoriaEhSimples = categoriaEhIndividual(tipoParticipacao);
+  // duplas sorteadas ja formadas no sorteio sao editadas como dupla
+  const formIndividual = categoriaEhSimples && !((editandoInscricao?.equipe.atletas.length ?? 0) > 1);
   const labelCapitaoAtletaA = form.atletaANome.trim() || "Atleta 1";
   const labelCapitaoAtletaB = form.atletaBNome.trim() || "Atleta 2";
   const podeSalvar = useMemo(() => {
-    if (categoriaEhSimples) return Boolean(form.atletaANome.trim() && form.atletaAEmail.trim());
+    if (formIndividual) return Boolean(form.atletaANome.trim() && form.atletaAEmail.trim());
     return Boolean(form.atletaANome.trim() && form.atletaAEmail.trim() && form.atletaBNome.trim() && form.atletaBEmail.trim());
-  }, [categoriaEhSimples, form]);
+  }, [formIndividual, form]);
 
   function atletaEhCapitao(inscricao: Inscricao, atletaId: string, indice: number) {
     if (inscricao.equipe.capitaoUsuarioId) {
@@ -456,7 +458,7 @@ export default function AdminCategoriaInscricoesPage() {
     setAtletaBGeneroPreenchido(false);
     setForm({
       equipeNome: inscricao.equipe.nome || "",
-      capitaoPosicao: categoriaEhSimples ? "A" : capitaoPosicao,
+      capitaoPosicao: categoriaEhSimples && !a2 ? "A" : capitaoPosicao,
       atletaANome: a1?.nome || "",
       atletaAEmail: a1?.email || "",
       atletaATelefone: a1?.telefone || "",
@@ -487,7 +489,7 @@ export default function AdminCategoriaInscricoesPage() {
     e.preventDefault();
     setErro(null);
     if (!podeSalvar) {
-      setErro(categoriaEhSimples ? "Preencha os dados do atleta (nome e email)." : "Preencha os dados dos dois atletas (nome e email).");
+      setErro(formIndividual ? "Preencha os dados do atleta (nome e email)." : "Preencha os dados dos dois atletas (nome e email).");
       return;
     }
 
@@ -497,7 +499,7 @@ export default function AdminCategoriaInscricoesPage() {
       const valorAtletaBOriginal = String(editandoInscricao?.equipe.atletas[1]?.valorDevido || "").trim();
       const payload = {
         equipeNome: form.equipeNome.trim() || undefined,
-        capitaoPosicao: categoriaEhSimples ? "A" : form.capitaoPosicao,
+        capitaoPosicao: formIndividual ? "A" : form.capitaoPosicao,
         status: form.status,
         atletaA: {
           nome: form.atletaANome.trim(),
@@ -508,7 +510,7 @@ export default function AdminCategoriaInscricoesPage() {
           genero: form.atletaAGenero || null,
           camisetaOpcao: form.atletaACamiseta.trim() || null,
         },
-        atletaB: categoriaEhSimples
+        atletaB: formIndividual
           ? null
           : {
               nome: form.atletaBNome.trim(),
@@ -562,7 +564,7 @@ export default function AdminCategoriaInscricoesPage() {
             valorDevido: form.atletaAValorDevido.trim(),
             valorOriginal: valorAtletaAOriginal,
           },
-          ...(categoriaEhSimples
+          ...(formIndividual
             ? []
             : [
                 {
@@ -817,7 +819,7 @@ export default function AdminCategoriaInscricoesPage() {
               </select>
             </div>
 
-            {!categoriaEhSimples ? (
+            {!formIndividual ? (
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Capitão da dupla</label>
               <select
@@ -958,7 +960,7 @@ export default function AdminCategoriaInscricoesPage() {
               </div>
             </div>
 
-            {!categoriaEhSimples ? (
+            {!formIndividual ? (
             <div className="space-y-3">
               <div className="font-semibold text-slate-900">Atleta 2</div>
               <div className="space-y-2">
@@ -1136,7 +1138,7 @@ export default function AdminCategoriaInscricoesPage() {
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-slate-900">{i.equipe.nome || "Equipe"}</div>
                   <div className="text-xs text-slate-500"><NomeEquipeComSobrenome atletas={i.equipe.atletas} nomeEquipeFallback={i.equipe.nome} tamanho="sm" separador=" &amp; " /></div>
-                  {!categoriaEhSimples ? (
+                  {!categoriaEhSimples || i.equipe.atletas.length > 1 ? (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {i.equipe.atletas.map((a, indice) => {
                         const ehCapitao = atletaEhCapitao(i, a.id, indice);
@@ -1285,7 +1287,7 @@ export default function AdminCategoriaInscricoesPage() {
                         <div className="text-xs text-slate-500">
                           <NomeEquipeComSobrenome atletas={i.equipe.atletas} nomeEquipeFallback={i.equipe.nome} tamanho="sm" separador=" &amp; " />
                         </div>
-                        {!categoriaEhSimples ? (
+                        {!categoriaEhSimples || i.equipe.atletas.length > 1 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {i.equipe.atletas.map((a, indice) => {
                               const ehCapitao = atletaEhCapitao(i, a.id, indice);
