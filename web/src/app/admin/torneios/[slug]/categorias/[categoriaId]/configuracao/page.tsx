@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Settings, Smartphone, Swords, TrendingUp, Trophy, Trash2, X, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Settings, Shuffle, Smartphone, Swords, TrendingUp, Trophy, Trash2, X, ChevronDown, ChevronRight } from "lucide-react";
 import { CategoriaHeader } from "@/components/admin/categoria-header";
 import { Alert, Button, Card } from "@/components/admin/ui";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
@@ -1795,6 +1795,7 @@ export default function AdminCategoriaJogosPage() {
   const configAlterada = Boolean(config && configSalvaJson !== null && JSON.stringify(config) !== configSalvaJson);
   const formatoAtual = config?.formato ?? "GRUPOS";
   const usaGrupos = formatoAtual !== "MATA_MATA";
+  const soMataMata = formatoAtual === "MATA_MATA";
   const usaClassificacao = formatoAtual === "GRUPOS";
   const usaMataMata = formatoAtual !== "LIGA";
   const grupoUnico = config?.grupos?.modo === "MANUAL" && config?.grupos?.quantidade === 1;
@@ -2258,6 +2259,28 @@ export default function AdminCategoriaJogosPage() {
                     Há alterações não salvas. A montagem usa a configuração salva.
                   </div>
                 )}
+                {soMataMata ? (
+                  <>
+                    <Button
+                      variant="primary"
+                      className="w-full"
+                      disabled={gerandoMataMata || !config || configAlterada}
+                      title={configAlterada ? "Salve a configuração antes de sortear a chave" : undefined}
+                      onClick={() => {
+                        if (window.confirm("Sortear a chave do mata-mata com as duplas aprovadas? Os jogos atuais da categoria serão substituídos.")) {
+                          void gerarMataMataConfig();
+                        }
+                      }}
+                      icon={<Shuffle />}
+                    >
+                      {gerandoMataMata ? "Sorteando…" : "Sortear chave e gerar jogos"}
+                    </Button>
+                    <p className="text-xs text-muted">
+                      Sorteio sem cabeça de chave. Se o número de duplas não fechar a chave (2, 4, 8, 16), as sorteadas para passar direto entram na fase seguinte.
+                    </p>
+                  </>
+                ) : (
+                <>
                 <Button variant="primary" className="w-full" disabled={gerandoGrupos || !config} onClick={() => void gerarGruposEJogos()}>
                   {gerandoGrupos ? "Gerando…" : "Gerar grupos e jogos"}
                 </Button>
@@ -2280,6 +2303,8 @@ export default function AdminCategoriaJogosPage() {
                 <Button className="w-full" disabled={gerandoMataMata} onClick={() => void gerarMataMataConfig()}>
                   {gerandoMataMata ? "Gerando…" : "Gerar mata-mata"}
                 </Button>
+                </>
+                )}
               </div>
             </section>
 

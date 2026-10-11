@@ -1,6 +1,7 @@
 import { db } from "@/db";
-import { categorias, equipes, inscricoes, partidas, placarSubmissoes, torneios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, inscricoes, partidas, placarSubmissoes, torneios } from "@/db/schema";
 import { and, eq, inArray, not, or } from "drizzle-orm";
+import { montarConfrontosProximaFase, sortearChaveDireta } from "@/services/mata-mata-direto";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
 import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
@@ -326,6 +327,13 @@ export class MataMataService {
   private async obterConfrontosDecisivosSemi(params: { torneioId: string; categoriaId: string }) {
     const config = await categoriaConfigService.obterOuDefault(params.categoriaId);
     const disputaTerceiroLugar = config.fase2?.disputaTerceiroLugar === true;
+
+    if (config.formato === "MATA_MATA") {
+      const r = await this.confrontosProximaFaseSemGrupos({ ...params, faseAtual: "SEMI" });
+      const final = r.pronto && r.confrontos.length === 1 ? r.confrontos[0] : null;
+      const terceiroLugar = final && disputaTerceiroLugar && r.perdedores.length === 2 ? { a: r.perdedores[0], b: r.perdedores[1] } : null;
+      return { pronto: Boolean(final), disputaTerceiroLugar, final, terceiroLugar };
+    }
 
     const jogos = await db
       .select({
@@ -784,6 +792,12 @@ export class MataMataService {
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((j) => j.vencedorId!)
       .filter(Boolean);
+
+    const configCategoria = await categoriaConfigService.obterOuDefault(params.categoriaId);
+    if (configCategoria.formato === "MATA_MATA") {
+      const r = await this.confrontosProximaFaseSemGrupos(params);
+      return { faseProxima, pairings: r.pronto ? r.confrontos : [] };
+    }
 
     const pairings: { a: string; b: string }[] = [];
     const { seeds, qualificados, superCampeonato, config } = await this.calcularSeeds({ categoriaId: params.categoriaId });
@@ -1277,7 +1291,117 @@ export class MataMataService {
     return updated;
   }
 
+  /** Equipes aprovadas da categoria, para o formato "Só mata-mata". */
+  private async equipesAprovadasSemGrupos(categoriaId: string, tipoParticipacao?: string) {
+    const rows = await db
+      .select({ equipeId: inscricoes.equipeId })
+      .from(inscricoes)
+      .where(and(eq(inscricoes.categoriaId, categoriaId), eq(inscricoes.status, "APROVADA")));
+    const equipeIds = Array.from(new Set(rows.map((r) => r.equipeId).filter((id): id is string => Boolean(id))));
+
+    if (tipoParticipacao === "DUPLAS_SORTEADAS" && equipeIds.length > 0) {
+      const integrantes = await db
+        .select({ equipeId: equipeIntegrantes.equipeId })
+        .from(equipeIntegrantes)
+        .where(inArray(equipeIntegrantes.equipeId, equipeIds));
+      const porEquipe = new Map<string, number>();
+      for (const i of integrantes) porEquipe.set(i.equipeId, (porEquipe.get(i.equipeId) ?? 0) + 1);
+      if (equipeIds.some((id) => (porEquipe.get(id) ?? 0) < 2)) {
+        throw new Error("Ainda há atletas sem dupla. Sorteie ou forme as duplas na aba Inscrições antes de gerar o mata-mata.");
+      }
+    }
+    return equipeIds;
+  }
+
+  /** Sorteia a chave direto das inscricoes aprovadas (sem grupos e sem cabeca de chave). */
+  private async gerarPrimeiraFaseSemGrupos(params: { torneioId: string; categoriaId: string; tipoParticipacao?: string }) {
+    const existentes = await db
+      .select({
+        id: partidas.id,
+        status: partidas.status,
+        vencedorId: partidas.vencedorId,
+        placarA: partidas.placarA,
+        placarB: partidas.placarB,
+        detalhesPlacar: partidas.detalhesPlacar,
+        fotoUrl: partidas.fotoUrl,
+      })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId)));
+    if (existentes.some(partidaIniciada)) {
+      throw new Error("Não é possível sortear a chave: já existem jogos com resultado nesta categoria.");
+    }
+
+    const equipeIds = await this.equipesAprovadasSemGrupos(params.categoriaId, params.tipoParticipacao);
+    const chave = sortearChaveDireta(equipeIds);
+
+    await db.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId)));
+    // insere um a um para preservar a ordem do sorteio em criado_em (usada no avanco da chave)
+    for (const jogo of chave.jogos) {
+      await db.insert(partidas).values({
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        grupoId: null,
+        equipeAId: jogo.a,
+        equipeBId: jogo.b,
+        fase: chave.fase,
+        status: "AGENDADA",
+        placarA: 0,
+        placarB: 0,
+        atualizadoEm: new Date(),
+      });
+    }
+    await Promise.all(existentes.map((p) => excluirCardPartidaDoGcs(p.fotoUrl)));
+
+    return { fase: chave.fase, partidasCriadas: chave.jogos.length, qualificados: equipeIds.length, byes: chave.byes.length };
+  }
+
+  /**
+   * Confrontos da fase seguinte no formato "Só mata-mata". Na primeira fase, quem nao jogou
+   * (passou direto) entra junto com os vencedores.
+   */
+  private async confrontosProximaFaseSemGrupos(params: { torneioId: string; categoriaId: string; faseAtual: Fase }) {
+    const vazio = { pronto: false, confrontos: [] as { a: string; b: string }[], perdedores: [] as string[] };
+    const todas = await db
+      .select({
+        id: partidas.id,
+        fase: partidas.fase,
+        status: partidas.status,
+        equipeAId: partidas.equipeAId,
+        equipeBId: partidas.equipeBId,
+        vencedorId: partidas.vencedorId,
+        criadoEm: partidas.criadoEm,
+      })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId)));
+
+    const jogos = todas
+      .filter((p) => p.fase === params.faseAtual)
+      .sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime() || a.id.localeCompare(b.id));
+    if (jogos.length === 0) return vazio;
+    if (jogos.some((j) => !((j.status === "FINALIZADA" || j.status === "WO") && j.vencedorId))) return vazio;
+
+    const vencedores = jogos.map((j) => j.vencedorId!);
+    const perdedores = jogos.map((j) => (j.vencedorId === j.equipeAId ? j.equipeBId : j.equipeAId));
+
+    const primeiraFase = ordemFases.find((f) => todas.some((p) => p.fase === f));
+    let byes: string[] = [];
+    if (primeiraFase === params.faseAtual) {
+      const config = await categoriaConfigService.obterOuDefault(params.categoriaId);
+      const jogaram = new Set(jogos.flatMap((j) => [j.equipeAId, j.equipeBId]));
+      byes = (await this.equipesAprovadasSemGrupos(params.categoriaId, config.tipoParticipacao))
+        .filter((id) => !jogaram.has(id))
+        .sort((a, b) => a.localeCompare(b));
+    }
+
+    return { pronto: true, confrontos: montarConfrontosProximaFase(byes, vencedores), perdedores };
+  }
+
   async gerarPrimeiraFase(params: { torneioId: string; categoriaId: string; manualTieBreaks?: Record<string, string[]> }) {
+    const configCategoria = await categoriaConfigService.obterOuDefault(params.categoriaId);
+    if (configCategoria.formato === "MATA_MATA") {
+      return this.gerarPrimeiraFaseSemGrupos({ ...params, tipoParticipacao: configCategoria.tipoParticipacao });
+    }
+
     const { config, grupos, qualificados, seeds: seedIds, superCampeonato, orderedByRank } = await this.calcularSeeds({
       categoriaId: params.categoriaId,
       manualTieBreaks: params.manualTieBreaks,

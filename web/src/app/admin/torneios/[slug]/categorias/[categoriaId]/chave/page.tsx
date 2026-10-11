@@ -38,6 +38,7 @@ type GrupoClassificacao = {
 };
 
 type CategoriaConfig = {
+  formato?: "GRUPOS" | "MATA_MATA" | "LIGA";
   mataMata?: {
     estrutura?: "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO" | "GRUPOS_10_CRUZAMENTO_PADRAO";
   };
@@ -159,6 +160,7 @@ export default function AdminCategoriaChavePage() {
   const [mataMataEstrutura, setMataMataEstrutura] = useState<
     "PADRAO" | "SUPER_CAMPEONATO_6" | "GRUPOS_6_MELHORES_PRIMEIROS_BYE" | "GRUPOS_8_CRUZAMENTO_PADRAO" | "GRUPOS_10_CRUZAMENTO_PADRAO"
   >("PADRAO");
+  const [soMataMata, setSoMataMata] = useState(false);
   const [classificacao, setClassificacao] = useState<GrupoClassificacao[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -270,6 +272,7 @@ export default function AdminCategoriaChavePage() {
         if (!ativo) return;
         setSuperCampeonato(isSuper);
         setMataMataEstrutura(configCategoria?.mataMata?.estrutura ?? "PADRAO");
+        setSoMataMata(configCategoria?.formato === "MATA_MATA");
         setClassificacao(classRows);
         await carregarChave();
       } catch (e: any) {
@@ -333,7 +336,14 @@ export default function AdminCategoriaChavePage() {
     const baseCount = jogosPorFase[base as Fase].length;
     const expected: Record<FaseColuna, number> = { OITAVAS: 0, QUARTAS: 0, SEMI: 0, FINAL: 0 };
 
-    if (base === "OITAVAS") {
+    if (soMataMata) {
+      // chave sorteada direto: a 1a fase pode ter duplas que passaram direto, as seguintes sao completas
+      const tamanhos: Record<FaseColuna, number> = { OITAVAS: 8, QUARTAS: 4, SEMI: 2, FINAL: 1 };
+      const ordem: FaseColuna[] = ["OITAVAS", "QUARTAS", "SEMI", "FINAL"];
+      for (const fase of ordem.slice(ordem.indexOf(base as FaseColuna))) {
+        expected[fase] = fase === base ? baseCount : tamanhos[fase];
+      }
+    } else if (base === "OITAVAS") {
       expected.OITAVAS = baseCount;
       expected.QUARTAS = Math.max(0, Math.floor(baseCount / 2));
       expected.SEMI = Math.max(0, Math.floor(expected.QUARTAS / 2));
@@ -399,7 +409,7 @@ export default function AdminCategoriaChavePage() {
     }
 
     return out;
-  }, [jogosPorFase, superCampeonato, superTop2, gruposTop2, mataMataEstrutura]);
+  }, [jogosPorFase, superCampeonato, superTop2, gruposTop2, mataMataEstrutura, soMataMata]);
 
   const jogosTerceiroLugar = jogosPorFase.TERCEIRO_LUGAR ?? [];
 
