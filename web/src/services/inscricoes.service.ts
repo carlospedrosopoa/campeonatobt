@@ -153,7 +153,7 @@ function normalizeOption(value?: string | null) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
-type GeneroCategoria = "MASCULINO" | "FEMININO" | "MISTO";
+type GeneroCategoria = "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE";
 export type GeneroAtleta = "MASCULINO" | "FEMININO";
 export type AtletaGeneroInput = {
   nome?: string | null;
@@ -511,6 +511,8 @@ export async function validarGeneroInscricao(params: {
   atletaB?: AtletaGeneroInput | null;
 }) {
   const categoriaGenero = String(params.categoriaGenero || "").trim().toUpperCase() as GeneroCategoria;
+  // Categoria livre: aceita dupla masculina, feminina ou mista (nao exige o genero dos atletas)
+  if (categoriaGenero === "LIVRE") return;
   if (!["MASCULINO", "FEMININO", "MISTO"].includes(categoriaGenero)) return;
 
   const atletaA = await resolverGeneroAtleta(params.atletaA);

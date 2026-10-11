@@ -62,4 +62,5 @@ export const GENERO_LABEL: Record<string, string> = {
   MASCULINO: "Masculino",
   FEMININO: "Feminino",
   MISTO: "Misto",
+  LIVRE: "Livre",
 };

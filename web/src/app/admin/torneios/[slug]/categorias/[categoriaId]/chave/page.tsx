@@ -13,7 +13,7 @@ type Categoria = {
   id: string;
   torneioId: string;
   nome: string;
-  genero: "MASCULINO" | "FEMININO" | "MISTO";
+  genero: "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE";
   valorInscricao: string | null;
   vagasMaximas: number | null;
 };

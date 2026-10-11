@@ -6,7 +6,7 @@ export type CategoriaResumoAdmin = {
   id: string;
   torneioId: string;
   nome: string;
-  genero: "MASCULINO" | "FEMININO" | "MISTO";
+  genero: "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE";
   valorInscricao: string | null;
   vagasMaximas: number | null;
   dataHorario: Date | null;
