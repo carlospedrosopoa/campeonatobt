@@ -509,6 +509,8 @@ export async function validarGeneroInscricao(params: {
   categoriaGenero: string | null | undefined;
   atletaA: AtletaGeneroInput;
   atletaB?: AtletaGeneroInput | null;
+  /** inscricao individual de duplas sorteadas: a dupla so e formada depois, no sorteio */
+  individualSorteada?: boolean;
 }) {
   const categoriaGenero = String(params.categoriaGenero || "").trim().toUpperCase() as GeneroCategoria;
   // Categoria livre: aceita dupla masculina, feminina ou mista (nao exige o genero dos atletas)
@@ -523,6 +525,12 @@ export async function validarGeneroInscricao(params: {
   }
 
   if (!atletaB) {
+    if (categoriaGenero === "MISTO" && params.individualSorteada) {
+      if (atletaA.genero !== "MASCULINO" && atletaA.genero !== "FEMININO") {
+        throw new Error(`Não foi possível validar o gênero de ${atletaA.nome}. Atualize o perfil no Play na Quadra.`);
+      }
+      return;
+    }
     if (categoriaGenero === "MISTO") {
       throw new Error("A categoria mista exige dois atletas de gêneros diferentes.");
     }
@@ -818,6 +826,7 @@ export class InscricoesService {
     if (exigeDupla && atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
 
     await validarGeneroInscricao({
+      individualSorteada: tipoParticipacao === "DUPLAS_SORTEADAS",
       categoriaGenero: categoria.genero,
       atletaA: {
         nome: dados.atletaA.nome,
@@ -970,6 +979,7 @@ export class InscricoesService {
     if (exigeDupla && atletaAEmail === atletaBEmail) throw new Error("Atletas precisam ser diferentes");
 
     await validarGeneroInscricao({
+      individualSorteada: tipoParticipacao === "DUPLAS_SORTEADAS",
       categoriaGenero: categoria?.genero,
       atletaA: {
         nome: dados.atletaA.nome,
