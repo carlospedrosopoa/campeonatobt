@@ -273,6 +273,7 @@ export default function AdminCategoriaChavePage() {
         setSuperCampeonato(isSuper);
         setMataMataEstrutura(configCategoria?.mataMata?.estrutura ?? "PADRAO");
         setSoMataMata(configCategoria?.formato === "MATA_MATA");
+        if (configCategoria?.formato === "MATA_MATA") void carregarEquipesAprovadas();
         setClassificacao(classRows);
         await carregarChave();
       } catch (e: any) {
@@ -384,6 +385,30 @@ export default function AdminCategoriaChavePage() {
     fill("SEMI");
     fill("FINAL");
 
+    if (soMataMata && base !== "FINAL") {
+      // duplas que passaram direto (sem jogo na 1a fase) aguardam os vencedores na fase seguinte,
+      // na mesma ordem usada pelo servidor
+      const ordem: FaseColuna[] = ["OITAVAS", "QUARTAS", "SEMI", "FINAL"];
+      const seguinte = ordem[ordem.indexOf(base as FaseColuna) + 1];
+      const jogaram = new Set(jogosPorFase[base as Fase].flatMap((p) => [p.equipeAId, p.equipeBId]));
+      const byes = equipes.filter((e) => !jogaram.has(e.id)).sort((a, b) => a.id.localeCompare(b.id));
+      const jogosBase = jogosPorFase[base as Fase].length;
+      out[seguinte] = out[seguinte].map((p, idx) => {
+        if (!p.id.startsWith("placeholder:")) return p;
+        // primeiro cada bye enfrenta um vencedor; os byes que sobrarem se enfrentam entre si
+        const a = idx < jogosBase ? byes[idx] : byes[jogosBase + 2 * (idx - jogosBase)];
+        const b = idx < jogosBase ? null : byes[jogosBase + 2 * (idx - jogosBase) + 1];
+        if (!a) return p;
+        return {
+          ...p,
+          equipeAId: a.id,
+          equipeANome: a.nome,
+          equipeBId: b ? b.id : "aguardando",
+          equipeBNome: b ? b.nome : "Aguardando vencedor",
+        };
+      });
+    }
+
     if ((superCampeonato || mataMataEstrutura === "GRUPOS_6_MELHORES_PRIMEIROS_BYE") && base === "QUARTAS" && expected.SEMI === 2 && out.SEMI.length === 2) {
       const semifinalistasComBye = superCampeonato ? superTop2 : gruposTop2;
       const s1 = semifinalistasComBye?.s1;
@@ -409,7 +434,7 @@ export default function AdminCategoriaChavePage() {
     }
 
     return out;
-  }, [jogosPorFase, superCampeonato, superTop2, gruposTop2, mataMataEstrutura, soMataMata]);
+  }, [jogosPorFase, superCampeonato, superTop2, gruposTop2, mataMataEstrutura, soMataMata, equipes]);
 
   const jogosTerceiroLugar = jogosPorFase.TERCEIRO_LUGAR ?? [];
 
