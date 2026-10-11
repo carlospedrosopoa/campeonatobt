@@ -7,6 +7,7 @@ export const SECOES_TORNEIO: Record<string, string> = {
   comunicacoes: "Comunicações",
   "jogos-do-dia": "Jogos do dia",
   "lista-chamada": "Lista de chamada",
+  "qr-checkin": "QR do check-in",
   "painel-quadras": "Painel de quadras",
   "importar-supercampeonato": "Importar Excel",
 };
@@ -48,6 +49,6 @@ export function interpretarRota(pathname: string): RotaAdmin {
     }
   }
 
-  const telaCheia = abaCategoria === "sorteio" || abaCategoria === "jogos/arbitro" || abaCategoria === "jogos/lancar-placar";
+  const telaCheia = secao === "qr-checkin" || abaCategoria === "sorteio" || abaCategoria === "jogos/arbitro" || abaCategoria === "jogos/lancar-placar";
   return { slug, secao, categoriaId, abaCategoria, telaCheia };
 }

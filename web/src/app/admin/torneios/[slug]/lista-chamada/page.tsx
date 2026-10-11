@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Calendar, Check, RefreshCw, Search, Users } from "lucide-react";
+import { Calendar, Check, QrCode, RefreshCw, Search, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Alert, Badge, Button, Card, EmptyState, PageHeader } from "@/components/admin/ui";
+import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader } from "@/components/admin/ui";
 
 type AtletaChamada = {
   usuarioId: string;
@@ -146,6 +146,9 @@ export default function ListaChamadaPage() {
               <Calendar className="h-4 w-4 text-muted" />
               <input type="date" value={data} onChange={(e) => setData(e.target.value || hojeSP())} aria-label="Dia" className="bg-transparent text-ink outline-none" />
             </label>
+            <LinkButton href={`/admin/torneios/${slug}/qr-checkin`} target="_blank" icon={<QrCode />}>
+              QR do dia
+            </LinkButton>
             <Button onClick={() => void carregar()} disabled={carregando} aria-label="Atualizar" className="w-10 px-0">
               <RefreshCw className={carregando ? "animate-spin" : ""} />
             </Button>
