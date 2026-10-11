@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Banknote, Gamepad2, ImageIcon, Pencil, Plus, RefreshCw, Save, Settings, Trash2, Users, X } from "lucide-react";
 import { CategoriaHeader } from "@/components/admin/categoria-header";
+import { DuplasSorteadasPainel } from "@/components/admin/duplas-sorteadas";
 import { gerarCardDuplasInscritasAdmin, gerarCardInscricaoAdmin } from "@/lib/match-card-client";
 import { NomeAtletaSobrenome, NomeEquipeComSobrenome, separarPrimeiroUltimoNome } from "@/lib/nome-atleta";
 
@@ -762,6 +763,10 @@ export default function AdminCategoriaInscricoesPage() {
           <div className="text-2xl font-bold text-slate-900">{inscricoes.filter((i) => i.status === "APROVADA").length}</div>
         </div>
       </div>
+
+      {categoriaEhDuplasSorteadas(tipoParticipacao) && (
+        <DuplasSorteadasPainel slug={slug} categoriaId={categoriaId} onAlterou={() => void carregar()} />
+      )}
 
       {mostraForm && (
         <form onSubmit={onSubmit} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-6 space-y-5">
