@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       categoriaNome: categorias.nome,
       superCampeonato: torneios.superCampeonato,
       superCampeonatoFormato: torneios.superCampeonatoFormato,
+      capitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
       fase: partidas.fase,
       status: partidas.status,
       arenaId: partidas.arenaId,
@@ -141,6 +142,8 @@ export async function GET(request: NextRequest) {
             detalhesPlacar: pendente.detalhesPlacar,
           }
         : null,
+      // agendar e informar/confirmar placar pelo app (flag da competicao)
+      capitaesGerenciamJogos: Boolean(r.capitaesGerenciamJogos),
       regrasPartida: obterRegrasPartidaEfetivas({
         regrasBase: config?.regrasPartida,
         regrasPorFase: config?.regrasPartidaPorFase ?? null,

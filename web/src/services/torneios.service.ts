@@ -59,6 +59,7 @@ export type CriarTorneioDTO = {
   quadrasAtivas?: number;
   oculto?: boolean;
   inscricaoComIa?: boolean;
+  capitaesGerenciamJogos?: boolean;
   valorPrimeiraInscricao?: string | number | null;
   valorInscricaoAdicional?: string | number | null;
   pixChave?: string | null;
@@ -166,6 +167,7 @@ export class TorneiosService {
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
+        capitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
         valorInscricaoAdicional: torneios.valorInscricaoAdicional,
         pixChave: torneios.pixChave,
@@ -224,6 +226,7 @@ export class TorneiosService {
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
+        capitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
         valorInscricaoAdicional: torneios.valorInscricaoAdicional,
         pixChave: torneios.pixChave,
@@ -276,6 +279,7 @@ export class TorneiosService {
         quadrasAtivas: torneios.quadrasAtivas,
         oculto: torneios.oculto,
         inscricaoComIa: torneios.inscricaoComIa,
+        capitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
         valorInscricaoAdicional: torneios.valorInscricaoAdicional,
         pixChave: torneios.pixChave,
@@ -314,6 +318,7 @@ export class TorneiosService {
       status: torneios.status,
       oculto: torneios.oculto,
       inscricaoComIa: torneios.inscricaoComIa,
+      capitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
       bannerUrl: torneios.bannerUrl,
       logoUrl: torneios.logoUrl,
       templateUrl: torneios.templateUrl,
@@ -384,6 +389,7 @@ export class TorneiosService {
           camisetaOpcoes: normalizeStringArray(dados.camisetaOpcoes),
           oculto: dados.oculto ?? false,
           inscricaoComIa: dados.inscricaoComIa ?? false,
+          capitaesGerenciamJogos: dados.capitaesGerenciamJogos ?? false,
           cardApenasComFotos: dados.cardApenasComFotos ?? false,
           layoutCards: normalizeLayoutCards(dados.layoutCards),
           toleranciaAtrasoMin: normalizeTolerancia(dados.toleranciaAtrasoMin),
@@ -457,6 +463,7 @@ export class TorneiosService {
           status: "RASCUNHO",
           oculto: true,
           inscricaoComIa: origem.inscricaoComIa,
+          capitaesGerenciamJogos: origem.capitaesGerenciamJogos,
           modeloTorneio: origem.modeloTorneio,
           superCampeonato: origem.superCampeonato,
           superCampeonatoFormato: origem.superCampeonatoFormato,
@@ -581,6 +588,7 @@ export class TorneiosService {
       quadrasAtivas?: number;
       oculto?: boolean;
       inscricaoComIa?: boolean;
+  capitaesGerenciamJogos?: boolean;
     }
   ) {
     const atual = await this.buscarPorSlug(slug);
@@ -624,6 +632,7 @@ export class TorneiosService {
         pixCidade: normalizeText(dados.pixCidade),
         camisetaOpcoes: normalizeStringArray((dados as any).camisetaOpcoes),
         layoutCards: dados.layoutCards === undefined ? undefined : normalizeLayoutCards(dados.layoutCards),
+        capitaesGerenciamJogos: dados.capitaesGerenciamJogos === undefined ? undefined : Boolean(dados.capitaesGerenciamJogos),
         toleranciaAtrasoMin: dados.toleranciaAtrasoMin === undefined ? undefined : normalizeTolerancia(dados.toleranciaAtrasoMin),
         checkinModo: dados.checkinModo === undefined ? undefined : normalizeCheckinModo(dados.checkinModo),
         atualizadoEm: new Date(),

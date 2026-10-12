@@ -32,6 +32,7 @@ type Partida = {
     detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[];
   } | null;
   regrasPartida?: RegrasPartidaConfig | RegrasPartidaSets | null;
+  capitaesGerenciamJogos?: boolean;
 };
 
 type FormPlacar = {
@@ -337,7 +338,8 @@ export default function AtletaJogosPage() {
                       (p.detalhesPlacar?.length || 0) > 0 || p.status === "FINALIZADA" || p.status === "WO";
                     const pendente = p.placarSubmissaoPendente && p.placarSubmissao?.status === "PENDENTE" ? p.placarSubmissao : null;
                     const informadoPorMim = Boolean(pendente && meuUsuarioId && pendente.informadoPorUsuarioId === meuUsuarioId);
-                    const souCapitao = Boolean(p.souCapitao);
+                    // so na competicao com a flag ligada o capitao informa/confirma placar
+                    const souCapitao = Boolean(p.souCapitao) && Boolean(p.capitaesGerenciamJogos);
                     const podeInformar =
                       !temPlacar && !pendente && souCapitao && (p.status === "AGENDADA" || p.status === "EM_ANDAMENTO");
                     const podeEditar = !temPlacar && pendente && informadoPorMim && souCapitao;

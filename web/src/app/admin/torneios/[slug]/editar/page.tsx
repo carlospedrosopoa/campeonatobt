@@ -25,6 +25,7 @@ type Torneio = {
   superCampeonato: boolean;
   superCampeonatoFormato: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos: boolean;
+  capitaesGerenciamJogos: boolean;
   layoutCards: "NOVO" | "CLASSICO";
   toleranciaAtrasoMin?: number;
   checkinModo?: "QR" | "BOTAO" | "AMBOS";
@@ -106,6 +107,7 @@ export default function AdminEditarDadosTorneioPage() {
     superCampeonato: false,
     superCampeonatoFormato: "2_SET_SUPER_TIE" as "2_SET_SUPER_TIE" | "1_SET",
     cardApenasComFotos: false,
+    capitaesGerenciamJogos: false,
     layoutCards: "CLASSICO",
     toleranciaAtrasoMin: 15,
     checkinModo: "AMBOS" as "QR" | "BOTAO" | "AMBOS",
@@ -170,6 +172,7 @@ export default function AdminEditarDadosTorneioPage() {
           superCampeonato: Boolean(t.superCampeonato),
           superCampeonatoFormato: t.superCampeonatoFormato ?? "2_SET_SUPER_TIE",
           cardApenasComFotos: Boolean(t.cardApenasComFotos),
+          capitaesGerenciamJogos: Boolean(t.capitaesGerenciamJogos),
           layoutCards: t.layoutCards === "NOVO" ? "NOVO" : "CLASSICO",
           toleranciaAtrasoMin: typeof t.toleranciaAtrasoMin === "number" ? t.toleranciaAtrasoMin : 15,
           checkinModo: t.checkinModo === "QR" || t.checkinModo === "BOTAO" ? t.checkinModo : "AMBOS",
@@ -303,6 +306,7 @@ export default function AdminEditarDadosTorneioPage() {
         superCampeonato: form.modeloTorneio === "SUPERCAMPEONATO",
         superCampeonatoFormato: form.superCampeonatoFormato,
         cardApenasComFotos: form.cardApenasComFotos,
+        capitaesGerenciamJogos: form.capitaesGerenciamJogos,
         layoutCards: form.layoutCards,
         toleranciaAtrasoMin: form.toleranciaAtrasoMin,
         checkinModo: form.checkinModo,
@@ -613,6 +617,19 @@ export default function AdminEditarDadosTorneioPage() {
                 Habilitar atendimento virtual com IA neste torneio
               </label>
               <div className="text-xs text-slate-500">Controla a exibição do chat público e se o agente pode atender inscrições deste torneio.</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Jogos pelos capitães</label>
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.capitaesGerenciamJogos)}
+                  onChange={(e) => setForm((prev) => ({ ...prev, capitaesGerenciamJogos: e.target.checked }))}
+                />
+                Capitães agendam o jogo e informam o placar pelo app
+              </label>
+              <div className="text-xs text-slate-500">O capitão da dupla define data, hora e arena; o vencedor informa o placar e o adversário confirma.</div>
             </div>
 
             <div className="space-y-2">

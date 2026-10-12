@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
+import { bloqueioRecursoCapitaes } from "@/lib/capitaes-jogos";
 import { db } from "@/db";
 import { arenas, equipeIntegrantes, equipes, partidas } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
@@ -35,6 +36,8 @@ export async function PUT(
     .limit(1);
   const partida = partidaRows[0];
   if (!partida) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
+  const bloqueio = await bloqueioRecursoCapitaes(id);
+  if (bloqueio) return bloqueio;
 
   if (partida.status === "FINALIZADA" || partida.status === "WO") {
     return NextResponse.json({ error: "Não é possível agendar uma partida já encerrada" }, { status: 400 });
