@@ -24,6 +24,7 @@ type CriarTorneioPayload = {
   superCampeonato?: boolean;
   superCampeonatoFormato?: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos?: boolean;
+  capitaesGerenciamJogos?: boolean;
   layoutCards?: "NOVO" | "CLASSICO";
   toleranciaAtrasoMin?: number;
   checkinModo?: "QR" | "BOTAO" | "AMBOS";
@@ -97,6 +98,7 @@ export default function AdminNovoTorneioPage() {
     superCampeonato: false,
     superCampeonatoFormato: "2_SET_SUPER_TIE",
     cardApenasComFotos: false,
+    capitaesGerenciamJogos: false,
     layoutCards: "CLASSICO",
     toleranciaAtrasoMin: 15,
     checkinModo: "AMBOS",
@@ -261,6 +263,7 @@ export default function AdminNovoTorneioPage() {
         superCampeonato: form.modeloTorneio === "SUPERCAMPEONATO",
         superCampeonatoFormato: form.superCampeonatoFormato,
         cardApenasComFotos: form.cardApenasComFotos,
+        capitaesGerenciamJogos: form.capitaesGerenciamJogos,
         layoutCards: form.layoutCards,
         toleranciaAtrasoMin: form.toleranciaAtrasoMin,
         checkinModo: form.checkinModo,
@@ -502,6 +505,19 @@ export default function AdminNovoTorneioPage() {
               Habilitar atendimento virtual com IA neste torneio
             </label>
             <div className="text-xs text-slate-500">Quando marcado, o torneio pode aparecer no fluxo do agente e exibe o chat público de inscrição no site.</div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Jogos pelos capitães</label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={Boolean(form.capitaesGerenciamJogos)}
+                onChange={(e) => setForm((prev) => ({ ...prev, capitaesGerenciamJogos: e.target.checked }))}
+              />
+              Capitães agendam o jogo e informam o placar pelo app
+            </label>
+            <div className="text-xs text-slate-500">O capitão da dupla define data, hora e arena; o vencedor informa o placar e o adversário confirma.</div>
           </div>
 
           <div className="space-y-2">

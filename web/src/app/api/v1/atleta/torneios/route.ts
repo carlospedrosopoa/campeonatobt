@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
       torneioValorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
       torneioValorInscricaoAdicional: torneios.valorInscricaoAdicional,
       torneioCamisetaOpcoes: torneios.camisetaOpcoes,
+      torneioCapitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
       esporteNome: esportes.nome,
       categoriaId: categorias.id,
       categoriaNome: categorias.nome,
@@ -63,6 +64,7 @@ export async function GET(request: NextRequest) {
       valorPrimeiraInscricao: string | null;
       valorInscricaoAdicional: string | null;
       camisetaOpcoes: string[] | null;
+      capitaesGerenciamJogos: boolean;
       categorias: {
         id: string;
         nome: string;
@@ -95,6 +97,7 @@ export async function GET(request: NextRequest) {
         valorPrimeiraInscricao: r.torneioValorPrimeiraInscricao ?? null,
         valorInscricaoAdicional: r.torneioValorInscricaoAdicional ?? null,
         camisetaOpcoes: (r.torneioCamisetaOpcoes as string[] | null) ?? null,
+        capitaesGerenciamJogos: Boolean(r.torneioCapitaesGerenciamJogos),
         esporteNome: r.esporteNome ?? null,
         categorias: [],
       } as any);

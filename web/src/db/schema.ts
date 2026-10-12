@@ -241,6 +241,8 @@ export const torneios = pgTable('torneios', {
   superCampeonato: boolean('super_campeonato').default(false).notNull(),
   superCampeonatoFormato: superCampeonatoFormatoEnum('super_campeonato_formato').default('2_SET_SUPER_TIE'),
   cardApenasComFotos: boolean('card_apenas_com_fotos').default(false).notNull(),
+  // capitaes agendam o jogo e informam/confirmam o placar pelo app
+  capitaesGerenciamJogos: boolean('capitaes_gerenciam_jogos').default(false).notNull(),
   toleranciaAtrasoMin: integer('tolerancia_atraso_min').default(15).notNull(),
   checkinModo: text('checkin_modo').$type<"QR" | "BOTAO" | "AMBOS">().default('AMBOS').notNull(),
   layoutCards: text('layout_cards').$type<"NOVO" | "CLASSICO">().default('CLASSICO').notNull(),

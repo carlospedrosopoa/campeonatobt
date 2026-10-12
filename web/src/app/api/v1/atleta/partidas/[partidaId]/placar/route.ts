@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
+import { bloqueioRecursoCapitaes } from "@/lib/capitaes-jogos";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, partidas, placarSubmissoes, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
@@ -45,6 +46,8 @@ export async function POST(
 
   const partida = partidaRows[0];
   if (!partida) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
+  const bloqueio = await bloqueioRecursoCapitaes(partidaId);
+  if (bloqueio) return bloqueio;
 
   const membro = await db
     .select({ id: equipeIntegrantes.id })
