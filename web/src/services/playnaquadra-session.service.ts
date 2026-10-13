@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { usuarios } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { createSession } from "@/lib/auth";
+import { playGetAtletaMe } from "@/services/playnaquadra-client";
 
 function decodeJwtPayload(token: string): any | null {
   const parts = token.split(".");
@@ -18,13 +19,12 @@ function decodeJwtPayload(token: string): any | null {
 
 export function extractPlayIdentity(me: any, tokenPlay: string) {
   const jwtPayload = decodeJwtPayload(tokenPlay);
+  // So o id do perfil de atleta. O id da conta (jwt.id / me.id) NAO serve: /atleta/{id} do Play responde 404 com ele.
   const atletaId =
     (me?.atletaId as string | undefined | null) ??
     (me?.user?.atletaId as string | undefined | null) ??
     (me?.usuario?.atletaId as string | undefined | null) ??
     (jwtPayload?.atletaId as string | undefined | null) ??
-    (jwtPayload?.id ? String(jwtPayload.id) : null) ??
-    (me?.id ? String(me.id) : null) ??
     null;
 
   const email =
@@ -78,18 +78,29 @@ export function extractPlayIdentity(me: any, tokenPlay: string) {
   return { atletaId, email, nome: nome.trim(), telefone, genero };
 }
 
+/** Id do perfil de atleta no Play: o do usuario logado ou, se nao vier, o de /atleta/me/atleta. */
+export function atletaIdDoPerfilPlay(data: any): string | null {
+  const id = data?.id ?? data?.atleta?.id ?? data?.data?.id ?? null;
+  return id ? String(id) : null;
+}
+
 export async function createOrUpdateAtletaFromPlayToken(params: { tokenPlay: string; me: any }) {
   const { tokenPlay, me } = params;
   const identity = extractPlayIdentity(me, tokenPlay);
+  if (!identity.atletaId) {
+    const atletaMe = await playGetAtletaMe(tokenPlay).catch(() => null);
+    if (atletaMe?.res.ok) identity.atletaId = atletaIdDoPerfilPlay(atletaMe.data);
+  }
 
-  if (!identity.atletaId) throw new Error("Não foi possível identificar o atleta no Play na Quadra");
   if (!identity.email) throw new Error("Usuário do Play na Quadra sem email");
 
-  const existentePorAtleta = await db
-    .select({ id: usuarios.id, nome: usuarios.nome, email: usuarios.email, perfil: usuarios.perfil, playnaquadraAtletaId: usuarios.playnaquadraAtletaId })
-    .from(usuarios)
-    .where(eq(usuarios.playnaquadraAtletaId, identity.atletaId))
-    .limit(1);
+  const existentePorAtleta = identity.atletaId
+    ? await db
+        .select({ id: usuarios.id, nome: usuarios.nome, email: usuarios.email, perfil: usuarios.perfil, playnaquadraAtletaId: usuarios.playnaquadraAtletaId })
+        .from(usuarios)
+        .where(eq(usuarios.playnaquadraAtletaId, identity.atletaId))
+        .limit(1)
+    : [];
 
   let userId: string;
   let perfil: "ADMIN" | "ORGANIZADOR" | "ATLETA" = "ATLETA";
@@ -123,11 +134,13 @@ export async function createOrUpdateAtletaFromPlayToken(params: { tokenPlay: str
         .set({
           nome: identity.nome || u.nome,
           telefone: identity.telefone || null,
-          playnaquadraAtletaId: identity.atletaId,
+          // sem perfil de atleta identificado, mantem o vinculo que ja existe
+          ...(identity.atletaId ? { playnaquadraAtletaId: identity.atletaId } : {}),
           atualizadoEm: new Date(),
         })
         .where(eq(usuarios.id, userId));
     } else {
+      if (!identity.atletaId) throw new Error("Não foi possível identificar o atleta no Play na Quadra");
       const [novo] = await db
         .insert(usuarios)
         .values({
