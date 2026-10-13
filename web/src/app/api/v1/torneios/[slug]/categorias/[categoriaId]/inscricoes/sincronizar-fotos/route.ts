@@ -154,8 +154,13 @@ export async function POST(
         consultados += 1;
         const { res, data } = await playGetAtletaById({ token, atletaId: atleta.playId as string });
         let fotoUrl = res.ok && data ? extrairFotoUrl(data) : null;
+        // id guardado que nao e de atleta (ex.: id da conta gravado por login antigo): achar o perfil pela conta
+        let atletaIdCorrigido: string | null = null;
         if (!fotoUrl) {
-          const termosBusca = [String(atleta.playId), atleta.email, atleta.nome].filter((v, i, arr) => !!v && arr.indexOf(v) === i);
+          const partesNome = atleta.nome.trim().split(/s+/);
+          const termosBusca = [String(atleta.playId), atleta.email, atleta.nome, partesNome[0], partesNome[partesNome.length - 1]].filter(
+            (v, i, arr) => !!v && v.length >= 3 && arr.indexOf(v) === i
+          );
           for (const termo of termosBusca) {
             const busca = await playBuscarAtletas({ token, q: termo, limite: 20 });
             if (!busca.res.ok || !busca.data) continue;
@@ -168,10 +173,27 @@ export async function POST(
               const id = String(x?.id || x?._id || x?.atletaId || x?.usuarioId || "");
               return id === String(atleta.playId);
             });
+            const byConta = !res.ok ? lista.find((x: any) => String(x?.usuarioId || x?.usuario?.id || "") === String(atleta.playId)) : null;
+            if (byConta?.id) {
+              atletaIdCorrigido = String(byConta.id);
+              fotoUrl = extrairFotoUrl(byConta);
+              break;
+            }
             const byEmail = lista.find((x: any) => extrairEmail(x) === atleta.email.toLowerCase());
             const byNome = lista.find((x: any) => normalizarTexto(x?.nome || x?.usuario?.nome || x?.atleta?.nome) === normalizarTexto(atleta.nome));
             fotoUrl = extrairFotoUrl(byId || byEmail || byNome || lista[0] || busca.data);
             if (fotoUrl) break;
+          }
+        }
+        if (atletaIdCorrigido) {
+          const [outro] = await db
+            .select({ id: usuarios.id })
+            .from(usuarios)
+            .where(eq(usuarios.playnaquadraAtletaId, atletaIdCorrigido))
+            .limit(1);
+          // se outro cadastro ja usa esse perfil (atleta duplicado), nao mexe no vinculo
+          if (!outro) {
+            await db.update(usuarios).set({ playnaquadraAtletaId: atletaIdCorrigido, atualizadoEm: new Date() }).where(eq(usuarios.id, atleta.usuarioId));
           }
         }
         if (!fotoUrl) {

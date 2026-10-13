@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { playGetAtletaMe, playGetUsuarioLogado, playLogin } from "@/services/playnaquadra-client";
-import { createOrUpdateAtletaFromPlayToken, extractPlayIdentity } from "@/services/playnaquadra-session.service";
+import { atletaIdDoPerfilPlay, createOrUpdateAtletaFromPlayToken, extractPlayIdentity } from "@/services/playnaquadra-session.service";
 
 const CREATE_PROFILE_URL = "https://atleta.playnaquadra.com.br";
 
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     const atletaMe = await playGetAtletaMe(tokenPlay);
-    const semPerfil = atletaMe.res.status === 204 || !identity.atletaId;
+    const semPerfil = atletaMe.res.status === 204 || !(identity.atletaId || (atletaMe.res.ok ? atletaIdDoPerfilPlay(atletaMe.data) : null));
     if (semPerfil) {
       return NextResponse.json(
         {
