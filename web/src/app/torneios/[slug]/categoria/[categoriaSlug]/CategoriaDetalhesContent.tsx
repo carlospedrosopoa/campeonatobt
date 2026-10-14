@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, Clock, MapPin, Trophy, Users, ChevronLeft, Camera, ImageIcon, Video } from "lucide-react";
+import { Calendar, Clock, MapPin, Trophy, Users, ChevronLeft, Camera, ImageIcon, Swords, Video } from "lucide-react";
 import Link from "next/link";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
+import { ConfrontoJogo } from "@/components/publico/confronto-jogo";
 
 type Categoria = {
   id: string;
@@ -188,7 +189,7 @@ function LinhaDupla({
   );
 }
 
-function JogoPublico({ partida: p, numero, onCard }: { partida: Partida; numero: number; onCard: () => void }) {
+function JogoPublico({ partida: p, numero, onCard, onConfronto }: { partida: Partida; numero: number; onCard: () => void; onConfronto: () => void }) {
   const encerrado = jogoEncerrado(p);
   const sets = Array.isArray(p.detalhesPlacar) ? (p.detalhesPlacar as { a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[]) : [];
   const setsA = sets.map((s) => ({ games: s.a, venceuSet: s.a > s.b, tiebreak: s.tiebreak ? s.tbA ?? null : null }));
@@ -251,6 +252,15 @@ function JogoPublico({ partida: p, numero, onCard }: { partida: Partida; numero:
       </div>
 
       <div className="flex items-center justify-end gap-1 border-t border-slate-100 pt-2">
+        <button
+          type="button"
+          onClick={onConfronto}
+          title="Histórico de confrontos"
+          className="mr-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+        >
+          <Swords className="h-4 w-4" />
+          Confronto
+        </button>
         {p.fotoUrl && (
           <a href={p.fotoUrl} target="_blank" rel="noopener noreferrer" title="Ver fotos" className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
             <Camera className="h-4 w-4" />
@@ -281,6 +291,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
   const [tab, setTab] = useState<"inscritos" | "classificacao" | "jogos">("inscritos");
   const [fase, setFase] = useState("GRUPOS");
   const [filtroJogos, setFiltroJogos] = useState<"todos" | "pendentes" | "encerrados">("todos");
+  const [confrontoPartidaId, setConfrontoPartidaId] = useState<string | null>(null);
   
   const [inscritos, setInscritos] = useState<Inscrito[]>([]);
   const [classificacao, setClassificacao] = useState<ClassificacaoGrupo[]>([]);
@@ -603,7 +614,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
                         </div>
                         <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
                           {visiveis.map(({ p, numero }) => (
-                            <JogoPublico key={p.id} partida={p} numero={numero} onCard={() => gerarCardPublico(p)} />
+                            <JogoPublico key={p.id} partida={p} numero={numero} onCard={() => gerarCardPublico(p)} onConfronto={() => setConfrontoPartidaId(p.id)} />
                           ))}
                         </div>
                       </section>
@@ -614,6 +625,13 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
             </div>
           )}
         </>
+      )}
+
+      {confrontoPartidaId && (
+        <ConfrontoJogo
+          url={`/api/public/torneios/${torneio.slug}/categorias/${categoria.id}/partidas/${confrontoPartidaId}/confronto`}
+          onFechar={() => setConfrontoPartidaId(null)}
+        />
       )}
     </div>
   );
