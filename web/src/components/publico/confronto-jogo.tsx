@@ -197,7 +197,7 @@ export function ConfrontoJogo({ url, onFechar }: { url: string; onFechar: () => 
                 </div>
               </Secao>
 
-              <Secao titulo="Momento (últimos 5 jogos)">
+              <Secao titulo="Últimos 5 jogos nos torneios da Plataforma Play Na Quadra">
                 <div className="space-y-2">
                   {[...dados.duplaA, ...dados.duplaB].map((a) => (
                     <div key={a.id} className="flex items-center justify-between gap-3 text-sm">
