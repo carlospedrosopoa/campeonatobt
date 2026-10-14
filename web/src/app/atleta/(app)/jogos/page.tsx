@@ -33,6 +33,8 @@ type Partida = {
   } | null;
   regrasPartida?: RegrasPartidaConfig | RegrasPartidaSets | null;
   capitaesGerenciamJogos?: boolean;
+  podeInformarPlacar?: boolean;
+  podeConfirmarPlacar?: boolean;
 };
 
 type FormPlacar = {
@@ -337,13 +339,10 @@ export default function AtletaJogosPage() {
                     const temPlacar =
                       (p.detalhesPlacar?.length || 0) > 0 || p.status === "FINALIZADA" || p.status === "WO";
                     const pendente = p.placarSubmissaoPendente && p.placarSubmissao?.status === "PENDENTE" ? p.placarSubmissao : null;
-                    const informadoPorMim = Boolean(pendente && meuUsuarioId && pendente.informadoPorUsuarioId === meuUsuarioId);
-                    // so na competicao com a flag ligada o capitao informa/confirma placar
-                    const souCapitao = Boolean(p.souCapitao) && Boolean(p.capitaesGerenciamJogos);
-                    const podeInformar =
-                      !temPlacar && !pendente && souCapitao && (p.status === "AGENDADA" || p.status === "EM_ANDAMENTO");
-                    const podeEditar = !temPlacar && pendente && informadoPorMim && souCapitao;
-                    const podeConfirmar = !temPlacar && pendente && !informadoPorMim && souCapitao;
+                    // a API decide: qualquer atleta do jogo informa; a outra dupla confirma (so com a flag da competicao)
+                    const podeInformar = !temPlacar && !pendente && Boolean(p.podeInformarPlacar);
+                    const podeEditar = !temPlacar && Boolean(pendente) && Boolean(p.podeInformarPlacar);
+                    const podeConfirmar = !temPlacar && Boolean(pendente) && Boolean(p.podeConfirmarPlacar);
 
                     if (temPlacar) {
                       return (

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
-import { bloqueioRecursoCapitaes } from "@/lib/capitaes-jogos";
+import { bloqueioRecursoCapitaes, equipeDoAtletaNaPartida } from "@/lib/capitaes-jogos";
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, partidas, placarSubmissoes, torneios } from "@/db/schema";
+import { categorias, equipeIntegrantes, partidas, placarSubmissoes, torneios } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
@@ -51,27 +51,6 @@ export async function POST(
     .limit(1);
   if (!membro[0]) return NextResponse.json({ error: "Você não faz parte desta partida" }, { status: 403 });
 
-  const equipesRows = await db
-    .select({
-      id: equipes.id,
-      capitaoUsuarioId: equipes.capitaoUsuarioId,
-    })
-    .from(equipes)
-    .where(inArray(equipes.id, [partida.equipeAId, partida.equipeBId]));
-
-  const getCapitao = async (equipeId: string) => {
-    const row = equipesRows.find((x) => x.id === equipeId);
-    if (row?.capitaoUsuarioId) return row.capitaoUsuarioId;
-    const [fallback] = await db
-      .select({ usuarioId: equipeIntegrantes.usuarioId })
-      .from(equipeIntegrantes)
-      .where(eq(equipeIntegrantes.equipeId, equipeId))
-      .limit(1);
-    return fallback?.usuarioId ?? null;
-  };
-
-  const capitaoEquipeAId = await getCapitao(partida.equipeAId);
-  const capitaoEquipeBId = await getCapitao(partida.equipeBId);
 
   const pendenteRows = await db
     .select({
@@ -91,10 +70,13 @@ export async function POST(
     equipeVencedoraId === partida.equipeAId ? partida.equipeBId : equipeVencedoraId === partida.equipeBId ? partida.equipeAId : null;
   if (!equipePerdedoraId) return NextResponse.json({ error: "Placar pendente inválido (sem vencedor)" }, { status: 400 });
 
-  const capitaoPerdedor =
-    equipePerdedoraId === partida.equipeAId ? capitaoEquipeAId : equipePerdedoraId === partida.equipeBId ? capitaoEquipeBId : null;
-  if (!capitaoPerdedor || capitaoPerdedor !== auth.user.id) {
-    return NextResponse.json({ error: "Apenas o capitão da dupla adversária pode confirmar este placar" }, { status: 403 });
+  // confirma quem e da outra dupla (nao a dupla que informou)
+  const [minhaEquipeId, equipeDoInformante] = await Promise.all([
+    equipeDoAtletaNaPartida(auth.user.id, [partida.equipeAId, partida.equipeBId]),
+    equipeDoAtletaNaPartida(pendente.usuarioId, [partida.equipeAId, partida.equipeBId]),
+  ]);
+  if (!minhaEquipeId || minhaEquipeId === equipeDoInformante) {
+    return NextResponse.json({ error: "Quem confirma o placar é a dupla adversária" }, { status: 403 });
   }
 
   const config = await categoriaConfigService.obterOuDefault(partida.categoriaId);
@@ -115,7 +97,7 @@ export async function POST(
 
   if (!resultado.vencedorId) return NextResponse.json({ error: "O placar informado não define um vencedor válido" }, { status: 400 });
   if (resultado.vencedorId !== pendente.vencedorId) {
-    return NextResponse.json({ error: "O placar pendente ficou inconsistente. Peça para o capitão reenviar." }, { status: 409 });
+    return NextResponse.json({ error: "O placar pendente ficou inconsistente. Peça para informarem de novo." }, { status: 409 });
   }
 
   const [updated] = await db.transaction(async (tx) => {

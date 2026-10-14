@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
-import { bloqueioRecursoCapitaes } from "@/lib/capitaes-jogos";
+import { bloqueioRecursoCapitaes, equipeDoAtletaNaPartida } from "@/lib/capitaes-jogos";
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, partidas, placarSubmissoes, torneios, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, partidas, placarSubmissoes, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { calcularResultadoPartida, obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
@@ -56,32 +56,8 @@ export async function POST(
     .limit(1);
   if (!membro[0]) return NextResponse.json({ error: "Você não faz parte desta partida" }, { status: 403 });
 
-  const equipesRows = await db
-    .select({
-      id: equipes.id,
-      capitaoUsuarioId: equipes.capitaoUsuarioId,
-    })
-    .from(equipes)
-    .where(inArray(equipes.id, [partida.equipeAId, partida.equipeBId]));
-
-  const getCapitao = async (equipeId: string) => {
-    const row = equipesRows.find((x) => x.id === equipeId);
-    if (row?.capitaoUsuarioId) return row.capitaoUsuarioId;
-    const [fallback] = await db
-      .select({ usuarioId: equipeIntegrantes.usuarioId })
-      .from(equipeIntegrantes)
-      .where(eq(equipeIntegrantes.equipeId, equipeId))
-      .limit(1);
-    return fallback?.usuarioId ?? null;
-  };
-
-  const capitaoEquipeAId = await getCapitao(partida.equipeAId);
-  const capitaoEquipeBId = await getCapitao(partida.equipeBId);
-  const isCapitaoA = capitaoEquipeAId === auth.user.id;
-  const isCapitaoB = capitaoEquipeBId === auth.user.id;
-  if (!isCapitaoA && !isCapitaoB) {
-    return NextResponse.json({ error: "Apenas o capitão da dupla pode informar/alterar placar" }, { status: 403 });
-  }
+  // qualquer atleta do jogo informa; a confirmacao fica com a dupla adversaria
+  const minhaEquipeId = await equipeDoAtletaNaPartida(auth.user.id, [partida.equipeAId, partida.equipeBId]);
 
   const [pendenteAtual] = await db
     .select({
@@ -91,15 +67,17 @@ export async function POST(
     .from(placarSubmissoes)
     .where(and(eq(placarSubmissoes.partidaId, partidaId), eq(placarSubmissoes.status, "PENDENTE")))
     .limit(1);
+  const equipeDoInformante = pendenteAtual ? await equipeDoAtletaNaPartida(pendenteAtual.usuarioId, [partida.equipeAId, partida.equipeBId]) : null;
+  const pendenteDaMinhaDupla = Boolean(pendenteAtual && equipeDoInformante === minhaEquipeId);
 
   if (detalhesPlacar.length === 0) {
-    if (pendenteAtual?.id && pendenteAtual.usuarioId === auth.user.id) {
+    if (pendenteAtual?.id && pendenteDaMinhaDupla) {
       await db
         .update(placarSubmissoes)
         .set({
           status: "CANCELADA",
           canceladoEm: new Date(),
-          canceladoMotivo: "Zerado pelo capitão da dupla vencedora",
+          canceladoMotivo: "Zerado pela dupla que informou",
           atualizadoEm: new Date(),
         })
         .where(eq(placarSubmissoes.id, pendenteAtual.id));
@@ -107,8 +85,8 @@ export async function POST(
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   }
 
-  if (pendenteAtual?.id && pendenteAtual.usuarioId !== auth.user.id) {
-    return NextResponse.json({ error: "Já existe um placar pendente informado pelo outro capitão" }, { status: 409 });
+  if (pendenteAtual?.id && !pendenteDaMinhaDupla) {
+    return NextResponse.json({ error: "A dupla adversária já informou o placar. Confirme ou recuse." }, { status: 409 });
   }
 
   const config = await categoriaConfigService.obterOuDefault(partida.categoriaId);
@@ -127,11 +105,6 @@ export async function POST(
     detalhesPlacar,
   });
 
-  const capitaoVencedor =
-    resultado.vencedorId === partida.equipeAId ? capitaoEquipeAId : resultado.vencedorId === partida.equipeBId ? capitaoEquipeBId : null;
-  if (!capitaoVencedor || capitaoVencedor !== auth.user.id) {
-    return NextResponse.json({ error: "Somente o capitão da dupla vencedora pode informar o placar" }, { status: 403 });
-  }
 
   const tokenHash = sha256Hex(gerarTokenAleatorio(32));
   const expira = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

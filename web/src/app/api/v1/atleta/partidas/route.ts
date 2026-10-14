@@ -98,6 +98,15 @@ export async function GET(request: NextRequest) {
   const equipesRows = ids.length
     ? await db.select({ id: equipes.id, capitaoUsuarioId: equipes.capitaoUsuarioId }).from(equipes).where(inArray(equipes.id, ids))
     : [];
+
+  // de que dupla e quem informou cada placar pendente (qualquer atleta do jogo pode informar)
+  const informantes = Array.from(new Set(Array.from(pendentesMap.values()).map((p) => p.usuarioId)));
+  const equipesDosInformantes = informantes.length && ids.length
+    ? await db
+        .select({ equipeId: equipeIntegrantes.equipeId, usuarioId: equipeIntegrantes.usuarioId })
+        .from(equipeIntegrantes)
+        .where(and(inArray(equipeIntegrantes.usuarioId, informantes), inArray(equipeIntegrantes.equipeId, ids)))
+    : [];
   const capitaoMap = new Map(equipesRows.map((e) => [e.id, e.capitaoUsuarioId ?? null] as const));
 
   const partidasResult = rows.map((r) => {
@@ -109,6 +118,13 @@ export async function GET(request: NextRequest) {
       (capitaoEquipeAId && capitaoEquipeAId === auth.user.id) || (capitaoEquipeBId && capitaoEquipeBId === auth.user.id);
     const souCapitaoA = Boolean(capitaoEquipeAId && capitaoEquipeAId === auth.user.id);
     const souCapitaoB = Boolean(capitaoEquipeBId && capitaoEquipeBId === auth.user.id);
+    const meuLado = equipeIds.includes(r.equipeAId) ? "A" : equipeIds.includes(r.equipeBId) ? "B" : null;
+    const equipeInformante = pendente
+      ? equipesDosInformantes.find((e) => e.usuarioId === pendente.usuarioId && (e.equipeId === r.equipeAId || e.equipeId === r.equipeBId))?.equipeId
+      : null;
+    const informadoPeloLado = equipeInformante === r.equipeAId ? "A" : equipeInformante === r.equipeBId ? "B" : null;
+    const encerrada = r.status === "FINALIZADA" || r.status === "WO";
+    const recursoLigado = Boolean(r.capitaesGerenciamJogos);
 
     return {
       id: r.id,
@@ -125,7 +141,7 @@ export async function GET(request: NextRequest) {
       detalhesPlacar: r.detalhesPlacar,
       dataHorario: r.dataHorario,
       quadra: r.quadra,
-      meuLado: equipeIds.includes(r.equipeAId) ? "A" : equipeIds.includes(r.equipeBId) ? "B" : null,
+      meuLado,
       souCapitao,
       souCapitaoDoLado: souCapitaoA ? "A" : souCapitaoB ? "B" : null,
       capitaoEquipeAId,
@@ -136,6 +152,7 @@ export async function GET(request: NextRequest) {
             id: pendente.id,
             status: "PENDENTE" as const,
             informadoPorUsuarioId: pendente.usuarioId,
+            informadoPeloLado,
             vencedorId: pendente.vencedorId,
             placarA: pendente.placarA,
             placarB: pendente.placarB,
@@ -143,7 +160,10 @@ export async function GET(request: NextRequest) {
           }
         : null,
       // agendar e informar/confirmar placar pelo app (flag da competicao)
-      capitaesGerenciamJogos: Boolean(r.capitaesGerenciamJogos),
+      capitaesGerenciamJogos: recursoLigado,
+      // qualquer atleta do jogo informa (ou edita o que a propria dupla informou); a outra dupla confirma ou recusa
+      podeInformarPlacar: recursoLigado && !encerrada && Boolean(meuLado) && (!pendente || informadoPeloLado === meuLado),
+      podeConfirmarPlacar: recursoLigado && !encerrada && Boolean(pendente) && Boolean(meuLado) && Boolean(informadoPeloLado) && informadoPeloLado !== meuLado,
       regrasPartida: obterRegrasPartidaEfetivas({
         regrasBase: config?.regrasPartida,
         regrasPorFase: config?.regrasPartidaPorFase ?? null,
