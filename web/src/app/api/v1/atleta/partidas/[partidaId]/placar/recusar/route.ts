@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
-import { bloqueioRecursoCapitaes } from "@/lib/capitaes-jogos";
+import { bloqueioRecursoCapitaes, equipeDoAtletaNaPartida } from "@/lib/capitaes-jogos";
 import { db } from "@/db";
-import { equipeIntegrantes, equipes, partidas, placarSubmissoes } from "@/db/schema";
+import { equipeIntegrantes, partidas, placarSubmissoes } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 
 export async function POST(
@@ -36,32 +36,6 @@ export async function POST(
     .limit(1);
   if (!membro[0]) return NextResponse.json({ error: "Você não faz parte desta partida" }, { status: 403 });
 
-  const equipesRows = await db
-    .select({
-      id: equipes.id,
-      capitaoUsuarioId: equipes.capitaoUsuarioId,
-    })
-    .from(equipes)
-    .where(inArray(equipes.id, [partida.equipeAId, partida.equipeBId]));
-
-  const getCapitao = async (equipeId: string) => {
-    const row = equipesRows.find((x) => x.id === equipeId);
-    if (row?.capitaoUsuarioId) return row.capitaoUsuarioId;
-    const [fallback] = await db
-      .select({ usuarioId: equipeIntegrantes.usuarioId })
-      .from(equipeIntegrantes)
-      .where(eq(equipeIntegrantes.equipeId, equipeId))
-      .limit(1);
-    return fallback?.usuarioId ?? null;
-  };
-
-  const capitaoEquipeAId = await getCapitao(partida.equipeAId);
-  const capitaoEquipeBId = await getCapitao(partida.equipeBId);
-  const isCapitaoA = capitaoEquipeAId === auth.user.id;
-  const isCapitaoB = capitaoEquipeBId === auth.user.id;
-  if (!isCapitaoA && !isCapitaoB) {
-    return NextResponse.json({ error: "Apenas o capitão da dupla pode recusar o placar" }, { status: 403 });
-  }
 
   const pendenteRows = await db
     .select({
@@ -74,8 +48,12 @@ export async function POST(
   const pendente = pendenteRows[0];
   if (!pendente) return NextResponse.json({ error: "Não existe placar pendente para recusar" }, { status: 404 });
 
-  if (pendente.usuarioId === auth.user.id) {
-    return NextResponse.json({ error: "O capitão que informou o placar não pode recusar. Use limpar/zerar." }, { status: 400 });
+  const [minhaEquipeId, equipeDoInformante] = await Promise.all([
+    equipeDoAtletaNaPartida(auth.user.id, [partida.equipeAId, partida.equipeBId]),
+    equipeDoAtletaNaPartida(pendente.usuarioId, [partida.equipeAId, partida.equipeBId]),
+  ]);
+  if (!minhaEquipeId || minhaEquipeId === equipeDoInformante) {
+    return NextResponse.json({ error: "Quem informou não recusa: use editar ou zerar. A recusa é da dupla adversária." }, { status: 400 });
   }
 
   await db
@@ -83,7 +61,7 @@ export async function POST(
     .set({
       status: "CANCELADA",
       canceladoEm: new Date(),
-      canceladoMotivo: "Recusado pelo capitão da dupla adversária",
+      canceladoMotivo: "Recusado pela dupla adversária",
       atualizadoEm: new Date(),
     })
     .where(eq(placarSubmissoes.id, pendente.id));

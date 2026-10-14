@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { partidas, torneios } from "@/db/schema";
+import { equipeIntegrantes, partidas, torneios } from "@/db/schema";
 
 /**
  * Agendar jogo e informar/confirmar placar pelo app so valem na competicao com a flag
@@ -19,4 +19,14 @@ export async function bloqueioRecursoCapitaes(partidaId: string): Promise<NextRe
     { error: "Nesta competição o agendamento e o placar são feitos pela organização.", code: "RECURSO_CAPITAES_DESATIVADO" },
     { status: 403 }
   );
+}
+
+/** Dupla (equipe) do jogo em que o atleta esta, ou null se ele nao joga essa partida. */
+export async function equipeDoAtletaNaPartida(usuarioId: string, equipeIds: string[]): Promise<string | null> {
+  const [row] = await db
+    .select({ equipeId: equipeIntegrantes.equipeId })
+    .from(equipeIntegrantes)
+    .where(and(eq(equipeIntegrantes.usuarioId, usuarioId), inArray(equipeIntegrantes.equipeId, equipeIds)))
+    .limit(1);
+  return row?.equipeId ?? null;
 }
