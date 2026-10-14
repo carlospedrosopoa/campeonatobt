@@ -2,13 +2,19 @@ import { db } from "@/db";
 import { partidas, rodadas } from "@/db/schema";
 import { and, asc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
+
+/** Rodadas andam em pares com a mesma data limite: R1 e R2 no prazo informado, R3 e R4 14 dias depois, e assim por diante. */
+const DIAS_ENTRE_PARES = 14;
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string; categoriaId: string; rodadaId: string }> }
 ) {
   try {
-    const { rodadaId, categoriaId } = await params;
+    const { slug, rodadaId, categoriaId } = await params;
+    const acesso = await requireTournamentAdminBySlug(slug);
+    if ("response" in acesso) return acesso.response;
     const body = await request.json();
     const { dataLimite } = body;
 
@@ -33,7 +39,7 @@ export async function PUT(
       .limit(1);
 
     const rodadaAtual = rodadaRows[0];
-    if (!rodadaAtual) {
+    if (!rodadaAtual || rodadaAtual.torneioId !== acesso.torneio.id) {
       return NextResponse.json({ error: "Rodada não encontrada" }, { status: 404 });
     }
     if (rodadaAtual.categoriaId && rodadaAtual.categoriaId !== categoriaId) {
@@ -59,7 +65,7 @@ export async function PUT(
         for (const r of todasRodadas) {
           if (!r.numero || r.numero < 1) continue;
           const dataRodada = new Date(dataLimiteDate);
-          dataRodada.setDate(dataRodada.getDate() + (r.numero - 1) * 7);
+          dataRodada.setDate(dataRodada.getDate() + Math.floor((r.numero - 1) / 2) * DIAS_ENTRE_PARES);
 
           await tx.update(rodadas).set({ dataLimite: dataRodada }).where(eq(rodadas.id, r.id));
           await tx.update(partidas).set({ dataLimite: dataRodada }).where(eq(partidas.rodadaId, r.id));
