@@ -91,11 +91,196 @@ function formatarDataSemFuso(data: string | null | undefined) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+const NOME_FASE: Record<string, string> = {
+  GRUPOS: "Fase de grupos",
+  OITAVAS: "Oitavas",
+  QUARTAS: "Quartas",
+  SEMI: "Semifinal",
+  FINAL: "Final",
+};
+
+const fusoBR = { timeZone: "America/Sao_Paulo" } as const;
+
+function jogoEncerrado(p: Partida) {
+  return p.status === "FINALIZADA" || p.status === "WO";
+}
+
+/** Prazo da rodada: encerrada, vencida, vencendo (ate 3 dias) ou normal. */
+function situacaoPrazo(dataLimite: string | null, rodadaEncerrada: boolean) {
+  if (rodadaEncerrada) return { rotulo: "Encerrada · prazo", classe: "bg-emerald-50 text-emerald-700" };
+  const ymd = dataLimite?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!ymd) return { rotulo: "Prazo", classe: "bg-slate-100 text-slate-600" };
+  const limite = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 23, 59);
+  const dias = (limite.getTime() - Date.now()) / 86_400_000;
+  if (dias < 0) return { rotulo: "Prazo vencido", classe: "bg-rose-50 text-rose-700" };
+  if (dias <= 3) return { rotulo: "Prazo até", classe: "bg-amber-50 text-amber-800" };
+  return { rotulo: "Prazo até", classe: "bg-slate-100 text-slate-600" };
+}
+
+function nomeCurto(nome: string) {
+  const p = nome.trim().split(/\s+/).filter(Boolean);
+  return p.length <= 1 ? p[0] ?? "" : `${p[0]} ${p[p.length - 1]}`;
+}
+
+function avatarUrl(a: { nome: string; fotoUrl?: string | null }) {
+  return a.fotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nome)}&background=random&color=fff`;
+}
+
+/** Linha de uma dupla no placar: fotos, nome e games de cada set. */
+function LinhaDupla({
+  nome,
+  atletas,
+  vencedora,
+  encerrado,
+  sets,
+  placar,
+}: {
+  nome: string;
+  atletas: { id: string; nome: string; fotoUrl?: string | null }[];
+  vencedora: boolean;
+  encerrado: boolean;
+  sets: { games: number; venceuSet: boolean; tiebreak?: number | null }[];
+  placar: number | null;
+}) {
+  return (
+    <div className={`flex items-center gap-3 py-2 ${encerrado && !vencedora ? "opacity-60" : ""}`}>
+      <div className="flex shrink-0 -space-x-2">
+        {atletas.slice(0, 2).map((a) => (
+          <img key={a.id} src={avatarUrl(a)} alt={a.nome} title={a.nome} className="h-9 w-9 rounded-full bg-slate-100 object-cover ring-2 ring-white" />
+        ))}
+        {atletas.length === 0 && <div className="h-9 w-9 rounded-full bg-slate-100 ring-2 ring-white" />}
+      </div>
+      {/* um atleta por linha (primeiro e ultimo nome) para caber no celular */}
+      <div className={`min-w-0 flex-1 text-sm leading-tight ${vencedora ? "font-extrabold text-slate-900" : "font-semibold text-slate-700"}`}>
+        {atletas.length > 0 ? (
+          atletas.slice(0, 2).map((a) => (
+            <div key={a.id} className="truncate">
+              {nomeCurto(a.nome)}
+            </div>
+          ))
+        ) : (
+          <div className="truncate">{nome}</div>
+        )}
+      </div>
+      {vencedora && <Trophy className="h-4 w-4 shrink-0 text-amber-500" />}
+      {encerrado && (
+        <div className="flex shrink-0 items-center gap-1">
+          {sets.length > 0
+            ? sets.map((s, i) => (
+                <span
+                  key={i}
+                  className={`relative inline-flex h-8 w-7 items-center justify-center rounded-md text-sm tabular-nums ${
+                    s.venceuSet ? "bg-slate-900 font-bold text-white" : "bg-slate-100 font-semibold text-slate-500"
+                  }`}
+                >
+                  {s.games}
+                  {s.tiebreak != null && <sup className="absolute -right-0.5 -top-1 text-[9px] font-bold text-slate-400">{s.tiebreak}</sup>}
+                </span>
+              ))
+            : (
+                <span className={`inline-flex h-8 min-w-7 items-center justify-center rounded-md px-1.5 text-sm tabular-nums ${vencedora ? "bg-slate-900 font-bold text-white" : "bg-slate-100 font-semibold text-slate-500"}`}>
+                  {placar ?? 0}
+                </span>
+              )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JogoPublico({ partida: p, numero, onCard }: { partida: Partida; numero: number; onCard: () => void }) {
+  const encerrado = jogoEncerrado(p);
+  const sets = Array.isArray(p.detalhesPlacar) ? (p.detalhesPlacar as { a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[]) : [];
+  const setsA = sets.map((s) => ({ games: s.a, venceuSet: s.a > s.b, tiebreak: s.tiebreak ? s.tbA ?? null : null }));
+  const setsB = sets.map((s) => ({ games: s.b, venceuSet: s.b > s.a, tiebreak: s.tiebreak ? s.tbB ?? null : null }));
+
+  const quando = p.dataHorario
+    ? `${new Date(p.dataHorario).toLocaleDateString("pt-BR", { ...fusoBR, weekday: "short", day: "2-digit", month: "2-digit" })} · ${new Date(
+        p.dataHorario
+      ).toLocaleTimeString("pt-BR", { ...fusoBR, hour: "2-digit", minute: "2-digit" })}`
+    : null;
+  const situacao = p.status === "WO"
+    ? { rotulo: "W.O.", classe: "bg-rose-50 text-rose-700" }
+    : encerrado
+      ? { rotulo: "Encerrado", classe: "bg-emerald-50 text-emerald-700" }
+      : p.status === "EM_ANDAMENTO"
+        ? { rotulo: "Em quadra", classe: "bg-sky-50 text-sky-700" }
+        : quando
+          ? { rotulo: "Agendado", classe: "bg-indigo-50 text-indigo-700" }
+          : { rotulo: "A agendar", classe: "bg-amber-50 text-amber-800" };
+
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white px-4 pb-2 pt-3 shadow-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <span className={`rounded-full px-2 py-0.5 font-bold ${situacao.classe}`}>{situacao.rotulo}</span>
+        <span className="font-semibold text-slate-400">Jogo {numero}</span>
+        {quando && (
+          <span className="inline-flex items-center gap-1 font-semibold capitalize text-slate-700">
+            <Calendar className="h-3.5 w-3.5 text-slate-400" />
+            {quando}
+          </span>
+        )}
+        {(p.arenaNome || p.quadra) && (
+          <span className="inline-flex min-w-0 items-center gap-1 text-slate-500">
+            {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt="" className="h-4 w-4 rounded-full object-cover" /> : <MapPin className="h-3.5 w-3.5" />}
+            <span className="truncate">
+              {p.arenaNome || "Arena"}
+              {p.quadra ? ` · ${p.quadra}` : ""}
+            </span>
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1 divide-y divide-slate-100">
+        <LinhaDupla
+          nome={p.equipeANome || "A definir"}
+          atletas={p.equipeAAtletas ?? []}
+          vencedora={Boolean(p.vencedorId && p.vencedorId === p.equipeAId)}
+          encerrado={encerrado}
+          sets={setsA}
+          placar={p.placarA}
+        />
+        <LinhaDupla
+          nome={p.equipeBNome || "A definir"}
+          atletas={p.equipeBAtletas ?? []}
+          vencedora={Boolean(p.vencedorId && p.vencedorId === p.equipeBId)}
+          encerrado={encerrado}
+          sets={setsB}
+          placar={p.placarB}
+        />
+      </div>
+
+      <div className="flex items-center justify-end gap-1 border-t border-slate-100 pt-2">
+        {p.fotoUrl && (
+          <a href={p.fotoUrl} target="_blank" rel="noopener noreferrer" title="Ver fotos" className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
+            <Camera className="h-4 w-4" />
+          </a>
+        )}
+        {p.transmissaoUrl && (
+          <a href={p.transmissaoUrl} target="_blank" rel="noopener noreferrer" title="Assistir transmissão" className="rounded-full p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600">
+            <Video className="h-4 w-4" />
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={onCard}
+          title="Gerar card do jogo"
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-indigo-600 transition-colors hover:bg-indigo-50"
+        >
+          <ImageIcon className="h-4 w-4" />
+          Card
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export default function CategoriaDetalhesContent({ torneio, categoria }: Props) {
   const ordemFases = ["GRUPOS", "OITAVAS", "QUARTAS", "SEMI", "FINAL"] as const;
   const mostrarColunasPorPontos = Boolean(torneio.superCampeonato);
   const [tab, setTab] = useState<"inscritos" | "classificacao" | "jogos">("inscritos");
   const [fase, setFase] = useState("GRUPOS");
+  const [filtroJogos, setFiltroJogos] = useState<"todos" | "pendentes" | "encerrados">("todos");
   
   const [inscritos, setInscritos] = useState<Inscrito[]>([]);
   const [classificacao, setClassificacao] = useState<ClassificacaoGrupo[]>([]);
@@ -190,28 +375,6 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
     if (fasesDisponiveis.includes(fase)) return;
     setFase(fasesDisponiveis[0] || "GRUPOS");
   }, [tab, fase, fasesDisponiveis]);
-
-  function formatarPlacar(p: Partida) {
-    if (!p.detalhesPlacar || !Array.isArray(p.detalhesPlacar)) {
-      return (
-        <div className="flex flex-col items-center">
-          <span className="text-xs text-gray-500">Sets</span>
-          <span className="font-bold text-gray-900">{p.placarA} x {p.placarB}</span>
-        </div>
-      );
-    }
-    
-    return (
-      <div className="flex items-center gap-2 text-sm font-mono">
-        {p.detalhesPlacar.map((s: any, i: number) => (
-          <div key={i} className="flex flex-col items-center bg-gray-50 px-2 py-1 rounded">
-            <span className="text-gray-900 font-bold">{s.a}-{s.b}</span>
-            {s.tiebreak && <span className="text-[10px] text-gray-500">({s.tbA}-{s.tbB})</span>}
-          </div>
-        ))}
-      </div>
-    );
-  }
 
   const partidasPorRodada = useMemo(() => {
     const grupos = new Map<number, { nome: string; dataLimite: string | null; jogos: Partida[] }>();
@@ -365,179 +528,87 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
           {/* Aba Jogos */}
           {tab === "jogos" && (
             <div className="space-y-4">
-              <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-                <div className="flex items-center gap-2 overflow-x-auto">
-                {fasesDisponiveis.map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFase(f)}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
-                      fase === f ? "bg-slate-900 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    {f}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                {fasesDisponiveis.length > 1 ? (
+                  <div className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                    {fasesDisponiveis.map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setFase(f)}
+                        className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                          fase === f ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        {NOME_FASE[f] ?? f}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm font-bold text-slate-700">{NOME_FASE[fase] ?? fase}</div>
+                )}
+                <div className="flex gap-1 self-start rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:self-auto">
+                  {(
+                    [
+                      ["todos", "Todos"],
+                      ["pendentes", "A jogar"],
+                      ["encerrados", "Encerrados"],
+                    ] as const
+                  ).map(([valor, rotulo]) => (
+                    <button
+                      key={valor}
+                      onClick={() => setFiltroJogos(valor)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        filtroJogos === valor ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      {rotulo}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               {partidas.length === 0 ? (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center text-gray-500">
+                <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
                   Nenhum jogo encontrado nesta fase.
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {partidasPorRodada.map(([num, dados]) => (
-                    <div key={num} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                      <div className="bg-gradient-to-r from-sky-50 via-white to-indigo-50 px-4 py-3 border-b border-slate-100 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
-                        <span className="font-bold text-slate-900">{dados.nome}</span>
-                        {dados.dataLimite && (
-                          <span className="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-full inline-flex items-center gap-1.5 w-fit">
-                            <Clock className="w-3.5 h-3.5" />
-                            Data limite: {formatarDataSemFuso(dados.dataLimite)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="p-3 sm:p-4 space-y-3">
-                        {dados.jogos.map((p, jogoIndex) => (
-                          <div
-                            key={p.id}
-                            className={`rounded-xl border p-3 sm:p-4 transition-colors ${
-                              jogoIndex % 2 === 0
-                                ? "bg-sky-50 border-sky-200 border-l-4 border-l-sky-400"
-                                : "bg-indigo-50 border-indigo-200 border-l-4 border-l-indigo-400"
-                            }`}
-                          >
-                            <div className="flex flex-col gap-3">
-                              <div className="flex items-center justify-between gap-2 text-xs">
-                                <span className={`px-2 py-1 rounded-full font-semibold uppercase tracking-wide ${
-                                  p.status === "FINALIZADA" || p.status === "WO"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-amber-100 text-amber-700"
-                                }`}>
-                                  {p.status === "AGENDADA" ? "AGENDAMENTO" : p.status}
-                                </span>
-                                <span className="text-slate-500 font-medium">Jogo {jogoIndex + 1}</span>
-                              </div>
-
-                              <div className={`flex items-center justify-between text-xs text-slate-600 rounded-lg px-3 py-2 ${
-                                jogoIndex % 2 === 0
-                                  ? "bg-sky-100/70 border border-sky-200"
-                                  : "bg-indigo-100/70 border border-indigo-200"
-                              }`}>
-                                {p.dataHorario ? (
-                                  <div className="flex items-center gap-2">
-                                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                                    <span className="font-semibold text-slate-800">
-                                      {new Date(p.dataHorario).toLocaleDateString("pt-BR", {
-                                        timeZone: "America/Sao_Paulo",
-                                        day: "2-digit",
-                                        month: "2-digit",
-                                      })}{" "}
-                                      às{" "}
-                                      {new Date(p.dataHorario).toLocaleTimeString("pt-BR", {
-                                        timeZone: "America/Sao_Paulo",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="italic text-slate-400">Não agendado</span>
-                                )}
-                                {(p.arenaNome || p.quadra) && (
-                                  <span className="inline-flex items-center gap-1 text-slate-600">
-                                    {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt={p.arenaNome || "Arena"} className="w-4 h-4 rounded-full object-cover" /> : null}
-                                    <MapPin className="w-3.5 h-3.5" />
-                                    {p.arenaNome || "Arena"}
-                                    {p.quadra ? ` • ${p.quadra}` : ""}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3">
-                                <div className={`rounded-xl border px-3 py-2 bg-white text-center sm:text-left ${p.vencedorId && p.vencedorId === p.equipeAId ? "border-emerald-200 text-emerald-700" : "border-slate-100 text-slate-900"}`}>
-                                  <div className="font-semibold text-sm">{p.equipeANome || "A definir"}</div>
-                                  <div className="mt-2 flex items-center justify-center sm:justify-start -space-x-2">
-                                    {(p.equipeAAtletas || []).slice(0, 2).map((a) => (
-                                      <img
-                                        key={a.id}
-                                        src={a.fotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nome)}&background=random&color=fff`}
-                                        alt={a.nome}
-                                        title={a.nome}
-                                        className="h-8 w-8 rounded-full ring-2 ring-white object-cover bg-slate-100"
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-
-                                <div className="shrink-0 flex flex-col items-center min-w-[86px]">
-                                  {p.status === "FINALIZADA" || p.status === "WO" ? (
-                                    formatarPlacar(p)
-                                  ) : (
-                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">vs</span>
-                                  )}
-                                </div>
-
-                                <div className={`rounded-xl border px-3 py-2 bg-white text-center sm:text-left ${p.vencedorId && p.vencedorId === p.equipeBId ? "border-emerald-200 text-emerald-700" : "border-slate-100 text-slate-900"}`}>
-                                  <div className="font-semibold text-sm">{p.equipeBNome || "A definir"}</div>
-                                  <div className="mt-2 flex items-center justify-center sm:justify-start -space-x-2">
-                                    {(p.equipeBAtletas || []).slice(0, 2).map((a) => (
-                                      <img
-                                        key={a.id}
-                                        src={a.fotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(a.nome)}&background=random&color=fff`}
-                                        alt={a.nome}
-                                        title={a.nome}
-                                        className="h-8 w-8 rounded-full ring-2 ring-white object-cover bg-slate-100"
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 pt-1 justify-center sm:justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() => gerarCardPublico(p)}
-                                  className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-white shadow-sm ring-1 ring-indigo-500/30 hover:bg-indigo-500 transition-colors animate-pulse"
-                                  title="Gerar card do jogo"
-                                >
-                                  <ImageIcon className="w-4 h-4" />
-                                  <span className="text-[11px] font-bold uppercase tracking-wide">Card</span>
-                                </button>
-                                {(p.fotoUrl || p.transmissaoUrl) ? (
-                                  <>
-                                  {p.fotoUrl && (
-                                    <a 
-                                      href={p.fotoUrl} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer" 
-                                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                                      title="Ver fotos"
-                                    >
-                                      <Camera className="w-4 h-4" />
-                                    </a>
-                                  )}
-                                  {p.transmissaoUrl && (
-                                    <a 
-                                      href={p.transmissaoUrl} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer" 
-                                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                                      title="Assistir transmissão"
-                                    >
-                                      <Video className="w-4 h-4" />
-                                    </a>
-                                  )}
-                                  </>
-                                ) : null}
-                              </div>
-                            </div>
+                  {partidasPorRodada.map(([num, dados]) => {
+                    const encerrados = dados.jogos.filter(jogoEncerrado).length;
+                    const visiveis = dados.jogos
+                      .map((p, idx) => ({ p, numero: idx + 1 }))
+                      .filter(({ p }) =>
+                        filtroJogos === "todos" ? true : filtroJogos === "encerrados" ? jogoEncerrado(p) : !jogoEncerrado(p)
+                      );
+                    if (visiveis.length === 0) return null;
+                    const prazo = situacaoPrazo(dados.dataLimite, encerrados === dados.jogos.length);
+                    return (
+                      <section key={num}>
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-baseline gap-3">
+                            <h3 className="text-lg font-extrabold text-slate-900">{dados.nome}</h3>
+                            <span className="text-xs font-semibold text-slate-500">
+                              {encerrados}/{dados.jogos.length} jogos encerrados
+                            </span>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                          {dados.dataLimite && (
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${prazo.classe}`}>
+                              <Clock className="h-3.5 w-3.5" />
+                              {prazo.rotulo} {formatarDataSemFuso(dados.dataLimite)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="h-1 overflow-hidden rounded-full bg-slate-200">
+                          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(encerrados / dados.jogos.length) * 100}%` }} />
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                          {visiveis.map(({ p, numero }) => (
+                            <JogoPublico key={p.id} partida={p} numero={numero} onCard={() => gerarCardPublico(p)} />
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
                 </div>
               )}
             </div>
