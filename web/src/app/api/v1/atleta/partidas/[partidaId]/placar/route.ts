@@ -55,6 +55,9 @@ export async function POST(
     .where(and(eq(equipeIntegrantes.usuarioId, auth.user.id), inArray(equipeIntegrantes.equipeId, [partida.equipeAId, partida.equipeBId])))
     .limit(1);
   if (!membro[0]) return NextResponse.json({ error: "Você não faz parte desta partida" }, { status: 403 });
+  if (partida.status === "FINALIZADA" || partida.status === "WO") {
+    return NextResponse.json({ error: "Este jogo já tem resultado oficial" }, { status: 409 });
+  }
 
   // qualquer atleta do jogo informa; a confirmacao fica com a dupla adversaria
   const minhaEquipeId = await equipeDoAtletaNaPartida(auth.user.id, [partida.equipeAId, partida.equipeBId]);

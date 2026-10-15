@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { arenas, grupos, partidas, rodadas } from "@/db/schema";
 import { and, asc, eq } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
+import { placarSubmissoesService } from "@/services/placar-submissoes.service";
 
 export async function GET(
   request: NextRequest,
@@ -60,6 +61,10 @@ export async function GET(
     const equipeIds = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
     const mapNomes = await equipesDisplayService.mapNomesEquipes(equipeIds, { categoriaId });
     const mapAtletas = await equipesDisplayService.mapAtletasEquipes(equipeIds, { categoriaId });
+    // placar informado por atleta e ainda nao confirmado
+    const pendentes = await placarSubmissoesService.pendentesPorPartidas(
+      rows.filter((r) => r.status !== "FINALIZADA" && r.status !== "WO").map((r) => ({ id: r.id, equipeAId: r.equipeAId, equipeBId: r.equipeBId }))
+    );
 
     const result = rows.map((r) => ({
       ...r,
@@ -67,6 +72,7 @@ export async function GET(
       equipeBNome: mapNomes.get(r.equipeBId) ?? null,
       equipeAAtletas: r.equipeAId ? mapAtletas.get(r.equipeAId) ?? [] : [],
       equipeBAtletas: r.equipeBId ? mapAtletas.get(r.equipeBId) ?? [] : [],
+      placarPendente: pendentes.get(r.id) ?? null,
     }));
 
     return NextResponse.json(result);
