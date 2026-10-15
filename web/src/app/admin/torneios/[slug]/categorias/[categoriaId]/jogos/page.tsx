@@ -109,6 +109,15 @@ type Partida = {
   placarA: number;
   placarB: number;
   detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
+  /** placar informado por atleta, aguardando confirmacao */
+  placarPendente?: {
+    id: string;
+    detalhesPlacar: { set: number; a: number; b: number; tiebreak?: boolean; tbA?: number; tbB?: number }[] | null;
+    vencedorId: string | null;
+    informadoPor: { id: string; nome: string };
+    informadoPeloLado: "A" | "B" | null;
+    informadoEm: string;
+  } | null;
 };
 
 type Inscricao = {
@@ -229,6 +238,7 @@ export default function AdminCategoriaJogosPage() {
 
   const [categoria, setCategoria] = useState<Categoria | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [decidindoPlacarId, setDecidindoPlacarId] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
 
   const [config, setConfig] = useState<CategoriaConfig | null>(null);
@@ -916,6 +926,33 @@ export default function AdminCategoriaJogosPage() {
     return map;
   }, [partidas]);
 
+  async function decidirPlacarPendente(p: Partida, acao: "confirmar" | "recusar") {
+    const pend = p.placarPendente;
+    if (!pend) return;
+    const texto = (pend.detalhesPlacar ?? []).map((s) => `${s.a}-${s.b}`).join(" · ");
+    const pergunta =
+      acao === "confirmar"
+        ? `Confirmar o placar ${texto} informado por ${pend.informadoPor.nome}? Ele passa a valer como resultado oficial.`
+        : `Recusar o placar ${texto} informado por ${pend.informadoPor.nome}? O jogo volta a ficar sem placar.`;
+    if (!window.confirm(pergunta)) return;
+    try {
+      setDecidindoPlacarId(p.id);
+      setErro(null);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas/${p.id}/placar-pendente`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "Não foi possível concluir");
+      await carregarPartidas();
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setDecidindoPlacarId(null);
+    }
+  }
+
   function renderPartidaCard(p: Partida) {
     const finalizada = partidaFinalizada(p);
     const sets = (p.detalhesPlacar ?? []).slice().sort((a, b) => a.set - b.set);
@@ -990,6 +1027,28 @@ export default function AdminCategoriaJogosPage() {
         <div className="min-w-0 space-y-1">
           {linhaEquipe("A")}
           {linhaEquipe("B")}
+          {p.placarPendente && !finalizada && (() => {
+            const pend = p.placarPendente;
+            const texto = (pend.detalhesPlacar ?? []).map((s) => `${s.a}-${s.b}`).join(" · ");
+            const atletasDupla = pend.informadoPeloLado === "A" ? p.equipeAAtletas : pend.informadoPeloLado === "B" ? p.equipeBAtletas : undefined;
+            const dupla = atletasDupla?.map((a) => a.nome.trim().split(/s+/)[0]).join("/") ?? null;
+            const ocupado = decidindoPlacarId === p.id;
+            return (
+              <div className="mt-1 flex flex-wrap items-center gap-2 rounded-[10px] bg-[#fdf1dc] px-3 py-2 text-xs text-[#6b3d00]">
+                <span className="min-w-0 flex-1">
+                  <strong>Aguardando confirmação:</strong> <span className="font-bold tabular-nums">{texto}</span>, informado por{" "}
+                  {pend.informadoPor.nome}
+                  {dupla ? ` (dupla ${dupla})` : ""}
+                </span>
+                <Button size="sm" variant="dark" disabled={ocupado} onClick={() => void decidirPlacarPendente(p, "confirmar")}>
+                  {ocupado ? "…" : "Confirmar"}
+                </Button>
+                <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => void decidirPlacarPendente(p, "recusar")}>
+                  Recusar
+                </Button>
+              </div>
+            );
+          })()}
           <div className="flex items-center gap-1.5 pt-0.5 text-xs text-muted">
             {p.arenaLogoUrl ? <img src={p.arenaLogoUrl} alt="" className="h-4 w-4 rounded-full object-cover" /> : <MapPin className="h-3.5 w-3.5" />}
             <span className="truncate">{local ?? "Local a definir"}</span>

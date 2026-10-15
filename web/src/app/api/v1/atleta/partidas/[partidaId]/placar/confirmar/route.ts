@@ -4,10 +4,7 @@ import { bloqueioRecursoCapitaes, equipeDoAtletaNaPartida } from "@/lib/capitaes
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, partidas, placarSubmissoes, torneios } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
-import { categoriaConfigService } from "@/services/categoria-config.service";
-import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
-import { MataMataService } from "@/services/mata-mata.service";
-import { calcularResultadoPartida, obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
+import { ErroPlacar, placarSubmissoesService } from "@/services/placar-submissoes.service";
 
 export async function POST(
   request: NextRequest,
@@ -79,68 +76,12 @@ export async function POST(
     return NextResponse.json({ error: "Quem confirma o placar é a dupla adversária" }, { status: 403 });
   }
 
-  const config = await categoriaConfigService.obterOuDefault(partida.categoriaId);
-  const regras = obterRegrasPartidaEfetivas({
-    regrasBase: config.regrasPartida,
-    regrasPorFase: config.regrasPartidaPorFase ?? null,
-    fase: partida.fase,
-    superCampeonato: partida.superCampeonato,
-    superCampeonatoFormato: partida.superCampeonatoFormato,
-  });
-
-  const resultado = calcularResultadoPartida({
-    regras,
-    equipeAId: partida.equipeAId,
-    equipeBId: partida.equipeBId,
-    detalhesPlacar: pendente.detalhesPlacar as any,
-  });
-
-  if (!resultado.vencedorId) return NextResponse.json({ error: "O placar informado não define um vencedor válido" }, { status: 400 });
-  if (resultado.vencedorId !== pendente.vencedorId) {
-    return NextResponse.json({ error: "O placar pendente ficou inconsistente. Peça para informarem de novo." }, { status: 409 });
+  try {
+    const updated = await placarSubmissoesService.confirmarPendente({ partidaId, confirmadoPorUsuarioId: auth.user.id });
+    return NextResponse.json({ ok: true, partida: updated }, { headers: { "Cache-Control": "no-store" } });
+  } catch (e) {
+    if (e instanceof ErroPlacar) return NextResponse.json({ error: e.message }, { status: e.status });
+    throw e;
   }
-
-  const [updated] = await db.transaction(async (tx) => {
-    const [pUpdated] = await tx
-      .update(partidas)
-      .set({
-        detalhesPlacar: resultado.detalhesPlacar as any,
-        placarA: resultado.placarA,
-        placarB: resultado.placarB,
-        vencedorId: resultado.vencedorId,
-        status: "FINALIZADA",
-        finalizadoEm: new Date(),
-        atualizadoEm: new Date(),
-      })
-      .where(eq(partidas.id, partidaId))
-      .returning();
-
-    await tx
-      .update(placarSubmissoes)
-      .set({
-        status: "CONFIRMADA",
-        confirmadoEm: new Date(),
-        confirmadoPorUsuarioId: auth.user.id,
-        atualizadoEm: new Date(),
-      })
-      .where(eq(placarSubmissoes.id, pendente.id));
-
-    return [pUpdated] as const;
-  });
-
-  if (partida.fase === "GRUPOS") {
-    await classificacaoCategoriaService.recalcularPorCategoria(partida.categoriaId).catch(() => null);
-  } else {
-    const mataMataService = new MataMataService();
-    await mataMataService
-      .sincronizarChaveAposAtualizacaoResultado({
-        torneioId: partida.torneioId,
-        categoriaId: partida.categoriaId,
-        faseAtual: partida.fase as any,
-      })
-      .catch(() => null);
-  }
-
-  return NextResponse.json({ ok: true, partida: updated }, { headers: { "Cache-Control": "no-store" } });
 }
 
