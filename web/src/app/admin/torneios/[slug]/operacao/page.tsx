@@ -118,7 +118,10 @@ export default function OperacaoPage() {
             return (
               <Card key={q.numero} className={cn("flex flex-col gap-3 p-4", atrasado && "border-red-300")}>
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-display text-xl font-bold text-ink">{q.nome}</h3>
+                  <div className="min-w-0">
+                    <h3 className="font-display text-xl font-bold text-ink">{q.nome}</h3>
+                    {q.reserva && <div className="truncate text-xs font-bold text-ocean-strong">Reservada: {q.reserva.descricao}</div>}
+                  </div>
                   {jogo ? (
                     jogo.status === "EM_ANDAMENTO" ? (
                       <Badge tone="live" dot>
@@ -172,7 +175,7 @@ export default function OperacaoPage() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted">
-                    {estado.categoria ? "Nenhum jogo pronto: aguardando atletas na fila." : "Escolha a categoria em andamento."}
+                    {q.aguardando ?? (estado.categoria ? "Nenhum jogo pronto: aguardando atletas na fila." : "Escolha a categoria em andamento.")}
                   </p>
                 )}
               </Card>
