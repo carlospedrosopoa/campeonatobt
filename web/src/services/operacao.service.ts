@@ -54,6 +54,19 @@ export type QuadraOperacao = {
   sugestao: JogoOperacao | null;
 };
 
+/** Jogo encerrado ha pouco, para o telao anunciar o resultado. */
+export type EncerradoOperacao = {
+  id: string;
+  quadra: number | null;
+  categoriaNome: string;
+  wo: boolean;
+  vencedora: Atleta[];
+  perdedora: Atleta[];
+  /** sets do ponto de vista da vencedora, ex.: ["6-3", "6-4"] */
+  sets: string[];
+  finalizadoEm: string;
+};
+
 export type EstadoOperacao = {
   torneio: { id: string; nome: string; quadrasAtivas: number; toleranciaAtrasoMin: number };
   categoria: { id: string; nome: string } | null;
@@ -61,6 +74,7 @@ export type EstadoOperacao = {
   quadras: QuadraOperacao[];
   fila: JogoOperacao[];
   progresso: { encerrados: number; total: number };
+  encerradosRecentes: EncerradoOperacao[];
 };
 
 const numeroDaQuadra = (quadra: string | null) => {
@@ -98,6 +112,9 @@ export class OperacaoService {
         quadra: partidas.quadra,
         chamadoEm: partidas.chamadoEm,
         iniciadoEm: partidas.iniciadoEm,
+        finalizadoEm: partidas.finalizadoEm,
+        vencedorId: partidas.vencedorId,
+        detalhesPlacar: partidas.detalhesPlacar,
         equipeAId: partidas.equipeAId,
         equipeBId: partidas.equipeBId,
         criadoEm: partidas.criadoEm,
@@ -128,7 +145,14 @@ export class OperacaoService {
       ? linhas.filter((l) => l.categoriaId === categoria.id && l.status === "AGENDADA" && !l.chamadoEm).sort(ordenarFila)
       : [];
 
-    const relevantes = [...emQuadra, ...filaLinhas];
+    // encerrados nos ultimos 30 min, com vencedor (o telao anuncia o resultado)
+    const limiteRecente = Date.now() - 30 * 60 * 1000;
+    const recentes = linhas
+      .filter((l) => (l.status === "FINALIZADA" || l.status === "WO") && l.vencedorId && l.finalizadoEm && new Date(l.finalizadoEm).getTime() >= limiteRecente)
+      .sort((a, b) => new Date(b.finalizadoEm!).getTime() - new Date(a.finalizadoEm!).getTime())
+      .slice(0, 10);
+
+    const relevantes = [...emQuadra, ...filaLinhas, ...recentes];
     const equipeIds = Array.from(new Set(relevantes.flatMap((l) => [l.equipeAId, l.equipeBId])));
     const atletasMap = equipeIds.length
       ? await equipesDisplayService.mapAtletasEquipes(equipeIds, { categoriaId: Array.from(new Set(relevantes.map((l) => l.categoriaId))) })
@@ -197,7 +221,25 @@ export class OperacaoService {
       quadras.push({ numero: n, nome: `Quadra ${n}`, jogo: atual ? montar(atual) : null, sugestao });
     }
 
+    const encerradosRecentes: EncerradoOperacao[] = recentes.map((l) => {
+      const venceuA = l.vencedorId === l.equipeAId;
+      const sets = Array.isArray(l.detalhesPlacar)
+        ? (l.detalhesPlacar as { a: number; b: number }[]).map((st) => (venceuA ? `${st.a}-${st.b}` : `${st.b}-${st.a}`))
+        : [];
+      return {
+        id: l.id,
+        quadra: numeroDaQuadra(l.quadra),
+        categoriaNome: l.categoriaNome,
+        wo: l.status === "WO",
+        vencedora: atletasMap.get(venceuA ? l.equipeAId : l.equipeBId) ?? [],
+        perdedora: atletasMap.get(venceuA ? l.equipeBId : l.equipeAId) ?? [],
+        sets,
+        finalizadoEm: new Date(l.finalizadoEm!).toISOString(),
+      };
+    });
+
     return {
+      encerradosRecentes,
       torneio: { id: torneio.id, nome: torneio.nome, quadrasAtivas: torneio.quadrasAtivas, toleranciaAtrasoMin: torneio.toleranciaAtrasoMin },
       categoria: categoria ? { id: categoria.id, nome: categoria.nome } : null,
       categorias: categoriasResumo,

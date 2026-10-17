@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
-import { textoChamada, textoProximo } from "@/lib/operacao-texto";
+import { textoChamada, textoProximo, textoResultado } from "@/lib/operacao-texto";
 
 /**
  * Telao da operacao: quadras e proximos jogos, e a chamada por voz de cada jogo chamado.
@@ -20,6 +20,8 @@ export default function TelaoOperacaoPage() {
   const [falando, setFalando] = useState<string | null>(null);
   const [agora, setAgora] = useState(Date.now());
   const anunciados = useRef<Set<string> | null>(null);
+  const resultadosAnunciados = useRef<Set<string> | null>(null);
+  const [telaAcordada, setTelaAcordada] = useState(false);
   const fila = useRef<string[]>([]);
   const tocando = useRef(false);
   const azureIndisponivel = useRef(false);
@@ -89,9 +91,45 @@ export default function TelaoOperacaoPage() {
     tocando.current = false;
   }, [falar]);
 
-  // detecta chamadas novas e anuncia
+  // mantem a tela do aparelho do som acordada enquanto o telao estiver aberto (Screen Wake Lock)
+  useEffect(() => {
+    if (!somAtivo || typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+    let trava: { release: () => Promise<void> } | null = null;
+    let ativo = true;
+    const pedir = async () => {
+      try {
+        trava = await (navigator as any).wakeLock.request("screen");
+        if (ativo) setTelaAcordada(true);
+        (trava as any)?.addEventListener?.("release", () => ativo && setTelaAcordada(false));
+      } catch {
+        if (ativo) setTelaAcordada(false);
+      }
+    };
+    void pedir();
+    // o navegador solta a trava quando a aba sai da frente; pede de novo ao voltar
+    const aoVoltar = () => document.visibilityState === "visible" && void pedir();
+    document.addEventListener("visibilitychange", aoVoltar);
+    return () => {
+      ativo = false;
+      document.removeEventListener("visibilitychange", aoVoltar);
+      void trava?.release().catch(() => null);
+    };
+  }, [somAtivo]);
+
+  // detecta chamadas novas e resultados e anuncia
   useEffect(() => {
     if (!estado) return;
+    const resultados = estado.encerradosRecentes ?? [];
+    if (!resultadosAnunciados.current) {
+      resultadosAnunciados.current = new Set(resultados.map((r) => r.id));
+    } else {
+      // do mais antigo para o mais recente
+      for (const r of [...resultados].reverse()) {
+        if (resultadosAnunciados.current.has(r.id)) continue;
+        resultadosAnunciados.current.add(r.id);
+        if (somAtivo) fila.current.push(textoResultado({ quadra: r.quadra, vencedora: r.vencedora, sets: r.sets, wo: r.wo }));
+      }
+    }
     const chamados = estado.quadras.filter((q) => q.jogo && q.jogo.status === "AGENDADA" && q.jogo.chamadoEm);
     const chave = (j: JogoOperacao) => `${j.id}:${j.chamadoEm}`;
     if (!anunciados.current) {
@@ -100,7 +138,10 @@ export default function TelaoOperacaoPage() {
       return;
     }
     const novos = chamados.filter((q) => !anunciados.current!.has(chave(q.jogo!)));
-    if (novos.length === 0) return;
+    if (novos.length === 0) {
+      void tocarFila();
+      return;
+    }
     for (const q of novos) {
       anunciados.current.add(chave(q.jogo!));
       if (!somAtivo) continue;
@@ -136,6 +177,9 @@ export default function TelaoOperacaoPage() {
           {somAtivo ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           {somAtivo ? "Som ativo" : "Ativar som"}
         </button>
+        {somAtivo && !telaAcordada && (
+          <span className="text-sm font-semibold text-[#f59e0b]">Deixe a tela deste aparelho sempre ligada</span>
+        )}
       </header>
 
       {falando && (

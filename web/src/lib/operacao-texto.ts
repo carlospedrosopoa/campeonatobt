@@ -31,3 +31,9 @@ export function operacaoDesabilitada() {
     { status: 403 }
   );
 }
+
+export function textoResultado(params: { quadra: number | null; vencedora: AtletaTexto[]; sets: string[]; wo: boolean }) {
+  const onde = params.quadra ? `Fim de jogo na quadra ${params.quadra}` : "Fim de jogo";
+  const placar = params.wo ? "por W.O" : params.sets.length ? `por ${params.sets.join(", ")}` : "";
+  return `${onde}: ${dupla(params.vencedora)} ${params.vencedora.length > 1 ? "vencem" : "vence"} ${placar}.`.replace(/\s+\./, ".");
+}
