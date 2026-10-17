@@ -243,6 +243,8 @@ export const torneios = pgTable('torneios', {
   cardApenasComFotos: boolean('card_apenas_com_fotos').default(false).notNull(),
   // capitaes agendam o jogo e informam/confirmam o placar pelo app
   capitaesGerenciamJogos: boolean('capitaes_gerenciam_jogos').default(false).notNull(),
+  // operacao ao vivo: fila automatica, tela da quadra e telao com chamada por voz
+  operacaoAoVivo: boolean('operacao_ao_vivo').default(false).notNull(),
   toleranciaAtrasoMin: integer('tolerancia_atraso_min').default(15).notNull(),
   checkinModo: text('checkin_modo').$type<"QR" | "BOTAO" | "AMBOS">().default('AMBOS').notNull(),
   layoutCards: text('layout_cards').$type<"NOVO" | "CLASSICO">().default('CLASSICO').notNull(),

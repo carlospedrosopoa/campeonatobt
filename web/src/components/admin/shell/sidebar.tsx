@@ -169,9 +169,11 @@ export function SidebarConteudo({
           <NavItem href={base} icon={<LayoutGrid />} active={!rota.secao && !rota.categoriaId} onNavigate={onNavigate}>
             Visão geral
           </NavItem>
-          <NavItem href={`${base}/operacao`} icon={<Megaphone />} active={rota.secao === "operacao"} onNavigate={onNavigate}>
-            Operação ao vivo
-          </NavItem>
+          {torneio?.operacaoAoVivo && (
+            <NavItem href={`${base}/operacao`} icon={<Megaphone />} active={rota.secao === "operacao"} onNavigate={onNavigate}>
+              Operação ao vivo
+            </NavItem>
+          )}
           <NavItem href={`${base}/jogos-do-dia`} icon={<CalendarDays />} active={rota.secao === "jogos-do-dia"} onNavigate={onNavigate}>
             Jogos do dia
           </NavItem>

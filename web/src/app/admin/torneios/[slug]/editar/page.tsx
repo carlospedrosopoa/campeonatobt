@@ -26,6 +26,7 @@ type Torneio = {
   superCampeonatoFormato: "2_SET_SUPER_TIE" | "1_SET";
   cardApenasComFotos: boolean;
   capitaesGerenciamJogos: boolean;
+  operacaoAoVivo: boolean;
   layoutCards: "NOVO" | "CLASSICO";
   toleranciaAtrasoMin?: number;
   checkinModo?: "QR" | "BOTAO" | "AMBOS";
@@ -108,6 +109,7 @@ export default function AdminEditarDadosTorneioPage() {
     superCampeonatoFormato: "2_SET_SUPER_TIE" as "2_SET_SUPER_TIE" | "1_SET",
     cardApenasComFotos: false,
     capitaesGerenciamJogos: false,
+    operacaoAoVivo: false,
     layoutCards: "CLASSICO",
     toleranciaAtrasoMin: 15,
     checkinModo: "AMBOS" as "QR" | "BOTAO" | "AMBOS",
@@ -173,6 +175,7 @@ export default function AdminEditarDadosTorneioPage() {
           superCampeonatoFormato: t.superCampeonatoFormato ?? "2_SET_SUPER_TIE",
           cardApenasComFotos: Boolean(t.cardApenasComFotos),
           capitaesGerenciamJogos: Boolean(t.capitaesGerenciamJogos),
+          operacaoAoVivo: Boolean(t.operacaoAoVivo),
           layoutCards: t.layoutCards === "NOVO" ? "NOVO" : "CLASSICO",
           toleranciaAtrasoMin: typeof t.toleranciaAtrasoMin === "number" ? t.toleranciaAtrasoMin : 15,
           checkinModo: t.checkinModo === "QR" || t.checkinModo === "BOTAO" ? t.checkinModo : "AMBOS",
@@ -307,6 +310,7 @@ export default function AdminEditarDadosTorneioPage() {
         superCampeonatoFormato: form.superCampeonatoFormato,
         cardApenasComFotos: form.cardApenasComFotos,
         capitaesGerenciamJogos: form.capitaesGerenciamJogos,
+        operacaoAoVivo: form.operacaoAoVivo,
         layoutCards: form.layoutCards,
         toleranciaAtrasoMin: form.toleranciaAtrasoMin,
         checkinModo: form.checkinModo,
@@ -617,6 +621,19 @@ export default function AdminEditarDadosTorneioPage() {
                 Habilitar atendimento virtual com IA neste torneio
               </label>
               <div className="text-xs text-slate-500">Controla a exibição do chat público e se o agente pode atender inscrições deste torneio.</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Operação ao vivo</label>
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.operacaoAoVivo)}
+                  onChange={(e) => setForm((prev) => ({ ...prev, operacaoAoVivo: e.target.checked }))}
+                />
+                Habilitar operação ao vivo com chamadas por voz
+              </label>
+              <div className="text-xs text-slate-500">Fila automática por quadra, tela da quadra no celular e telão que anuncia os jogos. Para torneios de um dia; o supercampeonato não usa.</div>
             </div>
 
             <div className="space-y-2">

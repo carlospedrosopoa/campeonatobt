@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
+import { operacaoDesabilitada } from "@/lib/operacao-texto";
 import { chamarJogo } from "@/services/operacao.service";
 
 /** Chama um jogo para a quadra: aloca na quadra e registra a hora da chamada. Body: { partidaId, quadraNumero } */
@@ -8,6 +9,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { slug } = await params;
     const acesso = await requireTournamentAdminBySlug(slug);
     if ("response" in acesso) return acesso.response;
+    if (!acesso.torneio.operacaoAoVivo) return operacaoDesabilitada();
     const body = await request.json().catch(() => null);
     const partidaId = String(body?.partidaId || "");
     const quadraNumero = Number(body?.quadraNumero);

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 export type TorneioContexto = {
-  torneio: { id: string; nome: string; slug: string; status: string; dataInicio?: string; dataFim?: string; local?: string } | null;
+  torneio: { id: string; nome: string; slug: string; status: string; dataInicio?: string; dataFim?: string; local?: string; operacaoAoVivo?: boolean } | null;
   stats: { inscricoesPendentes?: number; inscricoesTotal?: number } | null;
   categorias: Array<{ id: string; nome: string; genero?: string }>;
 };

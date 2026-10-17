@@ -23,3 +23,11 @@ export function textoChamada(params: {
 export function textoProximo(params: { equipeA: AtletaTexto[]; equipeB: AtletaTexto[] }) {
   return `Preparem-se para o próximo jogo: ${dupla(params.equipeA)}, contra ${dupla(params.equipeB)}.`;
 }
+
+/** Resposta padrao quando o torneio nao habilitou a operacao ao vivo. */
+export function operacaoDesabilitada() {
+  return Response.json(
+    { error: "Operação ao vivo desabilitada neste torneio. Habilite em Dados do torneio.", code: "OPERACAO_DESABILITADA" },
+    { status: 403 }
+  );
+}
