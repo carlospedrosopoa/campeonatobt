@@ -52,7 +52,33 @@ export type QuadraOperacao = {
   jogo: JogoOperacao | null;
   /** sugestao do proximo jogo quando a quadra esta livre */
   sugestao: JogoOperacao | null;
+  /** chave reservada para esta quadra no Painel de quadras */
+  reserva: { descricao: string } | null;
+  /** por que nao ha sugestao (ex.: aguardando atletas da chave reservada) */
+  aguardando: string | null;
 };
+
+type ReservaQuadra = { quadraNumero: number; categoriaId: string | null; fase: string | null; grupoId: string | null; proximaPartidaId: string | null };
+
+/** Reservas de quadra do Painel de quadras (mesmo formato salvo em torneios.painel_quadras_reservas). */
+export function normalizarReservas(value: unknown): ReservaQuadra[] {
+  if (!Array.isArray(value)) return [];
+  const texto = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return value
+    .map((item) => {
+      const raw = (item ?? {}) as Record<string, unknown>;
+      const quadraNumero = Math.trunc(Number(raw.quadraNumero) || 0);
+      return quadraNumero
+        ? { quadraNumero, categoriaId: texto(raw.categoriaId), fase: texto(raw.fase), grupoId: texto(raw.grupoId), proximaPartidaId: texto(raw.proximaPartidaId) }
+        : null;
+    })
+    .filter((r): r is ReservaQuadra => Boolean(r));
+}
+
+/** Jogo pertence a chave reservada (mesma regra do Painel de quadras: categoria, fase e grupo). */
+function daChave(l: { categoriaId: string; fase: string; grupoId: string | null }, r: ReservaQuadra) {
+  return l.categoriaId === r.categoriaId && l.fase === r.fase && (l.grupoId ?? null) === (r.grupoId ?? null);
+}
 
 /** Jogo encerrado ha pouco, para o telao anunciar o resultado. */
 export type EncerradoOperacao = {
@@ -94,7 +120,13 @@ function ordenarFila(a: { fase: string; rodadaNumero: number | null; grupoNome: 
 export class OperacaoService {
   async estado(params: { torneioId: string; categoriaId?: string | null }): Promise<EstadoOperacao> {
     const [torneio] = await db
-      .select({ id: torneios.id, nome: torneios.nome, quadrasAtivas: torneios.quadrasAtivas, toleranciaAtrasoMin: torneios.toleranciaAtrasoMin })
+      .select({
+        id: torneios.id,
+        nome: torneios.nome,
+        quadrasAtivas: torneios.quadrasAtivas,
+        toleranciaAtrasoMin: torneios.toleranciaAtrasoMin,
+        painelQuadrasReservas: torneios.painelQuadrasReservas,
+      })
       .from(torneios)
       .where(eq(torneios.id, params.torneioId))
       .limit(1);
@@ -106,6 +138,7 @@ export class OperacaoService {
         categoriaId: partidas.categoriaId,
         categoriaNome: categorias.nome,
         fase: partidas.fase,
+        grupoId: partidas.grupoId,
         grupoNome: grupos.nome,
         rodadaNumero: rodadas.numero,
         status: partidas.status,
@@ -141,9 +174,14 @@ export class OperacaoService {
     // jogos que ocupam quadra agora (de qualquer categoria) e os da fila da categoria ativa
     // ocupa quadra quem foi chamado ou esta jogando; quadra preenchida so pelo agendamento nao conta
     const emQuadra = linhas.filter((l) => l.quadra && (l.status === "EM_ANDAMENTO" || (l.status === "AGENDADA" && l.chamadoEm)));
-    const filaLinhas = categoria
-      ? linhas.filter((l) => l.categoriaId === categoria.id && l.status === "AGENDADA" && !l.chamadoEm).sort(ordenarFila)
-      : [];
+    // reservas do Painel de quadras: quadra reservada so recebe jogos da sua chave, e jogos de chave reservada so vao para ela
+    const reservas = normalizarReservas(torneio.painelQuadrasReservas);
+    const comEscopo = reservas.filter((r) => r.categoriaId && r.fase);
+    const emChaveReservada = (l: { categoriaId: string; fase: string; grupoId: string | null }) => comEscopo.some((r) => daChave(l, r));
+    // candidatos: fila da categoria ativa + jogos das chaves reservadas (podem ser de outra categoria)
+    const filaLinhas = linhas
+      .filter((l) => l.status === "AGENDADA" && !l.chamadoEm && (l.categoriaId === categoria?.id || emChaveReservada(l)))
+      .sort(ordenarFila);
 
     // encerrados nos ultimos 30 min, com vencedor (o telao anuncia o resultado)
     const limiteRecente = Date.now() - 30 * 60 * 1000;
@@ -199,26 +237,60 @@ export class OperacaoService {
       };
     };
 
-    const fila = filaLinhas.map(montar);
+    const candidatos = filaLinhas.map(montar);
+    const linhaPorId = new Map(filaLinhas.map((l) => [l.id, l]));
+    // a lista exibida e so a da categoria em andamento
+    const fila = candidatos.filter((j) => j.categoriaId === categoria?.id);
+    const descricaoReserva = (r: ReservaQuadra) => {
+      const nomeCategoria = categoriasResumo.find((c) => c.id === r.categoriaId)?.nome ?? "Chave";
+      const grupo = r.grupoId ? linhas.find((l) => l.grupoId === r.grupoId)?.grupoNome : null;
+      return `${nomeCategoria} · ${grupo || NOME_FASE[r.fase ?? ""] || r.fase}`;
+    };
     const totalQuadras = Math.max(torneio.quadrasAtivas, ...emQuadra.map((l) => numeroDaQuadra(l.quadra) ?? 0));
     const quadras: QuadraOperacao[] = [];
     const sugeridos = new Set<string>();
     const atletasSugeridos = new Set<string>();
+    const livre = (j: JogoOperacao) =>
+      j.pronto && !sugeridos.has(j.id) && ![...j.equipeA, ...j.equipeB].some((a) => atletasSugeridos.has(a.id));
+    const reservar = (j: JogoOperacao) => {
+      sugeridos.add(j.id);
+      for (const a of [...j.equipeA, ...j.equipeB]) atletasSugeridos.add(a.id);
+    };
+
+    // 1a passada: proximo jogo marcado manualmente no Painel de quadras tem prioridade
+    const sugestaoPorQuadra = new Map<number, JogoOperacao>();
+    for (let n = 1; n <= totalQuadras; n++) {
+      if (emQuadra.some((l) => numeroDaQuadra(l.quadra) === n)) continue;
+      const idManual = reservas.find((r) => r.quadraNumero === n)?.proximaPartidaId;
+      const manual = idManual ? candidatos.find((j) => j.id === idManual && livre(j)) : undefined;
+      if (manual) {
+        reservar(manual);
+        sugestaoPorQuadra.set(n, manual);
+      }
+    }
+
+    // 2a passada: chave reservada para a quadra; sem reserva, o proximo pronto da categoria fora das chaves reservadas
     for (let n = 1; n <= totalQuadras; n++) {
       const atual = emQuadra.find((l) => numeroDaQuadra(l.quadra) === n);
-      let sugestao: JogoOperacao | null = null;
-      if (!atual) {
-        // proximo jogo pronto da fila, sem repetir atleta ja sugerido para outra quadra
-        sugestao =
-          fila.find(
-            (j) => j.pronto && !sugeridos.has(j.id) && ![...j.equipeA, ...j.equipeB].some((a) => atletasSugeridos.has(a.id))
-          ) ?? null;
-        if (sugestao) {
-          sugeridos.add(sugestao.id);
-          for (const a of [...sugestao.equipeA, ...sugestao.equipeB]) atletasSugeridos.add(a.id);
-        }
+      const reserva = comEscopo.find((r) => r.quadraNumero === n) ?? null;
+      let sugestao = sugestaoPorQuadra.get(n) ?? null;
+      let aguardando: string | null = null;
+      if (!atual && !sugestao) {
+        const opcoes = reserva
+          ? candidatos.filter((j) => daChave(linhaPorId.get(j.id)!, reserva))
+          : candidatos.filter((j) => j.categoriaId === categoria?.id && !emChaveReservada(linhaPorId.get(j.id)!));
+        sugestao = opcoes.find(livre) ?? null;
+        if (sugestao) reservar(sugestao);
+        else if (reserva) aguardando = opcoes.length ? `Aguardando atletas da chave ${descricaoReserva(reserva)}` : `Chave ${descricaoReserva(reserva)} sem jogos pendentes`;
       }
-      quadras.push({ numero: n, nome: `Quadra ${n}`, jogo: atual ? montar(atual) : null, sugestao });
+      quadras.push({
+        numero: n,
+        nome: `Quadra ${n}`,
+        jogo: atual ? montar(atual) : null,
+        sugestao: atual ? null : sugestao,
+        reserva: reserva ? { descricao: descricaoReserva(reserva) } : null,
+        aguardando,
+      });
     }
 
     const encerradosRecentes: EncerradoOperacao[] = recentes.map((l) => {
@@ -271,6 +343,9 @@ export async function chamarJogo(params: { torneioId: string; partidaId: string;
       equipeAId: partidas.equipeAId,
       equipeBId: partidas.equipeBId,
       fotoUrl: partidas.fotoUrl,
+      categoriaId: partidas.categoriaId,
+      fase: partidas.fase,
+      grupoId: partidas.grupoId,
     })
     .from(partidas)
     .where(and(eq(partidas.id, params.partidaId), eq(partidas.torneioId, params.torneioId)))
@@ -286,6 +361,10 @@ export async function chamarJogo(params: { torneioId: string; partidaId: string;
     (p) => p.id !== jogo.id && numeroDaQuadra(p.quadra) === n && (p.status === "EM_ANDAMENTO" || p.chamadoEm)
   );
   if (ocupante) throw new Error(`A quadra ${n} já tem um jogo chamado ou em andamento`);
+
+  const [cfg] = await db.select({ reservas: torneios.painelQuadrasReservas }).from(torneios).where(eq(torneios.id, params.torneioId)).limit(1);
+  const reserva = normalizarReservas(cfg?.reservas).find((r) => r.quadraNumero === n && r.categoriaId && r.fase);
+  if (reserva && !daChave(jogo, reserva)) throw new Error(`A quadra ${n} está reservada para outra chave no Painel de quadras`);
 
   const quadra = `Quadra ${n}`;
   const invalidarCard = deveInvalidarCardPartida(jogo, {
