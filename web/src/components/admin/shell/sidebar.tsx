@@ -10,6 +10,7 @@ import {
   ExternalLink,
   FileUp,
   Gamepad2,
+  Megaphone,
   Handshake,
   LayoutGrid,
   MapPin,
@@ -167,6 +168,9 @@ export function SidebarConteudo({
         <Secao titulo="Operação">
           <NavItem href={base} icon={<LayoutGrid />} active={!rota.secao && !rota.categoriaId} onNavigate={onNavigate}>
             Visão geral
+          </NavItem>
+          <NavItem href={`${base}/operacao`} icon={<Megaphone />} active={rota.secao === "operacao"} onNavigate={onNavigate}>
+            Operação ao vivo
           </NavItem>
           <NavItem href={`${base}/jogos-do-dia`} icon={<CalendarDays />} active={rota.secao === "jogos-do-dia"} onNavigate={onNavigate}>
             Jogos do dia
