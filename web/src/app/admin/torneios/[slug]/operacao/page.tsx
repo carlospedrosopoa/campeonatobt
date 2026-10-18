@@ -242,6 +242,7 @@ function JogoResumo({ jogo, compacto }: { jogo: JogoOperacao; compacto?: boolean
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
         <span>{etapaJogo(jogo)}</span>
+        {jogo.status === "AGENDADA" && jogo.chamadoEm && !jogo.quadra && <span className="font-bold text-[#8a4e00]">chamado sem quadra</span>}
         <span className={cn("font-bold", completo ? "text-[#17663f]" : "text-[#8a4e00]")}>
           {jogo.presentes}/{jogo.total} presentes
         </span>

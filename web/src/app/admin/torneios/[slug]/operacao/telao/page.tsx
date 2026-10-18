@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
-import { textoChamada, textoProximo, textoResultado } from "@/lib/operacao-texto";
+import { textoChamada, textoChamadaSemQuadra, textoProximo, textoResultado } from "@/lib/operacao-texto";
 
 /**
  * Telao da operacao: quadras e proximos jogos, e a chamada por voz de cada jogo chamado.
@@ -131,11 +131,18 @@ export default function TelaoOperacaoPage() {
       }
     }
     const chamados = estado.quadras.filter((q) => q.jogo && q.jogo.status === "AGENDADA" && q.jogo.chamadoEm);
-    const chave = (j: JogoOperacao) => `${j.id}:${j.chamadoEm}`;
+    const semQuadra = estado.chamadosSemQuadra ?? [];
+    const chave = (j: JogoOperacao) => `${j.id}:${j.quadra ?? ""}:${j.chamadoEm}`;
     if (!anunciados.current) {
       // ao abrir o telao, nao repete chamadas antigas
-      anunciados.current = new Set(chamados.map((q) => chave(q.jogo!)));
+      anunciados.current = new Set([...chamados.map((q) => chave(q.jogo!)), ...semQuadra.map(chave)]);
       return;
+    }
+    // chamadas feitas sem quadra (conferencia de presenca)
+    for (const j of semQuadra) {
+      if (anunciados.current.has(chave(j))) continue;
+      anunciados.current.add(chave(j));
+      if (somAtivo) fila.current.push(textoChamadaSemQuadra({ categoriaNome: j.categoriaNome, etapa: etapaJogo(j), equipeA: j.equipeA, equipeB: j.equipeB }));
     }
     const novos = chamados.filter((q) => !anunciados.current!.has(chave(q.jogo!)));
     if (novos.length === 0) {

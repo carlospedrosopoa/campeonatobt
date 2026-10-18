@@ -37,3 +37,8 @@ export function textoResultado(params: { quadra: number | null; vencedora: Atlet
   const placar = params.wo ? "por W.O" : params.sets.length ? `por ${params.sets.join(", ")}` : "";
   return `${onde}: ${dupla(params.vencedora)} ${params.vencedora.length > 1 ? "vencem" : "vence"} ${placar}.`.replace(/\s+\./, ".");
 }
+
+/** Chamada feita sem quadra (pela conferencia de presenca). */
+export function textoChamadaSemQuadra(params: { categoriaNome: string; etapa: string; equipeA: AtletaTexto[]; equipeB: AtletaTexto[] }) {
+  return `Atenção! ${params.categoriaNome}, ${params.etapa}: ${dupla(params.equipeA)}, contra ${dupla(params.equipeB)}. Apresentem-se para o jogo.`;
+}

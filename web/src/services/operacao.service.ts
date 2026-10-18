@@ -101,6 +101,8 @@ export type EstadoOperacao = {
   fila: JogoOperacao[];
   progresso: { encerrados: number; total: number };
   encerradosRecentes: EncerradoOperacao[];
+  /** chamados sem quadra (ex.: "Chamar" da conferencia de presenca), nas ultimas 2 h */
+  chamadosSemQuadra: JogoOperacao[];
 };
 
 const numeroDaQuadra = (quadra: string | null) => {
@@ -146,6 +148,7 @@ export class OperacaoService {
         chamadoEm: partidas.chamadoEm,
         iniciadoEm: partidas.iniciadoEm,
         finalizadoEm: partidas.finalizadoEm,
+        dataHorario: partidas.dataHorario,
         vencedorId: partidas.vencedorId,
         detalhesPlacar: partidas.detalhesPlacar,
         equipeAId: partidas.equipeAId,
@@ -179,8 +182,10 @@ export class OperacaoService {
     const comEscopo = reservas.filter((r) => r.categoriaId && r.fase);
     const emChaveReservada = (l: { categoriaId: string; fase: string; grupoId: string | null }) => comEscopo.some((r) => daChave(l, r));
     // candidatos: fila da categoria ativa + jogos das chaves reservadas (podem ser de outra categoria)
+    // fila: tudo que ainda nao ocupa quadra (jogo chamado sem quadra continua na fila)
+    const ocupaQuadra = (l: (typeof linhas)[number]) => Boolean(l.quadra && l.chamadoEm);
     const filaLinhas = linhas
-      .filter((l) => l.status === "AGENDADA" && !l.chamadoEm && (l.categoriaId === categoria?.id || emChaveReservada(l)))
+      .filter((l) => l.status === "AGENDADA" && !ocupaQuadra(l) && (l.categoriaId === categoria?.id || emChaveReservada(l)))
       .sort(ordenarFila);
 
     // encerrados nos ultimos 30 min, com vencedor (o telao anuncia o resultado)
@@ -190,19 +195,33 @@ export class OperacaoService {
       .sort((a, b) => new Date(b.finalizadoEm!).getTime() - new Date(a.finalizadoEm!).getTime())
       .slice(0, 10);
 
-    const relevantes = [...emQuadra, ...filaLinhas, ...recentes];
+    const limiteChamada = Date.now() - 2 * 60 * 60 * 1000;
+    const semQuadraLinhas = linhas.filter(
+      (l) => l.status === "AGENDADA" && l.chamadoEm && !l.quadra && new Date(l.chamadoEm).getTime() >= limiteChamada
+    );
+
+    const relevantes = [...emQuadra, ...filaLinhas, ...recentes, ...semQuadraLinhas];
     const equipeIds = Array.from(new Set(relevantes.flatMap((l) => [l.equipeAId, l.equipeBId])));
     const atletasMap = equipeIds.length
       ? await equipesDisplayService.mapAtletasEquipes(equipeIds, { categoriaId: Array.from(new Set(relevantes.map((l) => l.categoriaId))) })
       : new Map<string, Atleta[]>();
 
-    // presenca e de hoje: a operacao acontece no dia
+    // presenca vale a de hoje ou a do dia agendado do jogo (a conferencia de presenca grava no dia do jogo)
     const hoje = dataSP();
+    const diaDoJogo = (l: (typeof linhas)[number]) => (l.dataHorario ? dataSP(l.dataHorario) : hoje);
+    const dias = Array.from(new Set([hoje, ...relevantes.map(diaDoJogo)]));
     const presentesRows = await db
-      .select({ usuarioId: presencas.usuarioId, status: presencas.status })
+      .select({ usuarioId: presencas.usuarioId, status: presencas.status, data: presencas.data })
       .from(presencas)
-      .where(and(eq(presencas.torneioId, params.torneioId), eq(presencas.data, hoje)));
-    const presentes = new Set(presentesRows.filter((p) => p.status === "PRESENTE").map((p) => p.usuarioId));
+      .where(and(eq(presencas.torneioId, params.torneioId), inArray(presencas.data, dias)));
+    const presentesPorDia = new Map<string, Set<string>>();
+    for (const p of presentesRows) {
+      if (p.status !== "PRESENTE") continue;
+      const dia = String(p.data);
+      presentesPorDia.set(dia, (presentesPorDia.get(dia) ?? new Set()).add(p.usuarioId));
+    }
+    const estaPresente = (l: (typeof linhas)[number], usuarioId: string) =>
+      Boolean(presentesPorDia.get(hoje)?.has(usuarioId) || presentesPorDia.get(diaDoJogo(l))?.has(usuarioId));
 
     const ocupadosPorJogo = new Map<string, string>(); // atletaId -> partidaId
     for (const l of emQuadra) {
@@ -213,7 +232,7 @@ export class OperacaoService {
       const equipeA = atletasMap.get(l.equipeAId) ?? [];
       const equipeB = atletasMap.get(l.equipeBId) ?? [];
       const todos = [...equipeA, ...equipeB];
-      const faltando = todos.filter((a) => !presentes.has(a.id)).map((a) => a.nome);
+      const faltando = todos.filter((a) => !estaPresente(l, a.id)).map((a) => a.nome);
       const ocupados = todos.filter((a) => ocupadosPorJogo.has(a.id) && ocupadosPorJogo.get(a.id) !== l.id).map((a) => a.nome);
       return {
         id: l.id,
@@ -311,6 +330,7 @@ export class OperacaoService {
     });
 
     return {
+      chamadosSemQuadra: semQuadraLinhas.map(montar),
       encerradosRecentes,
       torneio: { id: torneio.id, nome: torneio.nome, quadrasAtivas: torneio.quadrasAtivas, toleranciaAtrasoMin: torneio.toleranciaAtrasoMin },
       categoria: categoria ? { id: categoria.id, nome: categoria.nome } : null,
