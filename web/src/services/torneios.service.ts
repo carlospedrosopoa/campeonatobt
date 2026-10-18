@@ -701,7 +701,11 @@ export class TorneiosService {
         .from(inscricoes)
         .where(eq(inscricoes.torneioId, torneio.id));
       const inscricaoIds = inscricaoRows.map((i) => i.id);
-      const equipeIds = Array.from(new Set(inscricaoRows.map((i) => i.equipeId).filter(Boolean))) as string[];
+      // equipes das inscricoes e as do torneio sem inscricao (sobras de inscricao removida, duplas do Americano)
+      const equipesDoTorneio = await tx.select({ id: equipes.id }).from(equipes).where(eq(equipes.torneioId, torneio.id));
+      const equipeIds = Array.from(
+        new Set([...inscricaoRows.map((i) => i.equipeId), ...equipesDoTorneio.map((e) => e.id)].filter(Boolean))
+      ) as string[];
 
       if (partidaIds.length > 0) {
         await tx.delete(placarSubmissoes).where(inArray(placarSubmissoes.partidaId, partidaIds));
