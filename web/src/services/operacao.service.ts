@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { categorias, grupos, partidas, presencas, rodadas, torneios } from "@/db/schema";
+import { categorias, equipeIntegrantes, grupos, partidas, presencas, rodadas, smartTorneios, torneios } from "@/db/schema";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 import { dataSP } from "@/services/presenca.service";
@@ -156,6 +156,13 @@ export class OperacaoService {
       .limit(1);
     if (!torneio) throw new Error("Torneio não encontrado");
 
+    // Americano: quadra livre sem jogo com os 4 livres remonta os jogos ainda nao chamados
+    if (params.categoriaId) {
+      await americanoService
+        .replanejarSeTravado({ torneioId: params.torneioId, categoriaId: params.categoriaId })
+        .catch((e) => console.error("[operacao] falha ao replanejar o americano", e));
+    }
+
     const linhas = await db
       .select({
         id: partidas.id,
@@ -243,12 +250,65 @@ export class OperacaoService {
       const dia = String(p.data);
       presentesPorDia.set(dia, (presentesPorDia.get(dia) ?? new Set()).add(p.usuarioId));
     }
+    // Smart Torneio e criado na hora, com todos no local: nao exige check-in
+    const [smart] = await db.select({ id: smartTorneios.id }).from(smartTorneios).where(eq(smartTorneios.torneioId, params.torneioId)).limit(1);
     const estaPresente = (l: (typeof linhas)[number], usuarioId: string) =>
-      Boolean(presentesPorDia.get(hoje)?.has(usuarioId) || presentesPorDia.get(diaDoJogo(l))?.has(usuarioId));
+      Boolean(smart) || Boolean(presentesPorDia.get(hoje)?.has(usuarioId) || presentesPorDia.get(diaDoJogo(l))?.has(usuarioId));
 
     const ocupadosPorJogo = new Map<string, string>(); // atletaId -> partidaId
     for (const l of emQuadra) {
       for (const a of [...(atletasMap.get(l.equipeAId) ?? []), ...(atletasMap.get(l.equipeBId) ?? [])]) ocupadosPorJogo.set(a.id, l.id);
+    }
+
+    // Americano: a ordem das rodadas e so referencia. O proximo jogo e o que tem os 4 livres,
+    // priorizando quem jogou menos e quem esta parado ha mais tempo (a soma de jogos de cada um nao muda).
+    const configCategoria = categoria ? await categoriaConfigService.obterOuDefault(categoria.id).catch(() => null) : null;
+    if (categoria && configCategoria?.formato === "AMERICANO") {
+      const daCategoria = linhas.filter((l) => l.categoriaId === categoria.id);
+      const equipesCat = Array.from(new Set(daCategoria.flatMap((l) => [l.equipeAId, l.equipeBId])));
+      const integrantes = equipesCat.length
+        ? await db
+            .select({ equipeId: equipeIntegrantes.equipeId, usuarioId: equipeIntegrantes.usuarioId })
+            .from(equipeIntegrantes)
+            .where(inArray(equipeIntegrantes.equipeId, equipesCat))
+        : [];
+      const membros = new Map<string, string[]>();
+      for (const i of integrantes) membros.set(i.equipeId, [...(membros.get(i.equipeId) ?? []), i.usuarioId]);
+      const doJogo = (l: (typeof linhas)[number]) => [...(membros.get(l.equipeAId) ?? []), ...(membros.get(l.equipeBId) ?? [])];
+
+      const jogados = new Map<string, number>();
+      const ultimoFim = new Map<string, number>(); // quando terminou o ultimo jogo (0 = ainda nao jogou)
+      for (const l of daCategoria) {
+        const encerrado = l.status === "FINALIZADA" || l.status === "WO";
+        const emQuadraAgora = emQuadra.some((q) => q.id === l.id);
+        if (!encerrado && !emQuadraAgora) continue;
+        for (const u of doJogo(l)) {
+          jogados.set(u, (jogados.get(u) ?? 0) + 1);
+          const fim = encerrado ? new Date(l.finalizadoEm ?? l.iniciadoEm ?? l.criadoEm).getTime() : Date.now();
+          ultimoFim.set(u, Math.max(ultimoFim.get(u) ?? 0, fim));
+        }
+      }
+      const ocupado = (u: string) => ocupadosPorJogo.has(u);
+      const chave = (l: (typeof linhas)[number]) => {
+        const us = doJogo(l);
+        return {
+          ocupados: us.filter(ocupado).length,
+          jogos: us.reduce((t, u) => t + (jogados.get(u) ?? 0), 0),
+          // o menos descansado dos 4 decide: quanto mais cedo ele terminou, melhor
+          descanso: Math.max(0, ...us.map((u) => ultimoFim.get(u) ?? 0)),
+        };
+      };
+      const chaves = new Map(filaLinhas.map((l) => [l.id, chave(l)]));
+      const ordenados = filaLinhas
+        .filter((l) => l.categoriaId === categoria.id)
+        .sort((a, b) => {
+          if (a.fase !== b.fase) return (ORDEM_FASE[a.fase] ?? 9) - (ORDEM_FASE[b.fase] ?? 9);
+          const x = chaves.get(a.id)!;
+          const y = chaves.get(b.id)!;
+          return x.ocupados - y.ocupados || x.jogos - y.jogos || x.descanso - y.descanso || ordenarFila(a, b);
+        });
+      const outras = filaLinhas.filter((l) => l.categoriaId !== categoria.id);
+      filaLinhas.splice(0, filaLinhas.length, ...ordenados, ...outras);
     }
 
     const montar = (l: (typeof linhas)[number]): JogoOperacao => {
@@ -357,8 +417,7 @@ export class OperacaoService {
 
     let rankingAmericano: RankingAmericanoOperacao[] | null = null;
     if (categoria) {
-      const config = await categoriaConfigService.obterOuDefault(categoria.id).catch(() => null);
-      if (config?.formato === "AMERICANO") {
+      if (configCategoria?.formato === "AMERICANO") {
         const { linhas: ranking } = await americanoService.ranking(categoria.id);
         rankingAmericano = ranking.map(({ posicao, usuarioId, nome, fotoUrl, jogos, vitorias, gamesPro, saldo }) => ({
           posicao,

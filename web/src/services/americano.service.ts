@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, inscricoes, partidas, rodadas, usuarios } from "@/db/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { categorias, equipeIntegrantes, equipes, inscricoes, partidas, rodadas, torneios, usuarios } from "@/db/schema";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { montarRodadasAmericano, ordenarRanking, type LinhaRankingAmericano } from "@/lib/americano";
 
@@ -138,6 +138,133 @@ export class AmericanoService {
 
     const totalJogos = montadas.reduce((s, r) => s + r.jogos.length, 0);
     return { atletas: atletas.length, rodadas: montadas.length, jogos: totalJogos, jogosPorAtleta };
+  }
+
+  /**
+   * Com o torneio rodando: se ha quadra livre e nenhum jogo pendente tem os 4 atletas livres,
+   * remonta os jogos ainda nao chamados a partir de quem esta livre, mantendo a meta de jogos de cada
+   * um e evitando repetir parceiro e adversario. Jogos encerrados, em quadra ou chamados ficam como estao.
+   * Retorna true se replanejou.
+   */
+  async replanejarSeTravado(params: { torneioId: string; categoriaId: string }): Promise<boolean> {
+    const config = await categoriaConfigService.obterOuDefault(params.categoriaId);
+    if (config.formato !== "AMERICANO") return false;
+    const meta = config.americano?.jogosPorAtleta ?? 6;
+
+    return db.transaction(async (tx) => {
+      // um replanejamento por vez (telao, operacao e celulares consultam ao mesmo tempo)
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"americano:" + params.categoriaId}))`);
+
+      const [torneio] = await tx.select({ quadrasAtivas: torneios.quadrasAtivas }).from(torneios).where(eq(torneios.id, params.torneioId)).limit(1);
+      const doTorneio = await tx
+        .select({ id: partidas.id, quadra: partidas.quadra, status: partidas.status, chamadoEm: partidas.chamadoEm })
+        .from(partidas)
+        .where(eq(partidas.torneioId, params.torneioId));
+      const ocupamQuadra = doTorneio.filter((p) => p.quadra && (p.status === "EM_ANDAMENTO" || (p.status === "AGENDADA" && p.chamadoEm)));
+      const quadrasLivres = Math.max(0, (torneio?.quadrasAtivas || 1) - ocupamQuadra.length);
+      if (quadrasLivres === 0) return false;
+
+      const jogos = await tx
+        .select({
+          id: partidas.id,
+          fase: partidas.fase,
+          status: partidas.status,
+          chamadoEm: partidas.chamadoEm,
+          vencedorId: partidas.vencedorId,
+          placarA: partidas.placarA,
+          placarB: partidas.placarB,
+          finalizadoEm: partidas.finalizadoEm,
+          rodadaId: partidas.rodadaId,
+          equipeAId: partidas.equipeAId,
+          equipeBId: partidas.equipeBId,
+        })
+        .from(partidas)
+        .where(and(eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "GRUPOS")));
+      if (jogos.length === 0) return false;
+
+      const livreParaRemontar = (j: (typeof jogos)[number]) => j.status === "AGENDADA" && !j.chamadoEm && !partidaIniciada(j);
+      const pendentes = jogos.filter(livreParaRemontar);
+      const fixos = jogos.filter((j) => !livreParaRemontar(j) && j.status !== "CANCELADA");
+
+      const equipeIds = Array.from(new Set(jogos.flatMap((j) => [j.equipeAId, j.equipeBId])));
+      const integrantes = await tx
+        .select({ equipeId: equipeIntegrantes.equipeId, usuarioId: equipeIntegrantes.usuarioId })
+        .from(equipeIntegrantes)
+        .where(inArray(equipeIntegrantes.equipeId, equipeIds));
+      const membros = new Map<string, string[]>();
+      for (const i of integrantes) membros.set(i.equipeId, [...(membros.get(i.equipeId) ?? []), i.usuarioId]);
+      const dupla = (equipeId: string) => membros.get(equipeId) ?? [];
+
+      const emQuadra = new Set<string>();
+      const acabaramDeJogar = new Set<string>();
+      const contagem = new Map<string, number>();
+      const parceiros: [string, string][] = [];
+      const adversarios: [string, string][] = [];
+      const recente = Date.now() - 15 * 60 * 1000;
+      for (const j of fixos) {
+        const a = dupla(j.equipeAId);
+        const b = dupla(j.equipeBId);
+        for (const u of [...a, ...b]) contagem.set(u, (contagem.get(u) ?? 0) + 1);
+        if (a.length === 2) parceiros.push([a[0], a[1]]);
+        if (b.length === 2) parceiros.push([b[0], b[1]]);
+        for (const x of a) for (const y of b) adversarios.push([x, y]);
+        const encerrado = j.status === "FINALIZADA" || j.status === "WO";
+        if (!encerrado) for (const u of [...a, ...b]) emQuadra.add(u);
+        else if (j.finalizadoEm && new Date(j.finalizadoEm).getTime() >= recente) for (const u of [...a, ...b]) acabaramDeJogar.add(u);
+      }
+
+      // travado = nenhum jogo pendente com os 4 livres
+      const temJogoLivre = pendentes.some((j) => [...dupla(j.equipeAId), ...dupla(j.equipeBId)].every((u) => !emQuadra.has(u)));
+      if (temJogoLivre) return false;
+
+      const atletas = Array.from(new Set([...(await this.atletasAprovados(params.categoriaId)).map((a) => a.usuarioId), ...integrantes.map((i) => i.usuarioId)]));
+      const livres = atletas.filter((u) => !emQuadra.has(u));
+      if (livres.length < 4 || !atletas.some((u) => (contagem.get(u) ?? 0) < meta)) return false;
+
+      const plano = montarRodadasAmericano({
+        atletas,
+        quadras: torneio?.quadrasAtivas || 1,
+        jogosPorAtleta: meta,
+        andamento: { jogos: contagem, parceiros, adversarios, emQuadra, acabaramDeJogar, quadrasLivres },
+      });
+      // so vale se a 1a rodada coloca alguem nas quadras livres agora
+      if (plano[0]?.numero !== 1) return false;
+
+      if (pendentes.length > 0) await tx.delete(partidas).where(inArray(partidas.id, pendentes.map((p) => p.id)));
+      const rodadasUsadas = new Set(fixos.map((j) => j.rodadaId).filter(Boolean) as string[]);
+      const existentes = await tx.select({ id: rodadas.id, numero: rodadas.numero }).from(rodadas).where(eq(rodadas.categoriaId, params.categoriaId));
+      const sobrando = existentes.filter((r) => !rodadasUsadas.has(r.id)).map((r) => r.id);
+      if (sobrando.length > 0) await tx.delete(rodadas).where(inArray(rodadas.id, sobrando));
+      let proximoNumero = Math.max(0, ...existentes.filter((r) => rodadasUsadas.has(r.id)).map((r) => r.numero ?? 0)) + 1;
+
+      const cache = new Map<string, string>();
+      for (const [equipeId, us] of membros) if (us.length === 2) cache.set([...us].sort().join("|"), equipeId);
+      for (const r of plano) {
+        const [rodada] = await tx
+          .insert(rodadas)
+          .values({ torneioId: params.torneioId, categoriaId: params.categoriaId, nome: `Rodada ${proximoNumero}`, numero: proximoNumero })
+          .returning({ id: rodadas.id });
+        proximoNumero += 1;
+        for (const j of r.jogos) {
+          const equipeAId = await this.equipeDaDupla(tx, params.torneioId, cache, j.a);
+          const equipeBId = await this.equipeDaDupla(tx, params.torneioId, cache, j.b);
+          await tx.insert(partidas).values({
+            torneioId: params.torneioId,
+            categoriaId: params.categoriaId,
+            rodadaId: rodada.id,
+            grupoId: null,
+            equipeAId,
+            equipeBId,
+            fase: "GRUPOS",
+            status: "AGENDADA",
+            placarA: 0,
+            placarB: 0,
+            atualizadoEm: new Date(),
+          });
+        }
+      }
+      return true;
+    });
   }
 
   /** Ranking individual a partir dos jogos encerrados da fase de rodadas. */

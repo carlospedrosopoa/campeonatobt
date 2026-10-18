@@ -30,6 +30,19 @@ export function montarRodadasAmericano(params: {
   quadras: number;
   jogosPorAtleta: number;
   aleatorio?: () => number;
+  /**
+   * Replanejamento com o torneio em andamento: jogos ja feitos (contando os em quadra), duplas e
+   * adversarios que ja aconteceram, quem esta em quadra agora (fica fora da 1a rodada, como se
+   * estivesse jogando nela), quem acabou de jogar e quantas quadras estao livres agora.
+   */
+  andamento?: {
+    jogos: Map<string, number>;
+    parceiros: [string, string][];
+    adversarios: [string, string][];
+    emQuadra: Set<string>;
+    acabaramDeJogar: Set<string>;
+    quadrasLivres: number;
+  };
 }): RodadaAmericano[] {
   const atletas = Array.from(new Set(params.atletas));
   const aleatorio = params.aleatorio ?? Math.random;
@@ -37,12 +50,18 @@ export function montarRodadasAmericano(params: {
   const quadras = Math.max(1, Math.min(Math.trunc(params.quadras) || 1, Math.floor(atletas.length / 4)));
   const meta = Math.max(1, Math.trunc(params.jogosPorAtleta) || 1);
 
-  const jogos = new Map<string, number>(atletas.map((a) => [a, 0]));
-  const ultimaRodada = new Map<string, number>(atletas.map((a) => [a, -1]));
+  const and = params.andamento;
+  const jogos = new Map<string, number>(atletas.map((a) => [a, and?.jogos.get(a) ?? 0]));
+  // em quadra conta como jogando na rodada 1; quem acabou de jogar, na rodada 0
+  const ultimaRodada = new Map<string, number>(
+    atletas.map((a) => [a, and?.emQuadra.has(a) ? 1 : and?.acabaramDeJogar.has(a) ? 0 : -1])
+  );
   const parceiros = new Map<string, number>();
   const adversarios = new Map<string, number>();
   const conta = (m: Map<string, number>, x: string, y: string) => m.get(chave(x, y)) ?? 0;
   const soma = (m: Map<string, number>, x: string, y: string) => m.set(chave(x, y), conta(m, x, y) + 1);
+  for (const [x, y] of and?.parceiros ?? []) soma(parceiros, x, y);
+  for (const [x, y] of and?.adversarios ?? []) soma(adversarios, x, y);
 
   /** melhor das 3 formas de dividir 4 atletas em 2 duplas */
   const melhorJogo = (q: string[]): { jogo: JogoAmericano; custo: number } => {
@@ -67,14 +86,27 @@ export function montarRodadasAmericano(params: {
   for (let numero = 1; numero <= 500; numero++) {
     const faltando = atletas.filter((a) => jogos.get(a)! < meta);
     if (faltando.length === 0) break;
+    // na 1a rodada do replanejamento: so as quadras livres e so quem nao esta em quadra
+    const primeiraComAndamento = Boolean(and) && numero === 1;
+    const disponiveis = primeiraComAndamento ? atletas.filter((a) => !and!.emQuadra.has(a)) : atletas;
+    const quadrasRodada = primeiraComAndamento ? Math.min(and!.quadrasLivres, Math.floor(disponiveis.length / 4)) : quadras;
+    const faltandoDisp = faltando.filter((a) => disponiveis.includes(a));
+    if (quadrasRodada <= 0 || faltandoDisp.length === 0) {
+      if (primeiraComAndamento) {
+        for (const a of and!.emQuadra) ultimaRodada.set(a, numero);
+        rodadas.push({ numero, jogos: [] });
+        continue;
+      }
+      break;
+    }
 
     // quantos jogos nesta rodada: o suficiente para quem ainda precisa jogar, ate o limite de quadras
-    const jogosNaRodada = Math.max(1, Math.min(quadras, Math.ceil(faltando.length / 4)));
+    const jogosNaRodada = Math.max(1, Math.min(quadrasRodada, Math.ceil(faltandoDisp.length / 4)));
     // quem joga: primeiro os que tem menos jogos (obrigatorios); as vagas que sobram saem do proximo
     // nivel, escolhidas junto com a divisao das duplas para variar parceiros e adversarios
     const vagas = jogosNaRodada * 4;
     const porJogos = new Map<number, string[]>();
-    for (const a of atletas) porJogos.set(jogos.get(a)!, [...(porJogos.get(jogos.get(a)!) ?? []), a]);
+    for (const a of disponiveis) porJogos.set(jogos.get(a)!, [...(porJogos.get(jogos.get(a)!) ?? []), a]);
     const niveis = Array.from(porJogos.keys()).sort((x, y) => x - y);
     const obrigatorios: string[] = [];
     let opcionais: string[] = [];
@@ -114,7 +146,7 @@ export function montarRodadasAmericano(params: {
     }
     rodadas.push({ numero, jogos: melhor!.jogos });
   }
-  return rodadas;
+  return rodadas.filter((r) => r.jogos.length > 0);
 }
 
 export type LinhaRankingAmericano = {
