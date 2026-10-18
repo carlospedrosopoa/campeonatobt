@@ -7,6 +7,7 @@ import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { categoriaConfigService, defaultCategoriaConfigV1, type CategoriaConfigV1 } from "@/services/categoria-config.service";
 import { torneioComunicacoesService } from "@/services/torneio-comunicacoes.service";
+import { DEFAULT_REGRAS_PARTIDA_BT } from "@/lib/regras-partida";
 
 /**
  * Smart Torneio: o atleta cria pelo app um torneio privado com uma categoria, paga por Pix
@@ -22,8 +23,8 @@ export class ErroSmart extends Error {
 
 export type StatusSmart = "AGUARDANDO_PAGAMENTO" | "AGUARDANDO_APROVACAO" | "APROVADO" | "RECUSADO";
 type Genero = "MASCULINO" | "FEMININO" | "MISTO" | "LIVRE";
-type TipoParticipacao = "DUPLAS" | "DUPLAS_SORTEADAS";
-type Formato = "GRUPOS" | "MATA_MATA";
+type TipoParticipacao = "DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES";
+type Formato = "GRUPOS" | "MATA_MATA" | "AMERICANO";
 
 const ESPORTE_BEACH_TENNIS = "Beach Tennis";
 // sem letras e numeros parecidos (0/O, 1/I/L)
@@ -91,6 +92,8 @@ export async function criarSmartTorneio(params: {
   tipoParticipacao: TipoParticipacao;
   formato: Formato;
   quantidadeAtletas: number;
+  /** Americano: jogos de cada atleta antes da final (padrao 6) */
+  jogosPorAtleta?: number;
 }) {
   const nome = params.nome?.trim();
   const local = params.local?.trim();
@@ -98,11 +101,14 @@ export async function criarSmartTorneio(params: {
   if (!local) throw new ErroSmart("Informe o local do torneio");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(params.data || "")) throw new ErroSmart("Data inválida");
   if (!["MASCULINO", "FEMININO", "MISTO", "LIVRE"].includes(params.genero)) throw new ErroSmart("Gênero inválido");
-  if (!["DUPLAS", "DUPLAS_SORTEADAS"].includes(params.tipoParticipacao)) throw new ErroSmart("Tipo de participação inválido");
-  const formato: Formato = params.formato === "MATA_MATA" ? "MATA_MATA" : "GRUPOS";
+  const formato: Formato = params.formato === "MATA_MATA" ? "MATA_MATA" : params.formato === "AMERICANO" ? "AMERICANO" : "GRUPOS";
+  // no Americano cada atleta se inscreve sozinho e troca de parceiro a cada jogo
+  const tipoParticipacao: TipoParticipacao = formato === "AMERICANO" ? "SIMPLES" : params.tipoParticipacao;
+  if (!["DUPLAS", "DUPLAS_SORTEADAS", "SIMPLES"].includes(tipoParticipacao)) throw new ErroSmart("Tipo de participação inválido");
+  if (formato !== "AMERICANO" && tipoParticipacao === "SIMPLES") throw new ErroSmart("Tipo de participação inválido");
   const quantidade = Math.trunc(Number(params.quantidadeAtletas) || 0);
   if (quantidade < MIN_ATLETAS || quantidade > MAX_ATLETAS) throw new ErroSmart(`A quantidade de atletas deve ficar entre ${MIN_ATLETAS} e ${MAX_ATLETAS}`);
-  if (quantidade % 2 !== 0) throw new ErroSmart("A quantidade de atletas precisa ser par (torneio de duplas)");
+  if (formato !== "AMERICANO" && quantidade % 2 !== 0) throw new ErroSmart("A quantidade de atletas precisa ser par (torneio de duplas)");
 
   const [criador] = await db.select({ id: usuarios.id, nome: usuarios.nome }).from(usuarios).where(eq(usuarios.id, params.criadorUsuarioId)).limit(1);
   if (!criador) throw new ErroSmart("Atleta não encontrado", 404);
@@ -131,11 +137,22 @@ export async function criarSmartTorneio(params: {
     nome,
     genero: params.genero,
     // vagas = inscricoes: em duplas, cada inscricao e uma dupla; em duplas sorteadas, cada inscricao e um atleta
-    vagasMaximas: params.tipoParticipacao === "DUPLAS" ? quantidade / 2 : quantidade,
+    vagasMaximas: tipoParticipacao === "DUPLAS" ? quantidade / 2 : quantidade,
     dataHorario,
   });
 
-  const configCategoria: CategoriaConfigV1 = { ...defaultCategoriaConfigV1, tipoParticipacao: params.tipoParticipacao, formato };
+  const configCategoria: CategoriaConfigV1 =
+    formato === "AMERICANO"
+      ? {
+          ...defaultCategoriaConfigV1,
+          tipoParticipacao,
+          formato,
+          // jogos ate 4 games, sem tie-break (4-3 vale); a final vai a 6 com tie-break
+          regrasPartida: { ...DEFAULT_REGRAS_PARTIDA_BT, gamesPorSet: 4, tiebreak: { habilitado: false, em: 4, ate: 5, diffMin: 2 } },
+          regrasPartidaPorFase: { FINAL: { ...DEFAULT_REGRAS_PARTIDA_BT } },
+          americano: { jogosPorAtleta: Number(params.jogosPorAtleta) > 0 ? Math.min(30, Math.trunc(Number(params.jogosPorAtleta))) : 6, final: true },
+        }
+      : { ...defaultCategoriaConfigV1, tipoParticipacao, formato };
   await categoriaConfigService.salvar(categoria.id, configCategoria);
 
   const [pedido] = await db

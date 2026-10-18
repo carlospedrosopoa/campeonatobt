@@ -152,8 +152,10 @@ export default function SmartTorneiosAdminPage() {
                 </dd>
                 <dt className="text-muted">Categoria</dt>
                 <dd className="font-semibold text-ink">
-                  {GENERO[s.categoria?.genero ?? ""] ?? s.categoria?.genero} · {s.categoria?.tipoParticipacao === "DUPLAS_SORTEADAS" ? "duplas sorteadas" : "duplas"} ·{" "}
-                  {s.categoria?.formato === "MATA_MATA" ? "só mata-mata" : "grupos + mata-mata"}
+                  {GENERO[s.categoria?.genero ?? ""] ?? s.categoria?.genero} ·{" "}
+                  {s.categoria?.formato === "AMERICANO"
+                    ? "americano (parceiro rotativo)"
+                    : `${s.categoria?.tipoParticipacao === "DUPLAS_SORTEADAS" ? "duplas sorteadas" : "duplas"} · ${s.categoria?.formato === "MATA_MATA" ? "só mata-mata" : "grupos + mata-mata"}`}
                 </dd>
                 <dt className="text-muted">Atletas</dt>
                 <dd className="font-semibold text-ink">

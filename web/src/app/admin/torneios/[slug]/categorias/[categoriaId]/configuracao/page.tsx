@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Settings, Shuffle, Smartphone, Swords, TrendingUp, Trophy, Trash2, X, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowLeft, Repeat, ArrowUp, Banknote, Calendar, Crown, FileText, Gamepad2, ImageIcon, MapPin, Network, Pencil, Save, Settings, Shuffle, Smartphone, Swords, TrendingUp, Trophy, Trash2, X, ChevronDown, ChevronRight } from "lucide-react";
 import { CategoriaHeader } from "@/components/admin/categoria-header";
 import { Alert, Button, Card } from "@/components/admin/ui";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
@@ -24,8 +24,9 @@ type Categoria = {
 
 type CategoriaConfig = {
   versao: 1;
-  formato: "GRUPOS" | "MATA_MATA" | "LIGA";
+  formato: "GRUPOS" | "MATA_MATA" | "LIGA" | "AMERICANO";
   tipoParticipacao?: "DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES";
+  americano?: { jogosPorAtleta: number; final: boolean };
   grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean; disputaTerceiroLugar?: boolean };
@@ -210,6 +211,9 @@ export default function AdminCategoriaJogosPage() {
   const [gerandoGrupos, setGerandoGrupos] = useState(false);
   const [recalculando, setRecalculando] = useState(false);
   const [gerandoMataMata, setGerandoMataMata] = useState(false);
+  const [quadrasAmericano, setQuadrasAmericano] = useState(2);
+  const [gerandoAmericano, setGerandoAmericano] = useState<"gerar" | "final" | null>(null);
+  const [avisoAmericano, setAvisoAmericano] = useState<string | null>(null);
   const [gerandoProximaFase, setGerandoProximaFase] = useState(false);
   const [resetando, setResetando] = useState(false);
 
@@ -332,6 +336,7 @@ export default function AdminCategoriaJogosPage() {
     }
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 6 && regras?.tiebreak?.habilitado === false) return "1SET_6_SEM_TB";
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 5 && regras?.tiebreak?.habilitado === false) return "1SET_5_SEM_TB";
+    if (regras?.melhorDe === 1 && regras?.gamesPorSet === 4 && regras?.tiebreak?.habilitado === false) return "1SET_4_SEM_TB";
     return "1SET_6_TB";
   }
 
@@ -389,6 +394,16 @@ export default function AdminCategoriaJogosPage() {
         melhorDe: 1,
         gamesPorSet: 6,
         tiebreak: { habilitado: false, em: 6, ate: 0, diffMin: 2 },
+        superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+        incluirSuperTieEmGames: false,
+      };
+    }
+    if (valor === "1SET_4_SEM_TB") {
+      return {
+        tipo: "BT_SETS",
+        melhorDe: 1,
+        gamesPorSet: 4,
+        tiebreak: { habilitado: false, em: 4, ate: 0, diffMin: 2 },
         superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
         incluirSuperTieEmGames: false,
       };
@@ -1792,12 +1807,41 @@ export default function AdminCategoriaJogosPage() {
     }
   }
 
+  async function acaoAmericano(acao: "gerar" | "final") {
+    try {
+      setGerandoAmericano(acao);
+      setErro(null);
+      setAvisoAmericano(null);
+      const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/americano`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao, quadras: quadrasAmericano }),
+      });
+      const payload = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(payload?.error || "Não foi possível concluir");
+      if (acao === "gerar") {
+        setAvisoAmericano(`${payload.rodadas} rodadas, ${payload.jogos} jogos: cada um dos ${payload.atletas} atletas joga ${payload.jogosPorAtleta} vez(es), trocando de parceiro.`);
+        setFasePartidas("GRUPOS");
+        await carregarPartidas("GRUPOS");
+      } else {
+        setAvisoAmericano(`Final: ${payload.duplaA.join(" / ")} x ${payload.duplaB.join(" / ")}`);
+        setFasePartidas("FINAL");
+        await carregarPartidas("FINAL");
+      }
+    } catch (e: any) {
+      setErro(e?.message || "Erro inesperado");
+    } finally {
+      setGerandoAmericano(null);
+    }
+  }
+
   const configAlterada = Boolean(config && configSalvaJson !== null && JSON.stringify(config) !== configSalvaJson);
   const formatoAtual = config?.formato ?? "GRUPOS";
-  const usaGrupos = formatoAtual !== "MATA_MATA";
+  const ehAmericano = formatoAtual === "AMERICANO";
+  const usaGrupos = formatoAtual !== "MATA_MATA" && !ehAmericano;
   const soMataMata = formatoAtual === "MATA_MATA";
   const usaClassificacao = formatoAtual === "GRUPOS";
-  const usaMataMata = formatoAtual !== "LIGA";
+  const usaMataMata = formatoAtual !== "LIGA" && !ehAmericano;
   const grupoUnico = config?.grupos?.modo === "MANUAL" && config?.grupos?.quantidade === 1;
   const temRegrasPorFase = Object.keys(config?.regrasPartidaPorFase ?? {}).length > 0;
 
@@ -1821,6 +1865,7 @@ export default function AdminCategoriaJogosPage() {
     { id: "GRUPOS", titulo: "Grupos + mata-mata", desc: "Fase de grupos e depois chave eliminatória." },
     { id: "LIGA", titulo: "Liga", desc: "Todos contra todos, vence quem somar mais." },
     { id: "MATA_MATA", titulo: "Só mata-mata", desc: "Chave eliminatória direta, sem grupos." },
+    { id: "AMERICANO", titulo: "Americano", desc: "Inscrição individual, parceiro novo a cada jogo e ranking individual." },
   ] as const;
   const OPCOES_PARTICIPACAO = [
     { id: "DUPLAS", titulo: "Duplas", desc: "Inscrição já com a dupla formada." },
@@ -1888,7 +1933,7 @@ export default function AdminCategoriaJogosPage() {
 
                 <div className="space-y-2">
                   <div className="text-[13px] font-bold text-ink">Formato</div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     {OPCOES_FORMATO.map((op) => {
                       const ativo = config.formato === op.id;
                       return (
@@ -1896,7 +1941,21 @@ export default function AdminCategoriaJogosPage() {
                           key={op.id}
                           type="button"
                           aria-pressed={ativo}
-                          onClick={() => setConfig((p) => (p ? { ...p, formato: op.id } : p))}
+                          onClick={() =>
+                            setConfig((p) => {
+                              if (!p) return p;
+                              if (op.id !== "AMERICANO") return { ...p, formato: op.id };
+                              // Americano: individual, jogos ate 4 sem tie e final ate 6 com tie
+                              return {
+                                ...p,
+                                formato: op.id,
+                                tipoParticipacao: "SIMPLES",
+                                regrasPartida: buildRegrasPartidaPreset("1SET_4_SEM_TB"),
+                                regrasPartidaPorFase: { ...(p.regrasPartidaPorFase ?? {}), FINAL: buildRegrasPartidaPreset("1SET_6_TB") },
+                                americano: p.americano ?? { jogosPorAtleta: 6, final: true },
+                              };
+                            })
+                          }
                           className={opcaoCls(ativo)}
                         >
                           <span className="text-sm font-extrabold">{op.titulo}</span>
@@ -1908,6 +1967,36 @@ export default function AdminCategoriaJogosPage() {
                 </div>
               </div>
             </section>
+
+            {ehAmericano && (
+              <section className={secaoCls}>
+                {tituloSecao(1, "Americano", "Cada atleta joga com parceiros diferentes; vale o ranking individual (games vencidos, saldo e vitórias).")}
+                <div className="grid grid-cols-1 gap-4 px-4 py-4 sm:grid-cols-2 sm:px-5">
+                  <label className="block space-y-1.5">
+                    <span className="text-[13px] font-bold text-ink">Jogos por atleta</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={config.americano?.jogosPorAtleta ?? 6}
+                      onChange={(e) =>
+                        setConfig((p) => (p ? { ...p, americano: { final: p.americano?.final ?? true, jogosPorAtleta: Math.max(1, Math.min(30, Number(e.target.value) || 1)) } } : p))
+                      }
+                      className={campoCls}
+                    />
+                  </label>
+                  <label className="flex items-center gap-2.5 self-end pb-2.5 text-[13px] font-bold text-ink">
+                    <input
+                      type="checkbox"
+                      checked={config.americano?.final ?? true}
+                      onChange={(e) => setConfig((p) => (p ? { ...p, americano: { jogosPorAtleta: p.americano?.jogosPorAtleta ?? 6, final: e.target.checked } } : p))}
+                      className="h-4 w-4"
+                    />
+                    Final balanceada (1º + 4º contra 2º + 3º)
+                  </label>
+                </div>
+              </section>
+            )}
 
             {/* 2. Regra do jogo */}
             <section className={secaoCls}>
@@ -1930,6 +2019,7 @@ export default function AdminCategoriaJogosPage() {
                         <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
                         <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
                         <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
+                        <option value="1SET_4_SEM_TB">1 set até 4 sem tie-break (4x3 vale)</option>
                         <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
                         <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie até 10</option>
                         <option value="VOLEI_3_21">Vôlei melhor de 3 até 21</option>
@@ -1993,6 +2083,7 @@ export default function AdminCategoriaJogosPage() {
                                 <option value="1SET_6_TB">1 set até 6 (tie no 6x6)</option>
                                 <option value="1SET_6_SEM_TB">1 set até 6 sem tie</option>
                                 <option value="1SET_5_SEM_TB">1 set até 5 sem tie</option>
+                                <option value="1SET_4_SEM_TB">1 set até 4 sem tie</option>
                                 <option value="2SETS_SUPER10">2 sets até 6 + super tie 10</option>
                                 <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie 10</option>
                               </>
@@ -2013,7 +2104,7 @@ export default function AdminCategoriaJogosPage() {
             <section className={secaoCls}>
               {tituloSecao(3, "Grupos", usaGrupos ? "Como as inscrições são divididas." : undefined)}
               {!usaGrupos ? (
-                <p className="px-4 py-4 text-[13px] text-muted sm:px-5">Não se aplica ao formato Só mata-mata.</p>
+                <p className="px-4 py-4 text-[13px] text-muted sm:px-5">Não se aplica a este formato.</p>
               ) : (
                 <div className="space-y-4 px-4 py-4 sm:px-5">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -2117,7 +2208,7 @@ export default function AdminCategoriaJogosPage() {
             <section className={secaoCls}>
               {tituloSecao(4, "Mata-mata", usaMataMata ? "Montagem da chave eliminatória." : undefined)}
               {!usaMataMata ? (
-                <p className="px-4 py-4 text-[13px] text-muted sm:px-5">Não se aplica ao formato Liga.</p>
+                <p className="px-4 py-4 text-[13px] text-muted sm:px-5">Não se aplica a este formato.</p>
               ) : (
                 <div className="space-y-4 px-4 py-4 sm:px-5">
                   <label className="block space-y-1.5">
@@ -2259,7 +2350,44 @@ export default function AdminCategoriaJogosPage() {
                     Há alterações não salvas. A montagem usa a configuração salva.
                   </div>
                 )}
-                {soMataMata ? (
+                {ehAmericano ? (
+                  <>
+                    <label className="block space-y-1.5">
+                      <span className="text-[13px] font-bold text-ink">Quadras para o torneio</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={8}
+                        value={quadrasAmericano}
+                        onChange={(e) => setQuadrasAmericano(Math.max(1, Math.min(8, Number(e.target.value) || 1)))}
+                        className={campoCls}
+                      />
+                    </label>
+                    <Button
+                      variant="primary"
+                      className="w-full"
+                      icon={<Repeat />}
+                      disabled={Boolean(gerandoAmericano) || !config || configAlterada}
+                      title={configAlterada ? "Salve a configuração antes de gerar" : undefined}
+                      onClick={() => {
+                        if (window.confirm("Gerar as rodadas do Americano com os atletas aprovados? Os jogos atuais da categoria serão substituídos.")) {
+                          void acaoAmericano("gerar");
+                        }
+                      }}
+                    >
+                      {gerandoAmericano === "gerar" ? "Gerando…" : "Gerar rodadas"}
+                    </Button>
+                    {config?.americano?.final !== false && (
+                      <Button className="w-full" icon={<Trophy />} disabled={Boolean(gerandoAmericano)} onClick={() => void acaoAmericano("final")}>
+                        {gerandoAmericano === "final" ? "Gerando…" : "Gerar final balanceada"}
+                      </Button>
+                    )}
+                    {avisoAmericano && <p className="rounded-[10px] bg-sand px-3 py-2.5 text-xs font-semibold text-ink">{avisoAmericano}</p>}
+                    <p className="text-xs text-muted">
+                      Cada rodada usa as quadras ao mesmo tempo; quem esperou mais entra primeiro e as duplas não se repetem enquanto houver combinação nova. A final sai depois que todos os jogos das rodadas acabarem.
+                    </p>
+                  </>
+                ) : soMataMata ? (
                   <>
                     <Button
                       variant="primary"

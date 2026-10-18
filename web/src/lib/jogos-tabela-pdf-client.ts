@@ -15,7 +15,7 @@ type PartidaTabelaPdf = {
 };
 
 type CategoriaConfigTabelaPdf = {
-  formato: "GRUPOS" | "MATA_MATA" | "LIGA";
+  formato: "GRUPOS" | "MATA_MATA" | "LIGA" | "AMERICANO";
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean };
   mataMata?: {
