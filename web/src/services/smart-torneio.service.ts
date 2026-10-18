@@ -331,7 +331,7 @@ export async function validarInscricaoSmart(params: { torneioId: string; categor
   }
 }
 
-/** Atletas inscritos pelo criador recebem aviso no app e no WhatsApp. */
+/** Atletas inscritos pelo criador recebem aviso so no app. */
 export async function avisarInscritosPeloCriador(params: { torneioId: string; inscricaoId: string; criadorId: string }) {
   try {
     const smart = await smartDoTorneio(params.torneioId);
@@ -352,7 +352,8 @@ export async function avisarInscritosPeloCriador(params: { torneioId: string; in
       categoriaId: smart.categoriaId,
       titulo: "Você foi inscrito num Smart Torneio",
       mensagem: `${criador?.nome ?? "O organizador"} inscreveu você no torneio ${t?.nome ?? ""}. Veja os detalhes no app Play na Quadra.`,
-      enviarWhatsapp: true,
+      // criado na hora, com todos presentes: aviso so pelo app
+      enviarWhatsapp: false,
       publicarNoApp: true,
       usuarioIds,
     });

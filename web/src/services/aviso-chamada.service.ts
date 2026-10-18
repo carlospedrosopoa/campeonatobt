@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { categorias, grupos, partidas, torneioComunicacoes, torneios } from "@/db/schema";
+import { categorias, grupos, partidas, smartTorneios, torneioComunicacoes, torneios } from "@/db/schema";
 import { and, eq, gte } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 import { torneioComunicacoesService } from "@/services/torneio-comunicacoes.service";
@@ -12,7 +12,7 @@ const nomeCurto = (nome: string) => {
 
 /**
  * Avisa os 4 atletas, pelo app (notificacoes) e pelo WhatsApp, que o jogo deles foi chamado.
- * So nos torneios com a operacao ao vivo ligada. Nao repete o mesmo aviso dentro de 1 minuto.
+ * So nos torneios com a operacao ao vivo ligada; no Smart Torneio (todos presentes) so pelo app. Nao repete o mesmo aviso dentro de 1 minuto.
  * Erros sao registrados e engolidos: a chamada do jogo nunca falha por causa do aviso.
  */
 export async function avisarChamadaJogo(params: { torneioId: string; partidaId: string; criadoPorId: string }) {
@@ -74,6 +74,8 @@ export async function avisarChamadaJogo(params: { torneioId: string; partidaId: 
       .limit(1);
     if (recente) return;
 
+    const [smart] = await db.select({ id: smartTorneios.id }).from(smartTorneios).where(eq(smartTorneios.torneioId, torneio.id)).limit(1);
+
     await torneioComunicacoesService.criarComunicacao({
       torneioId: torneio.id,
       torneioNome: torneio.nome,
@@ -81,7 +83,7 @@ export async function avisarChamadaJogo(params: { torneioId: string; partidaId: 
       categoriaId: jogo.categoriaId,
       titulo,
       mensagem,
-      enviarWhatsapp: true,
+      enviarWhatsapp: !smart,
       publicarNoApp: true,
       usuarioIds,
     });
