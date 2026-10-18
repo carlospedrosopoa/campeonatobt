@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Megaphone, MonitorPlay, Play, Smartphone, Undo2, Users } from "lucide-react";
+import { AlertTriangle, Flag, Megaphone, MonitorPlay, Play, Smartphone, Undo2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader } from "@/components/admin/ui";
+import { PlacarForm } from "@/components/admin/operacao/placar-form";
 import { agoraServidor, acoesOperacao, contagemAte, emAquecimento, etapaJogo, minutosDesde, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
 
 const CHAVE_CATEGORIA = "operacao:categoria";
@@ -20,6 +21,8 @@ export default function OperacaoPage() {
   const [falha, setFalha] = useState<string | null>(null);
   const [agora, setAgora] = useState(agoraServidor);
   const [aquecimentoPadrao, setAquecimentoPadrao] = useState<string>("");
+  // jogo com o formulario de placar aberto no card da quadra
+  const [placarAberto, setPlacarAberto] = useState<string | null>(null);
 
   useEffect(() => {
     if (categoriaId) return;
@@ -199,7 +202,19 @@ export default function OperacaoPage() {
 
                 {jogo ? (
                   <>
-                    <JogoResumo jogo={jogo} />
+                    {placarAberto === jogo.id && jogo.status === "EM_ANDAMENTO" ? (
+                      <PlacarForm
+                        jogo={jogo}
+                        ocupado={ocupado === `p${jogo.id}`}
+                        onCancelar={() => setPlacarAberto(null)}
+                        onSalvar={async (sets) => {
+                          await executar(`p${jogo.id}`, () => acoesOperacao.lancarPlacar(slug, jogo, sets));
+                          setPlacarAberto(null);
+                        }}
+                      />
+                    ) : (
+                      <JogoResumo jogo={jogo} />
+                    )}
                     {atrasado && (
                       <p className="flex items-center gap-1.5 text-xs font-bold text-red-700">
                         <AlertTriangle className="h-4 w-4" /> Passou da tolerância de {tolerancia} min. Decida: aguardar, devolver à fila ou W.O.
@@ -218,6 +233,11 @@ export default function OperacaoPage() {
                             Devolver à fila
                           </Button>
                         </>
+                      )}
+                      {jogo.status === "EM_ANDAMENTO" && placarAberto !== jogo.id && (
+                        <Button size="sm" variant="primary" icon={<Flag />} disabled={Boolean(ocupado)} onClick={() => setPlacarAberto(jogo.id)}>
+                          Lançar placar
+                        </Button>
                       )}
                       <LinkButton size="sm" variant="ghost" href={`/admin/torneios/${slug}/operacao/quadra/${q.numero}`} target="_blank" icon={<Smartphone />}>
                         Tela da quadra
