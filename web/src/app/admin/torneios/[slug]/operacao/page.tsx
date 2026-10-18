@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Megaphone, MonitorPlay, Play, Smartphone, Undo2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader } from "@/components/admin/ui";
-import { acoesOperacao, contagemAte, emAquecimento, etapaJogo, minutosDesde, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
+import { agoraServidor, acoesOperacao, contagemAte, emAquecimento, etapaJogo, minutosDesde, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
 
 const CHAVE_CATEGORIA = "operacao:categoria";
 
@@ -18,7 +18,7 @@ export default function OperacaoPage() {
   const { estado, erro, recarregar } = useOperacao(slug, categoriaId);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
-  const [agora, setAgora] = useState(Date.now());
+  const [agora, setAgora] = useState(agoraServidor);
   const [aquecimentoPadrao, setAquecimentoPadrao] = useState<string>("");
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export default function OperacaoPage() {
   }, [slug, categoriaId]);
 
   useEffect(() => {
-    const t = setInterval(() => setAgora(Date.now()), 5000);
+    const t = setInterval(() => setAgora(agoraServidor()), 5000);
     return () => clearInterval(t);
   }, []);
 

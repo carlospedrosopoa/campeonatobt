@@ -5,6 +5,14 @@ import type { EstadoOperacao, JogoOperacao } from "@/services/operacao.service";
 
 export type { EstadoOperacao, JogoOperacao, QuadraOperacao } from "@/services/operacao.service";
 
+// diferenca entre o relogio do servidor e o do aparelho (relogio do aparelho pode estar errado)
+let desvioRelogioMs = 0;
+
+/** "Agora" pelo relogio do servidor: contagens e tempos das telas da operacao usam este. */
+export function agoraServidor() {
+  return Date.now() + desvioRelogioMs;
+}
+
 /** Estado da operacao do dia, atualizado sozinho a cada `intervaloMs`. */
 export function useOperacao(slug: string, categoriaId: string | null, intervaloMs = 5000) {
   const [estado, setEstado] = useState<EstadoOperacao | null>(null);
@@ -14,9 +22,15 @@ export function useOperacao(slug: string, categoriaId: string | null, intervaloM
   const carregar = useCallback(async () => {
     try {
       const qs = categoriaId ? `?categoriaId=${encodeURIComponent(categoriaId)}` : "";
+      const enviadoEm = Date.now();
       const res = await fetch(`/api/v1/torneios/${slug}/operacao${qs}`, { cache: "no-store" });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Falha ao carregar a operação");
+      if (data?.agora) {
+        // hora do servidor no meio da requisicao
+        const meio = enviadoEm + (Date.now() - enviadoEm) / 2;
+        desvioRelogioMs = new Date(data.agora).getTime() - meio;
+      }
       if (ativo.current) {
         setEstado(data as EstadoOperacao);
         setErro(null);
