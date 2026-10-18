@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { Flag, Minus, Play, Plus, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, Button } from "@/components/admin/ui";
-import { acoesOperacao, contagemAte, emAquecimento, etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
+import { agoraServidor, acoesOperacao, contagemAte, emAquecimento, etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
 
 /** Tela da quadra (celular de quem fica na quadra): Comecou, cronometro, Terminou e placar. */
 export default function QuadraOperacaoPage() {
@@ -15,11 +15,11 @@ export default function QuadraOperacaoPage() {
   const [ocupado, setOcupado] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
   const [placarAberto, setPlacarAberto] = useState(false);
-  const [agora, setAgora] = useState(Date.now());
+  const [agora, setAgora] = useState(agoraServidor);
   const [aquecimento, setAquecimento] = useState<number | null>(null);
 
   useEffect(() => {
-    const t = setInterval(() => setAgora(Date.now()), 1000);
+    const t = setInterval(() => setAgora(agoraServidor()), 1000);
     return () => clearInterval(t);
   }, []);
 

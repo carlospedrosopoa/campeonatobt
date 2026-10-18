@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { contagemAte, emAquecimento, etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
+import { agoraServidor, contagemAte, emAquecimento, etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
 import {
   PREFIXO_REPETICAO,
   textoChamada,
@@ -29,7 +29,7 @@ export default function TelaoOperacaoPage() {
   const [ultimoAnuncio, setUltimoAnuncio] = useState<string | null>(null);
   const [vozUsada, setVozUsada] = useState<"Thalita" | "navegador" | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null);
-  const [agora, setAgora] = useState(Date.now());
+  const [agora, setAgora] = useState(agoraServidor);
   // o que ja foi anunciado (ou ignorado por ser antigo)
   const anunciados = useRef<Set<string>>(new Set());
   const [telaAcordada, setTelaAcordada] = useState(false);
@@ -43,7 +43,7 @@ export default function TelaoOperacaoPage() {
   const [falhaVoz, setFalhaVoz] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setInterval(() => setAgora(Date.now()), 1000);
+    const t = setInterval(() => setAgora(agoraServidor()), 1000);
     return () => clearInterval(t);
   }, []);
 
