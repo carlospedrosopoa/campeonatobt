@@ -28,6 +28,9 @@ export default function TelaoOperacaoPage() {
   const fila = useRef<string[]>([]);
   const tocando = useRef(false);
   const azureIndisponivel = useRef(false);
+  // um unico player, liberado no toque em "Ativar som" (o Android so deixa tocar audio liberado por um toque)
+  const player = useRef<HTMLAudioElement | null>(null);
+  const [falhaVoz, setFalhaVoz] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setAgora(Date.now()), 15000);
@@ -43,8 +46,14 @@ export default function TelaoOperacaoPage() {
         const voz = window.speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("pt"));
         if (voz) u.voice = voz;
         u.onend = () => resolve();
-        u.onerror = () => resolve();
+        u.onerror = (ev) => {
+          setFalhaVoz(`voz do navegador falhou (${(ev as SpeechSynthesisErrorEvent).error ?? "erro"})`);
+          resolve();
+        };
+        window.speechSynthesis.cancel();
         window.speechSynthesis.speak(u);
+        // alguns Android nao disparam onend: libera a fila depois de um tempo proporcional ao texto
+        setTimeout(resolve, 2000 + texto.length * 90);
       }),
     []
   );
@@ -61,11 +70,15 @@ export default function TelaoOperacaoPage() {
           if (res.status === 501) azureIndisponivel.current = true;
           if (res.ok) {
             const url = URL.createObjectURL(await res.blob());
+            const audio = player.current ?? new Audio();
             await new Promise<void>((resolve) => {
-              const audio = new Audio(url);
               audio.onended = () => resolve();
               audio.onerror = () => resolve();
-              void audio.play().catch(() => resolve());
+              audio.src = url;
+              void audio.play().catch((e) => {
+                setFalhaVoz(`áudio bloqueado pelo aparelho (${e?.name ?? "erro"}). Toque em Ativar som de novo.`);
+                resolve();
+              });
             });
             URL.revokeObjectURL(url);
             setVozUsada("Thalita");
@@ -80,6 +93,35 @@ export default function TelaoOperacaoPage() {
     },
     [slug, falarNavegador]
   );
+
+  /**
+   * Precisa rodar DENTRO do toque (sem await antes): libera a voz do navegador e o player de audio.
+   * Depois disso o telao pode falar sozinho a cada chamada.
+   */
+  function liberarAudio(frase = "Som ativado.") {
+    setFalhaVoz(null);
+    try {
+      const audio = player.current ?? new Audio();
+      player.current = audio;
+      // wav vazio: so para o aparelho liberar este player
+      audio.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+      void audio.play().catch(() => null);
+    } catch {
+      // segue com a voz do navegador
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(frase);
+      u.lang = "pt-BR";
+      const voz = window.speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("pt"));
+      if (voz) u.voice = voz;
+      u.onerror = (ev) => setFalhaVoz(`voz do navegador falhou (${(ev as SpeechSynthesisErrorEvent).error ?? "erro"})`);
+      window.speechSynthesis.speak(u);
+      setVozUsada("navegador");
+    } else {
+      setFalhaVoz("este navegador não tem voz; configure a voz Thalita (Azure)");
+    }
+  }
 
   const tocarFila = useCallback(async () => {
     if (tocando.current) return;
@@ -188,8 +230,8 @@ export default function TelaoOperacaoPage() {
         <button
           type="button"
           onClick={() => {
+            if (!somAtivo) liberarAudio();
             setSomAtivo((v) => !v);
-            if (!somAtivo) void falar("Som ativado.");
           }}
           className={cn(
             "inline-flex items-center gap-2 rounded-full px-5 py-3 text-base font-bold",
@@ -199,6 +241,15 @@ export default function TelaoOperacaoPage() {
           {somAtivo ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           {somAtivo ? "Som ativo" : "Ativar som"}
         </button>
+        {somAtivo && (
+          <button
+            type="button"
+            onClick={() => liberarAudio("Teste de voz. Atenção, quadra 1!")}
+            className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-3 text-sm font-bold text-white"
+          >
+            Testar voz
+          </button>
+        )}
         {somAtivo && !telaAcordada && (
           <span className="text-sm font-semibold text-[#f59e0b]">Deixe a tela deste aparelho sempre ligada</span>
         )}
@@ -266,6 +317,7 @@ export default function TelaoOperacaoPage() {
       <footer className="mt-8 text-xs font-semibold text-white/40">
         {atualizadoEm ? `Atualizado às ${atualizadoEm}` : "Conectando…"} · som {somAtivo ? "ativo" : "desligado"}
         {vozUsada ? ` · voz: ${vozUsada}` : ""}
+        {falhaVoz && <span className="text-[#f59e0b]"> · {falhaVoz}</span>}
       </footer>
     </div>
   );
