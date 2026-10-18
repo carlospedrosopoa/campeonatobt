@@ -2,6 +2,8 @@
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { painelQuadrasService } from "@/services/painel-quadras.service";
+import { after } from "next/server";
+import { avisarChamadaJogo } from "@/services/aviso-chamada.service";
 
 export async function PATCH(
   request: NextRequest,
@@ -23,6 +25,8 @@ export async function PATCH(
         quadraNumero: Number(body?.quadraNumero),
         arenaId: (body?.arenaId as string | null | undefined) ?? null,
       });
+      // aviso no app e no WhatsApp para os atletas (so com a operacao ao vivo ligada)
+      after(() => avisarChamadaJogo({ torneioId: torneio.id, partidaId, criadoPorId: String(acesso.user.id) }));
       return NextResponse.json(updated);
     }
 
