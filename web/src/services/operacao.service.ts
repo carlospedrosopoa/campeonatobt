@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { categorias, grupos, partidas, presencas, rodadas, torneios } from "@/db/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 import { dataSP } from "@/services/presenca.service";
 import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
@@ -455,4 +455,19 @@ export async function iniciarJogo(params: { torneioId: string; partidaId: string
     .where(eq(partidas.id, jogo.id))
     .returning();
   return atualizado;
+}
+
+/**
+ * Categoria em andamento para quem nao escolhe (pagina publica): a do jogo chamado mais recentemente
+ * nas ultimas 3 horas. Sem chamadas, null.
+ */
+export async function categoriaEmAndamento(torneioId: string): Promise<string | null> {
+  const desde = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const [row] = await db
+    .select({ categoriaId: partidas.categoriaId })
+    .from(partidas)
+    .where(and(eq(partidas.torneioId, torneioId), gte(partidas.chamadoEm, desde)))
+    .orderBy(desc(partidas.chamadoEm))
+    .limit(1);
+  return row?.categoriaId ?? null;
 }

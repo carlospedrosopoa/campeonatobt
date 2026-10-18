@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { MonitorPlay } from "lucide-react";
 import { torneiosService } from "@/services/torneios.service";
 import PainelQuadrasPublicContent from "./PainelQuadrasPublicContent";
+import AoVivoPublico from "./AoVivoPublico";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,12 @@ export default async function TorneioPainelQuadrasPublicPage({ params, searchPar
           Voltar ao torneio
         </Link>
       </div>
-      <PainelQuadrasPublicContent slug={torneio.slug} nomeTorneio={torneio.nome} modoInicial={modoInicial} />
+      {/* com a operacao ao vivo ligada, mostra os mesmos dados do telao (feito para o celular) */}
+      {torneio.operacaoAoVivo ? (
+        <AoVivoPublico slug={torneio.slug} nomeTorneio={torneio.nome} />
+      ) : (
+        <PainelQuadrasPublicContent slug={torneio.slug} nomeTorneio={torneio.nome} modoInicial={modoInicial} />
+      )}
     </>
   );
 }

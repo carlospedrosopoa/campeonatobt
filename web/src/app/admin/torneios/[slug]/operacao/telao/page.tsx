@@ -41,6 +41,15 @@ export default function TelaoOperacaoPage() {
   // audio ja gerado pela Thalita, por texto: repeticoes tocam daqui, sem gerar de novo
   const audiosGerados = useRef<Map<string, string>>(new Map());
   const [falhaVoz, setFalhaVoz] = useState<string | null>(null);
+  // QR para o publico abrir a pagina ao vivo no celular
+  const [qrSvg, setQrSvg] = useState<string | null>(null);
+  useEffect(() => {
+    const url = `${window.location.origin}/torneios/${slug}/painel-quadras`;
+    import("qrcode")
+      .then((QR) => QR.toString(url, { type: "svg", margin: 0, errorCorrectionLevel: "M" }))
+      .then(setQrSvg)
+      .catch(() => setQrSvg(null));
+  }, [slug]);
 
   useEffect(() => {
     const t = setInterval(() => setAgora(agoraServidor()), 1000);
@@ -281,111 +290,145 @@ export default function TelaoOperacaoPage() {
     }
   }, [estado, somAtivo, tocarFila]);
 
-  const proximos = estado?.fila.slice(0, 4) ?? [];
+  const proximos = estado?.fila.slice(0, 5) ?? [];
+  const totalQuadras = estado?.quadras.length ?? 0;
+  // modo TV: tudo numa tela; 4 a 6 quadras viram 3 colunas x 2 linhas
+  const colunas = totalQuadras <= 1 ? 1 : totalQuadras <= 4 ? 2 : 3;
+  const linhas = Math.max(1, Math.ceil(totalQuadras / colunas));
+  const destaque = (j: JogoOperacao | null) => Boolean(j && j.status === "AGENDADA" && j.chamadoEm && agora - new Date(j.chamadoEm).getTime() < 20_000);
 
   return (
-    <div className="min-h-dvh bg-[#06121c] px-6 py-6 text-white lg:px-10">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="text-sm font-bold uppercase tracking-[0.2em] text-[#3fd3f2]">{estado?.torneio.nome}</div>
-          <h1 className="font-display text-4xl font-bold lg:text-5xl">{estado?.categoria?.nome ?? "Agora em quadra"}</h1>
+    <div className="flex min-h-dvh flex-col bg-[#06121c] px-5 py-5 text-white lg:h-dvh lg:overflow-hidden lg:px-8">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-bold uppercase tracking-[0.2em] text-[#3fd3f2]">{estado?.torneio.nome}</div>
+          <h1 className="truncate font-display text-3xl font-bold lg:text-[clamp(2rem,3.2vw,3.5rem)]">{estado?.categoria?.nome ?? "Agora em quadra"}</h1>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            if (!somAtivo) liberarAudio();
-            setSomAtivo((v) => !v);
-          }}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-5 py-3 text-base font-bold",
-            somAtivo ? "bg-white/10 text-white" : "animate-pulse bg-[#3fd3f2] text-[#04202b]"
+        <div className="flex flex-wrap items-center gap-2">
+          {somAtivo && !telaAcordada && <span className="text-sm font-semibold text-[#f59e0b]">Deixe a tela deste aparelho sempre ligada</span>}
+          {somAtivo && (
+            <button
+              type="button"
+              onClick={() => liberarAudio("Teste de voz. Atenção, quadra 1!")}
+              className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-sm font-bold text-white"
+            >
+              Testar voz
+            </button>
           )}
-        >
-          {somAtivo ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
-          {somAtivo ? "Som ativo" : "Ativar som"}
-        </button>
-        {somAtivo && (
           <button
             type="button"
-            onClick={() => liberarAudio("Teste de voz. Atenção, quadra 1!")}
-            className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-3 text-sm font-bold text-white"
+            onClick={() => {
+              if (!somAtivo) liberarAudio();
+              setSomAtivo((v) => !v);
+            }}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-base font-bold",
+              somAtivo ? "bg-white/10 text-white" : "animate-pulse bg-[#3fd3f2] text-[#04202b]"
+            )}
           >
-            Testar voz
+            {somAtivo ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+            {somAtivo ? "Som ativo" : "Ativar som"}
           </button>
-        )}
-        {somAtivo && !telaAcordada && (
-          <span className="text-sm font-semibold text-[#f59e0b]">Deixe a tela deste aparelho sempre ligada</span>
-        )}
+        </div>
       </header>
 
       {(falando || ultimoAnuncio) && (
         <div
           className={cn(
-            "mb-6 rounded-2xl px-6 py-4 text-xl font-bold lg:text-2xl",
+            "mb-4 rounded-2xl px-6 py-3 font-bold lg:text-[clamp(1.1rem,1.6vw,1.9rem)]",
             falando ? "bg-[#3fd3f2] text-[#04202b]" : "bg-white/10 text-white/80"
           )}
         >
-          {!falando && <div className="mb-1 text-xs font-bold uppercase tracking-[0.2em] text-white/50">Último anúncio</div>}
+          {!falando && <span className="mr-3 text-xs font-bold uppercase tracking-[0.2em] text-white/50">Último anúncio</span>}
           {falando ?? ultimoAnuncio}
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {estado?.quadras.map((q) => (
-          <div key={q.numero} className={cn("rounded-2xl border p-5", q.jogo ? "border-white/15 bg-white/5" : "border-dashed border-white/15")}>
-            <div className="mb-3 flex items-center justify-between">
-              <span className="font-display text-3xl font-bold">{q.nome}</span>
-              {q.jogo ? (
-                q.jogo.status === "EM_ANDAMENTO" ? (
-                  emAquecimento(q.jogo, agora) ? (
-                    <span className="rounded-full bg-[#3fd3f2] px-3 py-1 text-sm font-bold text-[#04202b]">
-                      Aquecimento · {contagemAte(q.jogo.aquecimentoAte, agora)}
-                    </span>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,22vw)]">
+        <div
+          className="grid min-h-0 grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:var(--colunas)] lg:[grid-template-rows:var(--linhas)]"
+          style={{ ["--colunas" as string]: `repeat(${colunas}, minmax(0, 1fr))`, ["--linhas" as string]: `repeat(${linhas}, minmax(0, 1fr))` }}
+        >
+          {estado?.quadras.map((q) => (
+            <div
+              key={q.numero}
+              className={cn(
+                "flex min-h-0 flex-col rounded-2xl border p-5 transition-all",
+                q.jogo ? "border-white/15 bg-white/5" : "border-dashed border-white/15",
+                destaque(q.jogo) && "scale-[1.02] border-[#f59e0b] bg-[#f59e0b]/15 ring-4 ring-[#f59e0b]"
+              )}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-display text-[clamp(1.6rem,2.4vw,2.6rem)] font-bold leading-none">{q.nome}</span>
+                {q.jogo ? (
+                  q.jogo.status === "EM_ANDAMENTO" ? (
+                    emAquecimento(q.jogo, agora) ? (
+                      <span className="rounded-full bg-[#3fd3f2] px-3 py-1 text-sm font-bold text-[#04202b] lg:text-base">
+                        Aquecimento · {contagemAte(q.jogo.aquecimentoAte, agora)}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-[#17a34a] px-3 py-1 text-sm font-bold lg:text-base">
+                        Em jogo · {tempoDesde(q.jogo.aquecimentoAte ?? q.jogo.iniciadoEm, agora)}
+                      </span>
+                    )
                   ) : (
-                    <span className="rounded-full bg-[#17a34a] px-3 py-1 text-sm font-bold">
-                      Em jogo · {tempoDesde(q.jogo.aquecimentoAte ?? q.jogo.iniciadoEm, agora)}
-                    </span>
+                    <span className="animate-pulse rounded-full bg-[#f59e0b] px-3 py-1 text-sm font-bold text-[#1f1300] lg:text-base">Chamado</span>
                   )
                 ) : (
-                  <span className="animate-pulse rounded-full bg-[#f59e0b] px-3 py-1 text-sm font-bold text-[#1f1300]">Chamado</span>
-                )
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-bold text-white/70">Livre</span>
+                )}
+              </div>
+              {q.jogo ? (
+                <div className="flex min-h-0 flex-1 flex-col justify-center gap-1 text-[clamp(1.1rem,1.7vw,2rem)] font-bold leading-tight">
+                  <div className="truncate">{nomeDupla(q.jogo.equipeA)}</div>
+                  <div className="text-sm font-semibold text-white/50">contra</div>
+                  <div className="truncate">{nomeDupla(q.jogo.equipeB)}</div>
+                  <div className="pt-1 text-sm font-semibold text-[#3fd3f2] lg:text-base">{etapaJogo(q.jogo)}</div>
+                </div>
               ) : (
-                <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-bold text-white/70">Livre</span>
+                <div className="flex flex-1 items-center text-lg text-white/40">Aguardando próximo jogo</div>
               )}
             </div>
-            {q.jogo ? (
-              <div className="space-y-1 text-xl font-bold leading-tight lg:text-2xl">
-                <div>{nomeDupla(q.jogo.equipeA)}</div>
-                <div className="text-sm font-semibold text-white/50">contra</div>
-                <div>{nomeDupla(q.jogo.equipeB)}</div>
-                <div className="pt-2 text-sm font-semibold text-[#3fd3f2]">{etapaJogo(q.jogo)}</div>
-              </div>
+          ))}
+        </div>
+
+        <aside className="flex min-h-0 flex-col gap-4">
+          <section className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-white/5 p-4">
+            <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-white/60">Próximos</h2>
+            {proximos.length === 0 ? (
+              <p className="text-sm text-white/40">Sem jogos na fila.</p>
             ) : (
-              <div className="text-lg text-white/50">Aguardando próximo jogo</div>
+              <ol className="space-y-3">
+                {proximos.map((j, i) => (
+                  <li key={j.id} className="border-b border-white/10 pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-start gap-2">
+                      <span className="w-5 shrink-0 text-sm font-extrabold text-white/40">{i + 1}</span>
+                      <div className="min-w-0 flex-1 text-[clamp(0.95rem,1.1vw,1.25rem)] font-bold leading-snug">
+                        <div className="truncate">{nomeDupla(j.equipeA)}</div>
+                        <div className="truncate">{nomeDupla(j.equipeB)}</div>
+                      </div>
+                    </div>
+                    <div className={cn("mt-1 pl-7 text-xs font-bold", j.pronto ? "text-[#4ade80]" : "text-white/50")}>
+                      {j.pronto ? "prontos" : `${j.presentes}/${j.total} presentes`} · {etapaJogo(j)}
+                    </div>
+                  </li>
+                ))}
+              </ol>
             )}
-          </div>
-        ))}
+          </section>
+          {qrSvg && (
+            <section className="flex items-center gap-3 rounded-2xl bg-white p-3 text-[#06121c]">
+              <div className="h-24 w-24 shrink-0 [&_svg]:h-full [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: qrSvg }} />
+              <div className="text-sm font-extrabold leading-tight">
+                Acompanhe ao vivo no celular
+                <div className="mt-1 text-xs font-semibold text-[#06121c]/60">Aponte a câmera</div>
+              </div>
+            </section>
+          )}
+        </aside>
       </div>
 
-      {proximos.length > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-white/60">Próximos</h2>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {proximos.map((j) => (
-              <div key={j.id} className="flex items-center justify-between gap-4 rounded-xl bg-white/5 px-5 py-3">
-                <div className="min-w-0 text-lg font-bold">
-                  <span className="truncate">{nomeDupla(j.equipeA)}</span> <span className="text-white/40">x</span>{" "}
-                  <span className="truncate">{nomeDupla(j.equipeB)}</span>
-                </div>
-                <span className={cn("shrink-0 text-sm font-bold", j.pronto ? "text-[#4ade80]" : "text-white/50")}>
-                  {j.pronto ? "prontos" : `${j.presentes}/${j.total} presentes`}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-      <footer className="mt-8 text-xs font-semibold text-white/40">
+      <footer className="mt-3 text-xs font-semibold text-white/40">
         {atualizadoEm ? `Atualizado às ${atualizadoEm}` : "Conectando…"} · som {somAtivo ? "ativo" : "desligado"}
         {vozUsada ? ` · voz: ${vozUsada}` : ""}
         {falhaVoz && <span className="text-[#f59e0b]"> · {falhaVoz}</span>}
