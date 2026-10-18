@@ -4,8 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
-import { textoChamada, textoChamadaSemQuadra, textoProximo, textoResultado } from "@/lib/operacao-texto";
+import { contagemAte, emAquecimento, etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
+import {
+  PREFIXO_REPETICAO,
+  textoChamada,
+  textoChamadaSemQuadra,
+  textoFimAquecimento,
+  textoInicioAquecimento,
+  textoProximo,
+  textoResultado,
+} from "@/lib/operacao-texto";
 
 /**
  * Telao da operacao: quadras e proximos jogos, e a chamada por voz de cada jogo chamado.
@@ -30,10 +38,12 @@ export default function TelaoOperacaoPage() {
   const azureIndisponivel = useRef(false);
   // um unico player, liberado no toque em "Ativar som" (o Android so deixa tocar audio liberado por um toque)
   const player = useRef<HTMLAudioElement | null>(null);
+  // audio ja gerado pela Thalita, por texto: repeticoes tocam daqui, sem gerar de novo
+  const audiosGerados = useRef<Map<string, string>>(new Map());
   const [falhaVoz, setFalhaVoz] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setInterval(() => setAgora(Date.now()), 15000);
+    const t = setInterval(() => setAgora(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
@@ -60,6 +70,22 @@ export default function TelaoOperacaoPage() {
 
   const falar = useCallback(
     async (texto: string) => {
+      const tocarUrl = (url: string) =>
+        new Promise<void>((resolve) => {
+          const audio = player.current ?? new Audio();
+          audio.onended = () => resolve();
+          audio.onerror = () => resolve();
+          audio.src = url;
+          void audio.play().catch((e) => {
+            setFalhaVoz(`áudio bloqueado pelo aparelho (${e?.name ?? "erro"}). Toque em Ativar som de novo.`);
+            resolve();
+          });
+        });
+      const guardado = audiosGerados.current.get(texto);
+      if (guardado) {
+        await tocarUrl(guardado);
+        return;
+      }
       if (!azureIndisponivel.current) {
         try {
           const res = await fetch(`/api/v1/torneios/${slug}/locucao`, {
@@ -70,17 +96,13 @@ export default function TelaoOperacaoPage() {
           if (res.status === 501) azureIndisponivel.current = true;
           if (res.ok) {
             const url = URL.createObjectURL(await res.blob());
-            const audio = player.current ?? new Audio();
-            await new Promise<void>((resolve) => {
-              audio.onended = () => resolve();
-              audio.onerror = () => resolve();
-              audio.src = url;
-              void audio.play().catch((e) => {
-                setFalhaVoz(`áudio bloqueado pelo aparelho (${e?.name ?? "erro"}). Toque em Ativar som de novo.`);
-                resolve();
-              });
-            });
-            URL.revokeObjectURL(url);
+            audiosGerados.current.set(texto, url);
+            if (audiosGerados.current.size > 60) {
+              const [maisAntigo, urlAntiga] = audiosGerados.current.entries().next().value as [string, string];
+              audiosGerados.current.delete(maisAntigo);
+              URL.revokeObjectURL(urlAntiga);
+            }
+            await tocarUrl(url);
             setVozUsada("Thalita");
             return;
           }
@@ -207,6 +229,47 @@ export default function TelaoOperacaoPage() {
       const base = { categoriaNome: j.categoriaNome, etapa: etapaJogo(j), equipeA: j.equipeA, equipeB: j.equipeB };
       novos.push(quadra ? textoChamada({ ...base, quadra }) : textoChamadaSemQuadra(base));
     }
+    // repete a chamada a cada 3 min (ate 2 vezes) enquanto o jogo nao comecar; reaproveita o audio ja gerado
+    for (const q of estado.quadras) {
+      const j = q.jogo;
+      if (!j || j.status !== "AGENDADA" || !j.chamadoEm) continue;
+      PREFIXO_REPETICAO.forEach((prefixo, i) => {
+        const momento = new Date(j.chamadoEm!).getTime() + (i + 1) * 180_000;
+        const chave = `rep${i + 1}:${j.id}:${j.chamadoEm}`;
+        if (vistos.has(chave) || agoraServidor < momento) return;
+        if (agoraServidor - momento > 90_000) {
+          vistos.add(chave);
+          return;
+        }
+        if (!somAtivo) return;
+        vistos.add(chave);
+        novos.push(prefixo, textoChamada({ quadra: q.numero, categoriaNome: j.categoriaNome, etapa: etapaJogo(j), equipeA: j.equipeA, equipeB: j.equipeB }));
+      });
+    }
+
+    // aquecimento: anuncia o inicio (com os minutos) e o fim ("valendo")
+    for (const q of estado.quadras) {
+      const j = q.jogo;
+      if (!j || j.status !== "EM_ANDAMENTO" || !j.aquecimentoAte || !j.aquecimentoMin) continue;
+      const chaveInicio = `aq-inicio:${j.id}:${j.iniciadoEm}`;
+      if (!vistos.has(chaveInicio)) {
+        if (!recente(j.iniciadoEm)) vistos.add(chaveInicio);
+        else if (somAtivo) {
+          vistos.add(chaveInicio);
+          novos.push(textoInicioAquecimento({ quadra: q.numero, minutos: j.aquecimentoMin }));
+        }
+      }
+      const fim = new Date(j.aquecimentoAte).getTime();
+      const chaveFim = `aq-fim:${j.id}:${j.aquecimentoAte}`;
+      if (!vistos.has(chaveFim) && agoraServidor >= fim) {
+        if (agoraServidor - fim > 90_000) vistos.add(chaveFim);
+        else if (somAtivo) {
+          vistos.add(chaveFim);
+          novos.push(textoFimAquecimento({ quadra: q.numero }));
+        }
+      }
+    }
+
     if (houveChamada) {
       const proximo = estado.fila.find((j) => j.pronto && !j.chamadoEm);
       if (proximo) novos.push(textoProximo({ equipeA: proximo.equipeA, equipeB: proximo.equipeB }));
@@ -274,7 +337,15 @@ export default function TelaoOperacaoPage() {
               <span className="font-display text-3xl font-bold">{q.nome}</span>
               {q.jogo ? (
                 q.jogo.status === "EM_ANDAMENTO" ? (
-                  <span className="rounded-full bg-[#17a34a] px-3 py-1 text-sm font-bold">Em jogo · {tempoDesde(q.jogo.iniciadoEm, agora)}</span>
+                  emAquecimento(q.jogo, agora) ? (
+                    <span className="rounded-full bg-[#3fd3f2] px-3 py-1 text-sm font-bold text-[#04202b]">
+                      Aquecimento · {contagemAte(q.jogo.aquecimentoAte, agora)}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-[#17a34a] px-3 py-1 text-sm font-bold">
+                      Em jogo · {tempoDesde(q.jogo.aquecimentoAte ?? q.jogo.iniciadoEm, agora)}
+                    </span>
+                  )
                 ) : (
                   <span className="animate-pulse rounded-full bg-[#f59e0b] px-3 py-1 text-sm font-bold text-[#1f1300]">Chamado</span>
                 )

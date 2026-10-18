@@ -304,6 +304,25 @@ async function listarDestinatariosBase(params: { torneioId: string; categoriaId?
   return enriquecerDestinatariosComTelefonePlay(Array.from(destinatarios.values()));
 }
 
+/** Destinatarios escolhidos (ex.: os 4 atletas de um jogo chamado), com telefone completado pelo Play. */
+async function listarDestinatariosPorUsuarios(usuarioIds: string[]) {
+  const ids = Array.from(new Set(usuarioIds.filter(Boolean)));
+  if (ids.length === 0) return [] as DestinatarioComunicacao[];
+  const rows = await db
+    .select({
+      usuarioId: usuarios.id,
+      usuarioNome: usuarios.nome,
+      email: usuarios.email,
+      telefone: usuarios.telefone,
+      playnaquadraAtletaId: usuarios.playnaquadraAtletaId,
+    })
+    .from(usuarios)
+    .where(inArray(usuarios.id, ids));
+  return enriquecerDestinatariosComTelefonePlay(
+    rows.map((row) => ({ ...row, telefone: row.telefone ?? null, playnaquadraAtletaId: row.playnaquadraAtletaId ?? null }))
+  );
+}
+
 export const torneioComunicacoesService = {
   async contarDestinatarios(params: { torneioId: string; categoriaId?: string | null }) {
     const destinatarios = await listarDestinatariosBase(params);
@@ -420,11 +439,15 @@ export const torneioComunicacoesService = {
     mensagem: string;
     enviarWhatsapp: boolean;
     publicarNoApp: boolean;
+    /** quando informado, envia so para estes atletas (em vez de todos os inscritos) */
+    usuarioIds?: string[];
   }) {
-    const destinatarios = await listarDestinatariosBase({
-      torneioId: params.torneioId,
-      categoriaId: params.categoriaId ?? null,
-    });
+    const destinatarios = params.usuarioIds
+      ? await listarDestinatariosPorUsuarios(params.usuarioIds)
+      : await listarDestinatariosBase({
+          torneioId: params.torneioId,
+          categoriaId: params.categoriaId ?? null,
+        });
 
     if (destinatarios.length === 0) {
       throw new Error("Nenhum atleta inscrito encontrado para esta comunicação.");

@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { Flag, Minus, Play, Plus, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, Button } from "@/components/admin/ui";
-import { acoesOperacao, etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
+import { acoesOperacao, contagemAte, emAquecimento, etapaJogo, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
 
 /** Tela da quadra (celular de quem fica na quadra): Comecou, cronometro, Terminou e placar. */
 export default function QuadraOperacaoPage() {
@@ -16,6 +16,7 @@ export default function QuadraOperacaoPage() {
   const [falha, setFalha] = useState<string | null>(null);
   const [placarAberto, setPlacarAberto] = useState(false);
   const [agora, setAgora] = useState(Date.now());
+  const [aquecimento, setAquecimento] = useState<number | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setAgora(Date.now()), 1000);
@@ -24,6 +25,9 @@ export default function QuadraOperacaoPage() {
 
   const quadra = estado?.quadras.find((q) => q.numero === n) ?? null;
   const jogo = quadra?.jogo ?? null;
+  // aquecimento: comeca com o padrao da mesa de controle e pode ser ajustado antes do "Comecou"
+  const minutosAquecimento = aquecimento ?? estado?.torneio.aquecimentoMin ?? 5;
+  const aquecendo = jogo ? emAquecimento(jogo, agora) : false;
 
   useEffect(() => {
     if (!jogo || jogo.status !== "EM_ANDAMENTO") setPlacarAberto(false);
@@ -74,9 +78,16 @@ export default function QuadraOperacaoPage() {
             </div>
             <div className="mt-4 text-sm font-semibold text-muted">
               {jogo.status === "EM_ANDAMENTO" ? (
-                <span className="inline-flex items-center gap-1.5 text-ocean-strong">
-                  <Timer className="h-4 w-4" /> Em jogo há {tempoDesde(jogo.iniciadoEm, agora)}
-                </span>
+                aquecendo ? (
+                  <span className="block text-center">
+                    <span className="block text-xs font-bold uppercase tracking-[0.08em] text-muted">Aquecimento</span>
+                    <span className="block font-display text-6xl font-bold tabular-nums text-ocean-strong">{contagemAte(jogo.aquecimentoAte, agora)}</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-ocean-strong">
+                    <Timer className="h-4 w-4" /> Em jogo há {tempoDesde(jogo.aquecimentoAte ?? jogo.iniciadoEm, agora)}
+                  </span>
+                )
               ) : (
                 <span>Chamado há {tempoDesde(jogo.chamadoEm, agora)} · {jogo.presentes}/{jogo.total} presentes</span>
               )}
@@ -84,12 +95,28 @@ export default function QuadraOperacaoPage() {
           </div>
 
           {jogo.status === "AGENDADA" && (
-            <Button variant="dark" className="h-16 text-lg" icon={<Play />} disabled={ocupado} onClick={() => executar(() => acoesOperacao.iniciar(slug, jogo.id))}>
-              Começou
-            </Button>
+            <>
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-5 py-3">
+                <span className="text-sm font-bold text-ink">Aquecimento</span>
+                <span className="flex items-center gap-2">
+                  <Contador valor={minutosAquecimento} onChange={(v) => setAquecimento(Math.min(30, v))} />
+                  <span className="text-sm font-semibold text-muted">min</span>
+                </span>
+              </div>
+              <Button
+                variant="dark"
+                className="h-16 text-lg"
+                icon={<Play />}
+                disabled={ocupado}
+                onClick={() => executar(() => acoesOperacao.iniciar(slug, jogo.id, minutosAquecimento))}
+              >
+                Começou
+              </Button>
+            </>
           )}
 
           {jogo.status === "EM_ANDAMENTO" &&
+            !aquecendo &&
             (placarAberto ? (
               <PlacarForm
                 jogo={jogo}

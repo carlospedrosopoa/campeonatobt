@@ -48,7 +48,9 @@ async function enviar(url: string, method: string, body: unknown) {
 
 export const acoesOperacao = {
   chamar: (slug: string, partidaId: string, quadraNumero: number) => enviar(`/api/v1/torneios/${slug}/operacao/chamar`, "POST", { partidaId, quadraNumero }),
-  iniciar: (slug: string, partidaId: string) => enviar(`/api/v1/torneios/${slug}/operacao/iniciar`, "POST", { partidaId }),
+  iniciar: (slug: string, partidaId: string, aquecimentoMin?: number | null) =>
+    enviar(`/api/v1/torneios/${slug}/operacao/iniciar`, "POST", { partidaId, aquecimentoMin: aquecimentoMin ?? null }),
+  salvarAquecimentoPadrao: (slug: string, aquecimentoMin: number) => enviar(`/api/v1/torneios/${slug}/operacao/config`, "PATCH", { aquecimentoMin }),
   devolver: (slug: string, partidaId: string) => enviar(`/api/v1/torneios/${slug}/painel-quadras/partidas/${partidaId}`, "PATCH", { acao: "retirar" }),
   voltarAguardando: (slug: string, partidaId: string) =>
     enviar(`/api/v1/torneios/${slug}/painel-quadras/partidas/${partidaId}`, "PATCH", { acao: "voltar-aguardando" }),
@@ -68,6 +70,17 @@ export function tempoDesde(iso: string | null, agora = Date.now()) {
   const min = Math.max(0, Math.floor((agora - new Date(iso).getTime()) / 60000));
   if (min < 60) return `${min} min`;
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")}`;
+}
+
+/** "4:05" ate o instante informado (0:00 se ja passou) */
+export function contagemAte(iso: string | null, agora = Date.now()) {
+  if (!iso) return "";
+  const s = Math.max(0, Math.ceil((new Date(iso).getTime() - agora) / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+export function emAquecimento(j: { status: string; aquecimentoAte: string | null }, agora = Date.now()) {
+  return j.status === "EM_ANDAMENTO" && Boolean(j.aquecimentoAte) && new Date(j.aquecimentoAte!).getTime() > agora;
 }
 
 export function minutosDesde(iso: string | null, agora = Date.now()) {

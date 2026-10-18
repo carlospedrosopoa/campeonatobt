@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { presencaService } from "@/services/presenca.service";
+import { after } from "next/server";
+import { avisarChamadaJogo } from "@/services/aviso-chamada.service";
 
 // Conferencia dos atletas de um jogo (arbitro)
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ slug: string; partidaId: string }> }) {
@@ -28,6 +30,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (acao !== "chamar" && acao !== "limpar-chamada") return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
     const updated = await presencaService.definirChamada({ torneioId: acesso.torneio.id, partidaId, chamar: acao === "chamar" });
     if (!updated) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
+    if (acao === "chamar") {
+      after(() => avisarChamadaJogo({ torneioId: acesso.torneio.id, partidaId, criadoPorId: String(acesso.user.id) }));
+    }
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Erro ao chamar partida:", error);

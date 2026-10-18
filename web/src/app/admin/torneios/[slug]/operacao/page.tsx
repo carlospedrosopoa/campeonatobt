@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Megaphone, MonitorPlay, Play, Smartphone, Undo2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader } from "@/components/admin/ui";
-import { acoesOperacao, etapaJogo, minutosDesde, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
+import { acoesOperacao, contagemAte, emAquecimento, etapaJogo, minutosDesde, nomeDupla, tempoDesde, useOperacao, type JogoOperacao } from "@/components/admin/operacao/comum";
 
 const CHAVE_CATEGORIA = "operacao:categoria";
 
@@ -19,6 +19,7 @@ export default function OperacaoPage() {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
   const [agora, setAgora] = useState(Date.now());
+  const [aquecimentoPadrao, setAquecimentoPadrao] = useState<string>("");
 
   useEffect(() => {
     if (categoriaId) return;
@@ -29,7 +30,7 @@ export default function OperacaoPage() {
   }, [slug, categoriaId]);
 
   useEffect(() => {
-    const t = setInterval(() => setAgora(Date.now()), 30000);
+    const t = setInterval(() => setAgora(Date.now()), 5000);
     return () => clearInterval(t);
   }, []);
 
@@ -55,6 +56,14 @@ export default function OperacaoPage() {
   }
 
   const tolerancia = estado?.torneio.toleranciaAtrasoMin ?? 15;
+  const aquecimentoSalvo = estado?.torneio.aquecimentoMin ?? 5;
+
+  /** Comecou: pergunta os minutos de aquecimento (padrao do torneio). */
+  function comecar(jogo: JogoOperacao) {
+    const resposta = window.prompt("Minutos de aquecimento (0 para começar direto):", String(aquecimentoSalvo));
+    if (resposta === null) return;
+    void executar(`i${jogo.id}`, () => acoesOperacao.iniciar(slug, jogo.id, Number(resposta) || 0));
+  }
   const quadrasLivres = estado?.quadras.filter((q) => !q.jogo) ?? [];
   const qsCategoria = categoriaId ? `?categoria=${categoriaId}` : "";
 
@@ -91,6 +100,35 @@ export default function OperacaoPage() {
             ))}
           </select>
         </label>
+        <label className="flex flex-col gap-1 text-[13px] font-bold text-ink">
+          Aquecimento padrão
+          <span className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={30}
+              value={aquecimentoPadrao || String(aquecimentoSalvo)}
+              onChange={(e) => setAquecimentoPadrao(e.target.value)}
+              className="h-10 w-20 rounded-[10px] border border-line bg-white px-3 text-sm font-semibold text-ink"
+            />
+            <span className="text-xs font-semibold text-muted">min</span>
+            {aquecimentoPadrao !== "" && Number(aquecimentoPadrao) !== aquecimentoSalvo && (
+              <Button
+                size="sm"
+                variant="dark"
+                disabled={Boolean(ocupado)}
+                onClick={() =>
+                  executar("aquecimento", async () => {
+                    await acoesOperacao.salvarAquecimentoPadrao(slug, Number(aquecimentoPadrao) || 0);
+                    setAquecimentoPadrao("");
+                  })
+                }
+              >
+                Salvar
+              </Button>
+            )}
+          </span>
+        </label>
         {estado?.categoria && (
           <div className="min-w-[180px]">
             <div className="text-[13px] font-semibold text-muted">
@@ -124,9 +162,15 @@ export default function OperacaoPage() {
                   </div>
                   {jogo ? (
                     jogo.status === "EM_ANDAMENTO" ? (
-                      <Badge tone="live" dot>
-                        Em jogo · {tempoDesde(jogo.iniciadoEm, agora)}
-                      </Badge>
+                      emAquecimento(jogo, agora) ? (
+                        <Badge tone="info" dot>
+                          Aquecimento · {contagemAte(jogo.aquecimentoAte, agora)}
+                        </Badge>
+                      ) : (
+                        <Badge tone="live" dot>
+                          Em jogo · {tempoDesde(jogo.aquecimentoAte ?? jogo.iniciadoEm, agora)}
+                        </Badge>
+                      )
                     ) : (
                       <Badge tone={atrasado ? "danger" : "warning"}>Chamado · {tempoDesde(jogo.chamadoEm, agora)}</Badge>
                     )
@@ -146,7 +190,7 @@ export default function OperacaoPage() {
                     <div className="flex flex-wrap gap-2">
                       {jogo.status === "AGENDADA" && (
                         <>
-                          <Button size="sm" variant="dark" icon={<Play />} disabled={Boolean(ocupado)} onClick={() => executar(`i${jogo.id}`, () => acoesOperacao.iniciar(slug, jogo.id))}>
+                          <Button size="sm" variant="dark" icon={<Play />} disabled={Boolean(ocupado)} onClick={() => comecar(jogo)}>
                             Começou
                           </Button>
                           <Button size="sm" variant="ghost" icon={<Megaphone />} disabled={Boolean(ocupado)} onClick={() => executar(`r${jogo.id}`, () => acoesOperacao.chamar(slug, jogo.id, q.numero))}>

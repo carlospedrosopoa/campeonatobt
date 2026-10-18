@@ -36,6 +36,10 @@ export type JogoOperacao = {
   quadra: string | null;
   chamadoEm: string | null;
   iniciadoEm: string | null;
+  /** minutos de aquecimento informados no "Comecou" */
+  aquecimentoMin: number | null;
+  /** fim do aquecimento (o jogo vale a partir daqui) */
+  aquecimentoAte: string | null;
   equipeA: Atleta[];
   equipeB: Atleta[];
   presentes: number;
@@ -94,7 +98,7 @@ export type EncerradoOperacao = {
 };
 
 export type EstadoOperacao = {
-  torneio: { id: string; nome: string; quadrasAtivas: number; toleranciaAtrasoMin: number };
+  torneio: { id: string; nome: string; quadrasAtivas: number; toleranciaAtrasoMin: number; aquecimentoMin: number };
   categoria: { id: string; nome: string } | null;
   categorias: { id: string; nome: string; pendentes: number; encerrados: number; total: number }[];
   quadras: QuadraOperacao[];
@@ -129,6 +133,7 @@ export class OperacaoService {
         nome: torneios.nome,
         quadrasAtivas: torneios.quadrasAtivas,
         toleranciaAtrasoMin: torneios.toleranciaAtrasoMin,
+        aquecimentoMin: torneios.aquecimentoMin,
         painelQuadrasReservas: torneios.painelQuadrasReservas,
       })
       .from(torneios)
@@ -149,6 +154,7 @@ export class OperacaoService {
         quadra: partidas.quadra,
         chamadoEm: partidas.chamadoEm,
         iniciadoEm: partidas.iniciadoEm,
+        aquecimentoMin: partidas.aquecimentoMin,
         finalizadoEm: partidas.finalizadoEm,
         dataHorario: partidas.dataHorario,
         vencedorId: partidas.vencedorId,
@@ -248,6 +254,9 @@ export class OperacaoService {
         quadra: l.quadra ?? null,
         chamadoEm: l.chamadoEm ? new Date(l.chamadoEm).toISOString() : null,
         iniciadoEm: l.iniciadoEm ? new Date(l.iniciadoEm).toISOString() : null,
+        aquecimentoMin: l.aquecimentoMin ?? null,
+        aquecimentoAte:
+          l.iniciadoEm && l.aquecimentoMin ? new Date(new Date(l.iniciadoEm).getTime() + l.aquecimentoMin * 60_000).toISOString() : null,
         equipeA,
         equipeB,
         presentes: todos.length - faltando.length,
@@ -335,7 +344,13 @@ export class OperacaoService {
       agora: new Date().toISOString(),
       chamadosSemQuadra: semQuadraLinhas.map(montar),
       encerradosRecentes,
-      torneio: { id: torneio.id, nome: torneio.nome, quadrasAtivas: torneio.quadrasAtivas, toleranciaAtrasoMin: torneio.toleranciaAtrasoMin },
+      torneio: {
+        id: torneio.id,
+        nome: torneio.nome,
+        quadrasAtivas: torneio.quadrasAtivas,
+        toleranciaAtrasoMin: torneio.toleranciaAtrasoMin,
+        aquecimentoMin: torneio.aquecimentoMin,
+      },
       categoria: categoria ? { id: categoria.id, nome: categoria.nome } : null,
       categorias: categoriasResumo,
       quadras,
@@ -407,7 +422,19 @@ export async function chamarJogo(params: { torneioId: string; partidaId: string;
 }
 
 /** Marca o inicio do jogo chamado (botao "Comecou" da quadra). */
-export async function iniciarJogo(params: { torneioId: string; partidaId: string }) {
+const limitarAquecimento = (v: unknown) => Math.max(0, Math.min(30, Math.trunc(Number(v) || 0)));
+
+/** Tempo de aquecimento padrao do torneio (mesa de controle). */
+export async function salvarAquecimentoPadrao(params: { torneioId: string; aquecimentoMin: number }) {
+  const [t] = await db
+    .update(torneios)
+    .set({ aquecimentoMin: limitarAquecimento(params.aquecimentoMin), atualizadoEm: new Date() })
+    .where(eq(torneios.id, params.torneioId))
+    .returning({ aquecimentoMin: torneios.aquecimentoMin });
+  return t;
+}
+
+export async function iniciarJogo(params: { torneioId: string; partidaId: string; aquecimentoMin?: number | null }) {
   const [jogo] = await db
     .select({ id: partidas.id, status: partidas.status, chamadoEm: partidas.chamadoEm, quadra: partidas.quadra })
     .from(partidas)
@@ -418,7 +445,13 @@ export async function iniciarJogo(params: { torneioId: string; partidaId: string
   if (!jogo.chamadoEm || !jogo.quadra) throw new Error("Chame o jogo para uma quadra antes de iniciar");
   const [atualizado] = await db
     .update(partidas)
-    .set({ status: "EM_ANDAMENTO", iniciadoEm: new Date(), finalizadoEm: null, atualizadoEm: new Date() })
+    .set({
+      status: "EM_ANDAMENTO",
+      iniciadoEm: new Date(),
+      aquecimentoMin: params.aquecimentoMin == null ? null : limitarAquecimento(params.aquecimentoMin) || null,
+      finalizadoEm: null,
+      atualizadoEm: new Date(),
+    })
     .where(eq(partidas.id, jogo.id))
     .returning();
   return atualizado;
