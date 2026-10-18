@@ -1,6 +1,8 @@
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, grupos, partidas, presencas, rodadas, smartTorneios, torneios } from "@/db/schema";
-import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { after } from "next/server";
+import { avisarChamadaJogo } from "@/services/aviso-chamada.service";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 import { dataSP } from "@/services/presenca.service";
 import { categoriaConfigService } from "@/services/categoria-config.service";
@@ -100,7 +102,7 @@ export type EncerradoOperacao = {
 };
 
 export type EstadoOperacao = {
-  torneio: { id: string; nome: string; quadrasAtivas: number; toleranciaAtrasoMin: number; aquecimentoMin: number };
+  torneio: { id: string; nome: string; quadrasAtivas: number; toleranciaAtrasoMin: number; aquecimentoMin: number; chamadaAutomatica: boolean };
   categoria: { id: string; nome: string } | null;
   categorias: { id: string; nome: string; pendentes: number; encerrados: number; total: number }[];
   quadras: QuadraOperacao[];
@@ -141,11 +143,13 @@ function ordenarFila(a: { fase: string; rodadaNumero: number | null; grupoNome: 
 }
 
 export class OperacaoService {
-  async estado(params: { torneioId: string; categoriaId?: string | null }): Promise<EstadoOperacao> {
+  async estado(params: { torneioId: string; categoriaId?: string | null; semChamadaAutomatica?: boolean }): Promise<EstadoOperacao> {
     const [torneio] = await db
       .select({
         id: torneios.id,
         nome: torneios.nome,
+        chamadaAutomatica: torneios.chamadaAutomatica,
+        organizadorId: torneios.organizadorId,
         quadrasAtivas: torneios.quadrasAtivas,
         toleranciaAtrasoMin: torneios.toleranciaAtrasoMin,
         aquecimentoMin: torneios.aquecimentoMin,
@@ -415,6 +419,16 @@ export class OperacaoService {
       };
     });
 
+    // chamada automatica: quadra livre com jogo sugerido e pronto e chamada sem esperar o operador
+    if (torneio.chamadaAutomatica && !params.semChamadaAutomatica && quadras.some((q) => !q.jogo && q.sugestao?.pronto)) {
+      const chamados = await chamarSugestoesAutomaticamente({
+        torneioId: torneio.id,
+        criadoPorId: torneio.organizadorId,
+        quadras: quadras.filter((q) => !q.jogo && q.sugestao?.pronto).map((q) => ({ numero: q.numero, partidaId: q.sugestao!.id })),
+      });
+      if (chamados > 0) return this.estado({ ...params, semChamadaAutomatica: true });
+    }
+
     let rankingAmericano: RankingAmericanoOperacao[] | null = null;
     if (categoria) {
       if (configCategoria?.formato === "AMERICANO") {
@@ -443,6 +457,7 @@ export class OperacaoService {
         quadrasAtivas: torneio.quadrasAtivas,
         toleranciaAtrasoMin: torneio.toleranciaAtrasoMin,
         aquecimentoMin: torneio.aquecimentoMin,
+        chamadaAutomatica: torneio.chamadaAutomatica,
       },
       categoria: categoria ? { id: categoria.id, nome: categoria.nome } : null,
       categorias: categoriasResumo,
@@ -512,6 +527,47 @@ export async function chamarJogo(params: { torneioId: string; partidaId: string;
     .returning();
   if (invalidarCard) await excluirCardPartidaDoGcs(jogo.fotoUrl).catch(() => null);
   return atualizado;
+}
+
+/**
+ * Chamada automatica: chama cada sugestao na sua quadra. Varios aparelhos consultam o estado ao mesmo
+ * tempo, entao roda com trava e confere de novo se o jogo ainda nao foi chamado. Retorna quantos chamou.
+ */
+async function chamarSugestoesAutomaticamente(params: { torneioId: string; criadoPorId: string; quadras: { numero: number; partidaId: string }[] }) {
+  const chamados: string[] = [];
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"chamada-automatica:" + params.torneioId}))`);
+    for (const q of params.quadras) {
+      const [p] = await tx.select({ status: partidas.status, chamadoEm: partidas.chamadoEm }).from(partidas).where(eq(partidas.id, q.partidaId)).limit(1);
+      if (!p || p.status !== "AGENDADA" || p.chamadoEm) continue;
+      try {
+        await chamarJogo({ torneioId: params.torneioId, partidaId: q.partidaId, quadraNumero: q.numero });
+        chamados.push(q.partidaId);
+      } catch (e) {
+        console.error("[operacao] chamada automatica falhou", q, e);
+      }
+    }
+  });
+  // aviso no app (e WhatsApp fora do Smart) para os atletas chamados
+  for (const partidaId of chamados) {
+    const aviso = () => avisarChamadaJogo({ torneioId: params.torneioId, partidaId, criadoPorId: params.criadoPorId });
+    try {
+      after(aviso);
+    } catch {
+      void aviso();
+    }
+  }
+  return chamados.length;
+}
+
+/** Liga ou desliga a chamada automatica (mesa de controle). */
+export async function salvarChamadaAutomatica(params: { torneioId: string; chamadaAutomatica: boolean }) {
+  const [t] = await db
+    .update(torneios)
+    .set({ chamadaAutomatica: Boolean(params.chamadaAutomatica), atualizadoEm: new Date() })
+    .where(eq(torneios.id, params.torneioId))
+    .returning({ chamadaAutomatica: torneios.chamadaAutomatica });
+  return t;
 }
 
 /** Marca o inicio do jogo chamado (botao "Comecou" da quadra). */

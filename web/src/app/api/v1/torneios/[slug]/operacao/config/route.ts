@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { operacaoDesabilitada } from "@/lib/operacao-texto";
-import { salvarAquecimentoPadrao } from "@/services/operacao.service";
+import { salvarAquecimentoPadrao, salvarChamadaAutomatica } from "@/services/operacao.service";
 
-/** Ajustes da mesa de controle. Body: { aquecimentoMin } */
+/** Ajustes da mesa de controle. Body: { aquecimentoMin } ou { chamadaAutomatica } */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
@@ -11,6 +11,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if ("response" in acesso) return acesso.response;
     if (!acesso.torneio.operacaoAoVivo) return operacaoDesabilitada();
     const body = await request.json().catch(() => null);
+    if (typeof body?.chamadaAutomatica === "boolean") {
+      const r = await salvarChamadaAutomatica({ torneioId: acesso.torneio.id, chamadaAutomatica: body.chamadaAutomatica });
+      return NextResponse.json({ ok: true, ...r });
+    }
     const r = await salvarAquecimentoPadrao({ torneioId: acesso.torneio.id, aquecimentoMin: Number(body?.aquecimentoMin) });
     return NextResponse.json({ ok: true, ...r });
   } catch (error: any) {
