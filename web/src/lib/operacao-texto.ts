@@ -42,3 +42,14 @@ export function textoResultado(params: { quadra: number | null; vencedora: Atlet
 export function textoChamadaSemQuadra(params: { categoriaNome: string; etapa: string; equipeA: AtletaTexto[]; equipeB: AtletaTexto[] }) {
   return `Atenção! ${params.categoriaNome}, ${params.etapa}: ${dupla(params.equipeA)}, contra ${dupla(params.equipeB)}. Apresentem-se para o jogo.`;
 }
+
+export function textoInicioAquecimento(params: { quadra: number; minutos: number }) {
+  return `Quadra ${params.quadra}: aquecimento de ${params.minutos} ${params.minutos === 1 ? "minuto" : "minutos"}.`;
+}
+
+export function textoFimAquecimento(params: { quadra: number }) {
+  return `Quadra ${params.quadra}: fim do aquecimento. Valendo, bom jogo!`;
+}
+
+/** Repeticao da chamada: a frase curta e gerada uma vez e o audio da chamada e reaproveitado. */
+export const PREFIXO_REPETICAO = ["Segunda chamada!", "Última chamada!"] as const;

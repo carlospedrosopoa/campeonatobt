@@ -245,6 +245,8 @@ export const torneios = pgTable('torneios', {
   capitaesGerenciamJogos: boolean('capitaes_gerenciam_jogos').default(false).notNull(),
   // operacao ao vivo: fila automatica, tela da quadra e telao com chamada por voz
   operacaoAoVivo: boolean('operacao_ao_vivo').default(false).notNull(),
+  // minutos de aquecimento padrao (mesa de controle da operacao ao vivo)
+  aquecimentoMin: integer('aquecimento_min').default(5).notNull(),
   toleranciaAtrasoMin: integer('tolerancia_atraso_min').default(15).notNull(),
   checkinModo: text('checkin_modo').$type<"QR" | "BOTAO" | "AMBOS">().default('AMBOS').notNull(),
   layoutCards: text('layout_cards').$type<"NOVO" | "CLASSICO">().default('CLASSICO').notNull(),
@@ -468,6 +470,8 @@ export const partidas = pgTable('partidas', {
   dataHorario: timestamp('data_horario'),
   dataLimite: timestamp('data_limite'),
   chamadoEm: timestamp('chamado_em'),
+  // minutos de aquecimento informados no "Comecou" (o jogo vale a partir de iniciadoEm + aquecimento)
+  aquecimentoMin: integer('aquecimento_min'),
   iniciadoEm: timestamp('iniciado_em'),
   finalizadoEm: timestamp('finalizado_em'),
   observacoes: text('observacoes'),
