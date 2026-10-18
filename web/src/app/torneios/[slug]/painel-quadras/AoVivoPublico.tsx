@@ -155,6 +155,33 @@ export default function AoVivoPublico({ slug, nomeTorneio }: { slug: string; nom
             </section>
           )}
 
+          {estado.rankingAmericano && estado.rankingAmericano.length > 0 && (
+            <section className="mt-6 space-y-2">
+              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">Ranking individual</h2>
+              <div className="overflow-hidden rounded-xl bg-white/5">
+                <div className="flex items-center gap-3 border-b border-white/10 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-white/40">
+                  <span className="w-6 text-right">#</span>
+                  <span className="flex-1">Atleta</span>
+                  <span className="w-8 text-right">J</span>
+                  <span className="w-8 text-right">V</span>
+                  <span className="w-10 text-right">Games</span>
+                  <span className="w-10 text-right">Saldo</span>
+                </div>
+                {estado.rankingAmericano.map((l) => (
+                  <div key={l.usuarioId} className="flex items-center gap-3 border-b border-white/5 px-4 py-2.5 text-sm font-bold last:border-0">
+                    <span className={`w-6 text-right tabular-nums ${l.posicao <= 4 ? "text-amber-400" : "text-white/40"}`}>{l.posicao}</span>
+                    <span className="min-w-0 flex-1 truncate">{l.nome}</span>
+                    <span className="w-8 text-right tabular-nums text-white/60">{l.jogos}</span>
+                    <span className="w-8 text-right tabular-nums text-white/60">{l.vitorias}</span>
+                    <span className="w-10 text-right tabular-nums">{l.gamesPro}</span>
+                    <span className="w-10 text-right tabular-nums text-white/60">{l.saldo > 0 ? `+${l.saldo}` : l.saldo}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-white/40">Os 4 primeiros jogam a final: 1º + 4º contra 2º + 3º.</p>
+            </section>
+          )}
+
           {estado.encerradosRecentes.length > 0 && (
             <section className="mt-6 space-y-2">
               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">Últimos resultados</h2>

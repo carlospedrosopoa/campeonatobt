@@ -3,6 +3,8 @@ import { categorias, grupos, partidas, presencas, rodadas, torneios } from "@/db
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 import { dataSP } from "@/services/presenca.service";
+import { categoriaConfigService } from "@/services/categoria-config.service";
+import { americanoService } from "@/services/americano.service";
 import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
 
 /**
@@ -109,6 +111,19 @@ export type EstadoOperacao = {
   chamadosSemQuadra: JogoOperacao[];
   /** hora do servidor, para o telao comparar sem depender do relogio do aparelho */
   agora: string;
+  /** categoria ativa no formato Americano: ranking individual ao vivo */
+  rankingAmericano: RankingAmericanoOperacao[] | null;
+};
+
+export type RankingAmericanoOperacao = {
+  posicao: number;
+  usuarioId: string;
+  nome: string;
+  fotoUrl: string | null;
+  jogos: number;
+  vitorias: number;
+  gamesPro: number;
+  saldo: number;
 };
 
 const numeroDaQuadra = (quadra: string | null) => {
@@ -340,8 +355,27 @@ export class OperacaoService {
       };
     });
 
+    let rankingAmericano: RankingAmericanoOperacao[] | null = null;
+    if (categoria) {
+      const config = await categoriaConfigService.obterOuDefault(categoria.id).catch(() => null);
+      if (config?.formato === "AMERICANO") {
+        const { linhas: ranking } = await americanoService.ranking(categoria.id);
+        rankingAmericano = ranking.map(({ posicao, usuarioId, nome, fotoUrl, jogos, vitorias, gamesPro, saldo }) => ({
+          posicao,
+          usuarioId,
+          nome,
+          fotoUrl,
+          jogos,
+          vitorias,
+          gamesPro,
+          saldo,
+        }));
+      }
+    }
+
     return {
       agora: new Date().toISOString(),
+      rankingAmericano,
       chamadosSemQuadra: semQuadraLinhas.map(montar),
       encerradosRecentes,
       torneio: {

@@ -6,6 +6,8 @@ import { operacaoService, NOME_FASE } from "@/services/operacao.service";
 import { presencaAtletaService } from "@/services/presenca-atleta.service";
 import { confrontosService } from "@/services/confrontos.service";
 import { classificacaoCategoriaService } from "@/services/classificacao-categoria.service";
+import { categoriaConfigService } from "@/services/categoria-config.service";
+import { americanoService } from "@/services/americano.service";
 
 /** Duracao media de um jogo quando ainda nao ha jogos encerrados no dia para medir. */
 const DURACAO_PADRAO_MIN = 30;
@@ -198,6 +200,32 @@ export async function meuDiaDeTorneio(params: { torneioId: string; usuarioId: st
     }
   }
 
+  // Americano: ranking individual da categoria, com a minha linha marcada
+  const categoriaRef = proximo?.categoriaId ?? jogos[0]?.categoriaId ?? null;
+  let rankingAmericano = null;
+  if (categoriaRef) {
+    const config = await categoriaConfigService.obterOuDefault(categoriaRef).catch(() => null);
+    if (config?.formato === "AMERICANO") {
+      const { linhas } = await americanoService.ranking(categoriaRef);
+      const minha = linhas.find((l) => l.usuarioId === params.usuarioId) ?? null;
+      rankingAmericano = {
+        categoriaNome: jogos.find((j) => j.categoriaId === categoriaRef)?.categoriaNome ?? null,
+        minhaPosicao: minha?.posicao ?? null,
+        total: linhas.length,
+        linhas: linhas.map((l) => ({
+          posicao: l.posicao,
+          nome: l.nome,
+          fotoUrl: l.fotoUrl,
+          minha: l.usuarioId === params.usuarioId,
+          jogos: l.jogos,
+          vitorias: l.vitorias,
+          gamesPro: l.gamesPro,
+          saldo: l.saldo,
+        })),
+      };
+    }
+  }
+
   // check-in de hoje (o mesmo do app), com o parceiro
   const status = await presencaAtletaService.status(params.usuarioId).catch(() => null);
   const checkin = status?.torneios.find((t) => t.torneio.id === torneio.id) ?? null;
@@ -211,6 +239,7 @@ export async function meuDiaDeTorneio(params: { torneioId: string; usuarioId: st
     proximoJogo,
     resultados,
     meuGrupo,
+    rankingAmericano,
   };
 }
 

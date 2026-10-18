@@ -9,7 +9,8 @@ import {
   type RegrasPartidaPorFase,
 } from "@/lib/regras-partida";
 
-export type CategoriaFormato = "GRUPOS" | "MATA_MATA" | "LIGA";
+/** AMERICANO: inscricao individual, parceiro rotativo a cada jogo e ranking individual (Smart Torneio). */
+export type CategoriaFormato = "GRUPOS" | "MATA_MATA" | "LIGA" | "AMERICANO";
 export type CategoriaTipoParticipacao = "DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES";
 
 export function tipoParticipacaoEhIndividual(tipo: CategoriaTipoParticipacao | undefined | null): boolean {
@@ -53,6 +54,8 @@ export type CategoriaConfigV1 = {
   regrasPartida?: RegrasPartidaConfig;
   regrasPartidaPorFase?: RegrasPartidaPorFase;
   desempate?: ("PONTOS" | "CONFRONTO_DIRETO" | "SALDO_GAMES" | "GAMES_PRO" | "VITORIAS" | "SORTEIO")[];
+  /** formato AMERICANO: quantos jogos cada atleta faz antes da final */
+  americano?: { jogosPorAtleta: number; final: boolean };
 };
 
 export const defaultCategoriaConfigV1: CategoriaConfigV1 = {
@@ -89,7 +92,8 @@ function criarConfigPadrao(esporte?: { slug?: string | null; nome?: string | nul
 
 function normalizeConfig(input: any): CategoriaConfigV1 {
   const versao = 1;
-  const formato: CategoriaFormato = input?.formato === "MATA_MATA" || input?.formato === "LIGA" ? input.formato : "GRUPOS";
+  const formato: CategoriaFormato =
+    input?.formato === "MATA_MATA" || input?.formato === "LIGA" || input?.formato === "AMERICANO" ? input.formato : "GRUPOS";
   const tipoParticipacao: CategoriaTipoParticipacao =
     input?.tipoParticipacao === "SIMPLES"
       ? "SIMPLES"
@@ -239,6 +243,13 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
     regrasPartidaPorFase:
       Object.keys(regrasPartidaPorFase).length > 0 ? regrasPartidaPorFase : undefined,
     desempate,
+    americano:
+      formato === "AMERICANO"
+        ? {
+            jogosPorAtleta: Math.trunc(Number(input?.americano?.jogosPorAtleta)) > 0 ? Math.min(30, Math.trunc(Number(input.americano.jogosPorAtleta))) : 6,
+            final: input?.americano?.final !== false,
+          }
+        : undefined,
   };
 }
 

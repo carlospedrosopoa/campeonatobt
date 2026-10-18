@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   );
 }
 
-/** Cria o pedido. Body: { nome, data (AAAA-MM-DD), horario? (HH:MM), local, genero, tipoParticipacao, formato, quantidadeAtletas } */
+/** Cria o pedido. Body: { nome, data (AAAA-MM-DD), horario? (HH:MM), local, genero, tipoParticipacao, formato (GRUPOS | MATA_MATA | AMERICANO), quantidadeAtletas, jogosPorAtleta? } */
 export async function POST(request: NextRequest) {
   const auth = await requireUser(request);
   if (auth instanceof NextResponse) return auth;
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       genero: b.genero,
       tipoParticipacao: b.tipoParticipacao,
       formato: b.formato,
+      jogosPorAtleta: b.jogosPorAtleta,
       quantidadeAtletas: Number(b.quantidadeAtletas),
     });
     const lista = await listarSmartDoCriador(auth.user.id);

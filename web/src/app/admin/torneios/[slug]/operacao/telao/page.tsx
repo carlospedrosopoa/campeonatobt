@@ -393,6 +393,22 @@ export default function TelaoOperacaoPage() {
         </div>
 
         <aside className="flex min-h-0 flex-col gap-4">
+          {estado?.rankingAmericano && estado.rankingAmericano.length > 0 && (
+            <section className="shrink-0 rounded-2xl bg-white/5 p-4">
+              <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-white/60">Ranking</h2>
+              <ol className="space-y-1.5">
+                {estado.rankingAmericano.slice(0, 8).map((l) => (
+                  <li key={l.usuarioId} className="flex items-center gap-2 text-[clamp(0.9rem,1vw,1.15rem)] font-bold">
+                    <span className={cn("w-6 shrink-0 text-right tabular-nums", l.posicao <= 4 ? "text-[#facc15]" : "text-white/40")}>{l.posicao}</span>
+                    <span className="min-w-0 flex-1 truncate">{l.nome}</span>
+                    <span className="shrink-0 tabular-nums text-white/80">{l.gamesPro}</span>
+                    <span className="w-9 shrink-0 text-right text-xs tabular-nums text-white/40">{l.saldo > 0 ? `+${l.saldo}` : l.saldo}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-2 text-[11px] font-semibold text-white/40">games vencidos · saldo — os 4 primeiros vão à final</p>
+            </section>
+          )}
           <section className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-white/5 p-4">
             <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-white/60">Próximos</h2>
             {proximos.length === 0 ? (
