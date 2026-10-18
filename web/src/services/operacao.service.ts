@@ -103,6 +103,8 @@ export type EstadoOperacao = {
   encerradosRecentes: EncerradoOperacao[];
   /** chamados sem quadra (ex.: "Chamar" da conferencia de presenca), nas ultimas 2 h */
   chamadosSemQuadra: JogoOperacao[];
+  /** hora do servidor, para o telao comparar sem depender do relogio do aparelho */
+  agora: string;
 };
 
 const numeroDaQuadra = (quadra: string | null) => {
@@ -330,6 +332,7 @@ export class OperacaoService {
     });
 
     return {
+      agora: new Date().toISOString(),
       chamadosSemQuadra: semQuadraLinhas.map(montar),
       encerradosRecentes,
       torneio: { id: torneio.id, nome: torneio.nome, quadrasAtivas: torneio.quadrasAtivas, toleranciaAtrasoMin: torneio.toleranciaAtrasoMin },
