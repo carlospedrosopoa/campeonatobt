@@ -149,6 +149,9 @@ export default function OperacaoPage() {
                           <Button size="sm" variant="dark" icon={<Play />} disabled={Boolean(ocupado)} onClick={() => executar(`i${jogo.id}`, () => acoesOperacao.iniciar(slug, jogo.id))}>
                             Começou
                           </Button>
+                          <Button size="sm" variant="ghost" icon={<Megaphone />} disabled={Boolean(ocupado)} onClick={() => executar(`r${jogo.id}`, () => acoesOperacao.chamar(slug, jogo.id, q.numero))}>
+                            Chamar de novo
+                          </Button>
                           <Button size="sm" variant="ghost" icon={<Undo2 />} disabled={Boolean(ocupado)} onClick={() => executar(`d${jogo.id}`, () => acoesOperacao.devolver(slug, jogo.id))}>
                             Devolver à fila
                           </Button>

@@ -18,9 +18,12 @@ export default function TelaoOperacaoPage() {
   const { estado } = useOperacao(slug, categoriaId, 3000);
   const [somAtivo, setSomAtivo] = useState(false);
   const [falando, setFalando] = useState<string | null>(null);
+  const [ultimoAnuncio, setUltimoAnuncio] = useState<string | null>(null);
+  const [vozUsada, setVozUsada] = useState<"Thalita" | "navegador" | null>(null);
+  const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null);
   const [agora, setAgora] = useState(Date.now());
-  const anunciados = useRef<Set<string> | null>(null);
-  const resultadosAnunciados = useRef<Set<string> | null>(null);
+  // o que ja foi anunciado (ou ignorado por ser antigo)
+  const anunciados = useRef<Set<string>>(new Set());
   const [telaAcordada, setTelaAcordada] = useState(false);
   const fila = useRef<string[]>([]);
   const tocando = useRef(false);
@@ -65,12 +68,14 @@ export default function TelaoOperacaoPage() {
               void audio.play().catch(() => resolve());
             });
             URL.revokeObjectURL(url);
+            setVozUsada("Thalita");
             return;
           }
         } catch {
           // cai para a voz do navegador
         }
       }
+      setVozUsada("navegador");
       await falarNavegador(texto);
     },
     [slug, falarNavegador]
@@ -82,6 +87,7 @@ export default function TelaoOperacaoPage() {
     while (fila.current.length) {
       const texto = fila.current.shift()!;
       setFalando(texto);
+      setUltimoAnuncio(texto);
       // aviso sonoro curto antes da chamada
       await new Promise((r) => setTimeout(r, 300));
       await falar(texto);
@@ -116,49 +122,58 @@ export default function TelaoOperacaoPage() {
     };
   }, [somAtivo]);
 
-  // detecta chamadas novas e resultados e anuncia
+  // detecta chamadas e resultados novos e anuncia.
+  // Anuncia o que aconteceu ate 90 s atras (pelo relogio do servidor): assim abrir o telao ou ativar o som
+  // logo depois da chamada ainda anuncia, e o que e mais antigo nao e repetido.
   useEffect(() => {
     if (!estado) return;
-    const resultados = estado.encerradosRecentes ?? [];
-    if (!resultadosAnunciados.current) {
-      resultadosAnunciados.current = new Set(resultados.map((r) => r.id));
-    } else {
-      // do mais antigo para o mais recente
-      for (const r of [...resultados].reverse()) {
-        if (resultadosAnunciados.current.has(r.id)) continue;
-        resultadosAnunciados.current.add(r.id);
-        if (somAtivo) fila.current.push(textoResultado({ quadra: r.quadra, vencedora: r.vencedora, sets: r.sets, wo: r.wo }));
+    setAtualizadoEm(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    const agoraServidor = new Date(estado.agora ?? Date.now()).getTime();
+    const recente = (iso: string | null) => Boolean(iso) && agoraServidor - new Date(iso!).getTime() <= 90_000;
+    const vistos = anunciados.current;
+    const novos: string[] = [];
+
+    // resultados, do mais antigo para o mais recente
+    for (const r of [...(estado.encerradosRecentes ?? [])].reverse()) {
+      const chave = `fim:${r.id}`;
+      if (vistos.has(chave)) continue;
+      if (!recente(r.finalizadoEm)) {
+        vistos.add(chave);
+        continue;
       }
+      if (!somAtivo) continue; // fica para quando o som for ativado (se ainda for recente)
+      vistos.add(chave);
+      novos.push(textoResultado({ quadra: r.quadra, vencedora: r.vencedora, sets: r.sets, wo: r.wo }));
     }
-    const chamados = estado.quadras.filter((q) => q.jogo && q.jogo.status === "AGENDADA" && q.jogo.chamadoEm);
-    const semQuadra = estado.chamadosSemQuadra ?? [];
-    const chave = (j: JogoOperacao) => `${j.id}:${j.quadra ?? ""}:${j.chamadoEm}`;
-    if (!anunciados.current) {
-      // ao abrir o telao, nao repete chamadas antigas
-      anunciados.current = new Set([...chamados.map((q) => chave(q.jogo!)), ...semQuadra.map(chave)]);
-      return;
-    }
-    // chamadas feitas sem quadra (conferencia de presenca)
-    for (const j of semQuadra) {
-      if (anunciados.current.has(chave(j))) continue;
-      anunciados.current.add(chave(j));
-      if (somAtivo) fila.current.push(textoChamadaSemQuadra({ categoriaNome: j.categoriaNome, etapa: etapaJogo(j), equipeA: j.equipeA, equipeB: j.equipeB }));
-    }
-    const novos = chamados.filter((q) => !anunciados.current!.has(chave(q.jogo!)));
-    if (novos.length === 0) {
-      void tocarFila();
-      return;
-    }
-    for (const q of novos) {
-      anunciados.current.add(chave(q.jogo!));
+
+    // chamadas sem quadra (conferencia de presenca) e chamadas para quadra (mesa de controle)
+    const chamadas = [
+      ...(estado.chamadosSemQuadra ?? []).map((j) => ({ j, quadra: null as number | null })),
+      ...estado.quadras.filter((q) => q.jogo && q.jogo.status === "AGENDADA" && q.jogo.chamadoEm).map((q) => ({ j: q.jogo!, quadra: q.numero })),
+    ];
+    let houveChamada = false;
+    for (const { j, quadra } of chamadas) {
+      const chave = `chamada:${j.id}:${quadra ?? ""}:${j.chamadoEm}`;
+      if (vistos.has(chave)) continue;
+      if (!recente(j.chamadoEm)) {
+        vistos.add(chave);
+        continue;
+      }
       if (!somAtivo) continue;
-      fila.current.push(
-        textoChamada({ quadra: q.numero, categoriaNome: q.jogo!.categoriaNome, etapa: etapaJogo(q.jogo!), equipeA: q.jogo!.equipeA, equipeB: q.jogo!.equipeB })
-      );
+      vistos.add(chave);
+      houveChamada = true;
+      const base = { categoriaNome: j.categoriaNome, etapa: etapaJogo(j), equipeA: j.equipeA, equipeB: j.equipeB };
+      novos.push(quadra ? textoChamada({ ...base, quadra }) : textoChamadaSemQuadra(base));
     }
-    const proximo = estado.fila.find((j) => j.pronto) ?? estado.fila[0];
-    if (somAtivo && proximo) fila.current.push(textoProximo({ equipeA: proximo.equipeA, equipeB: proximo.equipeB }));
-    void tocarFila();
+    if (houveChamada) {
+      const proximo = estado.fila.find((j) => j.pronto && !j.chamadoEm);
+      if (proximo) novos.push(textoProximo({ equipeA: proximo.equipeA, equipeB: proximo.equipeB }));
+    }
+
+    if (novos.length) {
+      fila.current.push(...novos);
+      void tocarFila();
+    }
   }, [estado, somAtivo, tocarFila]);
 
   const proximos = estado?.fila.slice(0, 4) ?? [];
@@ -189,8 +204,16 @@ export default function TelaoOperacaoPage() {
         )}
       </header>
 
-      {falando && (
-        <div className="mb-6 rounded-2xl bg-[#3fd3f2] px-6 py-4 text-xl font-bold text-[#04202b] lg:text-2xl">{falando}</div>
+      {(falando || ultimoAnuncio) && (
+        <div
+          className={cn(
+            "mb-6 rounded-2xl px-6 py-4 text-xl font-bold lg:text-2xl",
+            falando ? "bg-[#3fd3f2] text-[#04202b]" : "bg-white/10 text-white/80"
+          )}
+        >
+          {!falando && <div className="mb-1 text-xs font-bold uppercase tracking-[0.2em] text-white/50">Último anúncio</div>}
+          {falando ?? ultimoAnuncio}
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -240,6 +263,10 @@ export default function TelaoOperacaoPage() {
           </div>
         </section>
       )}
+      <footer className="mt-8 text-xs font-semibold text-white/40">
+        {atualizadoEm ? `Atualizado às ${atualizadoEm}` : "Conectando…"} · som {somAtivo ? "ativo" : "desligado"}
+        {vozUsada ? ` · voz: ${vozUsada}` : ""}
+      </footer>
     </div>
   );
 }
