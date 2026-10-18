@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { ErroSmart, avisarInscritosPeloCriador, validarInscricaoSmart } from "@/services/smart-torneio.service";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
@@ -36,6 +37,13 @@ export async function POST(
     const { slug, categoriaId } = await params;
     const acesso = await requireTournamentAdminBySlug(slug);
     if ("response" in acesso) return acesso.response;
+    // Smart Torneio: o criador inscreve sem codigo, mas respeitando o limite de atletas
+    try {
+      await validarInscricaoSmart({ torneioId: acesso.torneio.id, categoriaId, peloCriador: true });
+    } catch (e) {
+      if (e instanceof ErroSmart) return NextResponse.json({ error: e.message }, { status: e.status });
+      throw e;
+    }
     const { torneio } = acesso;
 
     const categoria = await categoriasService.buscarPorId(categoriaId);
@@ -106,6 +114,9 @@ export async function POST(
           : null,
     });
 
+    if ((acesso as { criadorSmart?: boolean }).criadorSmart && nova?.id) {
+      after(() => avisarInscritosPeloCriador({ torneioId: acesso.torneio.id, inscricaoId: nova.id, criadorId: String(acesso.user.id) }));
+    }
     return NextResponse.json(nova, { status: 201 });
   } catch (error: any) {
     const msg = typeof error?.message === "string" ? error.message : "Erro interno do servidor";

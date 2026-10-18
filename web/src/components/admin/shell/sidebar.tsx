@@ -11,6 +11,7 @@ import {
   FileUp,
   Gamepad2,
   Megaphone,
+  Sparkles,
   Handshake,
   LayoutGrid,
   MapPin,
@@ -119,6 +120,9 @@ export function SidebarConteudo({
           </NavItem>
           {isAdmin && (
             <>
+              <NavItem href="/admin/smart-torneios" icon={<Sparkles />} active={pathname.startsWith("/admin/smart-torneios")} onNavigate={onNavigate}>
+                Smart Torneios
+              </NavItem>
               <NavItem
                 href="/admin/configuracoes/organizadores"
                 icon={<UserCog />}

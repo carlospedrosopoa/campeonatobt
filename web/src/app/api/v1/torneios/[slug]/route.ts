@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
-import { requireGlobalAdmin, requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
+import { requireGlobalAdmin, requireTournamentAdminBySlug, negarCriadorSmart } from "@/lib/torneio-admin-auth";
 
 export async function GET(
   request: NextRequest,
@@ -29,6 +29,8 @@ export async function PUT(
     const { slug } = await params;
     const acesso = await requireTournamentAdminBySlug(slug);
     if ("response" in acesso) return acesso.response;
+    const negadoCriador = negarCriadorSmart(acesso);
+    if (negadoCriador) return negadoCriador;
     const body = await request.json();
 
     const atualizado = await torneiosService.atualizarPorSlug(slug, body);
@@ -51,6 +53,8 @@ export async function DELETE(
   try {
     const acesso = await requireGlobalAdmin();
     if ("response" in acesso) return acesso.response;
+    const negadoCriador = negarCriadorSmart(acesso);
+    if (negadoCriador) return negadoCriador;
 
     const { slug } = await params;
     const excluido = await torneiosService.excluirPorSlug(slug);
