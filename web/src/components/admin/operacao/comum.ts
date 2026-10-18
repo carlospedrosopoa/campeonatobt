@@ -65,6 +65,8 @@ export const acoesOperacao = {
   iniciar: (slug: string, partidaId: string, aquecimentoMin?: number | null) =>
     enviar(`/api/v1/torneios/${slug}/operacao/iniciar`, "POST", { partidaId, aquecimentoMin: aquecimentoMin ?? null }),
   salvarAquecimentoPadrao: (slug: string, aquecimentoMin: number) => enviar(`/api/v1/torneios/${slug}/operacao/config`, "PATCH", { aquecimentoMin }),
+  salvarChamadaAutomatica: (slug: string, chamadaAutomatica: boolean) =>
+    enviar(`/api/v1/torneios/${slug}/operacao/config`, "PATCH", { chamadaAutomatica }),
   devolver: (slug: string, partidaId: string) => enviar(`/api/v1/torneios/${slug}/painel-quadras/partidas/${partidaId}`, "PATCH", { acao: "retirar" }),
   voltarAguardando: (slug: string, partidaId: string) =>
     enviar(`/api/v1/torneios/${slug}/painel-quadras/partidas/${partidaId}`, "PATCH", { acao: "voltar-aguardando" }),

@@ -247,6 +247,8 @@ export const torneios = pgTable('torneios', {
   operacaoAoVivo: boolean('operacao_ao_vivo').default(false).notNull(),
   // minutos de aquecimento padrao (mesa de controle da operacao ao vivo)
   aquecimentoMin: integer('aquecimento_min').default(5).notNull(),
+  // chama sozinho o proximo jogo pronto quando a quadra libera (mesa de controle)
+  chamadaAutomatica: boolean('chamada_automatica').default(false).notNull(),
   toleranciaAtrasoMin: integer('tolerancia_atraso_min').default(15).notNull(),
   checkinModo: text('checkin_modo').$type<"QR" | "BOTAO" | "AMBOS">().default('AMBOS').notNull(),
   layoutCards: text('layout_cards').$type<"NOVO" | "CLASSICO">().default('CLASSICO').notNull(),

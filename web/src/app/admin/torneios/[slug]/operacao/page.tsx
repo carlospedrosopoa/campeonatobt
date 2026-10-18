@@ -129,6 +129,24 @@ export default function OperacaoPage() {
             )}
           </span>
         </label>
+        <label className="flex flex-col gap-1 text-[13px] font-bold text-ink">
+          Chamada automática
+          <span className="flex h-10 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={estado?.torneio.chamadaAutomatica ?? false}
+              disabled={!estado || Boolean(ocupado)}
+              onChange={(e) => {
+                const ligar = e.target.checked;
+                executar("chamada-automatica", () => acoesOperacao.salvarChamadaAutomatica(slug, ligar));
+              }}
+              className="h-5 w-5"
+            />
+            <span className="text-xs font-semibold text-muted">
+              {estado?.torneio.chamadaAutomatica ? "chama sozinho quando a quadra libera" : "o operador confirma cada chamada"}
+            </span>
+          </span>
+        </label>
         {estado?.categoria && (
           <div className="min-w-[180px]">
             <div className="text-[13px] font-semibold text-muted">

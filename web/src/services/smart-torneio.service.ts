@@ -130,6 +130,8 @@ export async function criarSmartTorneio(params: {
     oculto: true,
     operacaoAoVivo: true,
   });
+  // criado na hora, com todos no local: a proxima chamada sai sozinha quando a quadra libera
+  await db.update(torneios).set({ chamadaAutomatica: true }).where(eq(torneios.id, torneio.id));
 
   const dataHorario = params.horario && /^\d{2}:\d{2}$/.test(params.horario) ? new Date(`${params.data}T${params.horario}:00-03:00`) : null;
   const categoria = await categoriasService.criar({
