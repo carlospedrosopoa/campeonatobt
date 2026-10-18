@@ -571,3 +571,32 @@ export const presencas = pgTable('presencas', {
 }, (t) => ({
   unq: unique('presencas_torneio_usuario_data_unique').on(t.torneioId, t.usuarioId, t.data),
 }));
+
+// Smart Torneio: torneio privado criado pelo atleta no app, pago por Pix e autorizado pelo Play na Quadra
+export const smartTorneios = pgTable('smart_torneios', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  torneioId: uuid('torneio_id').references(() => torneios.id, { onDelete: 'cascade' }).notNull().unique(),
+  categoriaId: uuid('categoria_id').references(() => categorias.id, { onDelete: 'set null' }),
+  criadorUsuarioId: uuid('criador_usuario_id').references(() => usuarios.id).notNull(),
+  codigo: text('codigo').notNull().unique(),
+  status: text('status').$type<"AGUARDANDO_PAGAMENTO" | "AGUARDANDO_APROVACAO" | "APROVADO" | "RECUSADO">().default('AGUARDANDO_PAGAMENTO').notNull(),
+  quantidadeAtletas: integer('quantidade_atletas').notNull(),
+  valor: decimal('valor', { precision: 10, scale: 2 }).notNull(),
+  pixCopiaCola: text('pix_copia_cola'),
+  pagamentoInformadoEm: timestamp('pagamento_informado_em'),
+  aprovadoEm: timestamp('aprovado_em'),
+  aprovadoPorId: uuid('aprovado_por_id').references(() => usuarios.id),
+  motivoRecusa: text('motivo_recusa'),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});
+
+export const smartTorneioConfig = pgTable('smart_torneio_config', {
+  id: integer('id').primaryKey().default(1),
+  valorPorAtleta: decimal('valor_por_atleta', { precision: 10, scale: 2 }).default('5').notNull(),
+  valorMinimo: decimal('valor_minimo', { precision: 10, scale: 2 }).default('40').notNull(),
+  pixChave: text('pix_chave'),
+  pixNome: text('pix_nome'),
+  pixCidade: text('pix_cidade'),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});

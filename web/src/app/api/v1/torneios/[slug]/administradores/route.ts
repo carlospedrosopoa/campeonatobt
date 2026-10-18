@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireGlobalAdmin, requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
+import { requireGlobalAdmin, requireTournamentAdminBySlug, negarCriadorSmart } from "@/lib/torneio-admin-auth";
 import { torneioAdministradoresService } from "@/services/torneio-administradores.service";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -7,6 +7,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { slug } = await params;
     const acesso = await requireTournamentAdminBySlug(slug);
     if ("response" in acesso) return acesso.response;
+    const negadoCriador = negarCriadorSmart(acesso);
+    if (negadoCriador) return negadoCriador;
 
     const gestao = await torneioAdministradoresService.listarComOrganizadorPrincipal(acesso.torneio.id);
     return NextResponse.json({
@@ -24,6 +26,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const acesso = await requireGlobalAdmin();
     if ("response" in acesso) return acesso.response;
+    const negadoCriador = negarCriadorSmart(acesso);
+    if (negadoCriador) return negadoCriador;
 
     const { slug } = await params;
     const torneioAcesso = await requireTournamentAdminBySlug(slug);

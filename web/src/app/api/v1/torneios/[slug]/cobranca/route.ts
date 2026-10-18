@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
+import { requireTournamentAdminBySlug, negarCriadorSmart } from "@/lib/torneio-admin-auth";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricaoPagamentos, inscricoes, usuarios } from "@/db/schema";
 
@@ -31,6 +31,8 @@ export async function GET(
     const { slug } = await params;
     const acesso = await requireTournamentAdminBySlug(slug);
     if ("response" in acesso) return acesso.response;
+    const negadoCriador = negarCriadorSmart(acesso);
+    if (negadoCriador) return negadoCriador;
     const { torneio } = acesso;
 
     const { searchParams } = new URL(request.url);

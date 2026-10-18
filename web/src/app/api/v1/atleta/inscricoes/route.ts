@@ -8,6 +8,7 @@ import { torneioResultadosService } from "@/services/torneio-resultados.service"
 import { playGetUsuarioLogado } from "@/services/playnaquadra-client";
 import { extractPlayIdentity } from "@/services/playnaquadra-session.service";
 import { categoriaConfigService, tipoParticipacaoEhDupla, tipoParticipacaoEhIndividual } from "@/services/categoria-config.service";
+import { ErroSmart, validarInscricaoSmart } from "@/services/smart-torneio.service";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
@@ -230,6 +231,13 @@ export async function POST(request: NextRequest) {
   const torneio = t[0];
   if (!torneio) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
   if (torneio.status !== "ABERTO") return NextResponse.json({ error: "Inscrições não estão abertas para este torneio" }, { status: 400 });
+  // Smart Torneio: exige o codigo e respeita o limite de atletas habilitados
+  try {
+    await validarInscricaoSmart({ torneioId: torneio.id, categoriaId, codigo: body?.codigoSmart ?? null });
+  } catch (e) {
+    if (e instanceof ErroSmart) return NextResponse.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
 
   const opcoes = Array.isArray(torneio.camisetaOpcoes) ? (torneio.camisetaOpcoes as any[]).map((s) => String(s)) : [];
   const normalize = (v: string) => (v || "").trim().replace(/\s+/g, " ");

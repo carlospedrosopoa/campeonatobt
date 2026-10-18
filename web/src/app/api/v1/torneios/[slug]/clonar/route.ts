@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
+import { requireTournamentAdminBySlug, negarCriadorSmart } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 
 export async function POST(
@@ -10,6 +10,8 @@ export async function POST(
     const { slug } = await params;
     const acesso = await requireTournamentAdminBySlug(slug);
     if ("response" in acesso) return acesso.response;
+    const negadoCriador = negarCriadorSmart(acesso);
+    if (negadoCriador) return negadoCriador;
     const { torneio } = acesso;
 
     const body = await request.json().catch(() => null);
