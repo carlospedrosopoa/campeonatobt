@@ -453,17 +453,15 @@ export default function AdminAtletasInscritosPage() {
                   <thead className="bg-slate-50 border-b border-slate-100">
                     <tr className="text-left text-slate-500">
                       <th className="py-3 px-4 font-medium">Nome</th>
+                      <th className="py-3 px-4 font-medium">Camiseta</th>
                       <th className="py-3 px-4 font-medium">Dupla</th>
                       <th className="py-3 px-4 font-medium">Telefone</th>
-                      <th className="py-3 px-4 font-medium">Camiseta</th>
                     </tr>
                   </thead>
                   <tbody>
                     {c.atletas.map((a) => (
                       <tr key={`${c.categoriaId}:${a.atletaId}:${a.inscricaoId}`} className="border-b border-slate-100">
                         <td className="py-3 px-4 font-semibold text-slate-900">{a.atletaNome}</td>
-                        <td className="py-3 px-4 text-slate-700">{a.equipeNome || "-"}</td>
-                        <td className="py-3 px-4 text-slate-700">{a.atletaTelefone || "-"}</td>
                         <td className="py-3 px-4 text-slate-700">
                           <div className="flex min-w-[220px] items-center gap-2">
                             {(data?.torneio?.camisetaOpcoes || []).length > 0 ? (
@@ -504,6 +502,8 @@ export default function AdminAtletasInscritosPage() {
                             </button>
                           </div>
                         </td>
+                        <td className="py-3 px-4 text-slate-700">{a.equipeNome || "-"}</td>
+                        <td className="py-3 px-4 text-slate-700">{a.atletaTelefone || "-"}</td>
                       </tr>
                     ))}
                     {c.atletas.length === 0 && (
