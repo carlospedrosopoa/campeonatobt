@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MonitorPlay } from "lucide-react";
 import { torneiosService } from "@/services/torneios.service";
+import { smartDoTorneio } from "@/services/smart-torneio.service";
 import PainelQuadrasPublicContent from "./PainelQuadrasPublicContent";
 import AoVivoPublico from "./AoVivoPublico";
 
@@ -18,7 +19,8 @@ export default async function TorneioPainelQuadrasPublicPage({ params, searchPar
   const torneio = await torneiosService.buscarPorSlug(slug);
   const modoInicial = query.modo === "grade" ? "grade" : "destaque";
 
-  if (!torneio || torneio.oculto) notFound();
+  // Smart Torneio e oculto (privado), mas quem tem o link acompanha ao vivo
+  if (!torneio || (torneio.oculto && !(await smartDoTorneio(torneio.id)))) notFound();
 
   return (
     <>

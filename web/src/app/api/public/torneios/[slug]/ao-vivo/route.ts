@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriaEmAndamento, operacaoService, type JogoOperacao } from "@/services/operacao.service";
+import { smartDoTorneio } from "@/services/smart-torneio.service";
 
 /** Operacao ao vivo para o publico (pagina e app): mesmos dados do telao, sem nomes de quem falta. */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
     const torneio = await torneiosService.buscarPorSlug(slug);
-    if (!torneio || torneio.oculto || !torneio.operacaoAoVivo) {
+    // Smart Torneio e oculto (privado), mas quem tem o link acompanha ao vivo
+    if (!torneio || !torneio.operacaoAoVivo || (torneio.oculto && !(await smartDoTorneio(torneio.id)))) {
       return NextResponse.json({ error: "Operação ao vivo indisponível" }, { status: 404 });
     }
     const categoriaId = request.nextUrl.searchParams.get("categoriaId") || (await categoriaEmAndamento(torneio.id));
