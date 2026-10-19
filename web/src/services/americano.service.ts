@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { categorias, equipeIntegrantes, equipes, inscricoes, partidas, rodadas, torneios, usuarios } from "@/db/schema";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
-import { montarRodadasAmericano, ordenarRanking, type LinhaRankingAmericano } from "@/lib/americano";
+import { metasValidasAmericano, montarAmistoso, montarRodadasAmericano, ordenarRanking, type LinhaRankingAmericano } from "@/lib/americano";
 
 /**
  * Americano (parceiro rotativo): cada atleta se inscreve sozinho; os jogos usam duplas montadas
@@ -100,6 +100,13 @@ export class AmericanoService {
     if (atletas.length < 4) throw new ErroAmericano("O Americano precisa de pelo menos 4 atletas aprovados.");
 
     const jogosPorAtleta = params.jogosPorAtleta ?? americano.jogosPorAtleta;
+    // cada jogo do ranking vale para os 4: atletas x jogos precisa ser multiplo de 4
+    if ((atletas.length * jogosPorAtleta) % 4 !== 0) {
+      const validas = metasValidasAmericano(atletas.length).filter((n) => n <= 12);
+      throw new ErroAmericano(
+        `Com ${atletas.length} atletas não dá para todos jogarem ${jogosPorAtleta} jogos válidos (cada jogo tem 4 vagas). Use ${validas.join(", ")} jogos por atleta.`
+      );
+    }
     const montadas = montarRodadasAmericano({
       atletas: atletas.map((a) => a.usuarioId),
       quadras: params.quadras,
@@ -177,6 +184,7 @@ export class AmericanoService {
           rodadaId: partidas.rodadaId,
           equipeAId: partidas.equipeAId,
           equipeBId: partidas.equipeBId,
+          amistoso: partidas.amistoso,
         })
         .from(partidas)
         .where(and(eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "GRUPOS")));
@@ -204,10 +212,13 @@ export class AmericanoService {
       for (const j of fixos) {
         const a = dupla(j.equipeAId);
         const b = dupla(j.equipeBId);
-        for (const u of [...a, ...b]) contagem.set(u, (contagem.get(u) ?? 0) + 1);
-        if (a.length === 2) parceiros.push([a[0], a[1]]);
-        if (b.length === 2) parceiros.push([b[0], b[1]]);
-        for (const x of a) for (const y of b) adversarios.push([x, y]);
+        // amistoso ocupa a quadra mas nao conta jogo, parceiro nem adversario do ranking
+        if (!j.amistoso) {
+          for (const u of [...a, ...b]) contagem.set(u, (contagem.get(u) ?? 0) + 1);
+          if (a.length === 2) parceiros.push([a[0], a[1]]);
+          if (b.length === 2) parceiros.push([b[0], b[1]]);
+          for (const x of a) for (const y of b) adversarios.push([x, y]);
+        }
         const encerrado = j.status === "FINALIZADA" || j.status === "WO";
         if (!encerrado) for (const u of [...a, ...b]) emQuadra.add(u);
         else if (j.finalizadoEm && new Date(j.finalizadoEm).getTime() >= recente) for (const u of [...a, ...b]) acabaramDeJogar.add(u);
@@ -227,8 +238,40 @@ export class AmericanoService {
         jogosPorAtleta: meta,
         andamento: { jogos: contagem, parceiros, adversarios, emQuadra, acabaramDeJogar, quadrasLivres },
       });
-      // so vale se a 1a rodada coloca alguem nas quadras livres agora
-      if (plano[0]?.numero !== 1) return false;
+      const cache = new Map<string, string>();
+      for (const [equipeId, us] of membros) if (us.length === 2) cache.set([...us].sort().join("|"), equipeId);
+
+      // nenhum jogo do ranking fecha com quem esta livre: amistoso para a quadra nao ficar parada
+      if (plano[0]?.numero !== 1) {
+        if (pendentes.some((j) => j.amistoso)) return false;
+        const quantos = Math.min(quadrasLivres, Math.floor(livres.length / 4));
+        if (quantos === 0) return false;
+        // primeiro quem ja completou os jogos do ranking, depois quem descansou mais
+        const ordem = livres
+          .map((u) => ({ u, completo: (contagem.get(u) ?? 0) >= meta, recente: acabaramDeJogar.has(u), sorte: Math.random() }))
+          .sort((x, y) => Number(y.completo) - Number(x.completo) || Number(x.recente) - Number(y.recente) || x.sorte - y.sorte)
+          .map((x) => x.u);
+        for (let g = 0; g < quantos; g++) {
+          const quatro = ordem.slice(g * 4, g * 4 + 4) as [string, string, string, string];
+          const jogo = montarAmistoso(quatro, parceiros);
+          const equipeAId = await this.equipeDaDupla(tx, params.torneioId, cache, jogo.a);
+          const equipeBId = await this.equipeDaDupla(tx, params.torneioId, cache, jogo.b);
+          await tx.insert(partidas).values({
+            torneioId: params.torneioId,
+            categoriaId: params.categoriaId,
+            grupoId: null,
+            equipeAId,
+            equipeBId,
+            fase: "GRUPOS",
+            status: "AGENDADA",
+            amistoso: true,
+            placarA: 0,
+            placarB: 0,
+            atualizadoEm: new Date(),
+          });
+        }
+        return true;
+      }
 
       if (pendentes.length > 0) await tx.delete(partidas).where(inArray(partidas.id, pendentes.map((p) => p.id)));
       const rodadasUsadas = new Set(fixos.map((j) => j.rodadaId).filter(Boolean) as string[]);
@@ -237,8 +280,6 @@ export class AmericanoService {
       if (sobrando.length > 0) await tx.delete(rodadas).where(inArray(rodadas.id, sobrando));
       let proximoNumero = Math.max(0, ...existentes.filter((r) => rodadasUsadas.has(r.id)).map((r) => r.numero ?? 0)) + 1;
 
-      const cache = new Map<string, string>();
-      for (const [equipeId, us] of membros) if (us.length === 2) cache.set([...us].sort().join("|"), equipeId);
       for (const r of plano) {
         const [rodada] = await tx
           .insert(rodadas)
@@ -279,7 +320,7 @@ export class AmericanoService {
         detalhesPlacar: partidas.detalhesPlacar,
       })
       .from(partidas)
-      .where(and(eq(partidas.categoriaId, categoriaId), eq(partidas.fase, "GRUPOS")));
+      .where(and(eq(partidas.categoriaId, categoriaId), eq(partidas.fase, "GRUPOS"), eq(partidas.amistoso, false)));
 
     const linhas = new Map<string, LinhaRankingAmericano>(
       atletas.map((a) => [a.usuarioId, { usuarioId: a.usuarioId, nome: a.nome, fotoUrl: a.fotoUrl ?? null, jogos: 0, vitorias: 0, gamesPro: 0, gamesContra: 0, saldo: 0 }])
@@ -332,10 +373,10 @@ export class AmericanoService {
     if (!americano.final) throw new ErroAmericano("Esta categoria foi configurada sem final.");
 
     const jogos = await db
-      .select({ id: partidas.id, fase: partidas.fase, status: partidas.status, vencedorId: partidas.vencedorId, placarA: partidas.placarA, placarB: partidas.placarB })
+      .select({ id: partidas.id, fase: partidas.fase, status: partidas.status, vencedorId: partidas.vencedorId, placarA: partidas.placarA, placarB: partidas.placarB, amistoso: partidas.amistoso })
       .from(partidas)
       .where(eq(partidas.categoriaId, params.categoriaId));
-    const rodadasJogos = jogos.filter((j) => j.fase === "GRUPOS");
+    const rodadasJogos = jogos.filter((j) => j.fase === "GRUPOS" && !j.amistoso);
     if (rodadasJogos.length === 0) throw new ErroAmericano("Gere as rodadas antes da final.");
     const faltam = rodadasJogos.filter((j) => !ENCERRADA.has(j.status)).length;
     if (faltam > 0) throw new ErroAmericano(`Ainda ${faltam === 1 ? "falta 1 jogo" : `faltam ${faltam} jogos`} das rodadas.`);

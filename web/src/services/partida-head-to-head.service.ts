@@ -213,7 +213,9 @@ export class PartidaHeadToHeadService {
           .where(
             and(
               or(inArray(partidas.equipeAId, equipesRelacionadasIds), inArray(partidas.equipeBId, equipesRelacionadasIds)),
-              inArray(partidas.status, Array.from(STATUS_CONCLUIDOS) as Array<"FINALIZADA" | "WO">)
+              inArray(partidas.status, Array.from(STATUS_CONCLUIDOS) as Array<"FINALIZADA" | "WO">),
+              // amistoso do Americano nao entra no historico de confrontos
+              eq(partidas.amistoso, false)
             )
           )
           .orderBy(desc(partidas.finalizadoEm), desc(partidas.dataHorario), desc(partidas.criadoEm))

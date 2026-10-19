@@ -36,6 +36,7 @@ export async function avisarChamadaJogo(params: { torneioId: string; partidaId: 
         grupoNome: grupos.nome,
         equipeAId: partidas.equipeAId,
         equipeBId: partidas.equipeBId,
+        amistoso: partidas.amistoso,
       })
       .from(partidas)
       .innerJoin(categorias, eq(categorias.id, partidas.categoriaId))
@@ -51,7 +52,7 @@ export async function avisarChamadaJogo(params: { torneioId: string; partidaId: 
     if (usuarioIds.length === 0) return;
 
     const quadraNumero = jogo.quadra?.match(/(\d+)/)?.[1] ?? null;
-    const etapa = jogo.grupoNome || NOME_FASE[jogo.fase] || jogo.fase;
+    const etapa = jogo.amistoso ? "Amistoso (não vale para o ranking)" : jogo.grupoNome || NOME_FASE[jogo.fase] || jogo.fase;
     const dupla = (lista: { nome: string }[]) => lista.map((a) => nomeCurto(a.nome)).join(" / ");
     const titulo = quadraNumero ? `Seu jogo foi chamado: Quadra ${quadraNumero}` : "Seu jogo foi chamado";
     const mensagem = [
