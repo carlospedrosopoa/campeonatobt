@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import OpenAI from "openai";
 import { requireUser } from "@/lib/auth-request";
 import { ErroSmart } from "@/services/smart-torneio.service";
 import { conversarAssistenteSmart, transcreverFala, type MensagemAssistente, type RascunhoSmart } from "@/services/smart-assistente.service";
@@ -39,6 +40,11 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     if (e instanceof ErroSmart) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("Erro no assistente do Smart Torneio:", e);
+    // erro da OpenAI (chave, credito, modelo): mostra o motivo para dar para corrigir
+    if (e instanceof OpenAI.APIError) {
+      return NextResponse.json({ error: `IA indisponível (${e.status ?? "?"}): ${e.message}` }, { status: 502 });
+    }
+    if (e instanceof Error) return NextResponse.json({ error: `Erro no assistente: ${e.message}` }, { status: 500 });
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
