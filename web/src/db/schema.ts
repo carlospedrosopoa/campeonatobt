@@ -476,6 +476,8 @@ export const partidas = pgTable('partidas', {
   aquecimentoMin: integer('aquecimento_min'),
   // Americano: jogo extra para nao deixar quadra parada; nao conta para o ranking de ninguem
   amistoso: boolean('amistoso').default(false).notNull(),
+  // "Pular" da mesa de controle: o jogo fica fora das sugestoes ate este horario
+  adiadoAte: timestamp('adiado_ate'),
   iniciadoEm: timestamp('iniciado_em'),
   finalizadoEm: timestamp('finalizado_em'),
   observacoes: text('observacoes'),

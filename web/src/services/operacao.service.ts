@@ -51,6 +51,10 @@ export type JogoOperacao = {
   faltando: string[];
   /** algum atleta esta em outro jogo ja chamado ou em andamento */
   ocupados: string[];
+  /** atletas pausados pela mesa de controle (nao entram em jogo ate voltar) */
+  pausados: string[];
+  /** "Pular": fora das sugestoes ate este horario */
+  adiadoAte: string | null;
   pronto: boolean;
   /** Americano: jogo extra que nao conta para o ranking */
   amistoso: boolean;
@@ -66,6 +70,8 @@ export type QuadraOperacao = {
   reserva: { descricao: string } | null;
   /** por que nao ha sugestao (ex.: aguardando atletas da chave reservada) */
   aguardando: string | null;
+  /** chamada automatica: quando a sugestao sera chamada (30 s depois de a quadra liberar) */
+  chamadaAutomaticaEm: string | null;
 };
 
 type ReservaQuadra = { quadraNumero: number; categoriaId: string | null; fase: string | null; grupoId: string | null; proximaPartidaId: string | null };
@@ -117,6 +123,8 @@ export type EstadoOperacao = {
   agora: string;
   /** categoria ativa no formato Americano: ranking individual ao vivo */
   rankingAmericano: RankingAmericanoOperacao[] | null;
+  /** atletas com jogo pendente ou em quadra na categoria ativa (para pausar na mesa) */
+  atletas: { id: string; nome: string; pausado: boolean }[];
 };
 
 export type RankingAmericanoOperacao = {
@@ -191,6 +199,7 @@ export class OperacaoService {
         equipeBId: partidas.equipeBId,
         criadoEm: partidas.criadoEm,
         amistoso: partidas.amistoso,
+        adiadoAte: partidas.adiadoAte,
       })
       .from(partidas)
       .innerJoin(categorias, eq(categorias.id, partidas.categoriaId))
@@ -252,6 +261,8 @@ export class OperacaoService {
       .from(presencas)
       .where(and(eq(presencas.torneioId, params.torneioId), inArray(presencas.data, dias)));
     const presentesPorDia = new Map<string, Set<string>>();
+    // pausado = marcado como ausente hoje pela mesa de controle
+    const pausadosHoje = new Set(presentesRows.filter((p) => p.status === "AUSENTE" && String(p.data) === hoje).map((p) => p.usuarioId));
     for (const p of presentesRows) {
       if (p.status !== "PRESENTE") continue;
       const dia = String(p.data);
@@ -260,7 +271,7 @@ export class OperacaoService {
     // Smart Torneio e criado na hora, com todos no local: nao exige check-in
     const [smart] = await db.select({ id: smartTorneios.id }).from(smartTorneios).where(eq(smartTorneios.torneioId, params.torneioId)).limit(1);
     const estaPresente = (l: (typeof linhas)[number], usuarioId: string) =>
-      Boolean(smart) || Boolean(presentesPorDia.get(hoje)?.has(usuarioId) || presentesPorDia.get(diaDoJogo(l))?.has(usuarioId));
+      smart ? !pausadosHoje.has(usuarioId) : Boolean(presentesPorDia.get(hoje)?.has(usuarioId) || presentesPorDia.get(diaDoJogo(l))?.has(usuarioId));
 
     const ocupadosPorJogo = new Map<string, string>(); // atletaId -> partidaId
     for (const l of emQuadra) {
@@ -325,6 +336,8 @@ export class OperacaoService {
       const todos = [...equipeA, ...equipeB];
       const faltando = todos.filter((a) => !estaPresente(l, a.id)).map((a) => a.nome);
       const ocupados = todos.filter((a) => ocupadosPorJogo.has(a.id) && ocupadosPorJogo.get(a.id) !== l.id).map((a) => a.nome);
+      const pausados = todos.filter((a) => pausadosHoje.has(a.id)).map((a) => a.nome);
+      const adiado = l.status === "AGENDADA" && l.adiadoAte && new Date(l.adiadoAte).getTime() > Date.now();
       return {
         id: l.id,
         categoriaId: l.categoriaId,
@@ -346,7 +359,9 @@ export class OperacaoService {
         total: todos.length,
         faltando,
         ocupados,
-        pronto: todos.length > 0 && faltando.length === 0 && ocupados.length === 0,
+        pausados,
+        adiadoAte: adiado ? new Date(l.adiadoAte!).toISOString() : null,
+        pronto: todos.length > 0 && faltando.length === 0 && ocupados.length === 0 && !adiado,
         amistoso: l.amistoso,
       };
     };
@@ -404,7 +419,22 @@ export class OperacaoService {
         sugestao: atual ? null : sugestao,
         reserva: reserva ? { descricao: descricaoReserva(reserva) } : null,
         aguardando,
+        chamadaAutomaticaEm: null,
       });
+    }
+
+    // chamada automatica espera 30 s depois que a quadra liberou: tempo para o operador pular ou chamar ja
+    if (torneio.chamadaAutomatica) {
+      for (const q of quadras) {
+        if (q.jogo || !q.sugestao?.pronto) continue;
+        const livreDesde = Math.max(
+          0,
+          ...linhas
+            .filter((l) => numeroDaQuadra(l.quadra) === q.numero && l.finalizadoEm && (l.status === "FINALIZADA" || l.status === "WO"))
+            .map((l) => new Date(l.finalizadoEm!).getTime())
+        );
+        q.chamadaAutomaticaEm = new Date(livreDesde + ESPERA_CHAMADA_AUTOMATICA_MS).toISOString();
+      }
     }
 
     const encerradosRecentes: EncerradoOperacao[] = recentes.map((l) => {
@@ -425,11 +455,14 @@ export class OperacaoService {
     });
 
     // chamada automatica: quadra livre com jogo sugerido e pronto e chamada sem esperar o operador
-    if (torneio.chamadaAutomatica && !params.semChamadaAutomatica && quadras.some((q) => !q.jogo && q.sugestao?.pronto)) {
+    const vencidas = quadras.filter(
+      (q) => !q.jogo && q.sugestao?.pronto && q.chamadaAutomaticaEm && new Date(q.chamadaAutomaticaEm).getTime() <= Date.now()
+    );
+    if (torneio.chamadaAutomatica && !params.semChamadaAutomatica && vencidas.length > 0) {
       const chamados = await chamarSugestoesAutomaticamente({
         torneioId: torneio.id,
         criadoPorId: torneio.organizadorId,
-        quadras: quadras.filter((q) => !q.jogo && q.sugestao?.pronto).map((q) => ({ numero: q.numero, partidaId: q.sugestao!.id })),
+        quadras: vencidas.map((q) => ({ numero: q.numero, partidaId: q.sugestao!.id })),
       });
       if (chamados > 0) return this.estado({ ...params, semChamadaAutomatica: true });
     }
@@ -451,9 +484,19 @@ export class OperacaoService {
       }
     }
 
+    // atletas que ainda jogam (fila e em quadra) na categoria ativa, para a mesa pausar
+    const atletasCategoria = new Map<string, { id: string; nome: string; pausado: boolean }>();
+    for (const l of [...emQuadra, ...filaLinhas]) {
+      if (l.categoriaId !== categoria?.id) continue;
+      for (const a of [...(atletasMap.get(l.equipeAId) ?? []), ...(atletasMap.get(l.equipeBId) ?? [])]) {
+        atletasCategoria.set(a.id, { id: a.id, nome: a.nome, pausado: pausadosHoje.has(a.id) });
+      }
+    }
+
     return {
       agora: new Date().toISOString(),
       rankingAmericano,
+      atletas: Array.from(atletasCategoria.values()).sort((a, b) => Number(b.pausado) - Number(a.pausado) || a.nome.localeCompare(b.nome, "pt-BR")),
       chamadosSemQuadra: semQuadraLinhas.map(montar),
       encerradosRecentes,
       torneio: {
@@ -563,6 +606,34 @@ async function chamarSugestoesAutomaticamente(params: { torneioId: string; criad
     }
   }
   return chamados.length;
+}
+
+const ESPERA_CHAMADA_AUTOMATICA_MS = 30_000;
+
+/** Pausar atleta: marca ausente hoje (nao entra em jogo); voltar marca presente. */
+export async function pausarAtleta(params: { torneioId: string; usuarioId: string; pausado: boolean; registradoPor: string }) {
+  const agora = new Date();
+  const status = params.pausado ? ("AUSENTE" as const) : ("PRESENTE" as const);
+  await db
+    .insert(presencas)
+    .values({ torneioId: params.torneioId, usuarioId: params.usuarioId, data: dataSP(), status, origem: "ADMIN", registradoPor: params.registradoPor, registradoEm: agora })
+    .onConflictDoUpdate({
+      target: [presencas.torneioId, presencas.usuarioId, presencas.data],
+      set: { status, origem: "ADMIN", registradoPor: params.registradoPor, registradoEm: agora },
+    });
+  return { pausado: params.pausado };
+}
+
+/** "Pular": tira o jogo das sugestoes por alguns minutos (0 libera). */
+export async function adiarJogo(params: { torneioId: string; partidaId: string; minutos: number }) {
+  const minutos = Math.max(0, Math.min(120, Math.trunc(Number(params.minutos) || 0)));
+  const [p] = await db
+    .update(partidas)
+    .set({ adiadoAte: minutos ? new Date(Date.now() + minutos * 60_000) : null, atualizadoEm: new Date() })
+    .where(and(eq(partidas.id, params.partidaId), eq(partidas.torneioId, params.torneioId), eq(partidas.status, "AGENDADA")))
+    .returning({ id: partidas.id, adiadoAte: partidas.adiadoAte });
+  if (!p) throw new Error("Jogo não encontrado ou já começou");
+  return p;
 }
 
 /** Liga ou desliga a chamada automatica (mesa de controle). */

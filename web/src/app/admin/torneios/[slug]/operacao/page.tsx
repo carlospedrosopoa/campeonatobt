@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Flag, Megaphone, MonitorPlay, Play, Smartphone, Undo2, Users } from "lucide-react";
+import { AlertTriangle, Coffee, Flag, Megaphone, MonitorPlay, Play, SkipForward, Smartphone, Undo2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader } from "@/components/admin/ui";
 import { PlacarForm } from "@/components/admin/operacao/placar-form";
@@ -33,7 +33,7 @@ export default function OperacaoPage() {
   }, [slug, categoriaId]);
 
   useEffect(() => {
-    const t = setInterval(() => setAgora(agoraServidor()), 5000);
+    const t = setInterval(() => setAgora(agoraServidor()), 1000);
     return () => clearInterval(t);
   }, []);
 
@@ -248,15 +248,31 @@ export default function OperacaoPage() {
                   <div className="rounded-[10px] border border-dashed border-line bg-paper p-3">
                     <div className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-muted">Próximo sugerido</div>
                     <JogoResumo jogo={q.sugestao} />
-                    <Button
-                      className="mt-3 w-full"
-                      variant="primary"
-                      icon={<Megaphone />}
-                      disabled={Boolean(ocupado)}
-                      onClick={() => executar(`c${q.sugestao!.id}`, () => acoesOperacao.chamar(slug, q.sugestao!.id, q.numero))}
-                    >
-                      {ocupado === `c${q.sugestao.id}` ? "Chamando…" : `Chamar para a ${q.nome}`}
-                    </Button>
+                    {q.chamadaAutomaticaEm && q.sugestao.pronto && (
+                      <p className="mt-3 text-[13px] font-bold text-ocean-strong">
+                        Chamada automática em {Math.max(0, Math.ceil((new Date(q.chamadaAutomaticaEm).getTime() - agora) / 1000))}s
+                      </p>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        className="flex-1"
+                        variant="primary"
+                        icon={<Megaphone />}
+                        disabled={Boolean(ocupado)}
+                        onClick={() => executar(`c${q.sugestao!.id}`, () => acoesOperacao.chamar(slug, q.sugestao!.id, q.numero))}
+                      >
+                        {ocupado === `c${q.sugestao.id}` ? "Chamando…" : q.chamadaAutomaticaEm ? "Chamar já" : `Chamar para a ${q.nome}`}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        icon={<SkipForward />}
+                        disabled={Boolean(ocupado)}
+                        title="Este jogo não pode agora: sai das sugestões por 10 minutos"
+                        onClick={() => executar(`a${q.sugestao!.id}`, () => acoesOperacao.adiar(slug, q.sugestao!.id, 10))}
+                      >
+                        Pular
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-sm text-muted">
@@ -312,6 +328,36 @@ export default function OperacaoPage() {
           )}
         </Card>
       )}
+
+      {estado?.categoria && estado.atletas.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <h2 className="flex items-center gap-2 text-base font-extrabold text-ink">
+              <Coffee className="h-[18px] w-[18px]" /> Atletas
+            </h2>
+            <span className="text-[13px] text-muted">pausado não entra em jogo até voltar</span>
+          </div>
+          <div className="flex flex-wrap gap-2 p-4">
+            {estado.atletas.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                disabled={Boolean(ocupado)}
+                onClick={() => executar(`pz${a.id}`, () => acoesOperacao.pausarAtleta(slug, a.id, !a.pausado))}
+                className={cn(
+                  "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-bold",
+                  a.pausado ? "border-[#e0a526] bg-[#fdf1dc] text-[#6b3d00]" : "border-line bg-white text-ink hover:bg-sand-2"
+                )}
+                title={a.pausado ? "Voltar a chamar este atleta" : "Pausar: não chamar jogos com este atleta"}
+              >
+                {a.pausado && <Coffee className="h-3.5 w-3.5" />}
+                {a.nome}
+                <span className="text-[11px] font-semibold opacity-70">{a.pausado ? "voltar" : "pausar"}</span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -333,6 +379,12 @@ function JogoResumo({ jogo, compacto }: { jogo: JogoOperacao; compacto?: boolean
         </span>
         {!completo && jogo.faltando.length > 0 && <span className="truncate">falta: {jogo.faltando.join(", ")}</span>}
         {jogo.ocupados.length > 0 && <span className="font-bold text-red-700">em outra quadra: {jogo.ocupados.join(", ")}</span>}
+        {jogo.pausados.length > 0 && <span className="font-bold text-[#8a4e00]">pausado: {jogo.pausados.join(", ")}</span>}
+        {jogo.adiadoAte && (
+          <span className="font-bold text-[#8a4e00]">
+            pulado até {new Date(jogo.adiadoAte).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )}
       </div>
     </div>
   );
