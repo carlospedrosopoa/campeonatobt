@@ -1,5 +1,6 @@
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, inscricoes, partidas, rodadas, torneios, usuarios } from "@/db/schema";
+import { categorias, equipeIntegrantes, equipes, inscricoes, partidas, presencas, rodadas, torneios, usuarios } from "@/db/schema";
+import { dataSP } from "@/services/presenca.service";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 import { metasValidasAmericano, montarAmistoso, montarRodadasAmericano, ordenarRanking, type LinhaRankingAmericano } from "@/lib/americano";
@@ -185,12 +186,15 @@ export class AmericanoService {
           equipeAId: partidas.equipeAId,
           equipeBId: partidas.equipeBId,
           amistoso: partidas.amistoso,
+          adiadoAte: partidas.adiadoAte,
         })
         .from(partidas)
         .where(and(eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "GRUPOS")));
       if (jogos.length === 0) return false;
 
-      const livreParaRemontar = (j: (typeof jogos)[number]) => j.status === "AGENDADA" && !j.chamadoEm && !partidaIniciada(j);
+      // jogo "pulado" na mesa continua de pe (conta para a meta), so fica fora das sugestoes por um tempo
+      const adiado = (j: (typeof jogos)[number]) => Boolean(j.adiadoAte && new Date(j.adiadoAte).getTime() > Date.now());
+      const livreParaRemontar = (j: (typeof jogos)[number]) => j.status === "AGENDADA" && !j.chamadoEm && !partidaIniciada(j) && !adiado(j);
       const pendentes = jogos.filter(livreParaRemontar);
       const fixos = jogos.filter((j) => !livreParaRemontar(j) && j.status !== "CANCELADA");
 
@@ -220,9 +224,17 @@ export class AmericanoService {
           for (const x of a) for (const y of b) adversarios.push([x, y]);
         }
         const encerrado = j.status === "FINALIZADA" || j.status === "WO";
+        if (adiado(j) && j.status === "AGENDADA" && !j.chamadoEm) continue;
         if (!encerrado) for (const u of [...a, ...b]) emQuadra.add(u);
         else if (j.finalizadoEm && new Date(j.finalizadoEm).getTime() >= recente) for (const u of [...a, ...b]) acabaramDeJogar.add(u);
       }
+
+      // atleta pausado na mesa fica de fora como se estivesse em quadra
+      const pausados = await tx
+        .select({ usuarioId: presencas.usuarioId })
+        .from(presencas)
+        .where(and(eq(presencas.torneioId, params.torneioId), eq(presencas.data, dataSP()), eq(presencas.status, "AUSENTE")));
+      for (const p of pausados) emQuadra.add(p.usuarioId);
 
       // travado = nenhum jogo pendente com os 4 livres
       const temJogoLivre = pendentes.some((j) => [...dupla(j.equipeAId), ...dupla(j.equipeBId)].every((u) => !emQuadra.has(u)));
