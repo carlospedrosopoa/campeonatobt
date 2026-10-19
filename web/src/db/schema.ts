@@ -591,6 +591,8 @@ export const smartTorneios = pgTable('smart_torneios', {
   aprovadoEm: timestamp('aprovado_em'),
   aprovadoPorId: uuid('aprovado_por_id').references(() => usuarios.id),
   motivoRecusa: text('motivo_recusa'),
+  // torneio de teste: sem comunicacoes (app e WhatsApp) e pode ser excluido mesmo com jogos
+  teste: boolean('teste').default(false).notNull(),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });

@@ -94,6 +94,8 @@ export async function criarSmartTorneio(params: {
   quantidadeAtletas: number;
   /** Americano: jogos de cada atleta antes da final (padrao 6) */
   jogosPorAtleta?: number;
+  /** torneio de teste: sem comunicacoes e pode ser excluido mesmo com jogos */
+  teste?: boolean;
 }) {
   const nome = params.nome?.trim();
   const local = params.local?.trim();
@@ -168,6 +170,7 @@ export async function criarSmartTorneio(params: {
       quantidadeAtletas: quantidade,
       valor: valor.toFixed(2),
       pixCopiaCola: pixDoPedido(config, valor, codigo),
+      teste: params.teste === true,
     })
     .returning();
   return pedido;
@@ -205,6 +208,7 @@ async function montarResumo(linhas: LinhaSmart[]) {
         pagamentoInformadoEm: l.pagamentoInformadoEm?.toISOString() ?? null,
         aprovadoEm: l.aprovadoEm?.toISOString() ?? null,
         motivoRecusa: l.motivoRecusa,
+        teste: l.teste,
         criadoEm: l.criadoEm.toISOString(),
         criador: criadores.find((u) => u.id === l.criadorUsuarioId) ?? null,
         torneio: t ? { id: t.id, nome: t.nome, slug: t.slug, status: t.status, data: t.dataInicio, local: t.local } : null,
@@ -285,6 +289,22 @@ export async function aprovarSmart(params: { id: string; adminId: string }) {
     `Código do torneio: ${l.codigo}\nCompartilhe com os atletas: no app, em "Entrar em Smart Torneio", eles informam o código e se inscrevem.`,
     params.adminId
   );
+}
+
+/** Marca ou desmarca como teste (gestor). */
+export async function marcarTesteSmart(params: { id: string; teste: boolean }) {
+  const [l] = await db.update(smartTorneios).set({ teste: params.teste, atualizadoEm: new Date() }).where(eq(smartTorneios.id, params.id)).returning();
+  if (!l) throw new ErroSmart("Smart Torneio não encontrado", 404);
+}
+
+/** Exclui um Smart Torneio de teste com tudo o que tem (jogos, inscricoes, equipes). */
+export async function excluirSmartTeste(params: { id: string }) {
+  const [l] = await db.select().from(smartTorneios).where(eq(smartTorneios.id, params.id)).limit(1);
+  if (!l) throw new ErroSmart("Smart Torneio não encontrado", 404);
+  if (!l.teste) throw new ErroSmart("Só Smart Torneios marcados como teste podem ser excluídos por aqui");
+  const [t] = await db.select({ slug: torneios.slug }).from(torneios).where(eq(torneios.id, l.torneioId)).limit(1);
+  if (t) await torneiosService.excluirPorSlug(t.slug, { mesmoComResultados: true });
+  else await db.delete(smartTorneios).where(eq(smartTorneios.id, l.id));
 }
 
 export async function recusarSmart(params: { id: string; adminId: string; motivo: string }) {
