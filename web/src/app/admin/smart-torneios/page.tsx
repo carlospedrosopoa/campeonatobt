@@ -105,6 +105,11 @@ export default function SmartTorneiosAdminPage() {
         eyebrow="Play na Quadra"
         title="Smart Torneios"
         description="Torneios privados criados pelos atletas no app. Confira o Pix recebido e autorize para liberar o código de inscrição."
+        actions={
+          <LinkButton href="/admin/smart-torneios/assistente" variant="ghost">
+            Testar criação por voz
+          </LinkButton>
+        }
       />
 
       {erro && <Alert>{erro}</Alert>}
