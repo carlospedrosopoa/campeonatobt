@@ -35,9 +35,18 @@ type ApiResponse = {
 };
 
 type GradeCamisetaRow = {
+  genero: string;
   tipo: string;
   tamanho: string;
   quantidade: number;
+};
+
+const GENERO_GRADE: Record<string, string> = { MASCULINO: "Masculino", FEMININO: "Feminino", MISTO: "Misto", LIVRE: "Livre" };
+const ORDEM_GENERO = ["Feminino", "Masculino", "Misto", "Livre"];
+const ORDEM_TAMANHO = ["PP", "P", "M", "G", "GG", "XG", "EG", "XGG", "EXG", "EXGG", "UNICO", "UNICA", "U"];
+const posicao = (lista: string[], v: string) => {
+  const i = lista.indexOf(v.toUpperCase());
+  return i < 0 ? lista.length : i;
 };
 
 function normalizeSheetName(value: string) {
@@ -172,21 +181,25 @@ export default function AdminAtletasInscritosPage() {
         });
         const parsed = parseCamisetaGrade(camisetaTela);
         if (!parsed) continue;
-        const key = `${parsed.tipo}|||${parsed.tamanho}`;
+        // regata, baby look etc. mudam de modelo entre masculino e feminino: o genero separa a grade
+        const genero = GENERO_GRADE[categoria.categoriaGenero] ?? categoria.categoriaGenero ?? "";
+        const key = `${genero}|||${parsed.tipo}|||${parsed.tamanho}`;
         const current = counts.get(key);
         if (current) {
           current.quantidade += 1;
         } else {
-          counts.set(key, { ...parsed, quantidade: 1 });
+          counts.set(key, { genero, ...parsed, quantidade: 1 });
         }
       }
     }
 
-    return Array.from(counts.values()).sort((a, b) => {
-      const tipo = a.tipo.localeCompare(b.tipo);
-      if (tipo !== 0) return tipo;
-      return a.tamanho.localeCompare(b.tamanho);
-    });
+    return Array.from(counts.values()).sort(
+      (a, b) =>
+        posicao(ORDEM_GENERO.map((g) => g.toUpperCase()), a.genero) - posicao(ORDEM_GENERO.map((g) => g.toUpperCase()), b.genero) ||
+        a.tipo.localeCompare(b.tipo) ||
+        posicao(ORDEM_TAMANHO, a.tamanho) - posicao(ORDEM_TAMANHO, b.tamanho) ||
+        a.tamanho.localeCompare(b.tamanho)
+    );
   }, [camisetasEditadas, data]);
 
   async function exportarExcel() {
@@ -214,6 +227,7 @@ export default function AdminAtletasInscritosPage() {
     if (gradeCamisetas.length > 0) {
       const wsGrade = XLSX.utils.json_to_sheet(
         gradeCamisetas.map((item) => ({
+          Genero: item.genero,
           Tipo: item.tipo,
           Tamanho: item.tamanho,
           Quantidade: item.quantidade,
@@ -522,7 +536,7 @@ export default function AdminAtletasInscritosPage() {
           <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-5 py-4">
               <div className="font-bold text-slate-900">Grade de camisetas</div>
-              <div className="text-xs text-slate-500 mt-1">Resumo final por tipo e tamanho</div>
+              <div className="text-xs text-slate-500 mt-1">Resumo final por gênero, tipo e tamanho</div>
             </div>
 
             <div className="space-y-3 p-4 md:hidden">
@@ -533,7 +547,11 @@ export default function AdminAtletasInscritosPage() {
               )}
 
               {gradeCamisetas.map((item) => (
-                <div key={`${item.tipo}:${item.tamanho}:mobile`} className="grid grid-cols-3 gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+                <div key={`${item.genero}:${item.tipo}:${item.tamanho}:mobile`} className="grid grid-cols-4 gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gênero</div>
+                    <div className="mt-1 font-semibold text-slate-900">{item.genero}</div>
+                  </div>
                   <div>
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tipo</div>
                     <div className="mt-1 font-semibold text-slate-900">{item.tipo}</div>
@@ -554,6 +572,7 @@ export default function AdminAtletasInscritosPage() {
               <table className="w-full min-w-[520px] text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr className="text-left text-slate-500">
+                    <th className="py-3 px-4 font-medium">Gênero</th>
                     <th className="py-3 px-4 font-medium">Tipo</th>
                     <th className="py-3 px-4 font-medium">Tamanho</th>
                     <th className="py-3 px-4 font-medium">Quantidade</th>
@@ -561,7 +580,8 @@ export default function AdminAtletasInscritosPage() {
                 </thead>
                 <tbody>
                   {gradeCamisetas.map((item) => (
-                    <tr key={`${item.tipo}:${item.tamanho}`} className="border-b border-slate-100">
+                    <tr key={`${item.genero}:${item.tipo}:${item.tamanho}`} className="border-b border-slate-100">
+                      <td className="py-3 px-4 text-slate-900 font-semibold">{item.genero}</td>
                       <td className="py-3 px-4 text-slate-900 font-semibold">{item.tipo}</td>
                       <td className="py-3 px-4 text-slate-700">{item.tamanho}</td>
                       <td className="py-3 px-4 text-slate-700">{item.quantidade}</td>
@@ -569,7 +589,7 @@ export default function AdminAtletasInscritosPage() {
                   ))}
                   {gradeCamisetas.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="py-8 text-center text-slate-500">
+                      <td colSpan={4} className="py-8 text-center text-slate-500">
                         Nenhuma camiseta informada para montar a grade.
                       </td>
                     </tr>
