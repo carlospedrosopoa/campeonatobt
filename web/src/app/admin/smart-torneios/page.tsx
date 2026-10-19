@@ -219,6 +219,11 @@ export default function SmartTorneiosAdminPage() {
                     Abrir torneio
                   </LinkButton>
                 )}
+                {s.telaoUrl && (
+                  <LinkButton size="sm" variant="ghost" href={s.telaoUrl} target="_blank">
+                    Telão sem login
+                  </LinkButton>
+                )}
                 <label className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
                   <input
                     type="checkbox"

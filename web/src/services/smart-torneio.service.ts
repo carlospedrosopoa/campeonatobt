@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { categorias, equipeIntegrantes, esportes, inscricoes, smartTorneioConfig, smartTorneios, torneios, usuarios } from "@/db/schema";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { gerarPixCopiaCola } from "@/lib/pix";
+import { caminhoTelao } from "@/lib/telao-codigo";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { categoriaConfigService, defaultCategoriaConfigV1, type CategoriaConfigV1 } from "@/services/categoria-config.service";
@@ -209,6 +210,8 @@ async function montarResumo(linhas: LinhaSmart[]) {
         aprovadoEm: l.aprovadoEm?.toISOString() ?? null,
         motivoRecusa: l.motivoRecusa,
         teste: l.teste,
+        // telao sem login (aparelho da caixa de som); so para o criador e o gestor
+        telaoUrl: t && l.status === "APROVADO" ? caminhoTelao(t.slug, t.id) : null,
         criadoEm: l.criadoEm.toISOString(),
         criador: criadores.find((u) => u.id === l.criadorUsuarioId) ?? null,
         torneio: t ? { id: t.id, nome: t.nome, slug: t.slug, status: t.status, data: t.dataInicio, local: t.local } : null,
@@ -323,7 +326,7 @@ export async function buscarSmartPorCodigo(codigo: string) {
   const [l] = await db.select().from(smartTorneios).where(eq(smartTorneios.codigo, c)).limit(1);
   if (!l || l.status !== "APROVADO") throw new ErroSmart("Código não encontrado. Confira com quem criou o torneio.", 404);
   const [resumo] = await montarResumo([l]);
-  return { ...resumo, pixCopiaCola: null, valor: null };
+  return { ...resumo, pixCopiaCola: null, valor: null, telaoUrl: null };
 }
 
 /** Smart Torneio do torneio informado, se houver (para permissao do criador e regras de inscricao). */

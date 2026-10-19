@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Coffee, Flag, Megaphone, MonitorPlay, Play, SkipForward, Smartphone, Undo2, Users } from "lucide-react";
+import { AlertTriangle, Coffee, Link2, Flag, Megaphone, MonitorPlay, Play, SkipForward, Smartphone, Undo2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader } from "@/components/admin/ui";
 import { PlacarForm } from "@/components/admin/operacao/placar-form";
@@ -68,6 +68,20 @@ export default function OperacaoPage() {
     void executar(`i${jogo.id}`, () => acoesOperacao.iniciar(slug, jogo.id, Number(resposta) || 0));
   }
   const quadrasLivres = estado?.quadras.filter((q) => !q.jogo) ?? [];
+  // link do telao sem login (aparelho da caixa de som); a rota da mesa devolve junto com o estado
+  const telaoUrl = (estado as { telaoUrl?: string } | null)?.telaoUrl ?? null;
+  const [linkCopiado, setLinkCopiado] = useState(false);
+  async function copiarLinkTelao() {
+    if (!telaoUrl) return;
+    const url = `${window.location.origin}${telaoUrl}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopiado(true);
+      setTimeout(() => setLinkCopiado(false), 2500);
+    } catch {
+      window.prompt("Copie o link do telão:", url);
+    }
+  }
   const qsCategoria = categoriaId ? `?categoria=${categoriaId}` : "";
 
   return (
@@ -81,6 +95,11 @@ export default function OperacaoPage() {
             <LinkButton href={`/admin/torneios/${slug}/operacao/telao${qsCategoria}`} target="_blank" icon={<MonitorPlay />}>
               Abrir telão
             </LinkButton>
+            {telaoUrl && (
+              <Button variant="ghost" icon={<Link2 />} onClick={copiarLinkTelao} title="Link que abre o telão sem login, para o aparelho da caixa de som">
+                {linkCopiado ? "Link copiado" : "Link do telão (sem login)"}
+              </Button>
+            )}
           </>
         }
       />

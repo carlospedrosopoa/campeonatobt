@@ -14,16 +14,17 @@ export function agoraServidor() {
 }
 
 /** Estado da operacao do dia, atualizado sozinho a cada `intervaloMs`. */
-export function useOperacao(slug: string, categoriaId: string | null, intervaloMs = 5000) {
+export function useOperacao(slug: string, categoriaId: string | null, intervaloMs = 5000, urlEstado?: string) {
   const [estado, setEstado] = useState<EstadoOperacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const ativo = useRef(true);
 
   const carregar = useCallback(async () => {
     try {
-      const qs = categoriaId ? `?categoriaId=${encodeURIComponent(categoriaId)}` : "";
+      const base = urlEstado ?? `/api/v1/torneios/${slug}/operacao`;
+      const qs = categoriaId ? `${base.includes("?") ? "&" : "?"}categoriaId=${encodeURIComponent(categoriaId)}` : "";
       const enviadoEm = Date.now();
-      const res = await fetch(`/api/v1/torneios/${slug}/operacao${qs}`, { cache: "no-store" });
+      const res = await fetch(`${base}${qs}`, { cache: "no-store" });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Falha ao carregar a operação");
       if (data?.agora) {
@@ -38,7 +39,7 @@ export function useOperacao(slug: string, categoriaId: string | null, intervaloM
     } catch (e: any) {
       if (ativo.current) setErro(e?.message || "Erro inesperado");
     }
-  }, [slug, categoriaId]);
+  }, [slug, categoriaId, urlEstado]);
 
   useEffect(() => {
     ativo.current = true;
