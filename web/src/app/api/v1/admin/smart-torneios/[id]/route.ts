@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireGlobalAdmin } from "@/lib/torneio-admin-auth";
-import { ErroSmart, aprovarSmart, recusarSmart } from "@/services/smart-torneio.service";
+import { ErroSmart, aprovarSmart, excluirSmartTeste, marcarTesteSmart, recusarSmart } from "@/services/smart-torneio.service";
 
-/** Autorizar ou recusar. Body: { acao: "aprovar" | "recusar", motivo? } */
+/** Body: { acao: "aprovar" | "recusar" (motivo?) | "teste" (teste: boolean) | "excluir" (so teste) } */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const acesso = await requireGlobalAdmin();
   if ("response" in acesso) return acesso.response;
@@ -12,6 +12,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const adminId = String((acesso.user as { id?: string }).id ?? "");
     if (b.acao === "aprovar") await aprovarSmart({ id, adminId });
     else if (b.acao === "recusar") await recusarSmart({ id, adminId, motivo: String(b.motivo ?? "") });
+    else if (b.acao === "teste") await marcarTesteSmart({ id, teste: b.teste === true });
+    else if (b.acao === "excluir") await excluirSmartTeste({ id });
     else return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
     return NextResponse.json({ ok: true });
   } catch (e) {

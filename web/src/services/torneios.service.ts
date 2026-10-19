@@ -657,7 +657,8 @@ export class TorneiosService {
       : null;
   }
 
-  async excluirPorSlug(slug: string) {
+  /** mesmoComResultados: so para Smart Torneio de teste (apaga tambem os jogos com placar) */
+  async excluirPorSlug(slug: string, opcoes?: { mesmoComResultados?: boolean }) {
     const torneio = await this.buscarPorSlug(slug);
     if (!torneio) return null;
 
@@ -680,7 +681,7 @@ export class TorneiosService {
       );
 
     const jogosComResultado = (resCount[0]?.count ?? 0) > 0;
-    if (jogosComResultado) {
+    if (jogosComResultado && !opcoes?.mesmoComResultados) {
       throw new Error("Não é possível excluir: existe jogo com resultado informado.");
     }
 

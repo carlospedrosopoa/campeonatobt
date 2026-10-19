@@ -5,6 +5,7 @@ import {
   equipeIntegrantes,
   equipes,
   inscricoes,
+  smartTorneios,
   torneioComunicacaoDestinatarios,
   torneioComunicacoes,
   torneios,
@@ -442,6 +443,14 @@ export const torneioComunicacoesService = {
     /** quando informado, envia so para estes atletas (em vez de todos os inscritos) */
     usuarioIds?: string[];
   }) {
+    // Smart Torneio de teste nao manda nada (nem app nem WhatsApp)
+    const [smart] = await db
+      .select({ teste: smartTorneios.teste })
+      .from(smartTorneios)
+      .where(eq(smartTorneios.torneioId, params.torneioId))
+      .limit(1);
+    if (smart?.teste) throw new Error("Smart Torneio de teste: comunicações desativadas.");
+
     const destinatarios = params.usuarioIds
       ? await listarDestinatariosPorUsuarios(params.usuarioIds)
       : await listarDestinatariosBase({

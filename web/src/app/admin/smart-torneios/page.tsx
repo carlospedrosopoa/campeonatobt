@@ -55,14 +55,14 @@ export default function SmartTorneiosAdminPage() {
       .catch(() => null);
   }, []);
 
-  async function decidir(id: string, acao: "aprovar" | "recusar", motivo?: string) {
+  async function decidir(id: string, acao: "aprovar" | "recusar" | "teste" | "excluir", motivo?: string, teste?: boolean) {
     try {
       setOcupado(id);
       setErro(null);
       const res = await fetch(`/api/v1/admin/smart-torneios/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ acao, motivo }),
+        body: JSON.stringify({ acao, motivo, teste }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Não foi possível concluir");
@@ -139,9 +139,12 @@ export default function SmartTorneiosAdminPage() {
                     {dataBR(s.torneio?.data ?? null)} · {s.torneio?.local}
                   </div>
                 </div>
-                <Badge tone="dark" className="shrink-0 font-mono tracking-wider">
-                  {s.codigo}
-                </Badge>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {s.teste && <Badge tone="warning">Teste</Badge>}
+                  <Badge tone="dark" className="font-mono tracking-wider">
+                    {s.codigo}
+                  </Badge>
+                </div>
               </div>
 
               <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">
@@ -210,11 +213,37 @@ export default function SmartTorneiosAdminPage() {
                   </div>
                 ))}
 
-              {s.status === "APROVADO" && s.torneio && (
-                <LinkButton size="sm" href={`/admin/torneios/${s.torneio.slug}`} className="self-start">
-                  Abrir torneio
-                </LinkButton>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {s.status === "APROVADO" && s.torneio && (
+                  <LinkButton size="sm" href={`/admin/torneios/${s.torneio.slug}`}>
+                    Abrir torneio
+                  </LinkButton>
+                )}
+                <label className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                  <input
+                    type="checkbox"
+                    checked={s.teste}
+                    disabled={ocupado === s.id}
+                    onChange={(e) => decidir(s.id, "teste", undefined, e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Teste (sem avisos)
+                </label>
+                {s.teste && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    disabled={ocupado === s.id}
+                    onClick={() => {
+                      if (window.confirm(`Excluir o teste "${s.torneio?.nome}" com todos os jogos e inscrições? Não dá para desfazer.`)) {
+                        void decidir(s.id, "excluir");
+                      }
+                    }}
+                  >
+                    Excluir teste
+                  </Button>
+                )}
+              </div>
             </Card>
           ))}
         </div>
