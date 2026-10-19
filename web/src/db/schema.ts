@@ -474,6 +474,8 @@ export const partidas = pgTable('partidas', {
   chamadoEm: timestamp('chamado_em'),
   // minutos de aquecimento informados no "Comecou" (o jogo vale a partir de iniciadoEm + aquecimento)
   aquecimentoMin: integer('aquecimento_min'),
+  // Americano: jogo extra para nao deixar quadra parada; nao conta para o ranking de ninguem
+  amistoso: boolean('amistoso').default(false).notNull(),
   iniciadoEm: timestamp('iniciado_em'),
   finalizadoEm: timestamp('finalizado_em'),
   observacoes: text('observacoes'),

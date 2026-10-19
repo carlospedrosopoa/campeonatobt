@@ -88,25 +88,24 @@ export function montarRodadasAmericano(params: {
     if (faltando.length === 0) break;
     // na 1a rodada do replanejamento: so as quadras livres e so quem nao esta em quadra
     const primeiraComAndamento = Boolean(and) && numero === 1;
-    const disponiveis = primeiraComAndamento ? atletas.filter((a) => !and!.emQuadra.has(a)) : atletas;
-    const quadrasRodada = primeiraComAndamento ? Math.min(and!.quadrasLivres, Math.floor(disponiveis.length / 4)) : quadras;
-    const faltandoDisp = faltando.filter((a) => disponiveis.includes(a));
-    if (quadrasRodada <= 0 || faltandoDisp.length === 0) {
+    // jogo do ranking vale para os 4: so entra quem ainda precisa jogar (ninguem completa jogo)
+    const candidatos = primeiraComAndamento ? faltando.filter((a) => !and!.emQuadra.has(a)) : faltando;
+    const quadrasRodada = primeiraComAndamento ? and!.quadrasLivres : quadras;
+    const jogosNaRodada = Math.min(quadrasRodada, Math.floor(candidatos.length / 4));
+    if (jogosNaRodada <= 0) {
       if (primeiraComAndamento) {
         for (const a of and!.emQuadra) ultimaRodada.set(a, numero);
         rodadas.push({ numero, jogos: [] });
         continue;
       }
-      break;
+      break; // nao fecha mais jogo valido (so acontece com a ordem muito desviada do plano)
     }
 
-    // quantos jogos nesta rodada: o suficiente para quem ainda precisa jogar, ate o limite de quadras
-    const jogosNaRodada = Math.max(1, Math.min(quadrasRodada, Math.ceil(faltandoDisp.length / 4)));
     // quem joga: primeiro os que tem menos jogos (obrigatorios); as vagas que sobram saem do proximo
     // nivel, escolhidas junto com a divisao das duplas para variar parceiros e adversarios
     const vagas = jogosNaRodada * 4;
     const porJogos = new Map<number, string[]>();
-    for (const a of disponiveis) porJogos.set(jogos.get(a)!, [...(porJogos.get(jogos.get(a)!) ?? []), a]);
+    for (const a of candidatos) porJogos.set(jogos.get(a)!, [...(porJogos.get(jogos.get(a)!) ?? []), a]);
     const niveis = Array.from(porJogos.keys()).sort((x, y) => x - y);
     const obrigatorios: string[] = [];
     let opcionais: string[] = [];
@@ -147,6 +146,31 @@ export function montarRodadasAmericano(params: {
     rodadas.push({ numero, jogos: melhor!.jogos });
   }
   return rodadas.filter((r) => r.jogos.length > 0);
+}
+
+/**
+ * Para todos jogarem exatamente N jogos validos, atletas x N precisa ser multiplo de 4
+ * (cada jogo tem 4 vagas). Devolve os valores de N possiveis ate 30.
+ */
+export function metasValidasAmericano(atletas: number) {
+  return Array.from({ length: 30 }, (_, i) => i + 1).filter((n) => (atletas * n) % 4 === 0);
+}
+
+/** Amistoso: divide 4 atletas em 2 duplas repetindo o minimo de parceiros ja usados. */
+export function montarAmistoso(quatro: [string, string, string, string], parceirosUsados: [string, string][], aleatorio: () => number = Math.random): JogoAmericano {
+  const usados = new Set(parceirosUsados.map(([x, y]) => chave(x, y)));
+  const opcoes: [number, number, number, number][] = embaralhar(
+    [
+      [0, 1, 2, 3],
+      [0, 2, 1, 3],
+      [0, 3, 1, 2],
+    ],
+    aleatorio
+  );
+  const custo = ([i, j, k, l]: [number, number, number, number]) =>
+    Number(usados.has(chave(quatro[i], quatro[j]))) + Number(usados.has(chave(quatro[k], quatro[l])));
+  const [i, j, k, l] = opcoes.sort((x, y) => custo(x) - custo(y))[0];
+  return { a: [quatro[i], quatro[j]], b: [quatro[k], quatro[l]] };
 }
 
 export type LinhaRankingAmericano = {

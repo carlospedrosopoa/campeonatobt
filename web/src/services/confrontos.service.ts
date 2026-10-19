@@ -143,6 +143,7 @@ export class ConfrontosService {
         and(
           or(inArray(partidas.equipeAId, equipeIds), inArray(partidas.equipeBId, equipeIds)),
           inArray(partidas.status, ["FINALIZADA", "WO"]),
+          eq(partidas.amistoso, false),
           isNotNull(partidas.vencedorId),
           eq(torneios.oculto, false)
         )

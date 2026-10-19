@@ -52,6 +52,8 @@ export type JogoOperacao = {
   /** algum atleta esta em outro jogo ja chamado ou em andamento */
   ocupados: string[];
   pronto: boolean;
+  /** Americano: jogo extra que nao conta para o ranking */
+  amistoso: boolean;
 };
 
 export type QuadraOperacao = {
@@ -188,6 +190,7 @@ export class OperacaoService {
         equipeAId: partidas.equipeAId,
         equipeBId: partidas.equipeBId,
         criadoEm: partidas.criadoEm,
+        amistoso: partidas.amistoso,
       })
       .from(partidas)
       .innerJoin(categorias, eq(categorias.id, partidas.categoriaId))
@@ -285,7 +288,7 @@ export class OperacaoService {
       for (const l of daCategoria) {
         const encerrado = l.status === "FINALIZADA" || l.status === "WO";
         const emQuadraAgora = emQuadra.some((q) => q.id === l.id);
-        if (!encerrado && !emQuadraAgora) continue;
+        if ((!encerrado && !emQuadraAgora) || l.amistoso) continue;
         for (const u of doJogo(l)) {
           jogados.set(u, (jogados.get(u) ?? 0) + 1);
           const fim = encerrado ? new Date(l.finalizadoEm ?? l.iniciadoEm ?? l.criadoEm).getTime() : Date.now();
@@ -309,7 +312,8 @@ export class OperacaoService {
           if (a.fase !== b.fase) return (ORDEM_FASE[a.fase] ?? 9) - (ORDEM_FASE[b.fase] ?? 9);
           const x = chaves.get(a.id)!;
           const y = chaves.get(b.id)!;
-          return x.ocupados - y.ocupados || x.jogos - y.jogos || x.descanso - y.descanso || ordenarFila(a, b);
+          // amistoso so entra quando nenhum jogo do ranking esta livre
+          return Number(a.amistoso) - Number(b.amistoso) || x.ocupados - y.ocupados || x.jogos - y.jogos || x.descanso - y.descanso || ordenarFila(a, b);
         });
       const outras = filaLinhas.filter((l) => l.categoriaId !== categoria.id);
       filaLinhas.splice(0, filaLinhas.length, ...ordenados, ...outras);
@@ -326,7 +330,7 @@ export class OperacaoService {
         categoriaId: l.categoriaId,
         categoriaNome: l.categoriaNome,
         fase: l.fase,
-        faseNome: NOME_FASE[l.fase] ?? l.fase,
+        faseNome: l.amistoso ? "Amistoso" : NOME_FASE[l.fase] ?? l.fase,
         grupoNome: l.grupoNome ?? null,
         rodadaNumero: l.rodadaNumero ?? null,
         status: l.status,
@@ -343,6 +347,7 @@ export class OperacaoService {
         faltando,
         ocupados,
         pronto: todos.length > 0 && faltando.length === 0 && ocupados.length === 0,
+        amistoso: l.amistoso,
       };
     };
 
