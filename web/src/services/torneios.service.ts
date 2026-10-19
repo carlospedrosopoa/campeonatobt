@@ -718,6 +718,13 @@ export class TorneiosService {
       if (grupoIds.length > 0) {
         await tx.delete(grupoEquipes).where(inArray(grupoEquipes.grupoId, grupoIds));
       }
+      // inscricoes antes das categorias (inscricoes.categoria_id aponta para a categoria)
+      if (inscricaoIds.length > 0) {
+        await tx.delete(inscricaoPagamentos).where(inArray(inscricaoPagamentos.inscricaoId, inscricaoIds));
+      }
+
+      await tx.delete(inscricoes).where(eq(inscricoes.torneioId, torneio.id));
+
       if (categoriaIds.length > 0) {
         await tx.delete(grupos).where(inArray(grupos.categoriaId, categoriaIds));
         await tx.delete(categoriaConfiguracoes).where(inArray(categoriaConfiguracoes.categoriaId, categoriaIds));
@@ -728,11 +735,6 @@ export class TorneiosService {
       await tx.delete(apoiadores).where(eq(apoiadores.torneioId, torneio.id));
       await tx.delete(patrocinadores).where(eq(patrocinadores.torneioId, torneio.id));
 
-      if (inscricaoIds.length > 0) {
-        await tx.delete(inscricaoPagamentos).where(inArray(inscricaoPagamentos.inscricaoId, inscricaoIds));
-      }
-
-      await tx.delete(inscricoes).where(eq(inscricoes.torneioId, torneio.id));
 
       if (equipeIds.length > 0) {
         await tx.delete(equipeIntegrantes).where(inArray(equipeIntegrantes.equipeId, equipeIds));
