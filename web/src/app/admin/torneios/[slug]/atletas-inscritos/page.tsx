@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Download, RefreshCw, Save, Users } from "lucide-react";
+import { ArrowLeft, Download, Printer, RefreshCw, Save, Users } from "lucide-react";
 
 type AtletaInscrito = {
   atletaId: string;
@@ -201,6 +201,55 @@ export default function AdminAtletasInscritosPage() {
         a.tamanho.localeCompare(b.tamanho)
     );
   }, [camisetasEditadas, data]);
+
+  /** Grade de camisetas em pagina A4 para imprimir ou salvar como PDF (impressao do navegador). */
+  function imprimirGrade() {
+    if (!data || gradeCamisetas.length === 0) return;
+    const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const total = gradeCamisetas.reduce((t, i) => t + i.quantidade, 0);
+    const generos = Array.from(new Set(gradeCamisetas.map((i) => i.genero)));
+    const blocos = generos
+      .map((g) => {
+        const itens = gradeCamisetas.filter((i) => i.genero === g);
+        const subtotal = itens.reduce((t, i) => t + i.quantidade, 0);
+        const linhas = itens
+          .map((i) => `<tr><td>${esc(i.tipo)}</td><td class="c">${esc(i.tamanho)}</td><td class="n">${i.quantidade}</td></tr>`)
+          .join("");
+        return `<h2>${esc(g || "Sem gênero")}</h2><table><thead><tr><th>Tipo</th><th class="c">Tamanho</th><th class="n">Quantidade</th></tr></thead><tbody>${linhas}</tbody><tfoot><tr><td colspan="2">Subtotal ${esc(g)}</td><td class="n">${subtotal}</td></tr></tfoot></table>`;
+      })
+      .join("");
+    const emitido = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Grade de camisetas - ${esc(data.torneio.nome)}</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #17181c; margin: 0; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .sub { font-size: 12px; color: #6b6b6b; margin-bottom: 14px; }
+  h2 { font-size: 15px; margin: 18px 0 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; break-inside: avoid; }
+  th, td { border: 1px solid #d9d5cc; padding: 6px 8px; text-align: left; }
+  th { background: #f3f1ec; }
+  td.c, th.c { text-align: center; width: 90px; }
+  td.n, th.n { text-align: right; width: 100px; }
+  tfoot td { font-weight: bold; background: #faf9f6; }
+  .total { margin-top: 16px; font-size: 15px; font-weight: bold; text-align: right; }
+</style></head><body>
+<h1>Grade de camisetas</h1>
+<div class="sub">${esc(data.torneio.nome)} · emitido em ${emitido}</div>
+${blocos}
+<div class="total">Total geral: ${total} camiseta(s)</div>
+<script>window.onload = () => { window.print(); };</script>
+</body></html>`;
+    const janela = window.open("", "_blank");
+    if (!janela) {
+      alert("Libere as janelas pop-up deste site para imprimir a grade.");
+      return;
+    }
+    janela.document.open();
+    janela.document.write(html);
+    janela.document.close();
+  }
 
   async function exportarExcel() {
     if (!data) return;
@@ -534,9 +583,20 @@ export default function AdminAtletasInscritosPage() {
           )})}
 
           <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-4">
-              <div className="font-bold text-slate-900">Grade de camisetas</div>
-              <div className="text-xs text-slate-500 mt-1">Resumo final por gênero, tipo e tamanho</div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <div>
+                <div className="font-bold text-slate-900">Grade de camisetas</div>
+                <div className="text-xs text-slate-500 mt-1">Resumo final por gênero, tipo e tamanho</div>
+              </div>
+              <button
+                type="button"
+                onClick={imprimirGrade}
+                disabled={gradeCamisetas.length === 0}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir grade (PDF)
+              </button>
             </div>
 
             <div className="space-y-3 p-4 md:hidden">
