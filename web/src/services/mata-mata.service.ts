@@ -780,16 +780,18 @@ export class MataMataService {
     }
 
     const jogos = await db
-      .select({ id: partidas.id, status: partidas.status, vencedorId: partidas.vencedorId })
+      .select({ id: partidas.id, status: partidas.status, vencedorId: partidas.vencedorId, criadoEm: partidas.criadoEm })
       .from(partidas)
       .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, params.faseAtual)));
 
     const finalizados = jogos.filter((j) => (j.status === "FINALIZADA" || j.status === "WO") && j.vencedorId);
     if (finalizados.length !== jogos.length) return { faseProxima, pairings: [] as { a: string; b: string }[] };
 
+    // ordem da chave = ordem em que os jogos foram criados (ex.: quartas 1 e 2 formam a semi 1).
+    // Pelo id (aleatorio) a semi podia juntar lados errados e cruzar duplas do mesmo grupo antes da final.
     const winners = finalizados
       .slice()
-      .sort((a, b) => a.id.localeCompare(b.id))
+      .sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime() || a.id.localeCompare(b.id))
       .map((j) => j.vencedorId!)
       .filter(Boolean);
 
@@ -1086,8 +1088,11 @@ export class MataMataService {
           .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), inArray(partidas.fase, fasesAlvo as any)));
       }
 
-      for (const c of confrontos) {
+      const base = Date.now();
+      for (const [ordem, c] of confrontos.entries()) {
         await tx.insert(partidas).values({
+          // dentro da transacao o now() e o mesmo: horario explicito guarda a ordem da chave
+          criadoEm: new Date(base + ordem),
           torneioId: params.torneioId,
           categoriaId: params.categoriaId,
           rodadaId: null,
@@ -1668,6 +1673,7 @@ export class MataMataService {
         dataHorario: partidas.dataHorario,
         equipeAId: partidas.equipeAId,
         equipeBId: partidas.equipeBId,
+        criadoEm: partidas.criadoEm,
       })
       .from(partidas)
       .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, faseProxima)));
@@ -1692,7 +1698,8 @@ export class MataMataService {
           .delete(partidas)
           .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, faseProxima)));
 
-        for (const p of calc.pairings) {
+        const base = Date.now();
+        for (const [ordem, p] of calc.pairings.entries()) {
           await tx.insert(partidas).values({
             torneioId: params.torneioId,
             categoriaId: params.categoriaId,
@@ -1703,6 +1710,8 @@ export class MataMataService {
             status: "AGENDADA",
             placarA: 0,
             placarB: 0,
+            // dentro da transacao o now() e o mesmo: horario explicito guarda a ordem da chave
+            criadoEm: new Date(base + ordem),
             atualizadoEm: new Date(),
           });
         }
@@ -1718,7 +1727,7 @@ export class MataMataService {
       };
     }
 
-    const sorted = existentes.slice().sort((a, b) => a.id.localeCompare(b.id));
+    const sorted = existentes.slice().sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime() || a.id.localeCompare(b.id));
     let partidasAtualizadas = 0;
     for (let i = 0; i < sorted.length; i++) {
       const p = calc.pairings[i];
