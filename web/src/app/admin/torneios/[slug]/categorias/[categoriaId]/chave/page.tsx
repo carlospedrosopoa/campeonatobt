@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Banknote, CalendarClock, ClipboardCheck, Gamepad2, ImageIcon, Network, Pencil, PlusCircle, RefreshCcw, Save, Settings, X } from "lucide-react";
+import { ArrowLeft, Banknote, CalendarClock, ClipboardCheck, Gamepad2, ImageIcon, Network, Pencil, SquarePen, PlusCircle, RefreshCcw, Save, Settings, X } from "lucide-react";
 import { gerarCardPartidaAdmin } from "@/lib/match-card-client";
 import { ProntidaoBadge, useProntidao } from "@/components/admin/presenca/prontidao";
 import { ConferenciaPresenca } from "@/components/admin/presenca/conferencia-presenca";
@@ -586,6 +586,16 @@ export default function AdminCategoriaChavePage() {
           {p.status === "AGENDADA" && <ProntidaoBadge p={prontidao[p.id]} className="ml-auto shrink-0" />}
         </div>
         <div className={variante === "mobile" ? "grid grid-cols-2 gap-2" : "flex flex-wrap justify-end gap-2"}>
+          {p.status !== "AGUARDANDO" && p.equipeAId && p.equipeBId && (
+            // abre o formulario de placar da aba Jogos ja neste jogo
+            <Link
+              href={`/admin/torneios/${slug}/categorias/${categoriaId}/jogos${superCampeonato ? "/super" : ""}?partidaId=${p.id}&fase=${p.fase}`}
+              className={variante === "mobile" ? "col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-900 bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800" : "inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-900 bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"}
+            >
+              <SquarePen className="h-3.5 w-3.5" />
+              {p.status === "FINALIZADA" || p.status === "WO" ? "Editar placar" : "Lançar placar"}
+            </Link>
+          )}
           <button type="button" onClick={() => void gerarCardPartida(p)} disabled={gerandoCardId === p.id} className={btn}>
             <ImageIcon className="h-3.5 w-3.5" />
             {gerandoCardId === p.id ? "Gerando…" : "Card"}
