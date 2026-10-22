@@ -3,8 +3,11 @@ import { requireGlobalAdmin } from "@/lib/torneio-admin-auth";
 import {
   ErroRanking,
   adicionarAtleta,
+  atualizarCategoria,
   atualizarRanking,
+  criarCategoria,
   detalharRanking,
+  excluirCategoria,
   excluirLancamento,
   excluirRanking,
   lancarPontos,
@@ -30,7 +33,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
   }
 }
 
-/** Body: { nome, descricao?, dataInicio, dataFim, imagemUrl? } */
+/** Body: { nome, descricao?, janelaMeses, imagemUrl? } */
 export async function PUT(request: NextRequest, { params }: Ctx) {
   const acesso = await requireGlobalAdmin();
   if ("response" in acesso) return acesso.response;
@@ -56,8 +59,11 @@ export async function DELETE(_request: NextRequest, { params }: Ctx) {
 }
 
 /**
- * Body: { acao: "adicionarAtleta" (atleta do Play, pontosIniciais?, observacao?)
- *   | "removerAtleta" (usuarioId) | "lancar" (usuarioId, pontos, observacao) | "excluirLancamento" (lancamentoId) }
+ * Body: { acao, ... }
+ *   criarCategoria (nome, genero?) | editarCategoria (categoriaId, nome, genero?) | excluirCategoria (categoriaId)
+ *   adicionarAtleta (categoriaId, atleta do Play, pontosIniciais?, observacao?, dataReferencia?)
+ *   removerAtleta (categoriaId, usuarioId) | lancar (categoriaId, usuarioId, pontos, observacao, dataReferencia?)
+ *   excluirLancamento (lancamentoId)
  */
 export async function POST(request: NextRequest, { params }: Ctx) {
   const acesso = await requireGlobalAdmin();
@@ -66,14 +72,34 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const { id } = await params;
     const b = (await request.json().catch(() => null)) ?? {};
     const adminId = String((acesso.user as { id?: string }).id ?? "") || null;
+    const categoriaId = String(b.categoriaId ?? "");
+    if (b.acao === "criarCategoria") return NextResponse.json(await criarCategoria(id, b.nome, b.genero));
     if (b.acao === "adicionarAtleta") {
       return NextResponse.json(
-        await adicionarAtleta({ rankingId: id, atleta: b.atleta, pontosIniciais: b.pontosIniciais, observacao: b.observacao, criadoPorId: adminId })
+        await adicionarAtleta({
+          rankingId: id,
+          categoriaId,
+          atleta: b.atleta,
+          pontosIniciais: b.pontosIniciais,
+          observacao: b.observacao,
+          dataReferencia: b.dataReferencia,
+          criadoPorId: adminId,
+        })
       );
     }
-    if (b.acao === "removerAtleta") await removerAtleta(id, String(b.usuarioId ?? ""));
+    if (b.acao === "editarCategoria") await atualizarCategoria(id, categoriaId, b.nome, b.genero);
+    else if (b.acao === "excluirCategoria") await excluirCategoria(id, categoriaId);
+    else if (b.acao === "removerAtleta") await removerAtleta(id, categoriaId, String(b.usuarioId ?? ""));
     else if (b.acao === "lancar")
-      await lancarPontos({ rankingId: id, usuarioId: String(b.usuarioId ?? ""), pontos: b.pontos, observacao: b.observacao, criadoPorId: adminId });
+      await lancarPontos({
+        rankingId: id,
+        categoriaId,
+        usuarioId: String(b.usuarioId ?? ""),
+        pontos: b.pontos,
+        observacao: b.observacao,
+        dataReferencia: b.dataReferencia,
+        criadoPorId: adminId,
+      });
     else if (b.acao === "excluirLancamento") await excluirLancamento(id, String(b.lancamentoId ?? ""));
     else return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
     return NextResponse.json({ ok: true });
