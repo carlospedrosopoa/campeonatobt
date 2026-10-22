@@ -608,3 +608,38 @@ export const smartTorneioConfig = pgTable('smart_torneio_config', {
   pixCidade: text('pix_cidade'),
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });
+
+// Ranking: periodo, imagem, atletas participantes e lancamentos de pontos (o total e a soma dos lancamentos)
+export const rankings = pgTable('rankings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  nome: text('nome').notNull(),
+  descricao: text('descricao'),
+  dataInicio: date('data_inicio').notNull(),
+  dataFim: date('data_fim').notNull(),
+  imagemUrl: text('imagem_url'),
+  criadoPorId: uuid('criado_por_id').references(() => usuarios.id),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+  atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
+});
+
+export const rankingAtletas = pgTable('ranking_atletas', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rankingId: uuid('ranking_id').references(() => rankings.id, { onDelete: 'cascade' }).notNull(),
+  usuarioId: uuid('usuario_id').references(() => usuarios.id).notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique('ranking_atletas_ranking_usuario_unq').on(t.rankingId, t.usuarioId),
+}));
+
+export const rankingLancamentos = pgTable('ranking_lancamentos', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rankingId: uuid('ranking_id').references(() => rankings.id, { onDelete: 'cascade' }).notNull(),
+  usuarioId: uuid('usuario_id').references(() => usuarios.id).notNull(),
+  // INICIAL: pontuacao de entrada; MANUAL: ajuste do gestor; TORNEIO: gerado por regra de torneio (proxima fase)
+  tipo: text('tipo').$type<"INICIAL" | "MANUAL" | "TORNEIO">().default('MANUAL').notNull(),
+  pontos: integer('pontos').notNull(),
+  observacao: text('observacao'),
+  torneioId: uuid('torneio_id').references(() => torneios.id, { onDelete: 'set null' }),
+  criadoPorId: uuid('criado_por_id').references(() => usuarios.id),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+});

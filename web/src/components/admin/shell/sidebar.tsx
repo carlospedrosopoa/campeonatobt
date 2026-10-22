@@ -15,6 +15,7 @@ import {
   Handshake,
   LayoutGrid,
   MapPin,
+  Medal,
   MessageSquare,
   SlidersHorizontal,
   Trophy,
@@ -122,6 +123,9 @@ export function SidebarConteudo({
             <>
               <NavItem href="/admin/smart-torneios" icon={<Sparkles />} active={pathname.startsWith("/admin/smart-torneios")} onNavigate={onNavigate}>
                 Smart Torneios
+              </NavItem>
+              <NavItem href="/admin/rankings" icon={<Medal />} active={pathname.startsWith("/admin/rankings")} onNavigate={onNavigate}>
+                Rankings
               </NavItem>
               <NavItem
                 href="/admin/configuracoes/organizadores"
