@@ -1119,7 +1119,7 @@ export class InscricoesService {
     return { ok: true };
   }
 
-  private async upsertAtleta(dados: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null }) {
+  async upsertAtleta(dados: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null }) {
     const email = normalizeEmail(dados.email);
     const nome = dados.nome.trim();
     const telefone = dados.telefone?.trim() || null;
