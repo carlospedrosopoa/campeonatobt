@@ -255,6 +255,8 @@ export default function AdminCategoriaJogosPage() {
   const [confirmandoManualTieBreak, setConfirmandoManualTieBreak] = useState(false);
 
   const [classificacao, setClassificacao] = useState<GrupoClassificacao[]>([]);
+  // grupos com a lista de jogos aberta (fase de grupos: classificacao + jogos de cada grupo)
+  const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(new Set());
 
   const [fasePartidas, setFasePartidas] = useState<"GRUPOS" | "OITAVAS" | "QUARTAS" | "SEMI" | "FINAL">("GRUPOS");
   const [partidas, setPartidas] = useState<Partida[]>([]);
@@ -1875,6 +1877,194 @@ export default function AdminCategoriaJogosPage() {
   const mostrarClassificacaoLateral = fasePartidas === "GRUPOS" && classificacao.length > 0;
   const rotuloProximaFase = fasePartidas === "GRUPOS" ? "Gerar mata-mata" : "Gerar próxima fase";
 
+
+  function renderTabelaClassificacao(g: GrupoClassificacao) {
+    return (
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="text-[11px] font-bold text-muted">
+              <th className="w-7 py-1.5 text-left" />
+              <th className="py-1.5 text-left">Dupla</th>
+              <th className="w-8 py-1.5 text-right" title="Pontos">P</th>
+              <th className="w-8 py-1.5 text-right" title="Jogos">J</th>
+              <th className="w-8 py-1.5 text-right" title="Vitórias">V</th>
+              <th className="w-10 py-1.5 text-right" title="Saldo de games">SG</th>
+              <th className="w-11 py-1.5 text-right" title="Aproveitamento">AP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {g.equipes.map((e, idx) => {
+              const ap = e.jogosJogados > 0 ? Math.round((e.pontos / (e.jogosJogados * 3)) * 100) : 0;
+              const classifica = classificamPorGrupo > 0 ? idx < classificamPorGrupo : idx < 2;
+              return (
+                <tr key={e.equipeId} className="border-t border-sand-2">
+                  <td className="py-1.5">
+                    <span
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-md text-[11px] font-extrabold ${
+                        classifica ? "bg-[#e3f3ea] text-[#17663f]" : "bg-sand-2 text-ink-2"
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
+                  </td>
+                  <td className="max-w-0 py-1.5 pr-2">
+                    <div className="flex items-center gap-1.5">
+                      {Boolean(e.cabecaChave) && (
+                        <span title="Cabeça de chave do grupo" className="shrink-0 text-[#b7791f]">
+                          <Crown className="h-3.5 w-3.5" />
+                        </span>
+                      )}
+                      <span className="truncate font-semibold leading-tight text-ink">
+                        <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-1.5 text-right font-extrabold tabular-nums text-ink">{e.pontos}</td>
+                  <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosJogados}</td>
+                  <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosVencidos}</td>
+                  <td className={`py-1.5 text-right font-bold tabular-nums ${e.saldoGames >= 0 ? "text-[#17663f]" : "text-[#a11f14]"}`}>
+                    {e.saldoGames > 0 ? `+${e.saldoGames}` : e.saldoGames}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums text-ink-2">{ap}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+    );
+  }
+
+  const barraFiltros = (
+    <div className="flex flex-col gap-3 border-b border-line px-4 py-3 lg:flex-row lg:items-center sm:px-5">
+      <div className="-mx-1 flex gap-0.5 overflow-x-auto rounded-[10px] bg-sand-2 p-[3px] [scrollbar-width:none]">
+        {(
+          [
+            { id: "TODOS", label: "Todos" },
+            { id: "A_JOGAR", label: "A jogar" },
+            { id: "SEM_HORARIO", label: "Sem horário" },
+            { id: "FINALIZADOS", label: "Finalizados" },
+          ] as const
+        ).map((f) => {
+          const on = filtroStatus === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setFiltroStatus(f.id)}
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
+                on ? "bg-white font-bold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "font-semibold text-ink-2 hover:text-ink"
+              }`}
+            >
+              {f.label} <span className="tabular-nums">{contagemStatus[f.id]}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2 lg:ml-auto">
+        <select
+          value={filtroAtletaId}
+          onChange={(e) => setFiltroAtletaId(e.target.value)}
+          aria-label="Filtrar partidas por atleta"
+          className="h-9 min-w-0 flex-1 rounded-[9px] border border-line bg-white px-2.5 text-[13px] text-ink outline-none focus:border-[#b5b2aa] lg:w-56 lg:flex-none"
+        >
+          <option value="">Todos os atletas</option>
+          {atletasFiltroOptions.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.nome}
+            </option>
+          ))}
+        </select>
+        <Button
+          size="sm"
+          onClick={() => carregarPartidas()}
+          disabled={carregandoPartidas}
+          aria-label="Atualizar partidas"
+          title="Atualizar partidas"
+          className="w-9 px-0"
+        >
+          <RefreshCw className={carregandoPartidas ? "animate-spin" : ""} />
+        </Button>
+      </div>
+    </div>
+  );
+
+  function alternarGrupo(nome: string) {
+    setGruposAbertos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(nome)) novo.delete(nome);
+      else novo.add(nome);
+      return novo;
+    });
+  }
+
+  // fase de grupos: cada grupo com a classificacao e, logo abaixo, os jogos dele (abre e fecha)
+  const blocosGrupos = (() => {
+    const nomesClassificacao = new Set(classificacao.map((g) => (g.grupoNome || "").trim()));
+    const semClassificacao = partidasAgrupadasPorGrupo.filter((g) => !nomesClassificacao.has(g.grupoNome));
+    const blocos = [
+      ...classificacao.map((g) => ({ chave: g.grupoId, nome: (g.grupoNome || "").trim(), grupo: g as GrupoClassificacao | null })),
+      ...semClassificacao.map((g) => ({ chave: g.grupoNome, nome: g.grupoNome, grupo: null as GrupoClassificacao | null })),
+    ];
+    const todosAbertos = blocos.length > 0 && blocos.every((b) => gruposAbertos.has(b.nome));
+    return (
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-extrabold text-ink">Grupos</h2>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => setGruposAbertos(todosAbertos ? new Set() : new Set(blocos.map((b) => b.nome)))}>
+              {todosAbertos ? "Fechar todos os jogos" : "Abrir todos os jogos"}
+            </Button>
+            <Button variant="ghost" size="sm" disabled={recalculando} onClick={() => void recalcularClassificacao()} icon={<RefreshCw className={recalculando ? "animate-spin" : ""} />}>
+              {recalculando ? "Recalculando…" : "Recalcular"}
+            </Button>
+          </div>
+        </div>
+        <Card className="overflow-hidden [&>div]:border-b-0">{barraFiltros}</Card>
+        {blocos.map((b) => {
+          const jogosGrupo = partidas.filter((p) => (p.grupoNome || "Sem grupo").trim() === (b.nome || "Sem grupo"));
+          const finalizados = jogosGrupo.filter(partidaFinalizada).length;
+          const jogosVisiveis = partidasFiltradas.filter((p) => (p.grupoNome || "Sem grupo").trim() === (b.nome || "Sem grupo")).filter(visivel);
+          // filtro por atleta abre sozinho os grupos onde ele joga
+          const aberto = gruposAbertos.has(b.nome) || Boolean(filtroAtletaId);
+          return (
+            <Card key={b.chave} className="overflow-hidden">
+              <div className="flex items-center justify-between px-4 pt-3 sm:px-5">
+                <span className="font-extrabold text-ink">{b.nome || "Sem grupo"}</span>
+                {jogosGrupo.length > 0 && (
+                  <span className="text-xs tabular-nums text-muted">
+                    {finalizados}/{jogosGrupo.length} jogos
+                  </span>
+                )}
+              </div>
+              {b.grupo && <div className="px-4 pb-2 sm:px-5">{renderTabelaClassificacao(b.grupo)}</div>}
+              <button
+                type="button"
+                onClick={() => alternarGrupo(b.nome)}
+                aria-expanded={aberto}
+                className="flex w-full items-center justify-between gap-2 border-t border-line bg-paper px-4 py-2.5 text-left text-[13px] font-bold text-ink-2 hover:bg-sand-2 sm:px-5"
+              >
+                <span>
+                  Jogos do {b.nome || "grupo"}{" "}
+                  <span className="font-semibold text-muted">
+                    ({jogosVisiveis.length}
+                    {jogosVisiveis.length !== jogosGrupo.length ? ` de ${jogosGrupo.length}` : ""})
+                  </span>
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${aberto ? "rotate-180" : ""}`} />
+              </button>
+              {aberto &&
+                (jogosVisiveis.length === 0 ? (
+                  <p className="border-t border-sand-2 px-4 py-3 text-sm text-muted sm:px-5">Nenhum jogo deste grupo no filtro atual.</p>
+                ) : (
+                  <div className="border-t border-sand-2">{jogosVisiveis.map((p) => renderPartidaCard(p))}</div>
+                ))}
+            </Card>
+          );
+        })}
+      </section>
+    );
+  })();
   return (
     <div className="space-y-5">
       <CategoriaHeader
@@ -1981,7 +2171,10 @@ export default function AdminCategoriaJogosPage() {
         })}
       </Card>
 
-      <div className={mostrarClassificacaoLateral ? "grid grid-cols-1 items-start gap-5 xl:grid-cols-[400px_minmax(0,1fr)]" : "space-y-5"}>
+      {mostrarClassificacaoLateral ? (
+        blocosGrupos
+      ) : (
+      <div className="space-y-5">
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-base font-extrabold text-ink">Classificação</h2>
@@ -1994,7 +2187,7 @@ export default function AdminCategoriaJogosPage() {
               <EmptyState title="Sem classificação ainda" description="Gere os grupos na aba Configuração ou recalcule depois dos primeiros jogos." />
             </Card>
           ) : (
-            <div className={mostrarClassificacaoLateral ? "space-y-3" : "grid grid-cols-1 gap-3 md:grid-cols-2"}>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {classificacao.map((g) => {
                 const jogosGrupo = partidas.filter((p) => (p.grupoNome || "").trim() === (g.grupoNome || "").trim());
                 const jogosGrupoFinalizados = jogosGrupo.filter(partidaFinalizada).length;
@@ -2008,57 +2201,7 @@ export default function AdminCategoriaJogosPage() {
                         </span>
                       )}
                     </div>
-                    <table className="w-full text-[13px]">
-                      <thead>
-                        <tr className="text-[11px] font-bold text-muted">
-                          <th className="w-7 py-1.5 text-left" />
-                          <th className="py-1.5 text-left">Dupla</th>
-                          <th className="w-8 py-1.5 text-right" title="Pontos">P</th>
-                          <th className="w-8 py-1.5 text-right" title="Jogos">J</th>
-                          <th className="w-8 py-1.5 text-right" title="Vitórias">V</th>
-                          <th className="w-10 py-1.5 text-right" title="Saldo de games">SG</th>
-                          <th className="w-11 py-1.5 text-right" title="Aproveitamento">AP</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {g.equipes.map((e, idx) => {
-                          const ap = e.jogosJogados > 0 ? Math.round((e.pontos / (e.jogosJogados * 3)) * 100) : 0;
-                          const classifica = classificamPorGrupo > 0 ? idx < classificamPorGrupo : idx < 2;
-                          return (
-                            <tr key={e.equipeId} className="border-t border-sand-2">
-                              <td className="py-1.5">
-                                <span
-                                  className={`inline-flex h-5 w-5 items-center justify-center rounded-md text-[11px] font-extrabold ${
-                                    classifica ? "bg-[#e3f3ea] text-[#17663f]" : "bg-sand-2 text-ink-2"
-                                  }`}
-                                >
-                                  {idx + 1}
-                                </span>
-                              </td>
-                              <td className="max-w-0 py-1.5 pr-2">
-                                <div className="flex items-center gap-1.5">
-                                  {Boolean(e.cabecaChave) && (
-                                    <span title="Cabeça de chave do grupo" className="shrink-0 text-[#b7791f]">
-                                      <Crown className="h-3.5 w-3.5" />
-                                    </span>
-                                  )}
-                                  <span className="truncate font-semibold leading-tight text-ink">
-                                    <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="py-1.5 text-right font-extrabold tabular-nums text-ink">{e.pontos}</td>
-                              <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosJogados}</td>
-                              <td className="py-1.5 text-right tabular-nums text-ink-2">{e.jogosVencidos}</td>
-                              <td className={`py-1.5 text-right font-bold tabular-nums ${e.saldoGames >= 0 ? "text-[#17663f]" : "text-[#a11f14]"}`}>
-                                {e.saldoGames > 0 ? `+${e.saldoGames}` : e.saldoGames}
-                              </td>
-                              <td className="py-1.5 text-right tabular-nums text-ink-2">{ap}%</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    {renderTabelaClassificacao(g)}
                   </Card>
                 );
               })}
@@ -2069,59 +2212,7 @@ export default function AdminCategoriaJogosPage() {
         <section className="space-y-3">
           <h2 className="text-base font-extrabold text-ink">Partidas</h2>
           <Card className="overflow-hidden">
-            <div className="flex flex-col gap-3 border-b border-line px-4 py-3 lg:flex-row lg:items-center sm:px-5">
-              <div className="-mx-1 flex gap-0.5 overflow-x-auto rounded-[10px] bg-sand-2 p-[3px] [scrollbar-width:none]">
-                {(
-                  [
-                    { id: "TODOS", label: "Todos" },
-                    { id: "A_JOGAR", label: "A jogar" },
-                    { id: "SEM_HORARIO", label: "Sem horário" },
-                    { id: "FINALIZADOS", label: "Finalizados" },
-                  ] as const
-                ).map((f) => {
-                  const on = filtroStatus === f.id;
-                  return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => setFiltroStatus(f.id)}
-                      className={`shrink-0 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
-                        on ? "bg-white font-bold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "font-semibold text-ink-2 hover:text-ink"
-                      }`}
-                    >
-                      {f.label} <span className="tabular-nums">{contagemStatus[f.id]}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="flex items-center gap-2 lg:ml-auto">
-                <select
-                  value={filtroAtletaId}
-                  onChange={(e) => setFiltroAtletaId(e.target.value)}
-                  aria-label="Filtrar partidas por atleta"
-                  className="h-9 min-w-0 flex-1 rounded-[9px] border border-line bg-white px-2.5 text-[13px] text-ink outline-none focus:border-[#b5b2aa] lg:w-56 lg:flex-none"
-                >
-                  <option value="">Todos os atletas</option>
-                  {atletasFiltroOptions.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.nome}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  size="sm"
-                  onClick={() => carregarPartidas()}
-                  disabled={carregandoPartidas}
-                  aria-label="Atualizar partidas"
-                  title="Atualizar partidas"
-                  className="w-9 px-0"
-                >
-                  <RefreshCw className={carregandoPartidas ? "animate-spin" : ""} />
-                </Button>
-              </div>
-            </div>
-
+            {barraFiltros}
             <div className="px-4 empty:hidden sm:px-5 [&>*:last-child]:mb-4">
         {classificadosByes?.classificadosParaProximaFase && classificadosByes.classificadosParaProximaFase.length > 0 && fasePartidas !== "GRUPOS" && fasePartidas !== "FINAL" && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-white p-4 shadow-sm">
@@ -2283,6 +2374,7 @@ export default function AdminCategoriaJogosPage() {
           </Card>
         </section>
       </div>
+      )}
 
       {editPartidaId &&
         (() => {
