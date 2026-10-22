@@ -609,35 +609,51 @@ export const smartTorneioConfig = pgTable('smart_torneio_config', {
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });
 
-// Ranking: periodo, imagem, atletas participantes e lancamentos de pontos (o total e a soma dos lancamentos)
+// Ranking (ex.: Liga Master) com categorias. Cada categoria tem classificacao propria:
+// permanente = soma de todos os lancamentos; entrada = soma dos lancamentos dos ultimos janelaMeses
 export const rankings = pgTable('rankings', {
   id: uuid('id').defaultRandom().primaryKey(),
   nome: text('nome').notNull(),
   descricao: text('descricao'),
-  dataInicio: date('data_inicio').notNull(),
-  dataFim: date('data_fim').notNull(),
+  janelaMeses: integer('janela_meses').default(12).notNull(),
   imagemUrl: text('imagem_url'),
   criadoPorId: uuid('criado_por_id').references(() => usuarios.id),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
   atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
 });
 
+export const rankingCategorias = pgTable('ranking_categorias', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rankingId: uuid('ranking_id').references(() => rankings.id, { onDelete: 'cascade' }).notNull(),
+  nome: text('nome').notNull(),
+  genero: text('genero').$type<"MASCULINO" | "FEMININO" | "MISTO" | "LIVRE">(),
+  ordem: integer('ordem').default(0).notNull(),
+  criadoEm: timestamp('criado_em').defaultNow().notNull(),
+}, (t) => ({
+  unq: unique('ranking_categorias_ranking_nome_unq').on(t.rankingId, t.nome),
+}));
+
+// atleta participa por categoria; ao subir de categoria comeca do zero na nova
 export const rankingAtletas = pgTable('ranking_atletas', {
   id: uuid('id').defaultRandom().primaryKey(),
   rankingId: uuid('ranking_id').references(() => rankings.id, { onDelete: 'cascade' }).notNull(),
+  categoriaId: uuid('categoria_id').references(() => rankingCategorias.id, { onDelete: 'cascade' }).notNull(),
   usuarioId: uuid('usuario_id').references(() => usuarios.id).notNull(),
   criadoEm: timestamp('criado_em').defaultNow().notNull(),
 }, (t) => ({
-  unq: unique('ranking_atletas_ranking_usuario_unq').on(t.rankingId, t.usuarioId),
+  unq: unique('ranking_atletas_categoria_usuario_unq').on(t.categoriaId, t.usuarioId),
 }));
 
 export const rankingLancamentos = pgTable('ranking_lancamentos', {
   id: uuid('id').defaultRandom().primaryKey(),
   rankingId: uuid('ranking_id').references(() => rankings.id, { onDelete: 'cascade' }).notNull(),
+  categoriaId: uuid('categoria_id').references(() => rankingCategorias.id, { onDelete: 'cascade' }).notNull(),
   usuarioId: uuid('usuario_id').references(() => usuarios.id).notNull(),
   // INICIAL: pontuacao de entrada; MANUAL: ajuste do gestor; TORNEIO: gerado por regra de torneio (proxima fase)
   tipo: text('tipo').$type<"INICIAL" | "MANUAL" | "TORNEIO">().default('MANUAL').notNull(),
   pontos: integer('pontos').notNull(),
+  // dia que vale o ponto (dia do torneio); decide se ainda conta no ranking de entrada
+  dataReferencia: date('data_referencia').defaultNow().notNull(),
   observacao: text('observacao'),
   torneioId: uuid('torneio_id').references(() => torneios.id, { onDelete: 'set null' }),
   criadoPorId: uuid('criado_por_id').references(() => usuarios.id),

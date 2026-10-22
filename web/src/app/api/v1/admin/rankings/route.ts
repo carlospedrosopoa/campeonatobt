@@ -8,7 +8,7 @@ export async function GET() {
   return NextResponse.json({ rankings: await listarRankings() }, { headers: { "Cache-Control": "no-store" } });
 }
 
-/** Body: { nome, descricao?, dataInicio, dataFim, imagemUrl? } */
+/** Body: { nome, descricao?, janelaMeses, imagemUrl? } */
 export async function POST(request: NextRequest) {
   const acesso = await requireGlobalAdmin();
   if ("response" in acesso) return acesso.response;

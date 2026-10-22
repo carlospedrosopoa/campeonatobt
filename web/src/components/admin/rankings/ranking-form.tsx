@@ -4,12 +4,12 @@ import { useState } from "react";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Alert, Button } from "@/components/admin/ui";
 
-export type DadosRankingForm = { nome: string; descricao: string; dataInicio: string; dataFim: string; imagemUrl: string };
+export type DadosRankingForm = { nome: string; descricao: string; janelaMeses: string; imagemUrl: string };
 
 export const campo = "h-10 w-full rounded-[10px] border border-line bg-white px-3 text-sm font-semibold text-ink";
 const rotulo = "text-[13px] font-bold text-ink";
 
-/** Nome, periodo, descricao e imagem do ranking (criar e editar). */
+/** Nome, janela do ranking de entrada, descricao e imagem (criar e editar). */
 export function RankingForm({
   inicial,
   textoBotao,
@@ -24,8 +24,7 @@ export function RankingForm({
   const [dados, setDados] = useState<DadosRankingForm>({
     nome: inicial?.nome ?? "",
     descricao: inicial?.descricao ?? "",
-    dataInicio: inicial?.dataInicio ?? "",
-    dataFim: inicial?.dataFim ?? "",
+    janelaMeses: inicial?.janelaMeses ?? "12",
     imagemUrl: inicial?.imagemUrl ?? "",
   });
   const [salvando, setSalvando] = useState(false);
@@ -51,18 +50,23 @@ export function RankingForm({
         {erro && <Alert>{erro}</Alert>}
         <label className="block space-y-1">
           <span className={rotulo}>Nome</span>
-          <input className={campo} value={dados.nome} onChange={(e) => setDados({ ...dados, nome: e.target.value })} placeholder="Ranking 2027" />
+          <input className={campo} value={dados.nome} onChange={(e) => setDados({ ...dados, nome: e.target.value })} placeholder="Liga Master" />
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block space-y-1">
-            <span className={rotulo}>Início</span>
-            <input type="date" className={campo} value={dados.dataInicio} onChange={(e) => setDados({ ...dados, dataInicio: e.target.value })} />
-          </label>
-          <label className="block space-y-1">
-            <span className={rotulo}>Fim</span>
-            <input type="date" className={campo} value={dados.dataFim} onChange={(e) => setDados({ ...dados, dataFim: e.target.value })} />
-          </label>
-        </div>
+        <label className="block space-y-1">
+          <span className={rotulo}>Ranking de entrada: pontos dos últimos</span>
+          <span className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={120}
+              className={`${campo} w-24`}
+              value={dados.janelaMeses}
+              onChange={(e) => setDados({ ...dados, janelaMeses: e.target.value })}
+            />
+            <span className="text-sm font-semibold text-ink-2">meses</span>
+          </span>
+          <span className="block text-xs text-muted">O ranking permanente soma todos os pontos, sem prazo.</span>
+        </label>
         <label className="block space-y-1">
           <span className={rotulo}>Descrição (opcional)</span>
           <textarea
@@ -87,7 +91,10 @@ export function RankingForm({
   );
 }
 
-export function formatarPeriodo(inicio: string, fim: string) {
-  const f = (d: string) => d.split("-").reverse().join("/");
-  return `${f(inicio)} a ${f(fim)}`;
+export function rotuloJanela(meses: number) {
+  return meses === 1 ? "último mês" : `últimos ${meses} meses`;
+}
+
+export function formatarData(d: string) {
+  return d.split("-").reverse().join("/");
 }
