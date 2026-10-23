@@ -19,8 +19,8 @@ export default async function TorneioPainelQuadrasPublicPage({ params, searchPar
   const torneio = await torneiosService.buscarPorSlug(slug);
   const modoInicial = query.modo === "grade" ? "grade" : "destaque";
 
-  // Smart Torneio e oculto (privado), mas quem tem o link acompanha ao vivo
-  if (!torneio || (torneio.oculto && !(await smartDoTorneio(torneio.id)))) notFound();
+  // Smart Torneio e torneio demo sao ocultos, mas quem tem o link acompanha ao vivo
+  if (!torneio || (torneio.oculto && !torneio.demo && !(await smartDoTorneio(torneio.id)))) notFound();
 
   return (
     <>

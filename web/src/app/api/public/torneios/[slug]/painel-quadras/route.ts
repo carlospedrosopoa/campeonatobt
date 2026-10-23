@@ -112,7 +112,8 @@ export async function OPTIONS() {
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const torneio = await torneiosService.buscarPorSlug(slug);
-  if (!torneio || torneio.oculto) {
+  // torneio demo e oculto, mas o painel publico abre para a demonstracao
+  if (!torneio || (torneio.oculto && !torneio.demo)) {
     return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404, headers: corsHeaders() });
   }
 

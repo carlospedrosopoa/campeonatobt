@@ -245,6 +245,8 @@ export const torneios = pgTable('torneios', {
   capitaesGerenciamJogos: boolean('capitaes_gerenciam_jogos').default(false).notNull(),
   // operacao ao vivo: fila automatica, tela da quadra e telao com chamada por voz
   operacaoAoVivo: boolean('operacao_ao_vivo').default(false).notNull(),
+  // demonstracao (atletas ficticios): mesmo oculto, as paginas publicas de ao vivo e painel de quadras abrem
+  demo: boolean('demo').default(false).notNull(),
   // minutos de aquecimento padrao (mesa de controle da operacao ao vivo)
   aquecimentoMin: integer('aquecimento_min').default(5).notNull(),
   // chama sozinho o proximo jogo pronto quando a quadra libera (mesa de controle)
