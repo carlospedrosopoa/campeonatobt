@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
-import { inscricoesService } from "@/services/inscricoes.service";
+import { ErroExclusaoInscricao, inscricoesService } from "@/services/inscricoes.service";
 import { categoriaConfigService } from "@/services/categoria-config.service";
 
 export async function DELETE(
@@ -20,7 +20,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Categoria nÃ£o encontrada" }, { status: 404 });
     }
 
-    const del = await inscricoesService.excluir(inscricaoId);
+    let del;
+    try {
+      del = await inscricoesService.excluir(inscricaoId);
+    } catch (e) {
+      if (e instanceof ErroExclusaoInscricao) return NextResponse.json({ error: e.message }, { status: 400 });
+      throw e;
+    }
     if (!del) return NextResponse.json({ error: "InscriÃ§Ã£o nÃ£o encontrada" }, { status: 404 });
 
     return NextResponse.json({ ok: true });
