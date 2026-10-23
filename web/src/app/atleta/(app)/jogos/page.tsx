@@ -253,7 +253,7 @@ export default function AtletaJogosPage() {
       });
       const data = (await res.json().catch(() => null)) as any;
       if (!res.ok) throw new Error(data?.error || "Falha ao enviar placar");
-      alert("Placar enviado. Aguardando confirmação do capitão adversário.");
+      alert(data?.status === "CONFIRMADA" ? "Placar gravado." : "Placar enviado. Aguardando confirmação do capitão adversário.");
       setModal(null);
       await carregar();
     } catch (e: any) {

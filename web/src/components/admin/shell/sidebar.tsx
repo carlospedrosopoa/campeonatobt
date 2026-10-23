@@ -15,6 +15,7 @@ import {
   Handshake,
   LayoutGrid,
   MapPin,
+  CalendarX,
   Medal,
   MessageSquare,
   SlidersHorizontal,
@@ -126,6 +127,9 @@ export function SidebarConteudo({
               </NavItem>
               <NavItem href="/admin/rankings" icon={<Medal />} active={pathname.startsWith("/admin/rankings")} onNavigate={onNavigate}>
                 Rankings
+              </NavItem>
+              <NavItem href="/admin/jogos-sem-placar" icon={<CalendarX />} active={pathname.startsWith("/admin/jogos-sem-placar")} onNavigate={onNavigate}>
+                Jogos sem placar
               </NavItem>
               <NavItem
                 href="/admin/configuracoes/organizadores"

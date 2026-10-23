@@ -21,6 +21,12 @@ export async function bloqueioRecursoCapitaes(partidaId: string): Promise<NextRe
   );
 }
 
+/**
+ * Placar informado pelo atleta precisa da confirmacao da dupla adversaria?
+ * Desligado por enquanto: quem informa (qualquer atleta das duas duplas) ja grava o resultado oficial.
+ */
+export const PLACAR_EXIGE_CONFIRMACAO = false;
+
 /** Dupla (equipe) do jogo em que o atleta esta, ou null se ele nao joga essa partida. */
 export async function equipeDoAtletaNaPartida(usuarioId: string, equipeIds: string[]): Promise<string | null> {
   const [row] = await db
