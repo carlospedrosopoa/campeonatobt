@@ -170,6 +170,7 @@ export class TorneiosService {
         inscricaoComIa: torneios.inscricaoComIa,
         capitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
         operacaoAoVivo: torneios.operacaoAoVivo,
+        demo: torneios.demo,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
         valorInscricaoAdicional: torneios.valorInscricaoAdicional,
         pixChave: torneios.pixChave,
@@ -230,6 +231,7 @@ export class TorneiosService {
         inscricaoComIa: torneios.inscricaoComIa,
         capitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
         operacaoAoVivo: torneios.operacaoAoVivo,
+        demo: torneios.demo,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
         valorInscricaoAdicional: torneios.valorInscricaoAdicional,
         pixChave: torneios.pixChave,
@@ -284,6 +286,7 @@ export class TorneiosService {
         inscricaoComIa: torneios.inscricaoComIa,
         capitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
         operacaoAoVivo: torneios.operacaoAoVivo,
+        demo: torneios.demo,
         valorPrimeiraInscricao: torneios.valorPrimeiraInscricao,
         valorInscricaoAdicional: torneios.valorInscricaoAdicional,
         pixChave: torneios.pixChave,
@@ -324,6 +327,7 @@ export class TorneiosService {
       inscricaoComIa: torneios.inscricaoComIa,
       capitaesGerenciamJogos: torneios.capitaesGerenciamJogos,
       operacaoAoVivo: torneios.operacaoAoVivo,
+      demo: torneios.demo,
       bannerUrl: torneios.bannerUrl,
       logoUrl: torneios.logoUrl,
       templateUrl: torneios.templateUrl,
@@ -597,6 +601,7 @@ export class TorneiosService {
       inscricaoComIa?: boolean;
   capitaesGerenciamJogos?: boolean;
   operacaoAoVivo?: boolean;
+  demo?: boolean;
     }
   ) {
     const atual = await this.buscarPorSlug(slug);
@@ -642,6 +647,7 @@ export class TorneiosService {
         layoutCards: dados.layoutCards === undefined ? undefined : normalizeLayoutCards(dados.layoutCards),
         capitaesGerenciamJogos: dados.capitaesGerenciamJogos === undefined ? undefined : Boolean(dados.capitaesGerenciamJogos),
         operacaoAoVivo: dados.operacaoAoVivo === undefined ? undefined : Boolean(dados.operacaoAoVivo),
+        demo: dados.demo === undefined ? undefined : Boolean(dados.demo),
         toleranciaAtrasoMin: dados.toleranciaAtrasoMin === undefined ? undefined : normalizeTolerancia(dados.toleranciaAtrasoMin),
         checkinModo: dados.checkinModo === undefined ? undefined : normalizeCheckinModo(dados.checkinModo),
         atualizadoEm: new Date(),

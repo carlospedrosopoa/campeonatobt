@@ -8,8 +8,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { slug } = await params;
     const torneio = await torneiosService.buscarPorSlug(slug);
-    // Smart Torneio e oculto (privado), mas quem tem o link acompanha ao vivo
-    if (!torneio || !torneio.operacaoAoVivo || (torneio.oculto && !(await smartDoTorneio(torneio.id)))) {
+    // Smart Torneio e torneio demo sao ocultos, mas quem tem o link acompanha ao vivo
+    if (!torneio || !torneio.operacaoAoVivo || (torneio.oculto && !torneio.demo && !(await smartDoTorneio(torneio.id)))) {
       return NextResponse.json({ error: "Operação ao vivo indisponível" }, { status: 404 });
     }
     const categoriaId = request.nextUrl.searchParams.get("categoriaId") || (await categoriaEmAndamento(torneio.id));
