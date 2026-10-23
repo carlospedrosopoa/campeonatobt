@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
-import { bloqueioRecursoCapitaes, equipeDoAtletaNaPartida } from "@/lib/capitaes-jogos";
+import { PLACAR_EXIGE_CONFIRMACAO, bloqueioRecursoCapitaes, equipeDoAtletaNaPartida } from "@/lib/capitaes-jogos";
+import { ErroPlacar, placarSubmissoesService } from "@/services/placar-submissoes.service";
 import { db } from "@/db";
 import { categorias, equipeIntegrantes, partidas, placarSubmissoes, torneios, usuarios } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
@@ -88,7 +89,7 @@ export async function POST(
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   }
 
-  if (pendenteAtual?.id && !pendenteDaMinhaDupla) {
+  if (PLACAR_EXIGE_CONFIRMACAO && pendenteAtual?.id && !pendenteDaMinhaDupla) {
     return NextResponse.json({ error: "A dupla adversária já informou o placar. Confirme ou recuse." }, { status: 409 });
   }
 
@@ -148,6 +149,20 @@ export async function POST(
         })
         .returning();
   const submissao = upsert[0];
+
+  // sem confirmacao da dupla adversaria: o placar de quem informou ja vira o resultado oficial
+  if (!PLACAR_EXIGE_CONFIRMACAO) {
+    try {
+      const updated = await placarSubmissoesService.confirmarPendente({ partidaId: partida.id, confirmadoPorUsuarioId: auth.user.id });
+      return NextResponse.json(
+        { ok: true, submissaoId: submissao.id, status: "CONFIRMADA", partida: updated },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    } catch (e) {
+      if (e instanceof ErroPlacar) return NextResponse.json({ error: e.message }, { status: e.status });
+      throw e;
+    }
+  }
 
   return NextResponse.json(
     { ok: true, submissaoId: submissao.id, status: "PENDENTE" },

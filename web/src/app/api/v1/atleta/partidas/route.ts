@@ -6,6 +6,7 @@ import { obterRegrasPartidaEfetivas } from "@/lib/regras-partida";
 import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { equipesDisplayService } from "@/services/equipes-display.service";
 import { categoriaConfigService } from "@/services/categoria-config.service";
+import { PLACAR_EXIGE_CONFIRMACAO } from "@/lib/capitaes-jogos";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
@@ -162,7 +163,8 @@ export async function GET(request: NextRequest) {
       // agendar e informar/confirmar placar pelo app (flag da competicao)
       capitaesGerenciamJogos: recursoLigado,
       // qualquer atleta do jogo informa (ou edita o que a propria dupla informou); a outra dupla confirma ou recusa
-      podeInformarPlacar: recursoLigado && !encerrada && Boolean(meuLado) && (!pendente || informadoPeloLado === meuLado),
+      podeInformarPlacar:
+        recursoLigado && !encerrada && Boolean(meuLado) && (!PLACAR_EXIGE_CONFIRMACAO || !pendente || informadoPeloLado === meuLado),
       podeConfirmarPlacar: recursoLigado && !encerrada && Boolean(pendente) && Boolean(meuLado) && Boolean(informadoPeloLado) && informadoPeloLado !== meuLado,
       regrasPartida: obterRegrasPartidaEfetivas({
         regrasBase: config?.regrasPartida,
