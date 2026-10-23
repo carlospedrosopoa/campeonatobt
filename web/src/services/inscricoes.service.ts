@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricaoPagamentos, inscricoes, partidas, placarSubmissoes, torneioAtletaPrefs, torneios, usuarios } from "@/db/schema";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { categoriaConfigService, tipoParticipacaoEhDupla, tipoParticipacaoEhIndividual } from "@/services/categoria-config.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
 import { playAtualizarGeneroAtleta, playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
@@ -560,6 +560,9 @@ export async function validarGeneroInscricao(params: {
   }
 }
 
+/** Exclusao de inscricao bloqueada por regra (a rota devolve 400 com a mensagem). */
+export class ErroExclusaoInscricao extends Error {}
+
 export class InscricoesService {
   private async obterContextoCategoria(categoriaId: string, torneioId: string) {
     const cat = await db.select().from(categorias).where(eq(categorias.id, categoriaId)).limit(1);
@@ -949,9 +952,45 @@ export class InscricoesService {
     return novaInscricao;
   }
 
+  /**
+   * Exclui a inscricao. Se a dupla ja esta num grupo e ainda nao jogou, sai do grupo junto com os jogos dela;
+   * com jogo iniciado/encerrado ou no mata-mata, a exclusao e bloqueada (o resultado ja conta).
+   */
   async excluir(inscricaoId: string) {
-    const [del] = await db.delete(inscricoes).where(eq(inscricoes.id, inscricaoId)).returning();
-    return del ?? null;
+    const [ins] = await db
+      .select({ id: inscricoes.id, categoriaId: inscricoes.categoriaId, equipeId: inscricoes.equipeId })
+      .from(inscricoes)
+      .where(eq(inscricoes.id, inscricaoId))
+      .limit(1);
+    if (!ins) return null;
+
+    const jogos = await db
+      .select({ id: partidas.id, fase: partidas.fase, status: partidas.status })
+      .from(partidas)
+      .where(and(eq(partidas.categoriaId, ins.categoriaId), or(eq(partidas.equipeAId, ins.equipeId), eq(partidas.equipeBId, ins.equipeId))));
+    if (jogos.some((p) => p.status !== "AGENDADA" && p.status !== "CANCELADA")) {
+      throw new ErroExclusaoInscricao("Esta dupla já tem jogo iniciado ou com resultado. Use WO nos jogos em vez de excluir a inscrição.");
+    }
+    if (jogos.some((p) => p.fase !== "GRUPOS")) {
+      throw new ErroExclusaoInscricao("Esta dupla já está no mata-mata. Ajuste a chave antes de excluir a inscrição.");
+    }
+
+    const gruposCategoria = await db.select({ id: grupos.id }).from(grupos).where(eq(grupos.categoriaId, ins.categoriaId));
+    const del = await db.transaction(async (tx) => {
+      const jogoIds = jogos.map((p) => p.id);
+      if (jogoIds.length > 0) {
+        await tx.delete(placarSubmissoes).where(inArray(placarSubmissoes.partidaId, jogoIds));
+        await tx.delete(partidas).where(inArray(partidas.id, jogoIds));
+      }
+      if (gruposCategoria.length > 0) {
+        await tx
+          .delete(grupoEquipes)
+          .where(and(eq(grupoEquipes.equipeId, ins.equipeId), inArray(grupoEquipes.grupoId, gruposCategoria.map((g) => g.id))));
+      }
+      const [row] = await tx.delete(inscricoes).where(eq(inscricoes.id, inscricaoId)).returning();
+      return row ?? null;
+    });
+    return del;
   }
 
   async atualizar(inscricaoId: string, dados: AtualizarInscricaoDTO) {
