@@ -50,6 +50,7 @@ export async function meuDiaDeTorneio(params: { torneioId: string; usuarioId: st
           id: partidas.id,
           categoriaId: partidas.categoriaId,
           categoriaNome: categorias.nome,
+          categoriaInicio: categorias.dataHorario,
           fase: partidas.fase,
           grupoId: partidas.grupoId,
           grupoNome: grupos.nome,
@@ -116,10 +117,14 @@ export async function meuDiaDeTorneio(params: { torneioId: string; usuarioId: st
         const quadras = Math.max(1, estado.quadras.length || torneio.quadrasAtivas || 1);
         // cada "rodada" de quadras leva um jogo medio; quem esta em quadra ja adianta metade
         const rodadas = Math.ceil((idx + 1) / quadras);
+        // categoria que ainda nao comecou: conta a partir do horario de inicio dela, nao de agora
+        const inicio = proximo.categoriaInicio ? new Date(proximo.categoriaInicio).getTime() : null;
+        const previsao =
+          inicio && inicio > agora ? inicio + (rodadas - 1) * media * 60_000 : agora + Math.max(0, rodadas - 0.5) * media * 60_000;
         fila = {
           posicao: idx + 1,
           jogosAFrente: idx,
-          previsaoEm: new Date(agora + Math.max(0, rodadas - 0.5) * media * 60_000).toISOString(),
+          previsaoEm: new Date(previsao).toISOString(),
           prontoParaChamar: estado.fila[idx].pronto,
         };
       }
