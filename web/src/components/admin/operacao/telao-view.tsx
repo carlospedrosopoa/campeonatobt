@@ -14,6 +14,9 @@ import {
   textoResultado,
 } from "@/lib/operacao-texto";
 
+/** Fala "fim de jogo" no telao. Desligada por enquanto. */
+const ANUNCIAR_RESULTADO = false;
+
 /**
  * Telao da operacao: quadras e proximos jogos, e a chamada por voz de cada jogo chamado.
  * A voz vem do Azure (rota /locucao); sem Azure configurado, usa a voz do navegador.
@@ -205,8 +208,8 @@ export function TelaoView({ slug, categoriaId, codigo }: { slug: string; categor
     const vistos = anunciados.current;
     const novos: string[] = [];
 
-    // resultados, do mais antigo para o mais recente
-    for (const r of [...(estado.encerradosRecentes ?? [])].reverse()) {
+    // resultados, do mais antigo para o mais recente (locucao desligada por enquanto: o placar so aparece na tela)
+    for (const r of ANUNCIAR_RESULTADO ? [...(estado.encerradosRecentes ?? [])].reverse() : []) {
       const chave = `fim:${r.id}`;
       if (vistos.has(chave)) continue;
       if (!recente(r.finalizadoEm)) {
