@@ -15,13 +15,13 @@ export function textoChamada(params: {
   equipeA: AtletaTexto[];
   equipeB: AtletaTexto[];
 }) {
-  return `Atenção, quadra ${params.quadra}! ${params.categoriaNome}, ${params.etapa}: ${dupla(params.equipeA)}, contra ${dupla(
-    params.equipeB
-  )}. Dirijam-se à quadra ${params.quadra}.`;
+  // curta e direta, dita duas vezes: "Carlos Silva e João Souza contra André Lima e Mário Rosa, quadra 2"
+  const frase = `${dupla(params.equipeA)} contra ${dupla(params.equipeB)}, quadra ${params.quadra}.`;
+  return `${frase} ${frase}`;
 }
 
 export function textoProximo(params: { equipeA: AtletaTexto[]; equipeB: AtletaTexto[] }) {
-  return `Preparem-se para o próximo jogo: ${dupla(params.equipeA)}, contra ${dupla(params.equipeB)}.`;
+  return `Próximo jogo: ${dupla(params.equipeA)} contra ${dupla(params.equipeB)}.`;
 }
 
 /** Resposta padrao quando o torneio nao habilitou a operacao ao vivo. */
@@ -40,7 +40,8 @@ export function textoResultado(params: { quadra: number | null; vencedora: Atlet
 
 /** Chamada feita sem quadra (pela conferencia de presenca). */
 export function textoChamadaSemQuadra(params: { categoriaNome: string; etapa: string; equipeA: AtletaTexto[]; equipeB: AtletaTexto[] }) {
-  return `Atenção! ${params.categoriaNome}, ${params.etapa}: ${dupla(params.equipeA)}, contra ${dupla(params.equipeB)}. Apresentem-se para o jogo.`;
+  const frase = `${dupla(params.equipeA)} contra ${dupla(params.equipeB)}, apresentem-se.`;
+  return `${frase} ${frase}`;
 }
 
 export function textoInicioAquecimento(params: { quadra: number; minutos: number }) {
