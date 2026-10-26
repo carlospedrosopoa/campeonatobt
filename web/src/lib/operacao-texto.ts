@@ -45,11 +45,11 @@ export function textoChamadaSemQuadra(params: { categoriaNome: string; etapa: st
 }
 
 export function textoInicioAquecimento(params: { quadra: number; minutos: number }) {
-  return `Quadra ${params.quadra}: aquecimento de ${params.minutos} ${params.minutos === 1 ? "minuto" : "minutos"}.`;
+  return `Quadra ${params.quadra}, aquecimento ${params.minutos} ${params.minutos === 1 ? "minuto" : "minutos"}.`;
 }
 
 export function textoFimAquecimento(params: { quadra: number }) {
-  return `Quadra ${params.quadra}: fim do aquecimento. Valendo, bom jogo!`;
+  return `Play na quadra ${params.quadra}! Bom jogo!`;
 }
 
 /** Repeticao da chamada: a frase curta e gerada uma vez e o audio da chamada e reaproveitado. */
