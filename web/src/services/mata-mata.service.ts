@@ -1743,6 +1743,8 @@ export class MataMataService {
     // chave montada do jeito antigo (sem posicao): nao mexe
     if (existentes.some((j) => j.posicaoChave == null)) return nada;
 
+    // a tabela do grupo e gravada a parte: recalcula antes, senao o ultimo placar ainda nao conta
+    await classificacaoCategoriaService.recalcularPorCategoria(params.categoriaId);
     const grupos = [...(await classificacaoCategoriaService.obterClassificacao(params.categoriaId))].sort((a, b) =>
       a.grupoNome.localeCompare(b.grupoNome)
     );
