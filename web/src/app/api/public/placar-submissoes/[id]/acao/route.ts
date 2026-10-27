@@ -123,7 +123,17 @@ export async function POST(
   let partidasCriadas = 0;
   let proximaFaseAtualizada: string | null = null;
   let partidasAtualizadas = 0;
-  if (partida.fase !== "GRUPOS") {
+  if (partida.fase === "GRUPOS") {
+    // fechou o grupo: libera as quartas que ja tem os dois lados definidos
+    const r = await new MataMataService()
+      .liberarJogosProntos({ torneioId: partida.torneioId, categoriaId: partida.categoriaId })
+      .catch((e) => {
+        console.error("[mata-mata] falha ao liberar jogos prontos", e);
+        return { criados: 0, atualizados: 0 };
+      });
+    if (r.criados > 0) proximaFaseCriada = "QUARTAS";
+    partidasCriadas = r.criados;
+  } else {
     const mataMataService = new MataMataService();
     const r = await mataMataService.sincronizarChaveAposAtualizacaoResultado({
       torneioId: partida.torneioId,

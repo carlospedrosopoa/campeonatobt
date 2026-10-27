@@ -56,7 +56,7 @@ export async function GET(
       .leftJoin(rodadas, eq(partidas.rodadaId, rodadas.id))
       .leftJoin(arenas, eq(partidas.arenaId, arenas.id))
       .where(and(eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId), eq(partidas.fase, fase as any)))
-      .orderBy(asc(rodadas.numero), asc(partidas.criadoEm));
+      .orderBy(asc(rodadas.numero), asc(partidas.posicaoChave), asc(partidas.criadoEm));
 
     const equipeIds = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
     const mapNomes = await equipesDisplayService.mapNomesEquipes(equipeIds, { categoriaId });

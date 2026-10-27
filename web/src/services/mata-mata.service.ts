@@ -99,6 +99,34 @@ function partidaIniciada(p: { status?: any; vencedorId?: any; placarA?: any; pla
   return false;
 }
 
+/** Ordem da chave: a posicao do jogo quando existe; nos jogos antigos, a ordem de criacao. */
+function ordemNaChave(a: { posicaoChave: number | null; criadoEm: Date; id: string }, b: typeof a) {
+  return (a.posicaoChave ?? Infinity) - (b.posicaoChave ?? Infinity) || a.criadoEm.getTime() - b.criadoEm.getTime() || a.id.localeCompare(b.id);
+}
+
+/** Jogos de cada fase numa chave completa (sem byes). */
+const JOGOS_POR_FASE: Partial<Record<Fase, number>> = { OITAVAS: 8, QUARTAS: 4, SEMI: 2, FINAL: 1 };
+
+const jogoEncerrado = (p: { status: string | null; vencedorId: string | null }) =>
+  (p.status === "FINALIZADA" || p.status === "WO") && Boolean(p.vencedorId);
+
+type JogoDaFase = {
+  id: string;
+  status: string;
+  equipeAId: string;
+  equipeBId: string;
+  vencedorId: string | null;
+  placarA: number | null;
+  placarB: number | null;
+  detalhesPlacar: unknown;
+  fotoUrl: string | null;
+  arenaId: string | null;
+  quadra: string | null;
+  dataHorario: Date | null;
+  criadoEm: Date;
+  posicaoChave: number | null;
+};
+
 export class MataMataService {
   private calcularMetricasNormalizadas(e: QualifiedSeed) {
     const jogosJogados = Number(e.jogosJogados ?? 0);
@@ -780,7 +808,7 @@ export class MataMataService {
     }
 
     const jogos = await db
-      .select({ id: partidas.id, status: partidas.status, vencedorId: partidas.vencedorId, criadoEm: partidas.criadoEm })
+      .select({ id: partidas.id, status: partidas.status, vencedorId: partidas.vencedorId, criadoEm: partidas.criadoEm, posicaoChave: partidas.posicaoChave })
       .from(partidas)
       .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, params.faseAtual)));
 
@@ -791,7 +819,7 @@ export class MataMataService {
     // Pelo id (aleatorio) a semi podia juntar lados errados e cruzar duplas do mesmo grupo antes da final.
     const winners = finalizados
       .slice()
-      .sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime() || a.id.localeCompare(b.id))
+      .sort(ordemNaChave)
       .map((j) => j.vencedorId!)
       .filter(Boolean);
 
@@ -1079,6 +1107,7 @@ export class MataMataService {
 
     const idsParaApagar = existentes.map((r) => r.id);
     const urlsParaExcluir = existentes.map((r) => r.fotoUrl).filter((value): value is string => Boolean(value?.trim()));
+    const comPosicao = confrontos.length === JOGOS_POR_FASE[fase] && !(await this.isSuperCampeonato({ categoriaId: params.categoriaId }));
 
     await db.transaction(async (tx) => {
       if (idsParaApagar.length > 0) {
@@ -1093,6 +1122,7 @@ export class MataMataService {
         await tx.insert(partidas).values({
           // dentro da transacao o now() e o mesmo: horario explicito guarda a ordem da chave
           criadoEm: new Date(base + ordem),
+          posicaoChave: comPosicao ? ordem + 1 : null,
           torneioId: params.torneioId,
           categoriaId: params.categoriaId,
           rodadaId: null,
@@ -1503,6 +1533,13 @@ export class MataMataService {
       throw new Error("Quantidade de classificados não fecha chave (2/4/6/8/10/16). Ajuste porGrupo/melhoresTerceiros.");
     }
 
+    const jogosMataMata = await db
+      .select({ status: partidas.status, vencedorId: partidas.vencedorId, placarA: partidas.placarA, placarB: partidas.placarB, detalhesPlacar: partidas.detalhesPlacar })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), not(eq(partidas.fase, "GRUPOS"))));
+    if (jogosMataMata.some(partidaIniciada)) {
+      throw new Error("O mata-mata já tem jogos iniciados ou com placar. Use a montagem manual para ajustar a chave.");
+    }
     await db.delete(partidas).where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), not(eq(partidas.fase, "GRUPOS"))));
 
     let fase = faseParaQuantidade(total);
@@ -1592,9 +1629,12 @@ export class MataMataService {
       }
     }
 
+    // chave completa (sem byes): cada jogo guarda a posicao e o avanco segue jogo a jogo
+    const comPosicao = isPowerOfTwo(total) && pairings.length * 2 === total;
     let partidasCriadas = 0;
-    for (const p of pairings) {
+    for (const [i, p] of pairings.entries()) {
       await db.insert(partidas).values({
+        posicaoChave: comPosicao ? i + 1 : null,
         torneioId: params.torneioId,
         categoriaId: params.categoriaId,
         grupoId: null,
@@ -1610,6 +1650,184 @@ export class MataMataService {
     }
 
     return { fase, partidasCriadas, qualificados: total };
+  }
+
+  private async jogosDaFase(params: { torneioId: string; categoriaId: string; fase: Fase }): Promise<JogoDaFase[]> {
+    return db
+      .select({
+        id: partidas.id,
+        status: partidas.status,
+        equipeAId: partidas.equipeAId,
+        equipeBId: partidas.equipeBId,
+        vencedorId: partidas.vencedorId,
+        placarA: partidas.placarA,
+        placarB: partidas.placarB,
+        detalhesPlacar: partidas.detalhesPlacar,
+        fotoUrl: partidas.fotoUrl,
+        arenaId: partidas.arenaId,
+        quadra: partidas.quadra,
+        dataHorario: partidas.dataHorario,
+        criadoEm: partidas.criadoEm,
+        posicaoChave: partidas.posicaoChave,
+      })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, params.fase)));
+  }
+
+  /** Cria o jogo de uma posicao da chave, ou corrige o confronto se ele mudou e o jogo ainda nao comecou. */
+  private async garantirJogoNaPosicao(params: {
+    torneioId: string;
+    categoriaId: string;
+    fase: Fase;
+    posicao: number;
+    a: string;
+    b: string;
+    existentes: JogoDaFase[];
+  }) {
+    const atual = params.existentes.find((j) => j.posicaoChave === params.posicao);
+    if (!atual) {
+      const criados = await db
+        .insert(partidas)
+        .values({
+          torneioId: params.torneioId,
+          categoriaId: params.categoriaId,
+          grupoId: null,
+          equipeAId: params.a,
+          equipeBId: params.b,
+          fase: params.fase,
+          posicaoChave: params.posicao,
+          status: "AGENDADA",
+          placarA: 0,
+          placarB: 0,
+          atualizadoEm: new Date(),
+        })
+        // dois placares fechando juntos: o indice unico (categoria, fase, posicao) segura o segundo
+        .onConflictDoNothing()
+        .returning({ id: partidas.id });
+      return { criou: criados.length, atualizou: 0 };
+    }
+    if ((atual.equipeAId === params.a && atual.equipeBId === params.b) || partidaIniciada(atual)) return { criou: 0, atualizou: 0 };
+
+    const deveInvalidarCard = deveInvalidarCardPartida(atual, {
+      dataHorario: atual.dataHorario,
+      arenaId: atual.arenaId,
+      quadra: atual.quadra,
+      equipeAId: params.a,
+      equipeBId: params.b,
+    });
+    await db
+      .update(partidas)
+      .set({
+        equipeAId: params.a,
+        equipeBId: params.b,
+        chamadoEm: null,
+        ...(deveInvalidarCard ? { fotoUrl: null } : {}),
+        atualizadoEm: new Date(),
+      })
+      .where(eq(partidas.id, atual.id));
+    if (deveInvalidarCard) await excluirCardPartidaDoGcs(atual.fotoUrl);
+    return { criou: 0, atualizou: 1 };
+  }
+
+  /**
+   * Quartas do cruzamento de 4 grupos (2 por grupo): cada jogo sai assim que os dois grupos dele encerram.
+   * A1 x D2, B1 x C2, C1 x B2, D1 x A2 - a mesma chave do botao "Gerar mata-mata".
+   */
+  private async liberarQuartasPorGrupos(params: { torneioId: string; categoriaId: string }) {
+    const nada = { criados: 0, atualizados: 0 };
+    const config = await categoriaConfigService.obterOuDefault(params.categoriaId);
+    if (config.formato !== "GRUPOS" || config.fase2?.habilitada === false) return nada;
+    if ((config.classificacao?.porGrupo ?? 2) !== 2 || (config.classificacao?.melhoresTerceiros ?? 0) > 0) return nada;
+
+    const existentes = await this.jogosDaFase({ ...params, fase: "QUARTAS" });
+    // chave montada do jeito antigo (sem posicao): nao mexe
+    if (existentes.some((j) => j.posicaoChave == null)) return nada;
+
+    const grupos = [...(await classificacaoCategoriaService.obterClassificacao(params.categoriaId))].sort((a, b) =>
+      a.grupoNome.localeCompare(b.grupoNome)
+    );
+    if (grupos.length !== 4 || grupos.some((g) => g.equipes.length < 2)) return nada;
+
+    const jogosGrupos = await db
+      .select({ grupoId: partidas.grupoId, status: partidas.status })
+      .from(partidas)
+      .where(and(eq(partidas.torneioId, params.torneioId), eq(partidas.categoriaId, params.categoriaId), eq(partidas.fase, "GRUPOS")));
+    const encerrado = (grupoId: string) => {
+      const jogos = jogosGrupos.filter((j) => j.grupoId === grupoId && j.status !== "CANCELADA");
+      return jogos.length > 0 && jogos.every((j) => j.status === "FINALIZADA" || j.status === "WO");
+    };
+
+    const cruzamentos: Array<[number, number]> = [
+      [0, 3],
+      [1, 2],
+      [2, 1],
+      [3, 0],
+    ];
+    let criados = 0;
+    let atualizados = 0;
+    for (const [i, [g1, g2]] of cruzamentos.entries()) {
+      if (!encerrado(grupos[g1].grupoId) || !encerrado(grupos[g2].grupoId)) continue;
+      const r = await this.garantirJogoNaPosicao({
+        ...params,
+        fase: "QUARTAS",
+        posicao: i + 1,
+        a: grupos[g1].equipes[0].equipeId,
+        b: grupos[g2].equipes[1].equipeId,
+        existentes,
+      });
+      criados += r.criou;
+      atualizados += r.atualizou;
+    }
+    return { criados, atualizados };
+  }
+
+  /** Jogo k da fase seguinte sai quando os jogos 2k-1 e 2k desta fase terminam (sem esperar a fase inteira). */
+  private async liberarFaseSeguintePorPosicao(params: { torneioId: string; categoriaId: string; fase: "OITAVAS" | "QUARTAS" }) {
+    const nada = { criados: 0, atualizados: 0 };
+    const jogos = await this.jogosDaFase(params);
+    if (jogos.length === 0 || jogos.some((j) => j.posicaoChave == null)) return nada;
+    const faseSeguinte = proximaFase(params.fase)!;
+    const existentes = await this.jogosDaFase({ ...params, fase: faseSeguinte });
+    if (existentes.some((j) => j.posicaoChave == null)) return nada;
+
+    const porPosicao = new Map(jogos.map((j) => [j.posicaoChave!, j]));
+    let criados = 0;
+    let atualizados = 0;
+    for (let k = 1; k <= (JOGOS_POR_FASE[params.fase] ?? 0) / 2; k++) {
+      const j1 = porPosicao.get(2 * k - 1);
+      const j2 = porPosicao.get(2 * k);
+      if (!j1 || !j2 || !jogoEncerrado(j1) || !jogoEncerrado(j2)) continue;
+      const r = await this.garantirJogoNaPosicao({
+        torneioId: params.torneioId,
+        categoriaId: params.categoriaId,
+        fase: faseSeguinte,
+        posicao: k,
+        a: j1.vencedorId!,
+        b: j2.vencedorId!,
+        existentes,
+      });
+      criados += r.criou;
+      atualizados += r.atualizou;
+    }
+    return { criados, atualizados };
+  }
+
+  /**
+   * Mata-mata progressivo: libera cada jogo assim que os dois lados estao definidos, para tocar o torneio
+   * com quadra livre sem esperar a fase inteira. Chamado depois de cada placar (grupos e mata-mata).
+   * Final e 3o lugar seguem esperando as duas semis. Super Campeonato fica de fora.
+   */
+  async liberarJogosProntos(params: { torneioId: string; categoriaId: string }) {
+    if (await this.isSuperCampeonato({ categoriaId: params.categoriaId })) return { criados: 0, atualizados: 0 };
+    const etapas = [
+      await this.liberarQuartasPorGrupos(params),
+      await this.liberarFaseSeguintePorPosicao({ ...params, fase: "OITAVAS" }),
+      await this.liberarFaseSeguintePorPosicao({ ...params, fase: "QUARTAS" }),
+    ];
+    return {
+      criados: etapas.reduce((s, e) => s + e.criados, 0),
+      atualizados: etapas.reduce((s, e) => s + e.atualizados, 0),
+    };
   }
 
   async gerarProximaFaseSeCompleta(params: { torneioId: string; categoriaId: string; faseAtual: Fase }) {
@@ -1654,6 +1872,19 @@ export class MataMataService {
   async sincronizarChaveAposAtualizacaoResultado(params: { torneioId: string; categoriaId: string; faseAtual: Fase }) {
     if (params.faseAtual === "SEMI") {
       return this.sincronizarFasesDecisivasDaSemi({ torneioId: params.torneioId, categoriaId: params.categoriaId });
+    }
+
+    // chave com posicao: o jogo da fase seguinte nasce assim que os dois jogos que o alimentam terminam
+    const jogosFase = await this.jogosDaFase({ torneioId: params.torneioId, categoriaId: params.categoriaId, fase: params.faseAtual });
+    if (jogosFase.length > 0 && jogosFase.every((j) => j.posicaoChave != null)) {
+      const r = await this.liberarJogosProntos({ torneioId: params.torneioId, categoriaId: params.categoriaId });
+      const seguinte = proximaFase(params.faseAtual);
+      return {
+        faseCriada: (r.criados > 0 ? seguinte : null) as any,
+        faseAtualizada: (r.atualizados > 0 ? seguinte : null) as any,
+        partidasCriadas: r.criados,
+        partidasAtualizadas: r.atualizados,
+      };
     }
 
     const faseProxima = proximaFase(params.faseAtual);

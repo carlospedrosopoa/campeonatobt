@@ -58,7 +58,7 @@ export async function GET(
           ? and(eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId), eq(partidas.fase, fase as any))
           : and(eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId))
       )
-      .orderBy(asc(rodadas.numero), asc(partidas.criadoEm));
+      .orderBy(asc(rodadas.numero), asc(partidas.posicaoChave), asc(partidas.criadoEm));
 
     const equipeIds = Array.from(new Set(rows.flatMap((r) => [r.equipeAId, r.equipeBId]).filter(Boolean))) as string[];
     const mapNomes = await equipesDisplayService.mapNomesEquipes(equipeIds, { categoriaId });

@@ -480,6 +480,9 @@ export const partidas = pgTable('partidas', {
   amistoso: boolean('amistoso').default(false).notNull(),
   // "Pular" da mesa de controle: o jogo fica fora das sugestoes ate este horario
   adiadoAte: timestamp('adiado_ate'),
+  // mata-mata: posicao do jogo na fase (1 = primeiro jogo da chave). Com ela os jogos sao liberados fora de ordem
+  // e o avanco segue a chave: jogos 1 e 2 formam o jogo 1 da fase seguinte. Null nos jogos antigos (vale o criado_em).
+  posicaoChave: integer('posicao_chave'),
   iniciadoEm: timestamp('iniciado_em'),
   finalizadoEm: timestamp('finalizado_em'),
   observacoes: text('observacoes'),
