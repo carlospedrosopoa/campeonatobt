@@ -223,7 +223,8 @@ export default function AdminCategoriaChavePage() {
         const res = await fetch(`/api/v1/torneios/${slug}/categorias/${categoriaId}/partidas?fase=${f}`, { cache: "no-store" });
         if (!res.ok) return [f, []];
         const rows = (await res.json()) as Partida[];
-        const sorted = rows.slice().sort((a, b) => a.id.localeCompare(b.id));
+        // a API ja devolve na ordem da chave (posicao do jogo; nos antigos, a ordem de criacao)
+        const sorted = rows;
         return [f, sorted];
       })
     );

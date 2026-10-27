@@ -147,6 +147,9 @@ export class PlacarSubmissoesService {
 
     if (partida.fase === "GRUPOS") {
       await classificacaoCategoriaService.recalcularPorCategoria(partida.categoriaId).catch(() => null);
+      await new MataMataService()
+        .liberarJogosProntos({ torneioId: partida.torneioId, categoriaId: partida.categoriaId })
+        .catch((e) => console.error("[mata-mata] falha ao liberar jogos prontos", e));
     } else {
       await new MataMataService()
         .sincronizarChaveAposAtualizacaoResultado({ torneioId: partida.torneioId, categoriaId: partida.categoriaId, faseAtual: partida.fase as any })
