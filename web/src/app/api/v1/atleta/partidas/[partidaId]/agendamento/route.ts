@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { bloqueioRecursoCapitaes } from "@/lib/capitaes-jogos";
 import { db } from "@/db";
-import { arenas, equipeIntegrantes, equipes, partidas } from "@/db/schema";
+import { arenas, equipeIntegrantes, equipes, partidas, rodadas } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
+import { erroForaDoPrazo } from "@/lib/prazo-agendamento";
 
 export async function PUT(
   request: NextRequest,
@@ -30,8 +31,10 @@ export async function PUT(
       dataHorario: partidas.dataHorario,
       equipeAId: partidas.equipeAId,
       equipeBId: partidas.equipeBId,
+      rodadaDataLimite: rodadas.dataLimite,
     })
     .from(partidas)
+    .leftJoin(rodadas, eq(rodadas.id, partidas.rodadaId))
     .where(eq(partidas.id, id))
     .limit(1);
   const partida = partidaRows[0];
@@ -79,6 +82,8 @@ export async function PUT(
   if (Number.isNaN(dataHorario.getTime())) {
     return NextResponse.json({ error: "Data/hora inválida" }, { status: 400 });
   }
+  const foraDoPrazo = erroForaDoPrazo(dataHorario, partida.rodadaDataLimite);
+  if (foraDoPrazo) return NextResponse.json({ error: foraDoPrazo }, { status: 400 });
 
   const quadraNormalizada = quadra || null;
   const deveInvalidarCard = deveInvalidarCardPartida(partida, {

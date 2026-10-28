@@ -3,9 +3,10 @@ import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { db } from "@/db";
-import { arenas, partidas } from "@/db/schema";
+import { arenas, partidas, rodadas } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
+import { erroForaDoPrazo } from "@/lib/prazo-agendamento";
 
 export async function PUT(
   request: NextRequest,
@@ -33,8 +34,10 @@ export async function PUT(
         dataHorario: partidas.dataHorario,
         equipeAId: partidas.equipeAId,
         equipeBId: partidas.equipeBId,
+        rodadaDataLimite: rodadas.dataLimite,
       })
       .from(partidas)
+      .leftJoin(rodadas, eq(rodadas.id, partidas.rodadaId))
       .where(and(eq(partidas.id, partidaId), eq(partidas.torneioId, torneio.id), eq(partidas.categoriaId, categoriaId)))
       .limit(1);
     const partidaAtual = partidaRow[0];
@@ -61,6 +64,8 @@ export async function PUT(
     if (dataHorario && Number.isNaN(dataHorario.getTime())) return NextResponse.json({ error: "Data/hora invÃ¡lida" }, { status: 400 });
     if (dataLimite && Number.isNaN(dataLimite.getTime())) return NextResponse.json({ error: "Data limite invÃ¡lida" }, { status: 400 });
     if (dataHorario && !arenaId) return NextResponse.json({ error: "Arena Ã© obrigatÃ³ria para agendar a partida" }, { status: 400 });
+    const foraDoPrazo = dataHorario ? erroForaDoPrazo(dataHorario, partidaAtual.rodadaDataLimite) : null;
+    if (foraDoPrazo) return NextResponse.json({ error: foraDoPrazo }, { status: 400 });
 
     const deveInvalidarCard = deveInvalidarCardPartida(partidaAtual, {
       dataHorario,
