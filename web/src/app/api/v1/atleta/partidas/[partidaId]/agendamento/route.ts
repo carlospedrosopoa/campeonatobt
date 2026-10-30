@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { bloqueioRecursoCapitaes } from "@/lib/capitaes-jogos";
 import { db } from "@/db";
-import { arenas, equipeIntegrantes, equipes, partidas, rodadas } from "@/db/schema";
+import { arenas, equipeIntegrantes, partidas, rodadas } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
 import { erroForaDoPrazo } from "@/lib/prazo-agendamento";
@@ -53,15 +53,6 @@ export async function PUT(
     .where(and(eq(equipeIntegrantes.usuarioId, auth.user.id), inArray(equipeIntegrantes.equipeId, equipesDaPartida)))
     .limit(1);
   if (!membroRows[0]) return NextResponse.json({ error: "Você não participa desta partida" }, { status: 403 });
-
-  const capitaoRows = await db
-    .select({ id: equipes.id, capitaoUsuarioId: equipes.capitaoUsuarioId })
-    .from(equipes)
-    .where(inArray(equipes.id, equipesDaPartida));
-  const souCapitao = capitaoRows.some((equipe) => equipe.capitaoUsuarioId === auth.user.id);
-  if (!souCapitao) {
-    return NextResponse.json({ error: "Somente o capitão pode definir data, hora e arena do jogo" }, { status: 403 });
-  }
 
   const body = (await request.json().catch(() => null)) as any;
   const arenaId = typeof body?.arenaId === "string" ? body.arenaId.trim() : "";
