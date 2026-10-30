@@ -165,6 +165,8 @@ export async function GET(request: NextRequest) {
       // qualquer atleta do jogo informa (ou edita o que a propria dupla informou); a outra dupla confirma ou recusa
       podeInformarPlacar:
         recursoLigado && !encerrada && Boolean(meuLado) && (!PLACAR_EXIGE_CONFIRMACAO || !pendente || informadoPeloLado === meuLado),
+      // qualquer atleta do jogo agenda (como o placar), enquanto nao ha placar pendente
+      podeAgendarJogo: recursoLigado && !encerrada && Boolean(meuLado) && !pendente,
       podeConfirmarPlacar: recursoLigado && !encerrada && Boolean(pendente) && Boolean(meuLado) && Boolean(informadoPeloLado) && informadoPeloLado !== meuLado,
       regrasPartida: obterRegrasPartidaEfetivas({
         regrasBase: config?.regrasPartida,
