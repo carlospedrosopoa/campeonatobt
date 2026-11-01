@@ -283,10 +283,12 @@ export function calcularResultadoBeachTennisSets(params: {
       const games = regras.gamesPorSet;
       const tb = regras.tiebreak;
 
+      // 7x6 marcado como tie-break mas sem os pontos (como o app manda, e como este calculo grava) vale como set ganho no tie-break:
+      // recalcular um placar ja normalizado precisa dar o mesmo resultado
       const isTieAtTb =
         tb.habilitado &&
         ((s.a === tb.em && s.b === tb.em) || (Math.max(s.a, s.b) === tb.em + 1 && Math.min(s.a, s.b) === tb.em)) &&
-        (s.tbA !== undefined || s.tbB !== undefined || s.tiebreak);
+        (s.tbA !== undefined || s.tbB !== undefined || (s.tiebreak && s.a === s.b));
 
       if (isTieAtTb) {
         const tbA = s.tbA;

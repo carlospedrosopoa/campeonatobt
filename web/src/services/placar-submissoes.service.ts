@@ -113,12 +113,17 @@ export class PlacarSubmissoesService {
       superCampeonato: partida.superCampeonato,
       superCampeonatoFormato: partida.superCampeonatoFormato,
     });
-    const resultado = calcularResultadoPartida({
-      regras,
-      equipeAId: partida.equipeAId,
-      equipeBId: partida.equipeBId,
-      detalhesPlacar: pendente.detalhesPlacar as any,
-    });
+    let resultado: ReturnType<typeof calcularResultadoPartida>;
+    try {
+      resultado = calcularResultadoPartida({
+        regras,
+        equipeAId: partida.equipeAId,
+        equipeBId: partida.equipeBId,
+        detalhesPlacar: pendente.detalhesPlacar as any,
+      });
+    } catch (e) {
+      throw new ErroPlacar(e instanceof Error ? e.message : "Placar inválido", 400);
+    }
     if (!resultado.vencedorId) throw new ErroPlacar("O placar informado não define um vencedor válido", 400);
     if (resultado.vencedorId !== pendente.vencedorId) {
       throw new ErroPlacar("O placar pendente ficou inconsistente. Peça para informarem de novo.", 409);
