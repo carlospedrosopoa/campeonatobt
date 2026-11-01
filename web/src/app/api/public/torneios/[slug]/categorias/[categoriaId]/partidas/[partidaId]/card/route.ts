@@ -40,10 +40,6 @@ export async function GET(
       .select({
         id: partidas.id,
         fase: partidas.fase,
-        status: partidas.status,
-        placarA: partidas.placarA,
-        placarB: partidas.placarB,
-        detalhesPlacar: partidas.detalhesPlacar,
         dataHorario: partidas.dataHorario,
         quadra: partidas.quadra,
         equipeAId: partidas.equipeAId,
@@ -68,8 +64,7 @@ export async function GET(
     const atletasB = p.equipeBId ? mapAtletas.get(p.equipeBId) ?? [] : [];
     if (!atletasA.length || !atletasB.length) return erro("As duas duplas do jogo ainda não estão definidas", 400);
 
-    // placar so entra no card depois de encerrado (antes, e o card de programacao)
-    const encerrado = p.status === "FINALIZADA" || p.status === "WO";
+    // por enquanto o card do app nao mostra placar: sempre sai o card de programacao
     const png = await gerarCardPartidaPng({
       categoriaNome: categoria.nome,
       cardApenasComFotos: torneio.cardApenasComFotos,
@@ -78,9 +73,9 @@ export async function GET(
       partida: {
         id: p.id,
         fase: p.fase,
-        placarA: encerrado ? p.placarA : null,
-        placarB: encerrado ? p.placarB : null,
-        detalhesPlacar: encerrado ? p.detalhesPlacar : null,
+        placarA: null,
+        placarB: null,
+        detalhesPlacar: null,
         rodadaNome: p.rodadaNome ?? null,
         rodadaNumero: p.rodadaNumero ?? null,
         dataHorario: p.dataHorario ? p.dataHorario.toISOString() : null,
