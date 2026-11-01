@@ -102,13 +102,17 @@ export async function POST(
     superCampeonatoFormato: partida.superCampeonatoFormato,
   });
 
-  const resultado = calcularResultadoPartida({
-    regras,
-    equipeAId: partida.equipeAId,
-    equipeBId: partida.equipeBId,
-    detalhesPlacar,
-  });
-
+  let resultado: ReturnType<typeof calcularResultadoPartida>;
+  try {
+    resultado = calcularResultadoPartida({
+      regras,
+      equipeAId: partida.equipeAId,
+      equipeBId: partida.equipeBId,
+      detalhesPlacar,
+    });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Placar inválido" }, { status: 400 });
+  }
 
   const tokenHash = sha256Hex(gerarTokenAleatorio(32));
   const expira = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -159,8 +163,15 @@ export async function POST(
         { headers: { "Cache-Control": "no-store" } }
       );
     } catch (e) {
+      // sem confirmacao nao existe "aguardando o adversario": se nao gravou, descarta a submissao
+      await db
+        .update(placarSubmissoes)
+        .set({ status: "CANCELADA", canceladoEm: new Date(), canceladoMotivo: "Falha ao gravar o resultado", atualizadoEm: new Date() })
+        .where(and(eq(placarSubmissoes.id, submissao.id), eq(placarSubmissoes.status, "PENDENTE")))
+        .catch(() => null);
       if (e instanceof ErroPlacar) return NextResponse.json({ error: e.message }, { status: e.status });
-      throw e;
+      console.error("Erro ao gravar placar do atleta:", e);
+      return NextResponse.json({ error: "Não foi possível gravar o placar. Tente de novo." }, { status: 500 });
     }
   }
 

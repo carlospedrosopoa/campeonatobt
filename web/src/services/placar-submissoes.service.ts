@@ -142,6 +142,11 @@ export class PlacarSubmissoesService {
         .update(placarSubmissoes)
         .set({ status: "CONFIRMADA", confirmadoEm: new Date(), confirmadoPorUsuarioId: params.confirmadoPorUsuarioId, atualizadoEm: new Date() })
         .where(eq(placarSubmissoes.id, pendente.id));
+      // as duas duplas podem ter informado ao mesmo tempo: o resultado oficial encerra as outras pendentes
+      await tx
+        .update(placarSubmissoes)
+        .set({ status: "CANCELADA", canceladoEm: new Date(), canceladoMotivo: "Jogo já tem resultado oficial", atualizadoEm: new Date() })
+        .where(and(eq(placarSubmissoes.partidaId, params.partidaId), eq(placarSubmissoes.status, "PENDENTE")));
       return [pUpdated] as const;
     });
 

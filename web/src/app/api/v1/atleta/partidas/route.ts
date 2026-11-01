@@ -112,7 +112,8 @@ export async function GET(request: NextRequest) {
 
   const partidasResult = rows.map((r) => {
     const config = configMap.get(r.categoriaId);
-    const pendente = pendentesMap.get(r.id) ?? null;
+    // sem confirmacao, placar pendente (antigo ou de gravacao que falhou) nao trava o jogo no app: o atleta informa de novo
+    const pendente = PLACAR_EXIGE_CONFIRMACAO ? pendentesMap.get(r.id) ?? null : null;
     const capitaoEquipeAId = capitaoMap.get(r.equipeAId) ?? null;
     const capitaoEquipeBId = capitaoMap.get(r.equipeBId) ?? null;
     const souCapitao =
