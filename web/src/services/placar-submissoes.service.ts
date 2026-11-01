@@ -113,12 +113,17 @@ export class PlacarSubmissoesService {
       superCampeonato: partida.superCampeonato,
       superCampeonatoFormato: partida.superCampeonatoFormato,
     });
-    const resultado = calcularResultadoPartida({
-      regras,
-      equipeAId: partida.equipeAId,
-      equipeBId: partida.equipeBId,
-      detalhesPlacar: pendente.detalhesPlacar as any,
-    });
+    let resultado: ReturnType<typeof calcularResultadoPartida>;
+    try {
+      resultado = calcularResultadoPartida({
+        regras,
+        equipeAId: partida.equipeAId,
+        equipeBId: partida.equipeBId,
+        detalhesPlacar: pendente.detalhesPlacar as any,
+      });
+    } catch (e) {
+      throw new ErroPlacar(e instanceof Error ? e.message : "Placar inválido", 400);
+    }
     if (!resultado.vencedorId) throw new ErroPlacar("O placar informado não define um vencedor válido", 400);
     if (resultado.vencedorId !== pendente.vencedorId) {
       throw new ErroPlacar("O placar pendente ficou inconsistente. Peça para informarem de novo.", 409);
@@ -142,6 +147,11 @@ export class PlacarSubmissoesService {
         .update(placarSubmissoes)
         .set({ status: "CONFIRMADA", confirmadoEm: new Date(), confirmadoPorUsuarioId: params.confirmadoPorUsuarioId, atualizadoEm: new Date() })
         .where(eq(placarSubmissoes.id, pendente.id));
+      // as duas duplas podem ter informado ao mesmo tempo: o resultado oficial encerra as outras pendentes
+      await tx
+        .update(placarSubmissoes)
+        .set({ status: "CANCELADA", canceladoEm: new Date(), canceladoMotivo: "Jogo já tem resultado oficial", atualizadoEm: new Date() })
+        .where(and(eq(placarSubmissoes.partidaId, params.partidaId), eq(placarSubmissoes.status, "PENDENTE")));
       return [pUpdated] as const;
     });
 

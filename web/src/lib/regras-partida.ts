@@ -283,10 +283,10 @@ export function calcularResultadoBeachTennisSets(params: {
       const games = regras.gamesPorSet;
       const tb = regras.tiebreak;
 
+      // 6x6 / 7x6 sempre e set decidido no tie-break: os pontos do tie-break sao obrigatorios
       const isTieAtTb =
         tb.habilitado &&
-        ((s.a === tb.em && s.b === tb.em) || (Math.max(s.a, s.b) === tb.em + 1 && Math.min(s.a, s.b) === tb.em)) &&
-        (s.tbA !== undefined || s.tbB !== undefined || s.tiebreak);
+        ((s.a === tb.em && s.b === tb.em) || (Math.max(s.a, s.b) === tb.em + 1 && Math.min(s.a, s.b) === tb.em));
 
       if (isTieAtTb) {
         const tbA = s.tbA;
