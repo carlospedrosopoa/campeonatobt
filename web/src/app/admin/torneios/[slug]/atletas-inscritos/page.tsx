@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Download, Printer, RefreshCw, Save, Users } from "lucide-react";
+import { ArrowLeft, Download, Printer, RefreshCw, Save, Share2, Users } from "lucide-react";
 
 type AtletaInscrito = {
   atletaId: string;
@@ -249,6 +249,96 @@ ${blocos}
     janela.document.open();
     janela.document.write(html);
     janela.document.close();
+  }
+
+  /** PDF da grade como arquivo: no celular abre o compartilhar (WhatsApp etc.); no computador, baixa. */
+  async function compartilharPdfGrade() {
+    if (!data || gradeCamisetas.length === 0) return;
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const margem = 14;
+    const largura = 210 - margem * 2;
+    const colTam = 30;
+    const colQtd = 34;
+    const colTipo = largura - colTam - colQtd;
+    const alturaLinha = 8;
+    let y = margem;
+
+    const novaPaginaSePreciso = (altura: number) => {
+      if (y + altura > 297 - margem) {
+        doc.addPage();
+        y = margem;
+      }
+    };
+    const linha = (cels: [string, string, string], estilo: "cabecalho" | "corpo" | "rodape") => {
+      novaPaginaSePreciso(alturaLinha);
+      if (estilo !== "corpo") {
+        doc.setFillColor(estilo === "cabecalho" ? 243 : 250, estilo === "cabecalho" ? 241 : 249, estilo === "cabecalho" ? 236 : 246);
+        doc.rect(margem, y, largura, alturaLinha, "F");
+      }
+      doc.setDrawColor(217, 213, 204);
+      doc.rect(margem, y, colTipo, alturaLinha);
+      doc.rect(margem + colTipo, y, colTam, alturaLinha);
+      doc.rect(margem + colTipo + colTam, y, colQtd, alturaLinha);
+      doc.setFont("helvetica", estilo === "corpo" ? "normal" : "bold");
+      doc.setFontSize(10);
+      const base = y + alturaLinha / 2 + 1.3;
+      doc.text(cels[0], margem + 2.5, base);
+      doc.text(cels[1], margem + colTipo + colTam / 2, base, { align: "center" });
+      doc.text(cels[2], margem + largura - 2.5, base, { align: "right" });
+      y += alturaLinha;
+    };
+
+    const emitido = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
+    doc.setTextColor(23, 24, 28);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Grade de camisetas", margem, y + 5);
+    y += 10;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(107, 107, 107);
+    doc.text(`${data.torneio.nome} · emitido em ${emitido}`, margem, y);
+    doc.setTextColor(23, 24, 28);
+    y += 6;
+
+    for (const g of Array.from(new Set(gradeCamisetas.map((i) => i.genero)))) {
+      const itens = gradeCamisetas.filter((i) => i.genero === g);
+      novaPaginaSePreciso(10 + alturaLinha * 3);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text(g || "Sem gênero", margem, y + 6);
+      y += 9;
+      linha(["Tipo", "Tamanho", "Quantidade"], "cabecalho");
+      for (const i of itens) linha([i.tipo, i.tamanho, String(i.quantidade)], "corpo");
+      linha([`Subtotal ${g}`.trim(), "", String(itens.reduce((t, i) => t + i.quantidade, 0))], "rodape");
+      y += 2;
+    }
+    novaPaginaSePreciso(12);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(`Total geral: ${gradeCamisetas.reduce((t, i) => t + i.quantidade, 0)} camiseta(s)`, margem + largura, y + 8, { align: "right" });
+
+    const nomeArquivo = `grade-camisetas-${data.torneio.slug || "torneio"}.pdf`;
+    const blob = doc.output("blob");
+    const arquivo = new File([blob], nomeArquivo, { type: "application/pdf" });
+    if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [arquivo] })) {
+      try {
+        await navigator.share({ files: [arquivo], title: `Grade de camisetas - ${data.torneio.nome}` });
+        return;
+      } catch (e) {
+        // fechou o compartilhar: nao baixa por cima
+        if (e instanceof DOMException && e.name === "AbortError") return;
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
   async function exportarExcel() {
@@ -588,15 +678,26 @@ ${blocos}
                 <div className="font-bold text-slate-900">Grade de camisetas</div>
                 <div className="text-xs text-slate-500 mt-1">Resumo final por gênero, tipo e tamanho</div>
               </div>
-              <button
-                type="button"
-                onClick={imprimirGrade}
-                disabled={gradeCamisetas.length === 0}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                <Printer className="h-4 w-4" />
-                Imprimir grade (PDF)
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={compartilharPdfGrade}
+                  disabled={gradeCamisetas.length === 0}
+                  className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Baixar / enviar PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={imprimirGrade}
+                  disabled={gradeCamisetas.length === 0}
+                  className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <Printer className="h-4 w-4" />
+                  Imprimir
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3 p-4 md:hidden">
