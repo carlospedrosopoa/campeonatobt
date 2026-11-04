@@ -323,7 +323,9 @@ ${blocos}
     const nomeArquivo = `grade-camisetas-${data.torneio.slug || "torneio"}.pdf`;
     const blob = doc.output("blob");
     const arquivo = new File([blob], nomeArquivo, { type: "application/pdf" });
-    if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [arquivo] })) {
+    // compartilhar so no celular/tablet (toque); no computador o Windows tambem abre o compartilhar, e ali o certo e baixar
+    const celular = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+    if (celular && navigator.canShare?.({ files: [arquivo] })) {
       try {
         await navigator.share({ files: [arquivo], title: `Grade de camisetas - ${data.torneio.nome}` });
         return;
