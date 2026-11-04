@@ -201,6 +201,7 @@ export default function AdminAtletasInscritosPage() {
         a.tamanho.localeCompare(b.tamanho)
     );
   }, [camisetasEditadas, data]);
+  const totalCamisetas = useMemo(() => gradeCamisetas.reduce((t, i) => t + i.quantidade, 0), [gradeCamisetas]);
 
   /** Grade de camisetas em pagina A4 para imprimir ou salvar como PDF (impressao do navegador). */
   function imprimirGrade() {
@@ -365,12 +366,15 @@ ${blocos}
 
     if (gradeCamisetas.length > 0) {
       const wsGrade = XLSX.utils.json_to_sheet(
-        gradeCamisetas.map((item) => ({
-          Genero: item.genero,
-          Tipo: item.tipo,
-          Tamanho: item.tamanho,
-          Quantidade: item.quantidade,
-        }))
+        [
+          ...gradeCamisetas.map((item) => ({
+            Genero: item.genero,
+            Tipo: item.tipo,
+            Tamanho: item.tamanho,
+            Quantidade: item.quantidade,
+          })),
+          { Genero: "Total", Tipo: "", Tamanho: "", Quantidade: totalCamisetas },
+        ]
       );
       XLSX.utils.book_append_sheet(wb, wsGrade, "Grade Camisetas");
     }
@@ -727,6 +731,13 @@ ${blocos}
                   </div>
                 </div>
               ))}
+
+              {gradeCamisetas.length > 0 && (
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                  <div className="font-bold text-slate-900">Total de camisetas</div>
+                  <div className="text-lg font-bold text-slate-900">{totalCamisetas}</div>
+                </div>
+              )}
             </div>
 
             <div className="hidden overflow-x-auto md:block">
@@ -756,6 +767,14 @@ ${blocos}
                     </tr>
                   )}
                 </tbody>
+                {gradeCamisetas.length > 0 && (
+                  <tfoot className="bg-slate-50">
+                    <tr>
+                      <td colSpan={3} className="py-3 px-4 font-bold text-slate-900">Total de camisetas</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">{totalCamisetas}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
