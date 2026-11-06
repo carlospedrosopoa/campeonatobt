@@ -15,10 +15,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     try {
       const token = await getPlayAdminToken();
       const { res, data } = await playListarPoints({ token, apenasAtivos: true });
-      if (res.ok && data?.success && Array.isArray(data.points)) {
+      // GET /api/point do Play na Quadra devolve a lista direto; o formato { success, points } fica por compatibilidade
+      const points: any[] | null = Array.isArray(data) ? data : data?.success && Array.isArray(data.points) ? data.points : null;
+      if (!res.ok || !points) {
+        console.error("Sincronizar arenas: resposta inesperada do Play na Quadra", res.status);
+      } else {
         await arenasService.sincronizarComPoints({
           torneioId: torneio.id,
-          points: data.points
+          points: points
             .filter((point: any) => point?.id && point?.nome)
             .map((point: any) => ({
               id: point.id,
