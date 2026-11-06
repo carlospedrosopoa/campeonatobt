@@ -127,6 +127,12 @@ export async function GET(request: NextRequest) {
     const informadoPeloLado = equipeInformante === r.equipeAId ? "A" : equipeInformante === r.equipeBId ? "B" : null;
     const encerrada = r.status === "FINALIZADA" || r.status === "WO";
     const recursoLigado = Boolean(r.capitaesGerenciamJogos);
+    // jogo com placar (oficial ou informado e pendente) nao pode mais ter o agendamento trocado ou cancelado
+    const temPlacar =
+      (Array.isArray(r.detalhesPlacar) && r.detalhesPlacar.length > 0) ||
+      Number(r.placarA ?? 0) > 0 ||
+      Number(r.placarB ?? 0) > 0 ||
+      pendentesMap.has(r.id);
 
     return {
       id: r.id,
@@ -166,8 +172,8 @@ export async function GET(request: NextRequest) {
       // qualquer atleta do jogo informa (ou edita o que a propria dupla informou); a outra dupla confirma ou recusa
       podeInformarPlacar:
         recursoLigado && !encerrada && Boolean(meuLado) && (!PLACAR_EXIGE_CONFIRMACAO || !pendente || informadoPeloLado === meuLado),
-      // qualquer atleta do jogo agenda (como o placar), enquanto nao ha placar pendente
-      podeAgendarJogo: recursoLigado && !encerrada && Boolean(meuLado) && !pendente,
+      // qualquer atleta do jogo agenda, troca ou cancela o agendamento (como o placar), enquanto o jogo nao tem placar
+      podeAgendarJogo: recursoLigado && !encerrada && Boolean(meuLado) && !temPlacar,
       podeConfirmarPlacar: recursoLigado && !encerrada && Boolean(pendente) && Boolean(meuLado) && Boolean(informadoPeloLado) && informadoPeloLado !== meuLado,
       regrasPartida: obterRegrasPartidaEfetivas({
         regrasBase: config?.regrasPartida,
