@@ -2,20 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { bloqueioRecursoCapitaes } from "@/lib/capitaes-jogos";
 import { db } from "@/db";
-import { arenas, equipeIntegrantes, partidas, rodadas } from "@/db/schema";
+import { arenas, equipeIntegrantes, partidas, placarSubmissoes, rodadas } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { deveInvalidarCardPartida, excluirCardPartidaDoGcs } from "@/services/partida-card-cache.service";
 import { erroForaDoPrazo } from "@/lib/prazo-agendamento";
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ partidaId: string }> }
-) {
+const ERRO_TEM_PLACAR = "Não é possível alterar o agendamento de um jogo que já tem placar";
+
+/** Jogo ja tem placar (oficial ou informado por atleta e pendente)? Ai o agendamento nao muda mais. */
+async function jogoTemPlacar(partida: {
+  id: string;
+  placarA: number | null;
+  placarB: number | null;
+  detalhesPlacar: unknown;
+}) {
+  if (Array.isArray(partida.detalhesPlacar) && partida.detalhesPlacar.length > 0) return true;
+  if (Number(partida.placarA ?? 0) > 0 || Number(partida.placarB ?? 0) > 0) return true;
+  const [pendente] = await db
+    .select({ id: placarSubmissoes.id })
+    .from(placarSubmissoes)
+    .where(and(eq(placarSubmissoes.partidaId, partida.id), eq(placarSubmissoes.status, "PENDENTE")))
+    .limit(1);
+  return Boolean(pendente);
+}
+
+/** Checagens comuns ao agendar/trocar e ao cancelar: atleta do jogo, recurso ligado, jogo sem resultado. */
+async function carregarPartidaDoAtleta(request: NextRequest, partidaId: string) {
   const auth = await requireUser(request);
   if (auth instanceof NextResponse) return auth;
   if (auth.user.perfil !== "ATLETA") return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
-  const { partidaId } = await params;
   const id = (partidaId || "").trim();
   if (!id) return NextResponse.json({ error: "partidaId inválido" }, { status: 400 });
 
@@ -31,6 +47,9 @@ export async function PUT(
       dataHorario: partidas.dataHorario,
       equipeAId: partidas.equipeAId,
       equipeBId: partidas.equipeBId,
+      placarA: partidas.placarA,
+      placarB: partidas.placarB,
+      detalhesPlacar: partidas.detalhesPlacar,
       rodadaDataLimite: rodadas.dataLimite,
     })
     .from(partidas)
@@ -43,7 +62,7 @@ export async function PUT(
   if (bloqueio) return bloqueio;
 
   if (partida.status === "FINALIZADA" || partida.status === "WO") {
-    return NextResponse.json({ error: "Não é possível agendar uma partida já encerrada" }, { status: 400 });
+    return NextResponse.json({ error: "Não é possível alterar o agendamento de uma partida já encerrada" }, { status: 400 });
   }
 
   const equipesDaPartida = [partida.equipeAId, partida.equipeBId].filter(Boolean) as string[];
@@ -53,6 +72,20 @@ export async function PUT(
     .where(and(eq(equipeIntegrantes.usuarioId, auth.user.id), inArray(equipeIntegrantes.equipeId, equipesDaPartida)))
     .limit(1);
   if (!membroRows[0]) return NextResponse.json({ error: "Você não participa desta partida" }, { status: 403 });
+
+  if (await jogoTemPlacar(partida)) return NextResponse.json({ error: ERRO_TEM_PLACAR }, { status: 400 });
+
+  return partida;
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ partidaId: string }> }
+) {
+  const { partidaId } = await params;
+  const partida = await carregarPartidaDoAtleta(request, partidaId);
+  if (partida instanceof NextResponse) return partida;
+  const id = partida.id;
 
   const body = (await request.json().catch(() => null)) as any;
   const arenaId = typeof body?.arenaId === "string" ? body.arenaId.trim() : "";
@@ -95,6 +128,45 @@ export async function PUT(
       atualizadoEm: new Date(),
     })
     .where(eq(partidas.id, id))
+    .returning();
+
+  if (deveInvalidarCard) {
+    await excluirCardPartidaDoGcs(partida.fotoUrl);
+  }
+
+  return NextResponse.json(
+    { ok: true, partida: updated },
+    { headers: { "Cache-Control": "no-store", Vary: "Authorization" } }
+  );
+}
+
+/** Cancela o agendamento (data, arena e quadra); o jogo continua, so volta a ficar sem data. */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ partidaId: string }> }
+) {
+  const { partidaId } = await params;
+  const partida = await carregarPartidaDoAtleta(request, partidaId);
+  if (partida instanceof NextResponse) return partida;
+
+  const deveInvalidarCard = deveInvalidarCardPartida(partida, {
+    dataHorario: null,
+    arenaId: null,
+    quadra: null,
+    equipeAId: partida.equipeAId,
+    equipeBId: partida.equipeBId,
+  });
+
+  const [updated] = await db
+    .update(partidas)
+    .set({
+      dataHorario: null,
+      arenaId: null,
+      quadra: null,
+      ...(deveInvalidarCard ? { fotoUrl: null } : {}),
+      atualizadoEm: new Date(),
+    })
+    .where(eq(partidas.id, partida.id))
     .returning();
 
   if (deveInvalidarCard) {
