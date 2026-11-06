@@ -39,6 +39,7 @@ type Torneio = {
   pixNome: string | null;
   pixCidade: string | null;
   camisetaOpcoes: string[] | null;
+  pointIdSede: string | null;
   bannerUrl: string | null;
   logoUrl: string | null;
   templateUrl: string | null;
@@ -123,7 +124,9 @@ export default function AdminEditarDadosTorneioPage() {
     pixNome: "",
     pixCidade: "",
     camisetaOpcoesTexto: "",
+    pointIdSede: "",
   });
+  const [arenasPlay, setArenasPlay] = useState<{ pointId: string; nome: string }[]>([]);
 
   useEffect(() => {
     let ativo = true;
@@ -190,7 +193,21 @@ export default function AdminEditarDadosTorneioPage() {
           pixNome: t.pixNome ?? "",
           pixCidade: t.pixCidade ?? "",
           camisetaOpcoesTexto: (t.camisetaOpcoes ?? []).join("\n"),
+          pointIdSede: t.pointIdSede ?? "",
         });
+
+        // Arenas do Play na Quadra para escolher a sede (a rota sincroniza com os points ativos)
+        fetch(`/api/v1/torneios/${slugAtual}/arenas`, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : []))
+          .then((lista: { pointId: string | null; nome: string }[]) => {
+            if (!ativo || !Array.isArray(lista)) return;
+            setArenasPlay(
+              lista
+                .filter((a): a is { pointId: string; nome: string } => Boolean(a.pointId))
+                .map((a) => ({ pointId: a.pointId, nome: a.nome }))
+            );
+          })
+          .catch(() => undefined);
       } catch (e: any) {
         if (ativo) setErro(e?.message || "Erro inesperado");
       } finally {
@@ -326,6 +343,7 @@ export default function AdminEditarDadosTorneioPage() {
         pixNome: form.pixNome?.trim() ? form.pixNome : null,
         pixCidade: form.pixCidade?.trim() ? form.pixCidade : null,
         camisetaOpcoes: camisetaOpcoes.length > 0 ? camisetaOpcoes : null,
+        pointIdSede: form.pointIdSede || null,
       };
 
       const res = await fetch(`/api/v1/torneios/${slugAtual}`, {
@@ -725,6 +743,27 @@ export default function AdminEditarDadosTorneioPage() {
                 onChange={(e) => setForm((prev) => ({ ...prev, local: e.target.value }))}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="pointIdSede" className="text-sm font-medium text-slate-700">Arena sede (Play na Quadra)</label>
+              <select
+                id="pointIdSede"
+                value={form.pointIdSede}
+                onChange={(e) => setForm((prev) => ({ ...prev, pointIdSede: e.target.value }))}
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-900/10"
+              >
+                <option value="">Nenhuma</option>
+                {form.pointIdSede && !arenasPlay.some((a) => a.pointId === form.pointIdSede) ? (
+                  <option value={form.pointIdSede}>Arena atual (inativa)</option>
+                ) : null}
+                {arenasPlay.map((a) => (
+                  <option key={a.pointId} value={a.pointId}>
+                    {a.nome}
+                  </option>
+                ))}
+              </select>
+              <div className="text-xs text-slate-500">A arena sede vê o torneio no Play na Quadra e pode gerar as comandas das inscrições.</div>
             </div>
 
             <div className="space-y-2">

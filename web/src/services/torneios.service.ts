@@ -67,6 +67,7 @@ export type CriarTorneioDTO = {
   pixNome?: string | null;
   pixCidade?: string | null;
   camisetaOpcoes?: string[] | null;
+  pointIdSede?: string | null;
   organizadorId?: string;
   administradorIds?: string[];
   bannerUrl?: string;
@@ -346,6 +347,7 @@ export class TorneiosService {
       pixNome: torneios.pixNome,
       pixCidade: torneios.pixCidade,
       camisetaOpcoes: torneios.camisetaOpcoes,
+      pointIdSede: torneios.pointIdSede,
       organizadorId: torneios.organizadorId,
       esporteId: torneios.esporteId,
       esporteNome: esportes.nome
@@ -396,6 +398,7 @@ export class TorneiosService {
           pixNome: normalizeText(dados.pixNome),
           pixCidade: normalizeText(dados.pixCidade),
           camisetaOpcoes: normalizeStringArray(dados.camisetaOpcoes),
+          pointIdSede: normalizeText(dados.pointIdSede) ?? null,
           oculto: dados.oculto ?? false,
           inscricaoComIa: dados.inscricaoComIa ?? false,
           capitaesGerenciamJogos: dados.capitaesGerenciamJogos ?? false,
@@ -490,6 +493,7 @@ export class TorneiosService {
           pixNome: origem.pixNome,
           pixCidade: origem.pixCidade,
           camisetaOpcoes: origem.camisetaOpcoes,
+          pointIdSede: origem.pointIdSede,
           esporteId: origem.esporteId,
           organizadorId: origem.organizadorId,
           bannerUrl: origem.bannerUrl,
@@ -644,6 +648,7 @@ export class TorneiosService {
         pixNome: normalizeText(dados.pixNome),
         pixCidade: normalizeText(dados.pixCidade),
         camisetaOpcoes: normalizeStringArray((dados as any).camisetaOpcoes),
+        pointIdSede: normalizeText(dados.pointIdSede),
         layoutCards: dados.layoutCards === undefined ? undefined : normalizeLayoutCards(dados.layoutCards),
         capitaesGerenciamJogos: dados.capitaesGerenciamJogos === undefined ? undefined : Boolean(dados.capitaesGerenciamJogos),
         operacaoAoVivo: dados.operacaoAoVivo === undefined ? undefined : Boolean(dados.operacaoAoVivo),

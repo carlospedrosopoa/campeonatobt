@@ -270,6 +270,8 @@ export const torneios = pgTable('torneios', {
   pixNome: text('pix_nome'),
   pixCidade: text('pix_cidade'),
   camisetaOpcoes: json('camiseta_opcoes').$type<string[]>(),
+  // arena sede (Point do Play na Quadra): a arena que ve o torneio e gera as comandas das inscricoes
+  pointIdSede: text('point_id_sede'),
   esporteId: uuid('esporte_id').references(() => esportes.id),
   organizadorId: uuid('organizador_id').references(() => usuarios.id).notNull(),
   bannerUrl: text('banner_url'),
