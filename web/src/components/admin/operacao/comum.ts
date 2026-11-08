@@ -70,6 +70,8 @@ export const acoesOperacao = {
   adiar: (slug: string, partidaId: string, minutos: number) => enviar(`/api/v1/torneios/${slug}/operacao/adiar`, "POST", { partidaId, minutos }),
   salvarChamadaAutomatica: (slug: string, chamadaAutomatica: boolean) =>
     enviar(`/api/v1/torneios/${slug}/operacao/config`, "PATCH", { chamadaAutomatica }),
+  salvarWhatsappChamada: (slug: string, whatsappChamada: boolean) =>
+    enviar(`/api/v1/torneios/${slug}/operacao/config`, "PATCH", { whatsappChamada }),
   devolver: (slug: string, partidaId: string) => enviar(`/api/v1/torneios/${slug}/painel-quadras/partidas/${partidaId}`, "PATCH", { acao: "retirar" }),
   voltarAguardando: (slug: string, partidaId: string) =>
     enviar(`/api/v1/torneios/${slug}/painel-quadras/partidas/${partidaId}`, "PATCH", { acao: "voltar-aguardando" }),
