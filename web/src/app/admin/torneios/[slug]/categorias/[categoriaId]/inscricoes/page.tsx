@@ -146,6 +146,9 @@ export default function AdminCategoriaInscricoesPage() {
   const formIndividual = categoriaEhSimples && !((editandoInscricao?.equipe.atletas.length ?? 0) > 1);
   const labelCapitaoAtletaA = form.atletaANome.trim() || "Atleta 1";
   const labelCapitaoAtletaB = form.atletaBNome.trim() || "Atleta 2";
+  // atleta vinculado ao Play: nome e email sao do cadastro dele (para outro atleta, "Trocar atleta")
+  const vinculadoA = Boolean(form.atletaAPlayId) && !form.atletaAAvulso;
+  const vinculadoB = Boolean(form.atletaBPlayId) && !form.atletaBAvulso;
   const podeSalvar = useMemo(() => {
     // avulso: so o nome (o email interno e gerado no servidor)
     const okA = Boolean(form.atletaANome.trim() && (form.atletaAAvulso || form.atletaAEmail.trim()));
@@ -918,8 +921,24 @@ export default function AdminCategoriaInscricoesPage() {
                 <input
                   value={form.atletaANome}
                   onChange={(e) => setForm((p) => ({ ...p, atletaANome: e.target.value }))}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  readOnly={vinculadoA}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 read-only:bg-slate-50 read-only:text-slate-600"
                 />
+                {vinculadoA && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    Cadastro do Play na Quadra: nome e email não mudam por aqui.
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAtletaAGeneroPreenchido(false);
+                        setForm((p) => ({ ...p, atletaAPlayId: "", atletaANome: "", atletaAEmail: "", atletaATelefone: "", atletaAFotoUrl: "", atletaAGenero: "" }));
+                      }}
+                      className="font-semibold text-slate-700 underline"
+                    >
+                      Trocar atleta
+                    </button>
+                  </div>
+                )}
               </div>
               {form.atletaAAvulso ? (
                 <div className="text-xs text-slate-500">Avulso entra só com o nome: não acessa o app e só recebe WhatsApp se tiver telefone.</div>
@@ -928,12 +947,13 @@ export default function AdminCategoriaInscricoesPage() {
                 <label className="text-sm font-medium text-slate-700">Email *</label>
                 <input
                   value={form.atletaAEmail}
+                  readOnly={vinculadoA}
                   onChange={(e) => {
                     setAtletaAGeneroPreenchido(false);
                     setForm((p) => ({ ...p, atletaAEmail: e.target.value }));
                   }}
                   type="email"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 read-only:bg-slate-50 read-only:text-slate-600"
                 />
               </div>
               )}
@@ -1068,8 +1088,24 @@ export default function AdminCategoriaInscricoesPage() {
                 <input
                   value={form.atletaBNome}
                   onChange={(e) => setForm((p) => ({ ...p, atletaBNome: e.target.value }))}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  readOnly={vinculadoB}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 read-only:bg-slate-50 read-only:text-slate-600"
                 />
+                {vinculadoB && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    Cadastro do Play na Quadra: nome e email não mudam por aqui.
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAtletaBGeneroPreenchido(false);
+                        setForm((p) => ({ ...p, atletaBPlayId: "", atletaBNome: "", atletaBEmail: "", atletaBTelefone: "", atletaBFotoUrl: "", atletaBGenero: "" }));
+                      }}
+                      className="font-semibold text-slate-700 underline"
+                    >
+                      Trocar atleta
+                    </button>
+                  </div>
+                )}
               </div>
               {form.atletaBAvulso ? (
                 <div className="text-xs text-slate-500">Avulso entra só com o nome: não acessa o app e só recebe WhatsApp se tiver telefone.</div>
@@ -1078,12 +1114,13 @@ export default function AdminCategoriaInscricoesPage() {
                 <label className="text-sm font-medium text-slate-700">Email *</label>
                 <input
                   value={form.atletaBEmail}
+                  readOnly={vinculadoB}
                   onChange={(e) => {
                     setAtletaBGeneroPreenchido(false);
                     setForm((p) => ({ ...p, atletaBEmail: e.target.value }));
                   }}
                   type="email"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 read-only:bg-slate-50 read-only:text-slate-600"
                 />
               </div>
               )}
