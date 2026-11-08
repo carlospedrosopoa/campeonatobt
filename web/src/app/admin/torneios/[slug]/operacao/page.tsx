@@ -169,6 +169,24 @@ export default function OperacaoPage() {
             </span>
           </span>
         </label>
+        <label className="flex flex-col gap-1 text-[13px] font-bold text-ink">
+          WhatsApp na chamada
+          <span className="flex h-10 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={estado?.torneio.whatsappChamada ?? true}
+              disabled={!estado || Boolean(ocupado)}
+              onChange={(e) => {
+                const ligar = e.target.checked;
+                executar("whatsapp-chamada", () => acoesOperacao.salvarWhatsappChamada(slug, ligar));
+              }}
+              className="h-5 w-5"
+            />
+            <span className="text-xs font-semibold text-muted">
+              {estado?.torneio.whatsappChamada ?? true ? "avisa os atletas no app e no WhatsApp" : "avisa só no app (sem WhatsApp)"}
+            </span>
+          </span>
+        </label>
         {estado?.categoria && (
           <div className="min-w-[180px]">
             <div className="text-[13px] font-semibold text-muted">

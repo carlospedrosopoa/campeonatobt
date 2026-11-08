@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTournamentAdminBySlug } from "@/lib/torneio-admin-auth";
 import { operacaoDesabilitada } from "@/lib/operacao-texto";
-import { salvarAquecimentoPadrao, salvarChamadaAutomatica } from "@/services/operacao.service";
+import { salvarAquecimentoPadrao, salvarChamadaAutomatica, salvarWhatsappChamada } from "@/services/operacao.service";
 
-/** Ajustes da mesa de controle. Body: { aquecimentoMin } ou { chamadaAutomatica } */
+/** Ajustes da mesa de controle. Body: { aquecimentoMin }, { chamadaAutomatica } ou { whatsappChamada } */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
@@ -13,6 +13,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await request.json().catch(() => null);
     if (typeof body?.chamadaAutomatica === "boolean") {
       const r = await salvarChamadaAutomatica({ torneioId: acesso.torneio.id, chamadaAutomatica: body.chamadaAutomatica });
+      return NextResponse.json({ ok: true, ...r });
+    }
+    if (typeof body?.whatsappChamada === "boolean") {
+      const r = await salvarWhatsappChamada({ torneioId: acesso.torneio.id, whatsappChamada: body.whatsappChamada });
       return NextResponse.json({ ok: true, ...r });
     }
     const r = await salvarAquecimentoPadrao({ torneioId: acesso.torneio.id, aquecimentoMin: Number(body?.aquecimentoMin) });

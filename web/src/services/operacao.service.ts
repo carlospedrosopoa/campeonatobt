@@ -110,7 +110,7 @@ export type EncerradoOperacao = {
 };
 
 export type EstadoOperacao = {
-  torneio: { id: string; nome: string; quadrasAtivas: number; toleranciaAtrasoMin: number; aquecimentoMin: number; chamadaAutomatica: boolean };
+  torneio: { id: string; nome: string; quadrasAtivas: number; toleranciaAtrasoMin: number; aquecimentoMin: number; chamadaAutomatica: boolean; whatsappChamada: boolean };
   categoria: { id: string; nome: string } | null;
   categorias: { id: string; nome: string; pendentes: number; encerrados: number; total: number }[];
   quadras: QuadraOperacao[];
@@ -159,6 +159,7 @@ export class OperacaoService {
         id: torneios.id,
         nome: torneios.nome,
         chamadaAutomatica: torneios.chamadaAutomatica,
+        whatsappChamada: torneios.whatsappChamada,
         organizadorId: torneios.organizadorId,
         quadrasAtivas: torneios.quadrasAtivas,
         toleranciaAtrasoMin: torneios.toleranciaAtrasoMin,
@@ -506,6 +507,7 @@ export class OperacaoService {
         toleranciaAtrasoMin: torneio.toleranciaAtrasoMin,
         aquecimentoMin: torneio.aquecimentoMin,
         chamadaAutomatica: torneio.chamadaAutomatica,
+        whatsappChamada: torneio.whatsappChamada,
       },
       categoria: categoria ? { id: categoria.id, nome: categoria.nome } : null,
       categorias: categoriasResumo,
@@ -643,6 +645,16 @@ export async function salvarChamadaAutomatica(params: { torneioId: string; chama
     .set({ chamadaAutomatica: Boolean(params.chamadaAutomatica), atualizadoEm: new Date() })
     .where(eq(torneios.id, params.torneioId))
     .returning({ chamadaAutomatica: torneios.chamadaAutomatica });
+  return t;
+}
+
+/** Liga ou desliga o WhatsApp para os atletas quando o jogo e chamado (mesa de controle). */
+export async function salvarWhatsappChamada(params: { torneioId: string; whatsappChamada: boolean }) {
+  const [t] = await db
+    .update(torneios)
+    .set({ whatsappChamada: Boolean(params.whatsappChamada), atualizadoEm: new Date() })
+    .where(eq(torneios.id, params.torneioId))
+    .returning({ whatsappChamada: torneios.whatsappChamada });
   return t;
 }
 

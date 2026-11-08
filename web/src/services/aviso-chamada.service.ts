@@ -12,13 +12,13 @@ const nomeCurto = (nome: string) => {
 
 /**
  * Avisa os 4 atletas, pelo app (notificacoes) e pelo WhatsApp, que o jogo deles foi chamado.
- * So nos torneios com a operacao ao vivo ligada; no Smart Torneio (todos presentes) so pelo app. Nao repete o mesmo aviso dentro de 1 minuto.
+ * So nos torneios com a operacao ao vivo ligada; WhatsApp so com a opcao da mesa ligada; no Smart Torneio (todos presentes) so pelo app. Nao repete o mesmo aviso dentro de 1 minuto.
  * Erros sao registrados e engolidos: a chamada do jogo nunca falha por causa do aviso.
  */
 export async function avisarChamadaJogo(params: { torneioId: string; partidaId: string; criadoPorId: string }) {
   try {
     const [torneio] = await db
-      .select({ id: torneios.id, nome: torneios.nome, operacaoAoVivo: torneios.operacaoAoVivo })
+      .select({ id: torneios.id, nome: torneios.nome, operacaoAoVivo: torneios.operacaoAoVivo, whatsappChamada: torneios.whatsappChamada })
       .from(torneios)
       .where(eq(torneios.id, params.torneioId))
       .limit(1);
@@ -84,7 +84,7 @@ export async function avisarChamadaJogo(params: { torneioId: string; partidaId: 
       categoriaId: jogo.categoriaId,
       titulo,
       mensagem,
-      enviarWhatsapp: !smart,
+      enviarWhatsapp: !smart && torneio.whatsappChamada,
       publicarNoApp: true,
       usuarioIds,
     });
