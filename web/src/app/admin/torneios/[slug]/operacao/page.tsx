@@ -61,11 +61,9 @@ export default function OperacaoPage() {
   const tolerancia = estado?.torneio.toleranciaAtrasoMin ?? 15;
   const aquecimentoSalvo = estado?.torneio.aquecimentoMin ?? 5;
 
-  /** Comecou: pergunta os minutos de aquecimento (padrao do torneio). */
+  /** Comecou: usa direto o aquecimento padrao do torneio (ajustado no topo da mesa). */
   function comecar(jogo: JogoOperacao) {
-    const resposta = window.prompt("Minutos de aquecimento (0 para começar direto):", String(aquecimentoSalvo));
-    if (resposta === null) return;
-    void executar(`i${jogo.id}`, () => acoesOperacao.iniciar(slug, jogo.id, Number(resposta) || 0));
+    void executar(`i${jogo.id}`, () => acoesOperacao.iniciar(slug, jogo.id, aquecimentoSalvo));
   }
   const quadrasLivres = estado?.quadras.filter((q) => !q.jogo) ?? [];
   // link do telao sem login (aparelho da caixa de som); a rota da mesa devolve junto com o estado

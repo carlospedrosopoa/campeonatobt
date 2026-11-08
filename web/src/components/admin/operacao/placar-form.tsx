@@ -49,7 +49,6 @@ export function PlacarForm({
 }) {
   const [sets, setSets] = useState([{ a: 0, b: 0 }]);
   const mudar = (i: number, lado: "a" | "b", v: number) => setSets((s) => s.map((x, j) => (j === i ? { ...x, [lado]: v } : x)));
-  const resumo = sets.map((s) => `${s.a}-${s.b}`).join(" · ");
 
   return (
     <div className="space-y-4 rounded-2xl border border-line bg-white p-5">
@@ -87,9 +86,7 @@ export function PlacarForm({
           variant="primary"
           className="flex-[2]"
           disabled={ocupado || sets.every((s) => s.a === 0 && s.b === 0)}
-          onClick={() => {
-            if (window.confirm(`Confirmar o placar ${resumo}? O jogo será encerrado.`)) onSalvar(sets);
-          }}
+          onClick={() => onSalvar(sets)}
         >
           {ocupado ? "Salvando…" : "Encerrar jogo"}
         </Button>
