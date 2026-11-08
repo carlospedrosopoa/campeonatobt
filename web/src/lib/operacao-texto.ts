@@ -15,9 +15,8 @@ export function textoChamada(params: {
   equipeA: AtletaTexto[];
   equipeB: AtletaTexto[];
 }) {
-  // curta e direta, dita duas vezes: "Carlos Silva e João Souza, André Lima e Mário Rosa, quadra 2"
-  const frase = `${dupla(params.equipeA)}, ${dupla(params.equipeB)}, quadra ${params.quadra}.`;
-  return `${frase} ${frase}`;
+  // curta e direta, dita uma vez (repetir e com o "Chamar de novo"): "Carlos Silva e João Souza, André Lima e Mário Rosa, quadra 2"
+  return `${dupla(params.equipeA)}, ${dupla(params.equipeB)}, quadra ${params.quadra}.`;
 }
 
 export function textoProximo(params: { equipeA: AtletaTexto[]; equipeB: AtletaTexto[] }) {
@@ -40,8 +39,7 @@ export function textoResultado(params: { quadra: number | null; vencedora: Atlet
 
 /** Chamada feita sem quadra (pela conferencia de presenca). */
 export function textoChamadaSemQuadra(params: { categoriaNome: string; etapa: string; equipeA: AtletaTexto[]; equipeB: AtletaTexto[] }) {
-  const frase = `${dupla(params.equipeA)}, ${dupla(params.equipeB)}, apresentem-se.`;
-  return `${frase} ${frase}`;
+  return `${dupla(params.equipeA)}, ${dupla(params.equipeB)}, apresentem-se.`;
 }
 
 export function textoInicioAquecimento(params: { quadra: number; minutos: number }) {
