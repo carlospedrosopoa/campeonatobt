@@ -4,6 +4,7 @@ import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { ErroExclusaoInscricao, inscricoesService } from "@/services/inscricoes.service";
 import { categoriaConfigService } from "@/services/categoria-config.service";
+import { gerarEmailAvulso } from "@/lib/atleta-avulso";
 
 export async function DELETE(
   request: NextRequest,
@@ -66,6 +67,7 @@ export async function PATCH(
       fotoUrl?: string;
       camisetaOpcao?: string | null;
       genero?: string | null;
+      avulso?: boolean;
     } | undefined;
     const atletaB = body?.atletaB as {
       nome?: string;
@@ -75,7 +77,13 @@ export async function PATCH(
       fotoUrl?: string;
       camisetaOpcao?: string | null;
       genero?: string | null;
+      avulso?: boolean;
     } | undefined;
+
+    // atleta avulso (sem cadastro no Play na Quadra): so o nome; o email interno e gerado aqui
+    for (const atleta of [atletaA, atletaB]) {
+      if (atleta?.avulso && !atleta.email?.trim()) atleta.email = gerarEmailAvulso();
+    }
 
     if (!atletaA?.nome || !atletaA?.email) {
       return NextResponse.json({ error: "Dados do atleta são obrigatórios" }, { status: 400 });

@@ -3,6 +3,7 @@ import { categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricao
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { categoriaConfigService, tipoParticipacaoEhDupla, tipoParticipacaoEhIndividual } from "@/services/categoria-config.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
+import { ehEmailAvulso } from "@/lib/atleta-avulso";
 import { playAtualizarGeneroAtleta, playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
 
 function cleanBaseUrl(raw: string) {
@@ -216,6 +217,8 @@ export async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   const playId = String(params.playnaquadraAtletaId || "").trim();
   const debugAtleta = ` [email=${email || "vazio"} id=${playId || "vazio"}]`;
   const generoInformadoParam = normalizeGeneroAtleta(params.genero);
+  // atleta avulso nao tem cadastro em lugar nenhum: vale o genero informado na inscricao (buscar pelo nome acharia homonimos)
+  if (ehEmailAvulso(email)) return { nome: params.nome || "atleta", genero: generoInformadoParam, avulso: true };
   const temDadosParaPesquisarCarlao = !!email || !!phone || !!nome || !!playId;
 
   // =========================================================================
@@ -520,15 +523,15 @@ export async function validarGeneroInscricao(params: {
   const atletaA = await resolverGeneroAtleta(params.atletaA);
   const atletaB = params.atletaB ? await resolverGeneroAtleta(params.atletaB) : null;
 
-  if (!atletaA.genero) {
-    throw new Error(`Não foi possível validar o gênero de ${atletaA.nome}. Atualize o perfil no Play na Quadra.`);
-  }
+  const semGenero = (a: { nome: string; avulso?: boolean }) =>
+    a.avulso
+      ? `Informe o gênero de ${a.nome} (atleta avulso).`
+      : `Não foi possível validar o gênero de ${a.nome}. Atualize o perfil no Play na Quadra.`;
+  if (!atletaA.genero) throw new Error(semGenero(atletaA));
 
   if (!atletaB) {
     if (categoriaGenero === "MISTO" && params.individualSorteada) {
-      if (atletaA.genero !== "MASCULINO" && atletaA.genero !== "FEMININO") {
-        throw new Error(`Não foi possível validar o gênero de ${atletaA.nome}. Atualize o perfil no Play na Quadra.`);
-      }
+      if (atletaA.genero !== "MASCULINO" && atletaA.genero !== "FEMININO") throw new Error(semGenero(atletaA));
       return;
     }
     if (categoriaGenero === "MISTO") {
@@ -543,9 +546,7 @@ export async function validarGeneroInscricao(params: {
     return;
   }
 
-  if (!atletaB.genero) {
-    throw new Error(`Não foi possível validar o gênero de ${atletaB.nome}. Atualize o perfil no Play na Quadra.`);
-  }
+  if (!atletaB.genero) throw new Error(semGenero(atletaB));
 
   if (categoriaGenero === "MASCULINO" && (atletaA.genero !== "MASCULINO" || atletaB.genero !== "MASCULINO")) {
     throw new Error("A categoria masculina aceita apenas atletas do gênero masculino.");
