@@ -1587,8 +1587,9 @@ export class MataMataService {
         pairings.push({ a: s3, b: s6 });
         pairings.push({ a: s4, b: s5 });
       }
-    } else if (config.mataMata?.estrutura === "GRUPOS_8_CRUZAMENTO_PADRAO") {
-      if (!(gruposOrdenados.length === 4 && (config.classificacao?.porGrupo ?? 2) >= 2 && total === 8)) {
+    } else if (config.mataMata?.estrutura === "GRUPOS_8_CRUZAMENTO_PADRAO" && total === 8) {
+      // com outra quantidade de classificados (ex.: 2 grupos, 4 classificados) a estrutura nao se aplica e segue a regra geral
+      if (!(gruposOrdenados.length === 4 && (config.classificacao?.porGrupo ?? 2) >= 2)) {
         throw new Error("A estrutura de 8 classificados com cruzamento padrão exige 4 grupos com 2 classificados por grupo.");
       }
       const g0 = gruposOrdenados[0].equipes;
@@ -1730,8 +1731,9 @@ export class MataMataService {
   }
 
   /**
-   * Quartas do cruzamento de 4 grupos (2 por grupo): cada jogo sai assim que os dois grupos dele encerram.
-   * A1 x D2, B1 x C2, C1 x B2, D1 x A2 - a mesma chave do botao "Gerar mata-mata".
+   * Primeira fase do mata-mata saindo dos grupos (2 por grupo): cada jogo sai assim que os dois grupos dele encerram.
+   * 4 grupos: quartas A1 x D2, B1 x C2, C1 x B2, D1 x A2. 2 grupos: semi A1 x B2, B1 x A2.
+   * A mesma chave do botao "Gerar mata-mata".
    */
   private async liberarQuartasPorGrupos(params: { torneioId: string; categoriaId: string }) {
     const nada = { criados: 0, atualizados: 0 };
@@ -1739,16 +1741,17 @@ export class MataMataService {
     if (config.formato !== "GRUPOS" || config.fase2?.habilitada === false) return nada;
     if ((config.classificacao?.porGrupo ?? 2) !== 2 || (config.classificacao?.melhoresTerceiros ?? 0) > 0) return nada;
 
-    const existentes = await this.jogosDaFase({ ...params, fase: "QUARTAS" });
-    // chave montada do jeito antigo (sem posicao): nao mexe
-    if (existentes.some((j) => j.posicaoChave == null)) return nada;
-
     // a tabela do grupo e gravada a parte: recalcula antes, senao o ultimo placar ainda nao conta
     await classificacaoCategoriaService.recalcularPorCategoria(params.categoriaId);
     const grupos = [...(await classificacaoCategoriaService.obterClassificacao(params.categoriaId))].sort((a, b) =>
       a.grupoNome.localeCompare(b.grupoNome)
     );
-    if (grupos.length !== 4 || grupos.some((g) => g.equipes.length < 2)) return nada;
+    if ((grupos.length !== 4 && grupos.length !== 2) || grupos.some((g) => g.equipes.length < 2)) return nada;
+    const fase: Fase = grupos.length === 4 ? "QUARTAS" : "SEMI";
+
+    const existentes = await this.jogosDaFase({ ...params, fase });
+    // chave montada do jeito antigo (sem posicao): nao mexe
+    if (existentes.some((j) => j.posicaoChave == null)) return nada;
 
     const jogosGrupos = await db
       .select({ grupoId: partidas.grupoId, status: partidas.status })
@@ -1759,19 +1762,25 @@ export class MataMataService {
       return jogos.length > 0 && jogos.every((j) => j.status === "FINALIZADA" || j.status === "WO");
     };
 
-    const cruzamentos: Array<[number, number]> = [
-      [0, 3],
-      [1, 2],
-      [2, 1],
-      [3, 0],
-    ];
+    const cruzamentos: Array<[number, number]> =
+      grupos.length === 4
+        ? [
+            [0, 3],
+            [1, 2],
+            [2, 1],
+            [3, 0],
+          ]
+        : [
+            [0, 1],
+            [1, 0],
+          ];
     let criados = 0;
     let atualizados = 0;
     for (const [i, [g1, g2]] of cruzamentos.entries()) {
       if (!encerrado(grupos[g1].grupoId) || !encerrado(grupos[g2].grupoId)) continue;
       const r = await this.garantirJogoNaPosicao({
         ...params,
-        fase: "QUARTAS",
+        fase,
         posicao: i + 1,
         a: grupos[g1].equipes[0].equipeId,
         b: grupos[g2].equipes[1].equipeId,
