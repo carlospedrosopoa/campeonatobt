@@ -15,7 +15,20 @@ export function Contador({ valor, onChange }: { valor: number; onChange: (v: num
       <button type="button" className={btn} onClick={() => onChange(Math.max(0, valor - 1))} aria-label="Diminuir">
         <Minus className="h-5 w-5" />
       </button>
-      <span className="w-10 text-center font-display text-3xl font-bold tabular-nums text-ink">{valor}</span>
+      {/* da para tocar no numero e digitar; os botoes continuam para ajustar */}
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={String(valor)}
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => {
+          const digitos = e.target.value.replace(/\D/g, "").slice(-2);
+          onChange(digitos ? Math.min(99, Number(digitos)) : 0);
+        }}
+        aria-label="Placar"
+        className="h-12 w-14 rounded-xl border border-transparent bg-transparent text-center font-display text-3xl font-bold tabular-nums text-ink hover:border-line focus:border-line focus:bg-sand-2 focus:outline-none"
+      />
       <button type="button" className={btn} onClick={() => onChange(Math.min(99, valor + 1))} aria-label="Aumentar">
         <Plus className="h-5 w-5" />
       </button>
