@@ -8,6 +8,7 @@ import { CategoriaHeader } from "@/components/admin/categoria-header";
 import { DuplasSorteadasPainel } from "@/components/admin/duplas-sorteadas";
 import { gerarCardDuplasInscritasAdmin, gerarCardInscricaoAdmin } from "@/lib/match-card-client";
 import { NomeAtletaSobrenome, NomeEquipeComSobrenome, separarPrimeiroUltimoNome } from "@/lib/nome-atleta";
+import { ehEmailAvulso } from "@/lib/atleta-avulso";
 
 type Categoria = {
   id: string;
@@ -127,6 +128,7 @@ export default function AdminCategoriaInscricoesPage() {
     atletaAGenero: "" as GeneroAtletaForm,
     atletaACamiseta: "",
     atletaAValorDevido: "",
+    atletaAAvulso: false,
     atletaBNome: "",
     atletaBEmail: "",
     atletaBTelefone: "",
@@ -135,6 +137,7 @@ export default function AdminCategoriaInscricoesPage() {
     atletaBGenero: "" as GeneroAtletaForm,
     atletaBCamiseta: "",
     atletaBValorDevido: "",
+    atletaBAvulso: false,
     status: "APROVADA" as "PENDENTE" | "APROVADA" | "RECUSADA" | "FILA_ESPERA",
   });
 
@@ -143,9 +146,14 @@ export default function AdminCategoriaInscricoesPage() {
   const formIndividual = categoriaEhSimples && !((editandoInscricao?.equipe.atletas.length ?? 0) > 1);
   const labelCapitaoAtletaA = form.atletaANome.trim() || "Atleta 1";
   const labelCapitaoAtletaB = form.atletaBNome.trim() || "Atleta 2";
+  // atleta vinculado ao Play: nome e email sao do cadastro dele (para outro atleta, "Trocar atleta")
+  const vinculadoA = Boolean(form.atletaAPlayId) && !form.atletaAAvulso;
+  const vinculadoB = Boolean(form.atletaBPlayId) && !form.atletaBAvulso;
   const podeSalvar = useMemo(() => {
-    if (formIndividual) return Boolean(form.atletaANome.trim() && form.atletaAEmail.trim());
-    return Boolean(form.atletaANome.trim() && form.atletaAEmail.trim() && form.atletaBNome.trim() && form.atletaBEmail.trim());
+    // avulso: so o nome (o email interno e gerado no servidor)
+    const okA = Boolean(form.atletaANome.trim() && (form.atletaAAvulso || form.atletaAEmail.trim()));
+    const okB = Boolean(form.atletaBNome.trim() && (form.atletaBAvulso || form.atletaBEmail.trim()));
+    return formIndividual ? okA : okA && okB;
   }, [formIndividual, form]);
 
   function atletaEhCapitao(inscricao: Inscricao, atletaId: string, indice: number) {
@@ -377,6 +385,7 @@ export default function AdminCategoriaInscricoesPage() {
       atletaAGenero: "",
       atletaACamiseta: "",
       atletaAValorDevido: "",
+      atletaAAvulso: false,
       atletaBNome: "",
       atletaBEmail: "",
       atletaBTelefone: "",
@@ -385,6 +394,7 @@ export default function AdminCategoriaInscricoesPage() {
       atletaBGenero: "",
       atletaBCamiseta: "",
       atletaBValorDevido: "",
+      atletaBAvulso: false,
       status: "APROVADA",
     });
   }
@@ -467,6 +477,7 @@ export default function AdminCategoriaInscricoesPage() {
       atletaAGenero: "",
       atletaACamiseta: a1?.camisetaOpcao || "",
       atletaAValorDevido: a1?.valorDevido || "",
+      atletaAAvulso: ehEmailAvulso(a1?.email),
       atletaBNome: a2?.nome || "",
       atletaBEmail: a2?.email || "",
       atletaBTelefone: a2?.telefone || "",
@@ -475,12 +486,14 @@ export default function AdminCategoriaInscricoesPage() {
       atletaBGenero: "",
       atletaBCamiseta: a2?.camisetaOpcao || "",
       atletaBValorDevido: a2?.valorDevido || "",
+      atletaBAvulso: ehEmailAvulso(a2?.email),
       status: (inscricao.status as any) || "APROVADA",
     });
-    if (a1?.playnaquadraAtletaId || a1?.id) {
+    // avulso nao tem perfil no Play para buscar camiseta e genero
+    if ((a1?.playnaquadraAtletaId || a1?.id) && !ehEmailAvulso(a1?.email)) {
       void preencherDadosDoPerfil("A", { id: a1?.playnaquadraAtletaId || a1.id, email: a1?.email || "" });
     }
-    if (a2?.playnaquadraAtletaId || a2?.id) {
+    if ((a2?.playnaquadraAtletaId || a2?.id) && !ehEmailAvulso(a2?.email)) {
       void preencherDadosDoPerfil("B", { id: a2?.playnaquadraAtletaId || a2.id, email: a2?.email || "" });
     }
   }
@@ -489,7 +502,7 @@ export default function AdminCategoriaInscricoesPage() {
     e.preventDefault();
     setErro(null);
     if (!podeSalvar) {
-      setErro(formIndividual ? "Preencha os dados do atleta (nome e email)." : "Preencha os dados dos dois atletas (nome e email).");
+      setErro(formIndividual ? "Preencha os dados do atleta (nome e email, ou marque avulso)." : "Preencha os dados dos dois atletas (nome e email, ou marque avulso).");
       return;
     }
 
@@ -503,9 +516,10 @@ export default function AdminCategoriaInscricoesPage() {
         status: form.status,
         atletaA: {
           nome: form.atletaANome.trim(),
-          email: form.atletaAEmail.trim(),
+          email: form.atletaAAvulso && !ehEmailAvulso(form.atletaAEmail) ? "" : form.atletaAEmail.trim(),
           telefone: form.atletaATelefone.trim() || undefined,
-          playnaquadraAtletaId: form.atletaAPlayId || undefined,
+          playnaquadraAtletaId: form.atletaAAvulso ? undefined : form.atletaAPlayId || undefined,
+          avulso: form.atletaAAvulso,
           fotoUrl: form.atletaAFotoUrl || undefined,
           genero: form.atletaAGenero || null,
           camisetaOpcao: form.atletaACamiseta.trim() || null,
@@ -514,9 +528,10 @@ export default function AdminCategoriaInscricoesPage() {
           ? null
           : {
               nome: form.atletaBNome.trim(),
-              email: form.atletaBEmail.trim(),
+              email: form.atletaBAvulso && !ehEmailAvulso(form.atletaBEmail) ? "" : form.atletaBEmail.trim(),
               telefone: form.atletaBTelefone.trim() || undefined,
-              playnaquadraAtletaId: form.atletaBPlayId || undefined,
+              playnaquadraAtletaId: form.atletaBAvulso ? undefined : form.atletaBPlayId || undefined,
+              avulso: form.atletaBAvulso,
               fotoUrl: form.atletaBFotoUrl || undefined,
               genero: form.atletaBGenero || null,
               camisetaOpcao: form.atletaBCamiseta.trim() || null,
@@ -838,6 +853,26 @@ export default function AdminCategoriaInscricoesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
               <div className="font-semibold text-slate-900">Atleta 1</div>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={form.atletaAAvulso}
+                  onChange={(e) => {
+                    const avulso = e.target.checked;
+                    setAtletaAGeneroPreenchido(false);
+                    setForm((p) => ({
+                      ...p,
+                      atletaAAvulso: avulso,
+                      atletaAPlayId: "",
+                      atletaAFotoUrl: "",
+                      atletaAEmail: avulso || !ehEmailAvulso(p.atletaAEmail) ? p.atletaAEmail : "",
+                    }));
+                  }}
+                  className="h-4 w-4"
+                />
+                Atleta avulso (sem cadastro no Play na Quadra)
+              </label>
+              {!form.atletaAAvulso && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Buscar atleta</label>
                 <input
@@ -880,26 +915,48 @@ export default function AdminCategoriaInscricoesPage() {
                   </div>
                 )}
               </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Nome *</label>
                 <input
                   value={form.atletaANome}
                   onChange={(e) => setForm((p) => ({ ...p, atletaANome: e.target.value }))}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  readOnly={vinculadoA}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 read-only:bg-slate-50 read-only:text-slate-600"
                 />
+                {vinculadoA && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    Cadastro do Play na Quadra: nome e email não mudam por aqui.
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAtletaAGeneroPreenchido(false);
+                        setForm((p) => ({ ...p, atletaAPlayId: "", atletaANome: "", atletaAEmail: "", atletaATelefone: "", atletaAFotoUrl: "", atletaAGenero: "" }));
+                      }}
+                      className="font-semibold text-slate-700 underline"
+                    >
+                      Trocar atleta
+                    </button>
+                  </div>
+                )}
               </div>
+              {form.atletaAAvulso ? (
+                <div className="text-xs text-slate-500">Avulso entra só com o nome: não acessa o app e só recebe WhatsApp se tiver telefone.</div>
+              ) : (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Email *</label>
                 <input
                   value={form.atletaAEmail}
+                  readOnly={vinculadoA}
                   onChange={(e) => {
                     setAtletaAGeneroPreenchido(false);
                     setForm((p) => ({ ...p, atletaAEmail: e.target.value }));
                   }}
                   type="email"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 read-only:bg-slate-50 read-only:text-slate-600"
                 />
               </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Telefone</label>
                 <input
@@ -908,7 +965,7 @@ export default function AdminCategoriaInscricoesPage() {
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
               </div>
-              {form.atletaAEmail.trim() && !atletaAGeneroPreenchido && (
+              {(form.atletaAAvulso || form.atletaAEmail.trim()) && !atletaAGeneroPreenchido && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Gênero</label>
                   <select
@@ -963,6 +1020,26 @@ export default function AdminCategoriaInscricoesPage() {
             {!formIndividual ? (
             <div className="space-y-3">
               <div className="font-semibold text-slate-900">Atleta 2</div>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={form.atletaBAvulso}
+                  onChange={(e) => {
+                    const avulso = e.target.checked;
+                    setAtletaBGeneroPreenchido(false);
+                    setForm((p) => ({
+                      ...p,
+                      atletaBAvulso: avulso,
+                      atletaBPlayId: "",
+                      atletaBFotoUrl: "",
+                      atletaBEmail: avulso || !ehEmailAvulso(p.atletaBEmail) ? p.atletaBEmail : "",
+                    }));
+                  }}
+                  className="h-4 w-4"
+                />
+                Atleta avulso (sem cadastro no Play na Quadra)
+              </label>
+              {!form.atletaBAvulso && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Buscar atleta</label>
                 <input
@@ -1005,26 +1082,48 @@ export default function AdminCategoriaInscricoesPage() {
                   </div>
                 )}
               </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Nome *</label>
                 <input
                   value={form.atletaBNome}
                   onChange={(e) => setForm((p) => ({ ...p, atletaBNome: e.target.value }))}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  readOnly={vinculadoB}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 read-only:bg-slate-50 read-only:text-slate-600"
                 />
+                {vinculadoB && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    Cadastro do Play na Quadra: nome e email não mudam por aqui.
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAtletaBGeneroPreenchido(false);
+                        setForm((p) => ({ ...p, atletaBPlayId: "", atletaBNome: "", atletaBEmail: "", atletaBTelefone: "", atletaBFotoUrl: "", atletaBGenero: "" }));
+                      }}
+                      className="font-semibold text-slate-700 underline"
+                    >
+                      Trocar atleta
+                    </button>
+                  </div>
+                )}
               </div>
+              {form.atletaBAvulso ? (
+                <div className="text-xs text-slate-500">Avulso entra só com o nome: não acessa o app e só recebe WhatsApp se tiver telefone.</div>
+              ) : (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Email *</label>
                 <input
                   value={form.atletaBEmail}
+                  readOnly={vinculadoB}
                   onChange={(e) => {
                     setAtletaBGeneroPreenchido(false);
                     setForm((p) => ({ ...p, atletaBEmail: e.target.value }));
                   }}
                   type="email"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 read-only:bg-slate-50 read-only:text-slate-600"
                 />
               </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Telefone</label>
                 <input
@@ -1033,7 +1132,7 @@ export default function AdminCategoriaInscricoesPage() {
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
                 />
               </div>
-              {form.atletaBEmail.trim() && !atletaBGeneroPreenchido && (
+              {(form.atletaBAvulso || form.atletaBEmail.trim()) && !atletaBGeneroPreenchido && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Gênero</label>
                   <select

@@ -3,6 +3,7 @@ import { categorias, equipeIntegrantes, equipes, grupoEquipes, grupos, inscricao
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { categoriaConfigService, tipoParticipacaoEhDupla, tipoParticipacaoEhIndividual } from "@/services/categoria-config.service";
 import { getPlayAdminToken } from "@/services/playnaquadra-admin-token";
+import { ehEmailAvulso } from "@/lib/atleta-avulso";
 import { playAtualizarGeneroAtleta, playBuscarAtletas, playGetAtletaById } from "@/services/playnaquadra-client";
 
 function cleanBaseUrl(raw: string) {
@@ -216,6 +217,8 @@ export async function resolverGeneroAtleta(params: AtletaGeneroInput) {
   const playId = String(params.playnaquadraAtletaId || "").trim();
   const debugAtleta = ` [email=${email || "vazio"} id=${playId || "vazio"}]`;
   const generoInformadoParam = normalizeGeneroAtleta(params.genero);
+  // atleta avulso nao tem cadastro em lugar nenhum: vale o genero informado na inscricao (buscar pelo nome acharia homonimos)
+  if (ehEmailAvulso(email)) return { nome: params.nome || "atleta", genero: generoInformadoParam, avulso: true };
   const temDadosParaPesquisarCarlao = !!email || !!phone || !!nome || !!playId;
 
   // =========================================================================
@@ -520,15 +523,15 @@ export async function validarGeneroInscricao(params: {
   const atletaA = await resolverGeneroAtleta(params.atletaA);
   const atletaB = params.atletaB ? await resolverGeneroAtleta(params.atletaB) : null;
 
-  if (!atletaA.genero) {
-    throw new Error(`Não foi possível validar o gênero de ${atletaA.nome}. Atualize o perfil no Play na Quadra.`);
-  }
+  const semGenero = (a: { nome: string; avulso?: boolean }) =>
+    a.avulso
+      ? `Informe o gênero de ${a.nome} (atleta avulso).`
+      : `Não foi possível validar o gênero de ${a.nome}. Atualize o perfil no Play na Quadra.`;
+  if (!atletaA.genero) throw new Error(semGenero(atletaA));
 
   if (!atletaB) {
     if (categoriaGenero === "MISTO" && params.individualSorteada) {
-      if (atletaA.genero !== "MASCULINO" && atletaA.genero !== "FEMININO") {
-        throw new Error(`Não foi possível validar o gênero de ${atletaA.nome}. Atualize o perfil no Play na Quadra.`);
-      }
+      if (atletaA.genero !== "MASCULINO" && atletaA.genero !== "FEMININO") throw new Error(semGenero(atletaA));
       return;
     }
     if (categoriaGenero === "MISTO") {
@@ -543,9 +546,7 @@ export async function validarGeneroInscricao(params: {
     return;
   }
 
-  if (!atletaB.genero) {
-    throw new Error(`Não foi possível validar o gênero de ${atletaB.nome}. Atualize o perfil no Play na Quadra.`);
-  }
+  if (!atletaB.genero) throw new Error(semGenero(atletaB));
 
   if (categoriaGenero === "MASCULINO" && (atletaA.genero !== "MASCULINO" || atletaB.genero !== "MASCULINO")) {
     throw new Error("A categoria masculina aceita apenas atletas do gênero masculino.");
@@ -857,7 +858,7 @@ export class InscricoesService {
       telefone: dados.atletaA.telefone?.trim(),
       playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
       fotoUrl: dados.atletaA.fotoUrl ?? null,
-    });
+    }, { preservarVinculado: true });
 
     const atletaBId =
       exigeDupla && dados.atletaB
@@ -867,7 +868,7 @@ export class InscricoesService {
             telefone: dados.atletaB.telefone?.trim(),
             playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
             fotoUrl: dados.atletaB.fotoUrl ?? null,
-          })
+          }, { preservarVinculado: true })
         : null;
 
     if (atletaBId && atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
@@ -1055,7 +1056,7 @@ export class InscricoesService {
       telefone: dados.atletaA.telefone?.trim(),
       playnaquadraAtletaId: dados.atletaA.playnaquadraAtletaId ?? null,
       fotoUrl: dados.atletaA.fotoUrl ?? null,
-    });
+    }, { preservarVinculado: true });
 
     const atletaBId =
       exigeDupla && dados.atletaB
@@ -1065,7 +1066,7 @@ export class InscricoesService {
             telefone: dados.atletaB.telefone?.trim(),
             playnaquadraAtletaId: dados.atletaB.playnaquadraAtletaId ?? null,
             fotoUrl: dados.atletaB.fotoUrl ?? null,
-          })
+          }, { preservarVinculado: true })
         : null;
 
     if (atletaBId && atletaAId === atletaBId) throw new Error("Atletas precisam ser diferentes");
@@ -1158,7 +1159,14 @@ export class InscricoesService {
     return { ok: true };
   }
 
-  async upsertAtleta(dados: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null }) {
+  /**
+   * Acha ou cria o usuario do atleta. Com preservarVinculado (tela de inscricoes do admin), um atleta ja vinculado
+   * ao Play na Quadra e usado como esta: o nome e o email que vieram no formulario nao mudam o cadastro dele.
+   */
+  async upsertAtleta(
+    dados: { nome: string; email: string; telefone?: string; playnaquadraAtletaId?: string | null; fotoUrl?: string | null },
+    opcoes: { preservarVinculado?: boolean } = {}
+  ) {
     const email = normalizeEmail(dados.email);
     const nome = dados.nome.trim();
     const telefone = dados.telefone?.trim() || null;
@@ -1176,6 +1184,7 @@ export class InscricoesService {
       if (existingByPlay.length > 0) {
         const athlete = existingByPlay[0];
         if (athlete.perfil !== "ATLETA") throw new Error("Parceiro selecionado está vinculado a um usuário não-atleta");
+        if (opcoes.preservarVinculado) return athlete.id;
 
         const conflictingEmail = await db
           .select({ id: usuarios.id, perfil: usuarios.perfil, playnaquadraAtletaId: usuarios.playnaquadraAtletaId })
@@ -1234,6 +1243,9 @@ export class InscricoesService {
     if (existing.length > 0) {
       const athlete = existing[0];
       if (athlete.perfil !== "ATLETA") throw new Error("Email já está vinculado a um usuário não-atleta");
+      if (opcoes.preservarVinculado && athlete.playnaquadraAtletaId && (!playId || playId === athlete.playnaquadraAtletaId)) {
+        return athlete.id;
+      }
 
       if (playId && athlete.playnaquadraAtletaId !== playId) {
         const conflictingPlay = await db
