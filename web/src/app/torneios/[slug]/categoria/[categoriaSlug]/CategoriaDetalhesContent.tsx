@@ -302,6 +302,7 @@ export default function CategoriaDetalhesContent({ torneio, categoria }: Props) 
 
   async function gerarCardPublico(p: Partida) {
     await gerarCardPartidaAdmin({
+      superCampeonato: Boolean(torneio.superCampeonato),
       torneioNome: torneio.nome,
       categoriaNome: categoria.nome,
       templateUrl: torneio.templateUrl ?? null,

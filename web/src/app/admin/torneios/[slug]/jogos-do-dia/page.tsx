@@ -38,6 +38,7 @@ type Torneio = {
   bannerUrl: string | null;
   templateUrl: string | null;
   layoutCards?: string | null;
+  superCampeonato?: boolean | null;
 };
 
 type PlacarForm = {
@@ -394,6 +395,7 @@ export default function AdminJogosDoDiaPage() {
         return;
       }
       const result = await gerarCardPartidaAdmin({
+        superCampeonato: Boolean(torneio?.superCampeonato),
         torneioNome: torneio?.nome || "Torneio",
         categoriaNome: p.categoriaNome || "Categoria",
         templateUrl: torneio?.templateUrl,

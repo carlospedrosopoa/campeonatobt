@@ -490,6 +490,7 @@ export default function AdminLancarPlacarMobilePage() {
         return;
       }
       const result = await gerarCardPartidaAdmin({
+        superCampeonato: true,
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
         cardApenasComFotos: torneioCardApenasComFotos,

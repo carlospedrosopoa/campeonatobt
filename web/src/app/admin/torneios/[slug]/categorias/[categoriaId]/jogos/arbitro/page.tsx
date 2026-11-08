@@ -727,6 +727,7 @@ export default function AdminCategoriaJogosArbitroPage() {
         return;
       }
       const result = await gerarCardPartidaAdmin({
+        superCampeonato: Boolean(torneio?.superCampeonato),
         torneioNome: torneio?.nome || "",
         categoriaNome: categoria?.nome || "Categoria",
         cardApenasComFotos: torneioCardApenasComFotos,

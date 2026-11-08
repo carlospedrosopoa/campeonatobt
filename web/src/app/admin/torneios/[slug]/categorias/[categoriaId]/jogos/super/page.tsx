@@ -947,6 +947,7 @@ export default function AdminCategoriaJogosSuperPage() {
         return;
       }
       const result = await gerarCardPartidaAdmin({
+        superCampeonato: true,
         torneioNome,
         categoriaNome: categoria?.nome || "Categoria",
         cardApenasComFotos: torneioCardApenasComFotos,

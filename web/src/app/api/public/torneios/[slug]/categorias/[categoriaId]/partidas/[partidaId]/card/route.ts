@@ -68,6 +68,7 @@ export async function GET(
     const png = await gerarCardPartidaPng({
       categoriaNome: categoria.nome,
       cardApenasComFotos: torneio.cardApenasComFotos,
+      superCampeonato: Boolean(torneio.superCampeonato),
       templateUrl: torneio.templateUrl ?? null,
       layout: torneio.layoutCards ?? null,
       partida: {

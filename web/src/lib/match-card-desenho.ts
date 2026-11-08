@@ -25,6 +25,8 @@ export type DadosCardPartida = {
   categoriaNome: string;
   cardApenasComFotos?: boolean;
   templateUrl?: string | null;
+  /** supercampeonato mostra data e hora do jogo; torneio normal nao tem horario, so a arena (quando houver) */
+  superCampeonato?: boolean | null;
   partida: PartidaCardInfo;
 };
 
@@ -413,16 +415,23 @@ export async function desenharCardPartidaClassico(ctx: CanvasRenderingContext2D,
     const yCategoria = 378;
     const yData = 448;
     const yArena = 518;
-    ctx.fillStyle = "#e2e8f0";
-    ctx.font = "700 42px Inter, Arial, sans-serif";
-    ctx.fillText("Categoria:", linhaX, yCategoria);
-    ctx.fillText("Data:", linhaX, yData);
-    ctx.fillText("Arena:", linhaX, yArena);
-    ctx.font = "700 34px Inter, Arial, sans-serif";
-    ctx.fillStyle = "#ffffff";
-    drawTextLeft(ctx, params.categoriaNome || "A definir", valorX, yCategoria + 10, 650, 40);
-    drawTextLeft(ctx, formatarDataHora(params.partida.dataHorario), valorX, yData + 10, 650, 40);
-    drawTextLeft(ctx, local, valorX, yArena + 10, 650, 40);
+    // torneio normal: sem a linha de data; a arena sobe e so aparece quando houver
+    const linhas: { rotulo: string; valor: string }[] = [{ rotulo: "Categoria:", valor: params.categoriaNome || "A definir" }];
+    if (params.superCampeonato) {
+      linhas.push({ rotulo: "Data:", valor: formatarDataHora(params.partida.dataHorario) });
+      linhas.push({ rotulo: "Arena:", valor: local });
+    } else if (params.partida.arenaNome) {
+      linhas.push({ rotulo: "Arena:", valor: local });
+    }
+    const ys = [yCategoria, yData, yArena];
+    linhas.forEach((linha, i) => {
+      ctx.fillStyle = "#e2e8f0";
+      ctx.font = "700 42px Inter, Arial, sans-serif";
+      ctx.fillText(linha.rotulo, linhaX, ys[i]);
+      ctx.font = "700 34px Inter, Arial, sans-serif";
+      ctx.fillStyle = "#ffffff";
+      drawTextLeft(ctx, linha.valor, valorX, ys[i] + 10, 650, 40);
+    });
   }
 
   const placarTexto = formatarPlacarPartida(params.partida);
@@ -520,6 +529,10 @@ export async function desenharCardPartidaNovo(ctx: CanvasRenderingContext2D, par
     if (temPlacar) {
       titulo = "RESULTADO";
       subtitulo = local;
+    } else if (!params.superCampeonato) {
+      // torneio normal nao tem horario dos jogos: so a arena, quando houver
+      titulo = partida.arenaNome || "";
+      subtitulo = partida.quadra ? `Quadra ${partida.quadra}` : "";
     } else if (dataValida) {
       const dia = dataValida
         .toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short" })
@@ -534,9 +547,11 @@ export async function desenharCardPartidaNovo(ctx: CanvasRenderingContext2D, par
       subtitulo = local || "A organização divulga quadra e horário";
     }
 
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(textoCabendo(ctx, titulo, (px) => `700 ${px}px ${fontes.titulo}`, 150, 90, larguraUtil), margemX, y);
-    y += 158;
+    if (titulo) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(textoCabendo(ctx, titulo, (px) => `700 ${px}px ${fontes.titulo}`, 150, 90, larguraUtil), margemX, y);
+      y += 158;
+    }
     if (subtitulo) {
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.fillText(textoCabendo(ctx, subtitulo, (px) => `800 ${px}px ${fontes.texto}`, 40, 28, larguraUtil), margemX, y);

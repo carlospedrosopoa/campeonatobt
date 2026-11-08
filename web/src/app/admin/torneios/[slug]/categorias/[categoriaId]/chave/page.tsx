@@ -489,6 +489,7 @@ export default function AdminCategoriaChavePage() {
       }
       setGerandoCardId(p.id);
       const result = await gerarCardPartidaAdmin({
+        superCampeonato: superCampeonato,
         torneioNome: torneioInfo.nome,
         categoriaNome: categoria?.nome || "Categoria",
         cardApenasComFotos: torneioInfo.cardApenasComFotos,

@@ -49,6 +49,8 @@ type GerarCardParams = {
   uploadFolder?: string | null;
   persistFotoUrlApi?: string | null;
   download?: boolean;
+  /** supercampeonato mostra data e hora; torneio normal so a arena */
+  superCampeonato?: boolean | null;
   partida: PartidaCardInfo;
 };
 
