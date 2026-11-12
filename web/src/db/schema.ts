@@ -366,6 +366,7 @@ export const torneioAtletaPrefs = pgTable(
     torneioId: uuid('torneio_id').references(() => torneios.id, { onDelete: "cascade" }).notNull(),
     usuarioId: uuid('usuario_id').references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
     camisetaOpcao: text('camiseta_opcao'),
+    camisetaEntregueEm: timestamp('camiseta_entregue_em'),
     criadoEm: timestamp('criado_em').defaultNow().notNull(),
     atualizadoEm: timestamp('atualizado_em').defaultNow().notNull(),
   },

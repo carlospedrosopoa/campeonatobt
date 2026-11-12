@@ -132,6 +132,7 @@ export async function GET(
       atletaPagamentoStatus: inscricaoPagamentos.status,
       atletaValorDevido: inscricaoPagamentos.valorDevido,
       atletaCamiseta: torneioAtletaPrefs.camisetaOpcao,
+      camisetaEntregueEm: torneioAtletaPrefs.camisetaEntregueEm,
     })
     .from(inscricoes)
     .innerJoin(categorias, eq(inscricoes.categoriaId, categorias.id))
@@ -205,6 +206,7 @@ export async function GET(
     atletaTelefone: string | null;
     atletaPlaynaquadraId: string | null;
     atletaCamiseta: string | null;
+    camisetaEntregueEm: string | null;
     equipeId: string;
     equipeNome: string | null;
     inscricaoId: string;
@@ -235,6 +237,7 @@ export async function GET(
       atletaTelefone: r.atletaTelefone ?? null,
       atletaPlaynaquadraId: r.atletaPlaynaquadraId ?? null,
       atletaCamiseta: r.atletaCamiseta ?? null,
+      camisetaEntregueEm: r.camisetaEntregueEm ? r.camisetaEntregueEm.toISOString() : null,
       equipeId: r.equipeId,
       equipeNome: r.equipeNome ?? null,
       inscricaoId: r.inscricaoId,
