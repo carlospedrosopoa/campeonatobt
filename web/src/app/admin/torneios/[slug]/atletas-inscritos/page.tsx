@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Download, Printer, RefreshCw, Save, Share2, Users } from "lucide-react";
+import { ArrowLeft, Download, Printer, RefreshCw, Save, Share2, Shirt, Users } from "lucide-react";
 
 type AtletaInscrito = {
   atletaId: string;
@@ -478,6 +478,13 @@ ${blocos}
             <RefreshCw className={`h-4 w-4 ${sincronizandoDados ? "animate-spin" : ""}`} />
             {sincronizandoDados ? "Atualizando dados..." : "Atualizar dados faltantes"}
           </button>
+          <Link
+            href={`/admin/torneios/${slug}/atletas-inscritos/entrega-camisetas`}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Shirt className="h-4 w-4" />
+            Entrega de camisetas
+          </Link>
           <button
             onClick={exportarExcel}
             disabled={!data || carregando || totalAtletas === 0}
