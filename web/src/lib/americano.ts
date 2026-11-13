@@ -190,3 +190,68 @@ export function ordenarRanking(linhas: LinhaRankingAmericano[]) {
     .slice()
     .sort((x, y) => y.gamesPro - x.gamesPro || y.saldo - x.saldo || y.vitorias - x.vitorias || x.nome.localeCompare(y.nome, "pt-BR"));
 }
+
+/**
+ * Rodizio completo (como o Super 8 / Super 12): cada atleta joga exatamente uma vez com cada um dos
+ * outros como parceiro e enfrenta cada um exatamente 2 vezes. So fecha com 4n ou 4n+1 atletas; com
+ * 4n+1, um atleta descansa em cada rodada. As tabelas saem de uma rodada base "girada" (torneio whist
+ * ciclico): com 4n atletas, os numeros 0..v-2 giram e o "I" fica parado; com 4n+1, todos giram.
+ */
+type BaseRodizio = { tipo: "CICLICO"; base: (number | "I")[][] } | { tipo: "Z3xZ3"; base: number[][] };
+
+const BASES_RODIZIO: Record<number, BaseRodizio> = {
+  4: { tipo: "CICLICO", base: [["I", 0, 1, 2]] },
+  5: { tipo: "CICLICO", base: [[2, 3, 1, 4]] },
+  8: { tipo: "CICLICO", base: [["I", 3, 0, 1], [6, 4, 5, 2]] },
+  9: { tipo: "Z3xZ3", base: [[1, 2, 3, 6], [4, 8, 5, 7]] },
+  12: { tipo: "CICLICO", base: [[5, 6, 1, 8], [10, "I", 2, 0], [9, 3, 4, 7]] },
+  13: { tipo: "CICLICO", base: [[6, 8, 3, 4], [7, 2, 10, 1], [11, 5, 12, 9]] },
+  16: { tipo: "CICLICO", base: [[7, 3, 12, 4], [2, 8, 14, 0], ["I", 6, 5, 10], [9, 11, 1, 13]] },
+  17: { tipo: "CICLICO", base: [[10, 5, 11, 13], [12, 15, 4, 8], [3, 2, 1, 7], [6, 14, 9, 16]] },
+  20: { tipo: "CICLICO", base: [[1, 7, 14, 5], [17, 2, 16, 9], [13, 11, "I", 8], [3, 6, 4, 12], [15, 10, 0, 18]] },
+  21: { tipo: "CICLICO", base: [[14, 2, 10, 3], [19, 17, 5, 4], [20, 16, 1, 11], [13, 8, 6, 9], [12, 18, 7, 15]] },
+};
+
+/** Quantidades de atletas com rodizio completo disponivel. */
+export const TAMANHOS_RODIZIO_COMPLETO = Object.keys(BASES_RODIZIO)
+  .map(Number)
+  .sort((a, b) => a - b);
+
+export function rodizioCompletoDisponivel(atletas: number) {
+  return Boolean(BASES_RODIZIO[atletas]);
+}
+
+/** Quantidades validas mais proximas (abaixo e acima) para sugerir ao organizador. */
+export function tamanhosRodizioProximos(atletas: number) {
+  const abaixo = TAMANHOS_RODIZIO_COMPLETO.filter((t) => t <= atletas).pop() ?? null;
+  const acima = TAMANHOS_RODIZIO_COMPLETO.find((t) => t >= atletas) ?? null;
+  return { abaixo, acima };
+}
+
+/** Tabela de rodadas em indices 0..v-1 (cada jogo: [a1, a2, b1, b2]). */
+export function tabelaRodizioCompleto(v: number): [number, number, number, number][][] {
+  const def = BASES_RODIZIO[v];
+  if (!def) throw new Error(`Rodízio completo não disponível para ${v} atletas`);
+  const rodadas: [number, number, number, number][][] = [];
+  if (def.tipo === "Z3xZ3") {
+    const somar = (x: number, r: number) => (((x % 3) + (r % 3)) % 3) + 3 * ((Math.floor(x / 3) + Math.floor(r / 3)) % 3);
+    for (let r = 0; r < 9; r++) rodadas.push(def.base.map((j) => j.map((x) => somar(x, r)) as [number, number, number, number]));
+    return rodadas;
+  }
+  const m = v % 4 === 0 ? v - 1 : v;
+  for (let r = 0; r < m; r++) {
+    rodadas.push(def.base.map((j) => j.map((x) => (x === "I" ? m : (x + r) % m)) as [number, number, number, number]));
+  }
+  return rodadas;
+}
+
+/** Monta as rodadas do rodizio completo sorteando qual atleta ocupa cada posicao da tabela. */
+export function montarRodadasRodizioCompleto(atletasIds: string[], aleatorio: () => number = Math.random): RodadaAmericano[] {
+  const atletas = Array.from(new Set(atletasIds));
+  const tabela = tabelaRodizioCompleto(atletas.length);
+  const sorteio = embaralhar(atletas, aleatorio);
+  return tabela.map((jogos, i) => ({
+    numero: i + 1,
+    jogos: jogos.map(([a1, a2, b1, b2]) => ({ a: [sorteio[a1], sorteio[a2]], b: [sorteio[b1], sorteio[b2]] })),
+  }));
+}

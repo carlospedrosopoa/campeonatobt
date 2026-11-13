@@ -12,6 +12,7 @@ import { exportarPlanilhaContingenciaCategoria } from "@/lib/jogos-contingencia-
 import { isRegrasBeachTennisSets, isRegrasVoleiSets, obterRegrasPartidaEfetivas, type FasePartida, type RegrasPartidaConfig, type RegrasPartidaPorFase } from "@/lib/regras-partida";
 import { PartidaHeadToHeadButton } from "@/components/admin/PartidaHeadToHeadButton";
 import { NomeEquipeComSobrenome } from "@/lib/nome-atleta";
+import { TAMANHOS_RODIZIO_COMPLETO } from "@/lib/americano";
 
 type Categoria = {
   id: string;
@@ -26,7 +27,7 @@ type CategoriaConfig = {
   versao: 1;
   formato: "GRUPOS" | "MATA_MATA" | "LIGA" | "AMERICANO";
   tipoParticipacao?: "DUPLAS" | "DUPLAS_SORTEADAS" | "SIMPLES";
-  americano?: { jogosPorAtleta: number; final: boolean };
+  americano?: { jogosPorAtleta: number; final: boolean; rodizioCompleto?: boolean; semifinal?: boolean };
   grupos?: { modo: "AUTO" | "MANUAL"; tamanhoAlvo: number; quantidade?: number };
   classificacao?: { porGrupo: number; melhoresTerceiros?: number };
   fase2?: { habilitada: boolean; temFinal: boolean; disputaTerceiroLugar?: boolean };
@@ -1821,9 +1822,20 @@ export default function AdminCategoriaJogosPage() {
       const payload = (await res.json().catch(() => null)) as any;
       if (!res.ok) throw new Error(payload?.error || "Não foi possível concluir");
       if (acao === "gerar") {
-        setAvisoAmericano(`${payload.rodadas} rodadas, ${payload.jogos} jogos: cada um dos ${payload.atletas} atletas joga ${payload.jogosPorAtleta} vez(es), trocando de parceiro.`);
+        setAvisoAmericano(
+          payload.rodizioCompleto
+            ? `Rodízio completo: ${payload.rodadas} rodadas, ${payload.jogos} jogos. Cada um dos ${payload.atletas} atletas joga ${payload.jogosPorAtleta} vezes, uma com cada parceiro.`
+            : `${payload.rodadas} rodadas, ${payload.jogos} jogos: cada um dos ${payload.atletas} atletas joga ${payload.jogosPorAtleta} vez(es), trocando de parceiro.`
+        );
         setFasePartidas("GRUPOS");
         await carregarPartidas("GRUPOS");
+      } else if (payload.fase === "SEMI") {
+        const semis = (payload.semis ?? []) as { duplaA: string[]; duplaB: string[] }[];
+        setAvisoAmericano(
+          `Semifinais: ${semis.map((x) => `${x.duplaA.join(" / ")} x ${x.duplaB.join(" / ")}`).join(" · ")}. A final sai sozinha quando as duas terminarem.`
+        );
+        setFasePartidas("SEMI");
+        await carregarPartidas("SEMI");
       } else {
         setAvisoAmericano(`Final: ${payload.duplaA.join(" / ")} x ${payload.duplaB.join(" / ")}`);
         setFasePartidas("FINAL");
@@ -1973,28 +1985,68 @@ export default function AdminCategoriaJogosPage() {
               <section className={secaoCls}>
                 {tituloSecao(1, "Americano", "Cada atleta joga com parceiros diferentes; vale o ranking individual (games vencidos, saldo e vitórias).")}
                 <div className="grid grid-cols-1 gap-4 px-4 py-4 sm:grid-cols-2 sm:px-5">
-                  <label className="block space-y-1.5">
-                    <span className="text-[13px] font-bold text-ink">Jogos por atleta</span>
+                  <label className="flex items-start gap-2.5 text-[13px] font-bold text-ink sm:col-span-2">
                     <input
-                      type="number"
-                      min={1}
-                      max={30}
-                      value={config.americano?.jogosPorAtleta ?? 6}
+                      type="checkbox"
+                      checked={config.americano?.rodizioCompleto === true}
                       onChange={(e) =>
-                        setConfig((p) => (p ? { ...p, americano: { final: p.americano?.final ?? true, jogosPorAtleta: Math.max(1, Math.min(30, Number(e.target.value) || 1)) } } : p))
+                        setConfig((p) => (p ? { ...p, americano: { ...(p.americano ?? { jogosPorAtleta: 6, final: true }), rodizioCompleto: e.target.checked } } : p))
                       }
-                      className={campoCls}
+                      className="mt-0.5 h-4 w-4"
                     />
+                    <span>
+                      Rodízio completo (Super 8, Super 12…)
+                      <span className="block text-xs font-medium text-muted">
+                        Cada atleta joga uma vez com cada um dos outros. Fecha com {TAMANHOS_RODIZIO_COMPLETO.join(", ")} atletas; cada um joga o total de atletas menos 1.
+                      </span>
+                    </span>
                   </label>
+                  {config.americano?.rodizioCompleto !== true && (
+                    <label className="block space-y-1.5">
+                      <span className="text-[13px] font-bold text-ink">Jogos por atleta</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        value={config.americano?.jogosPorAtleta ?? 6}
+                        onChange={(e) =>
+                          setConfig((p) =>
+                            p ? { ...p, americano: { ...(p.americano ?? { final: true }), jogosPorAtleta: Math.max(1, Math.min(30, Number(e.target.value) || 1)) } } : p
+                          )
+                        }
+                        className={campoCls}
+                      />
+                    </label>
+                  )}
                   <label className="flex items-center gap-2.5 self-end pb-2.5 text-[13px] font-bold text-ink">
                     <input
                       type="checkbox"
                       checked={config.americano?.final ?? true}
-                      onChange={(e) => setConfig((p) => (p ? { ...p, americano: { jogosPorAtleta: p.americano?.jogosPorAtleta ?? 6, final: e.target.checked } } : p))}
+                      onChange={(e) =>
+                        setConfig((p) => (p ? { ...p, americano: { ...(p.americano ?? { jogosPorAtleta: 6 }), final: e.target.checked, semifinal: e.target.checked ? p.americano?.semifinal : false } } : p))
+                      }
                       className="h-4 w-4"
                     />
                     Final balanceada (1º + 4º contra 2º + 3º)
                   </label>
+                  {(config.americano?.final ?? true) && (
+                    <label className="flex items-start gap-2.5 text-[13px] font-bold text-ink sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        checked={config.americano?.semifinal === true}
+                        onChange={(e) =>
+                          setConfig((p) => (p ? { ...p, americano: { ...(p.americano ?? { jogosPorAtleta: 6, final: true }), semifinal: e.target.checked } } : p))
+                        }
+                        className="mt-0.5 h-4 w-4"
+                      />
+                      <span>
+                        Semifinal com os 8 primeiros
+                        <span className="block text-xs font-medium text-muted">
+                          1º + 8º contra 4º + 5º e 2º + 7º contra 3º + 6º; as duplas vencedoras fazem a final.
+                        </span>
+                      </span>
+                    </label>
+                  )}
                 </div>
               </section>
             )}
@@ -2380,7 +2432,7 @@ export default function AdminCategoriaJogosPage() {
                     </Button>
                     {config?.americano?.final !== false && (
                       <Button className="w-full" icon={<Trophy />} disabled={Boolean(gerandoAmericano)} onClick={() => void acaoAmericano("final")}>
-                        {gerandoAmericano === "final" ? "Gerando…" : "Gerar final balanceada"}
+                        {gerandoAmericano === "final" ? "Gerando…" : config?.americano?.semifinal ? "Gerar semifinais" : "Gerar final balanceada"}
                       </Button>
                     )}
                     {avisoAmericano && <p className="rounded-[10px] bg-sand px-3 py-2.5 text-xs font-semibold text-ink">{avisoAmericano}</p>}
