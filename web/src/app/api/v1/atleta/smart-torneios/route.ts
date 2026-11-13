@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { ErroSmart, criarSmartTorneio, listarSmartDoCriador, obterConfigSmart } from "@/services/smart-torneio.service";
+import { TAMANHOS_RODIZIO_COMPLETO } from "@/lib/americano";
 
 const semCache = { "Cache-Control": "no-store", Vary: "Authorization" };
 
@@ -10,12 +11,17 @@ export async function GET(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   const [lista, config] = await Promise.all([listarSmartDoCriador(auth.user.id), obterConfigSmart()]);
   return NextResponse.json(
-    { smartTorneios: lista, preco: { valorPorAtleta: config.valorPorAtleta, valorMinimo: config.valorMinimo, pixConfigurado: Boolean(config.pixChave) } },
+    {
+      smartTorneios: lista,
+      preco: { valorPorAtleta: config.valorPorAtleta, valorMinimo: config.valorMinimo, pixConfigurado: Boolean(config.pixChave) },
+      // Americano com rodizio completo: quantidades de atletas que fecham (cada um joga quantidade - 1 jogos)
+      rodizioCompleto: { tamanhos: TAMANHOS_RODIZIO_COMPLETO },
+    },
     { headers: semCache }
   );
 }
 
-/** Cria o pedido. Body: { nome, data (AAAA-MM-DD), horario? (HH:MM), local, genero, tipoParticipacao, formato (GRUPOS | MATA_MATA | AMERICANO), quantidadeAtletas, jogosPorAtleta?, teste? } */
+/** Cria o pedido. Body: { nome, data (AAAA-MM-DD), horario? (HH:MM), local, genero, tipoParticipacao, formato (GRUPOS | MATA_MATA | AMERICANO), quantidadeAtletas, jogosPorAtleta?, rodizioCompleto?, semifinal?, teste? } */
 export async function POST(request: NextRequest) {
   const auth = await requireUser(request);
   if (auth instanceof NextResponse) return auth;
@@ -31,6 +37,8 @@ export async function POST(request: NextRequest) {
       tipoParticipacao: b.tipoParticipacao,
       formato: b.formato,
       jogosPorAtleta: b.jogosPorAtleta,
+      rodizioCompleto: b.rodizioCompleto === true,
+      semifinal: b.semifinal === true,
       teste: b.teste === true,
       quantidadeAtletas: Number(b.quantidadeAtletas),
     });

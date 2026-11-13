@@ -55,7 +55,11 @@ export type CategoriaConfigV1 = {
   regrasPartidaPorFase?: RegrasPartidaPorFase;
   desempate?: ("PONTOS" | "CONFRONTO_DIRETO" | "SALDO_GAMES" | "GAMES_PRO" | "VITORIAS" | "SORTEIO")[];
   /** formato AMERICANO: quantos jogos cada atleta faz antes da final */
-  americano?: { jogosPorAtleta: number; final: boolean };
+  /**
+   * rodizioCompleto: cada atleta joga uma vez com cada parceiro (tabela fixa, so com 4n ou 4n+1 atletas).
+   * semifinal: antes da final, semis com os 8 primeiros (1º+8º x 4º+5º e 2º+7º x 3º+6º).
+   */
+  americano?: { jogosPorAtleta: number; final: boolean; rodizioCompleto?: boolean; semifinal?: boolean };
 };
 
 export const defaultCategoriaConfigV1: CategoriaConfigV1 = {
@@ -248,6 +252,8 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
         ? {
             jogosPorAtleta: Math.trunc(Number(input?.americano?.jogosPorAtleta)) > 0 ? Math.min(30, Math.trunc(Number(input.americano.jogosPorAtleta))) : 6,
             final: input?.americano?.final !== false,
+            rodizioCompleto: input?.americano?.rodizioCompleto === true,
+            semifinal: input?.americano?.final !== false && input?.americano?.semifinal === true,
           }
         : undefined,
   };

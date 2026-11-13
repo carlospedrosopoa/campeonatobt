@@ -9,6 +9,7 @@ import { categoriasService } from "@/services/categorias.service";
 import { categoriaConfigService, defaultCategoriaConfigV1, type CategoriaConfigV1 } from "@/services/categoria-config.service";
 import { torneioComunicacoesService } from "@/services/torneio-comunicacoes.service";
 import { DEFAULT_REGRAS_PARTIDA_BT } from "@/lib/regras-partida";
+import { TAMANHOS_RODIZIO_COMPLETO, rodizioCompletoDisponivel } from "@/lib/americano";
 
 /**
  * Smart Torneio: o atleta cria pelo app um torneio privado com uma categoria, paga por Pix
@@ -95,6 +96,10 @@ export async function criarSmartTorneio(params: {
   quantidadeAtletas: number;
   /** Americano: jogos de cada atleta antes da final (padrao 6) */
   jogosPorAtleta?: number;
+  /** Americano: cada atleta joga uma vez com cada parceiro (so com as quantidades que fecham) */
+  rodizioCompleto?: boolean;
+  /** Americano: semifinal com os 8 primeiros antes da final */
+  semifinal?: boolean;
   /** torneio de teste: sem comunicacoes e pode ser excluido mesmo com jogos */
   teste?: boolean;
 }) {
@@ -112,6 +117,18 @@ export async function criarSmartTorneio(params: {
   const quantidade = Math.trunc(Number(params.quantidadeAtletas) || 0);
   if (quantidade < MIN_ATLETAS || quantidade > MAX_ATLETAS) throw new ErroSmart(`A quantidade de atletas deve ficar entre ${MIN_ATLETAS} e ${MAX_ATLETAS}`);
   if (formato !== "AMERICANO" && quantidade % 2 !== 0) throw new ErroSmart("A quantidade de atletas precisa ser par (torneio de duplas)");
+  const rodizioCompleto = formato === "AMERICANO" && params.rodizioCompleto === true;
+  if (rodizioCompleto && !rodizioCompletoDisponivel(quantidade)) {
+    throw new ErroSmart(`O rodízio completo fecha com ${TAMANHOS_RODIZIO_COMPLETO.join(", ")} atletas`);
+  }
+  const semifinal = formato === "AMERICANO" && params.semifinal === true;
+  if (semifinal && quantidade < 8) throw new ErroSmart("A semifinal precisa de pelo menos 8 atletas");
+  // no rodizio completo cada atleta joga com todos os outros: quantidade - 1 jogos
+  const jogosPorAtleta = rodizioCompleto
+    ? quantidade - 1
+    : Number(params.jogosPorAtleta) > 0
+      ? Math.min(30, Math.trunc(Number(params.jogosPorAtleta)))
+      : 6;
 
   const [criador] = await db.select({ id: usuarios.id, nome: usuarios.nome }).from(usuarios).where(eq(usuarios.id, params.criadorUsuarioId)).limit(1);
   if (!criador) throw new ErroSmart("Atleta não encontrado", 404);
@@ -152,10 +169,12 @@ export async function criarSmartTorneio(params: {
           ...defaultCategoriaConfigV1,
           tipoParticipacao,
           formato,
-          // jogos ate 4 games, sem tie-break (4-3 vale); a final vai a 6 com tie-break
+          // jogos ate 4 games, sem tie-break (4-3 vale); semi e final vao a 6 com tie-break
           regrasPartida: { ...DEFAULT_REGRAS_PARTIDA_BT, gamesPorSet: 4, tiebreak: { habilitado: false, em: 4, ate: 5, diffMin: 2 } },
-          regrasPartidaPorFase: { FINAL: { ...DEFAULT_REGRAS_PARTIDA_BT } },
-          americano: { jogosPorAtleta: Number(params.jogosPorAtleta) > 0 ? Math.min(30, Math.trunc(Number(params.jogosPorAtleta))) : 6, final: true },
+          regrasPartidaPorFase: semifinal
+            ? { SEMI: { ...DEFAULT_REGRAS_PARTIDA_BT }, FINAL: { ...DEFAULT_REGRAS_PARTIDA_BT } }
+            : { FINAL: { ...DEFAULT_REGRAS_PARTIDA_BT } },
+          americano: { jogosPorAtleta, final: true, rodizioCompleto, semifinal },
         }
       : { ...defaultCategoriaConfigV1, tipoParticipacao, formato };
   await categoriaConfigService.salvar(categoria.id, configCategoria);
@@ -221,6 +240,7 @@ async function montarResumo(linhas: LinhaSmart[]) {
               genero: c.genero,
               tipoParticipacao: config?.tipoParticipacao ?? "DUPLAS",
               formato: config?.formato ?? "GRUPOS",
+              americano: config?.formato === "AMERICANO" ? (config.americano ?? null) : null,
               vagas: c.vagasMaximas,
               inscricoes: contagem.find((x) => x.torneioId === l.torneioId)?.total ?? 0,
               horario: c.dataHorario?.toISOString() ?? null,
