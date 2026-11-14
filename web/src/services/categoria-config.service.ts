@@ -183,6 +183,8 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
     const stAte = typeof superTieRaw?.["ate"] === "number" ? (superTieRaw.ate as number) : 10;
     const stDiff = typeof superTieRaw?.["diffMin"] === "number" ? (superTieRaw.diffMin as number) : 2;
     const incluirSuperTieEmGames = regrasInput["incluirSuperTieEmGames"] === true;
+    const somaRaw = Math.trunc(Number(regrasInput["somaGames"]));
+    const somaGames = melhorDe === 1 && somaRaw > 0 && somaRaw <= 15 ? somaRaw : undefined;
 
     return {
       tipo: "BT_SETS",
@@ -191,6 +193,7 @@ function normalizeConfig(input: any): CategoriaConfigV1 {
       tiebreak: { habilitado: tbHabilitado, em: tbEm, ate: tbAte, diffMin: tbDiff },
       superTiebreakDecisivo: { habilitado: melhorDe === 3 ? stHabilitado : false, ate: stAte, diffMin: stDiff },
       incluirSuperTieEmGames,
+      ...(somaGames ? { somaGames, tiebreak: { habilitado: false, em: gamesPorSet, ate: 0, diffMin: 2 } } : {}),
     };
   }
 

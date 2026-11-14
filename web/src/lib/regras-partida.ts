@@ -18,6 +18,8 @@ export type RegrasPartidaBTSets = {
   tiebreak: TieBreakConfig;
   superTiebreakDecisivo?: SuperTieConfig;
   incluirSuperTieEmGames?: boolean;
+  /** jogo de 1 set que acaba quando a soma dos games chega a este numero (ex.: 5 = 3x2, 4x1, 5x0) */
+  somaGames?: number;
 };
 
 export type RegrasPartidaSets = {
@@ -27,6 +29,7 @@ export type RegrasPartidaSets = {
   tiebreak: TieBreakConfig;
   superTiebreakDecisivo?: SuperTieConfig;
   incluirSuperTieEmGames?: boolean;
+  somaGames?: number;
 };
 
 export type RegrasPartidaVoleiSets = {
@@ -248,6 +251,21 @@ export function calcularResultadoBeachTennisSets(params: {
   const regras = normalizarRegrasBeachTennis(params.regras);
   const detalhes = normalizarDetalhesPlacar(params.detalhesPlacar);
 
+  // soma de games: um set so, termina quando os dois lados somam N games (sem empate possivel com N impar)
+  if (regras.somaGames && regras.somaGames > 0) {
+    if (detalhes.length !== 1) throw new Error("Informe o placar do jogo");
+    const s = detalhes[0];
+    if (s.a + s.b !== regras.somaGames) throw new Error(`O placar precisa somar ${regras.somaGames} games`);
+    if (s.a === s.b) throw new Error("O jogo não pode terminar empatado");
+    const vencedor = s.a > s.b ? params.equipeAId : params.equipeBId;
+    return {
+      placarA: s.a > s.b ? 1 : 0,
+      placarB: s.b > s.a ? 1 : 0,
+      vencedorId: vencedor,
+      detalhesPlacar: [{ set: 1, a: s.a, b: s.b, tiebreak: false }],
+    };
+  }
+
   const setsNeeded = regras.melhorDe === 1 ? 1 : 2;
   const maxSets = regras.melhorDe === 1 ? 1 : 3;
 
@@ -422,4 +440,25 @@ export function calcularResultadoSets(params: {
   detalhesPlacar: SetScore[];
 }) {
   return calcularResultadoBeachTennisSets(params);
+}
+
+/** Sistemas de jogo que o criador escolhe no Smart Torneio (1 set em todos). */
+export const SISTEMAS_JOGO_SMART = {
+  ATE_4_SEM_TB: { titulo: "Até 4 games sem tie-break (4x3 vale)", gamesPorSet: 4, tiebreak: false },
+  ATE_5_SEM_TB: { titulo: "Até 5 games sem tie-break (5x4 vale)", gamesPorSet: 5, tiebreak: false },
+  ATE_6_SEM_TB: { titulo: "Até 6 games sem tie-break (6x5 vale)", gamesPorSet: 6, tiebreak: false },
+  ATE_6_TB: { titulo: "Até 6 games com tie-break no 6x6", gamesPorSet: 6, tiebreak: true },
+  SOMA_5: { titulo: "Soma de 5 games (3x2, 4x1, 5x0)", gamesPorSet: 5, tiebreak: false, somaGames: 5 },
+} as const;
+
+export type SistemaJogoSmart = keyof typeof SISTEMAS_JOGO_SMART;
+
+export function regrasDoSistemaJogo(sistema: SistemaJogoSmart): RegrasPartidaBTSets {
+  const s = SISTEMAS_JOGO_SMART[sistema];
+  return {
+    ...DEFAULT_REGRAS_PARTIDA_BT,
+    gamesPorSet: s.gamesPorSet,
+    tiebreak: s.tiebreak ? { habilitado: true, em: s.gamesPorSet, ate: 7, diffMin: 2 } : { habilitado: false, em: s.gamesPorSet, ate: 0, diffMin: 2 },
+    ...("somaGames" in s ? { somaGames: s.somaGames } : {}),
+  };
 }

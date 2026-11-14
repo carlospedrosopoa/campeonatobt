@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-request";
 import { ErroSmart, criarSmartTorneio, listarSmartDoCriador, obterConfigSmart } from "@/services/smart-torneio.service";
 import { TAMANHOS_RODIZIO_COMPLETO } from "@/lib/americano";
+import { SISTEMAS_JOGO_SMART } from "@/lib/regras-partida";
 
 const semCache = { "Cache-Control": "no-store", Vary: "Authorization" };
 
@@ -16,12 +17,14 @@ export async function GET(request: NextRequest) {
       preco: { valorPorAtleta: config.valorPorAtleta, valorMinimo: config.valorMinimo, pixConfigurado: Boolean(config.pixChave) },
       // Americano com rodizio completo: quantidades de atletas que fecham (cada um joga quantidade - 1 jogos)
       rodizioCompleto: { tamanhos: TAMANHOS_RODIZIO_COMPLETO },
+      // regras de jogo que o criador pode escolher (padrao: Americano ATE_4_SEM_TB, demais ATE_6_TB)
+      sistemasJogo: Object.entries(SISTEMAS_JOGO_SMART).map(([id, s]) => ({ id, titulo: s.titulo })),
     },
     { headers: semCache }
   );
 }
 
-/** Cria o pedido. Body: { nome, data (AAAA-MM-DD), horario? (HH:MM), local, genero, tipoParticipacao, formato (GRUPOS | MATA_MATA | AMERICANO), quantidadeAtletas, jogosPorAtleta?, rodizioCompleto?, semifinal?, teste? } */
+/** Cria o pedido. Body: { nome, data (AAAA-MM-DD), horario? (HH:MM), local, genero, tipoParticipacao, formato (GRUPOS | MATA_MATA | AMERICANO), quantidadeAtletas, jogosPorAtleta?, rodizioCompleto?, termino? (SEM_FINAL | FINAL | SEMIFINAL), sistemaJogo?, teste? } */
 export async function POST(request: NextRequest) {
   const auth = await requireUser(request);
   if (auth instanceof NextResponse) return auth;
@@ -39,6 +42,8 @@ export async function POST(request: NextRequest) {
       jogosPorAtleta: b.jogosPorAtleta,
       rodizioCompleto: b.rodizioCompleto === true,
       semifinal: b.semifinal === true,
+      termino: b.termino,
+      sistemaJogo: b.sistemaJogo ?? undefined,
       teste: b.teste === true,
       quantidadeAtletas: Number(b.quantidadeAtletas),
     });

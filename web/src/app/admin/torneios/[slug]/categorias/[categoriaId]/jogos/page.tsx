@@ -2416,7 +2416,7 @@ export default function AdminCategoriaJogosPage() {
 
           const regraResumo = [
             melhorDe > 1 ? `melhor de ${melhorDe} sets` : "set único",
-            regrasBT?.gamesPorSet ? `${regrasBT.gamesPorSet} games` : null,
+            (regrasBT as any)?.somaGames ? `soma de ${(regrasBT as any).somaGames} games` : regrasBT?.gamesPorSet ? `${regrasBT.gamesPorSet} games` : null,
             regrasBT && tbHabilitado ? `tie-break em ${tbEm}–${tbEm}` : null,
             superTie ? "super tie decisivo" : null,
           ]

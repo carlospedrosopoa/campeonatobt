@@ -8,7 +8,7 @@ import { torneiosService } from "@/services/torneios.service";
 import { categoriasService } from "@/services/categorias.service";
 import { categoriaConfigService, defaultCategoriaConfigV1, type CategoriaConfigV1 } from "@/services/categoria-config.service";
 import { torneioComunicacoesService } from "@/services/torneio-comunicacoes.service";
-import { DEFAULT_REGRAS_PARTIDA_BT } from "@/lib/regras-partida";
+import { DEFAULT_REGRAS_PARTIDA_BT, SISTEMAS_JOGO_SMART, regrasDoSistemaJogo, type SistemaJogoSmart } from "@/lib/regras-partida";
 import { TAMANHOS_RODIZIO_COMPLETO, rodizioCompletoDisponivel } from "@/lib/americano";
 
 /**
@@ -98,8 +98,12 @@ export async function criarSmartTorneio(params: {
   jogosPorAtleta?: number;
   /** Americano: cada atleta joga uma vez com cada parceiro (so com as quantidades que fecham) */
   rodizioCompleto?: boolean;
-  /** Americano: semifinal com os 8 primeiros antes da final */
+  /** Americano: semifinal com os 8 primeiros antes da final (o mesmo que termino SEMIFINAL) */
   semifinal?: boolean;
+  /** Americano: como termina. SEM_FINAL = vale o ranking dos pontos corridos */
+  termino?: "SEM_FINAL" | "FINAL" | "SEMIFINAL";
+  /** regra dos jogos (no Americano, das rodadas; semi e final seguem ate 6 com tie-break) */
+  sistemaJogo?: SistemaJogoSmart;
   /** torneio de teste: sem comunicacoes e pode ser excluido mesmo com jogos */
   teste?: boolean;
 }) {
@@ -121,8 +125,18 @@ export async function criarSmartTorneio(params: {
   if (rodizioCompleto && !rodizioCompletoDisponivel(quantidade)) {
     throw new ErroSmart(`O rodízio completo fecha com ${TAMANHOS_RODIZIO_COMPLETO.join(", ")} atletas`);
   }
-  const semifinal = formato === "AMERICANO" && params.semifinal === true;
+  const termino =
+    params.termino === "SEM_FINAL" || params.termino === "FINAL" || params.termino === "SEMIFINAL"
+      ? params.termino
+      : params.semifinal === true
+        ? "SEMIFINAL"
+        : "FINAL";
+  const final = formato === "AMERICANO" && termino !== "SEM_FINAL";
+  const semifinal = formato === "AMERICANO" && termino === "SEMIFINAL";
   if (semifinal && quantidade < 8) throw new ErroSmart("A semifinal precisa de pelo menos 8 atletas");
+  if (params.sistemaJogo != null && !(params.sistemaJogo in SISTEMAS_JOGO_SMART)) throw new ErroSmart("Sistema de jogo inválido");
+  // padrao: Americano ate 4 sem tie-break; grupos e mata-mata ate 6 com tie-break
+  const sistemaJogo: SistemaJogoSmart = params.sistemaJogo ?? (formato === "AMERICANO" ? "ATE_4_SEM_TB" : "ATE_6_TB");
   // no rodizio completo cada atleta joga com todos os outros: quantidade - 1 jogos
   const jogosPorAtleta = rodizioCompleto
     ? quantidade - 1
@@ -169,14 +183,16 @@ export async function criarSmartTorneio(params: {
           ...defaultCategoriaConfigV1,
           tipoParticipacao,
           formato,
-          // jogos ate 4 games, sem tie-break (4-3 vale); semi e final vao a 6 com tie-break
-          regrasPartida: { ...DEFAULT_REGRAS_PARTIDA_BT, gamesPorSet: 4, tiebreak: { habilitado: false, em: 4, ate: 5, diffMin: 2 } },
+          // rodadas no sistema escolhido; semi e final vao a 6 com tie-break
+          regrasPartida: regrasDoSistemaJogo(sistemaJogo),
           regrasPartidaPorFase: semifinal
             ? { SEMI: { ...DEFAULT_REGRAS_PARTIDA_BT }, FINAL: { ...DEFAULT_REGRAS_PARTIDA_BT } }
-            : { FINAL: { ...DEFAULT_REGRAS_PARTIDA_BT } },
-          americano: { jogosPorAtleta, final: true, rodizioCompleto, semifinal },
+            : final
+              ? { FINAL: { ...DEFAULT_REGRAS_PARTIDA_BT } }
+              : undefined,
+          americano: { jogosPorAtleta, final, rodizioCompleto, semifinal },
         }
-      : { ...defaultCategoriaConfigV1, tipoParticipacao, formato };
+      : { ...defaultCategoriaConfigV1, tipoParticipacao, formato, regrasPartida: regrasDoSistemaJogo(sistemaJogo) };
   await categoriaConfigService.salvar(categoria.id, configCategoria);
 
   const [pedido] = await db
