@@ -335,6 +335,7 @@ export default function AdminCategoriaJogosPage() {
       if (regras?.gamesPorSet === 4 && regras?.tiebreak?.habilitado && regras?.tiebreak?.em === 3) return "2SETS_4_TB3x3_SUPER10";
       return "2SETS_SUPER10";
     }
+    if (regras?.melhorDe === 1 && (regras as any)?.somaGames === 5) return "1SET_SOMA_5";
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 6 && regras?.tiebreak?.habilitado === false) return "1SET_6_SEM_TB";
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 5 && regras?.tiebreak?.habilitado === false) return "1SET_5_SEM_TB";
     if (regras?.melhorDe === 1 && regras?.gamesPorSet === 4 && regras?.tiebreak?.habilitado === false) return "1SET_4_SEM_TB";
@@ -387,6 +388,17 @@ export default function AdminCategoriaJogosPage() {
         tiebreak: { habilitado: true, em: 6, ate: 7, diffMin: 2 },
         superTiebreakDecisivo: { habilitado: true, ate: 10, diffMin: 2 },
         incluirSuperTieEmGames: false,
+      };
+    }
+    if (valor === "1SET_SOMA_5") {
+      return {
+        tipo: "BT_SETS",
+        melhorDe: 1,
+        gamesPorSet: 5,
+        tiebreak: { habilitado: false, em: 5, ate: 0, diffMin: 2 },
+        superTiebreakDecisivo: { habilitado: false, ate: 10, diffMin: 2 },
+        incluirSuperTieEmGames: false,
+        somaGames: 5,
       };
     }
     if (valor === "1SET_6_SEM_TB") {
@@ -2073,6 +2085,7 @@ export default function AdminCategoriaJogosPage() {
                         <option value="1SET_6_SEM_TB">1 set até 6 sem tie-break</option>
                         <option value="1SET_5_SEM_TB">1 set até 5 sem tie-break</option>
                         <option value="1SET_4_SEM_TB">1 set até 4 sem tie-break (4x3 vale)</option>
+                        <option value="1SET_SOMA_5">Soma de 5 games (3x2, 4x1, 5x0)</option>
                         <option value="2SETS_SUPER10">2 sets até 6 + super tie (até 10)</option>
                         <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie até 10</option>
                         <option value="VOLEI_3_21">Vôlei melhor de 3 até 21</option>
@@ -2137,6 +2150,7 @@ export default function AdminCategoriaJogosPage() {
                                 <option value="1SET_6_SEM_TB">1 set até 6 sem tie</option>
                                 <option value="1SET_5_SEM_TB">1 set até 5 sem tie</option>
                                 <option value="1SET_4_SEM_TB">1 set até 4 sem tie</option>
+                                <option value="1SET_SOMA_5">Soma de 5 games</option>
                                 <option value="2SETS_SUPER10">2 sets até 6 + super tie 10</option>
                                 <option value="2SETS_4_TB3x3_SUPER10">2 sets até 4 (tie no 3x3) + super tie 10</option>
                               </>
