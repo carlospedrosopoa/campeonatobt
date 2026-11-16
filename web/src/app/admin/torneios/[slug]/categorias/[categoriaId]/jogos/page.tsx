@@ -1884,7 +1884,7 @@ export default function AdminCategoriaJogosPage() {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-[11px] font-bold text-muted">
-              <th className="w-7 py-1.5 text-left" />
+              <th className="w-9 py-1.5 text-left" />
               <th className="py-1.5 text-left">Dupla</th>
               <th className="w-8 py-1.5 text-right" title="Pontos">P</th>
               <th className="w-8 py-1.5 text-right" title="Jogos">J</th>
@@ -1901,11 +1901,11 @@ export default function AdminCategoriaJogosPage() {
                 <tr key={e.equipeId} className="border-t border-sand-2">
                   <td className="py-1.5">
                     <span
-                      className={`inline-flex h-5 w-5 items-center justify-center rounded-md text-[11px] font-extrabold ${
+                      className={`inline-flex h-5 min-w-[26px] px-1 items-center justify-center rounded-md text-[11px] font-extrabold ${
                         classifica ? "bg-[#e3f3ea] text-[#17663f]" : "bg-sand-2 text-ink-2"
                       }`}
                     >
-                      {idx + 1}
+                      {idx + 1}º
                     </span>
                   </td>
                   <td className="max-w-0 py-1.5 pr-2">
