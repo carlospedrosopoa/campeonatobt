@@ -2028,6 +2028,7 @@ export default function AdminCategoriaJogosSuperPage() {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="text-left text-slate-500 border-b border-slate-100">
+                          <th className="py-2 pr-3 font-medium whitespace-nowrap text-center w-[36px]">#</th>
                           <th className="py-2 pr-5 font-medium whitespace-nowrap">Equipe</th>
                           <th className="py-2 pr-5 font-medium whitespace-nowrap text-center w-[52px]" title="Pontos acumulados (vitórias/d. sets)">P</th>
                           <th className="py-2 pr-5 font-medium whitespace-nowrap text-center w-[64px]" title={`Jogos marcados / Jogos esperados no total (${jogosEsperadosPorEquipe})`}>J</th>
@@ -2039,10 +2040,11 @@ export default function AdminCategoriaJogosSuperPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {g.equipes.map((e) => {
+                        {g.equipes.map((e, idx) => {
                           const jogosJogados = e.jogosJogados ?? 0;
                           return (
                             <tr key={e.equipeId} className="border-b border-slate-50">
+                              <td className="py-2 pr-3 font-bold text-slate-500 tabular-nums whitespace-nowrap text-center">{idx + 1}º</td>
                               <td className="py-2 pr-5 text-slate-900 whitespace-nowrap leading-tight">
                                 <NomeEquipeComSobrenome atletas={equipeAtletasMap.get(e.equipeId)} nomeEquipeFallback={e.equipeNome || e.equipeId.slice(0, 8)} />
                               </td>
