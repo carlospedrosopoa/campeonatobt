@@ -28,9 +28,10 @@ type LinhaEntrega = {
   tamanho: string;
   categorias: string[];
   entregueEm: string | null;
+  pago: boolean;
 };
 
-type Filtro = "TODOS" | "A_ENTREGAR" | "ENTREGUES";
+type Filtro = "TODOS" | "A_ENTREGAR" | "ENTREGUES" | "NAO_PAGOS";
 
 const SEM_CAMISETA = "Sem camiseta informada";
 const TAMANHOS = new Set(["PP", "P", "M", "G", "GG", "XG", "XGG", "EG", "EXG", "EXGG", "UNICO", "UNICA", "U"]);
@@ -87,16 +88,16 @@ export default function EntregaCamisetasPage() {
     void carregar();
   }, [slug]);
 
-  // atleta pago aparece uma vez so, mesmo inscrito em mais de uma categoria (uma camiseta por torneio)
-  const linhas = useMemo<LinhaEntrega[]>(() => {
+  // atleta aparece uma vez so, mesmo inscrito em mais de uma categoria (uma camiseta por torneio); pago em alguma = pago
+  const todasLinhas = useMemo<LinhaEntrega[]>(() => {
     if (!data) return [];
     const opcoes = (data.torneio.camisetaOpcoes ?? []).map(normalizar);
     const porAtleta = new Map<string, LinhaEntrega>();
     for (const c of data.categorias) {
       for (const a of c.atletas) {
-        if (!a.pago) continue;
         const existente = porAtleta.get(a.atletaId);
         if (existente) {
+          if (a.pago) existente.pago = true;
           if (!existente.categorias.includes(c.categoriaNome)) existente.categorias.push(c.categoriaNome);
           continue;
         }
@@ -108,21 +109,26 @@ export default function EntregaCamisetasPage() {
           ...separarCamiseta(opcao),
           categorias: [c.categoriaNome],
           entregueEm: null,
+          pago: Boolean(a.pago),
         });
       }
     }
     return Array.from(porAtleta.values()).map((l) => ({ ...l, entregueEm: entregas[l.atletaId] ?? null }));
   }, [data, entregas]);
 
+  const linhas = useMemo(() => todasLinhas.filter((l) => l.pago), [todasLinhas]);
+  const naoPagos = useMemo(() => todasLinhas.filter((l) => !l.pago), [todasLinhas]);
+
   const grupos = useMemo(() => {
     const termo = normalizar(busca).toLowerCase();
-    const visiveis = linhas.filter((l) => {
+    const base = filtro === "NAO_PAGOS" ? naoPagos : linhas;
+    const visiveis = base.filter((l) => {
       if (filtro === "A_ENTREGAR" && l.entregueEm) return false;
       if (filtro === "ENTREGUES" && !l.entregueEm) return false;
       return !termo || l.nome.toLowerCase().includes(termo);
     });
     return agruparPorTipo(visiveis);
-  }, [linhas, filtro, busca]);
+  }, [linhas, naoPagos, filtro, busca]);
 
   const total = linhas.length;
   const entregues = linhas.filter((l) => l.entregueEm).length;
@@ -191,6 +197,7 @@ export default function EntregaCamisetasPage() {
     { id: "TODOS", label: "Todos", n: total },
     { id: "A_ENTREGAR", label: "A entregar", n: total - entregues },
     { id: "ENTREGUES", label: "Entregues", n: entregues },
+    { id: "NAO_PAGOS", label: "Não pagos", n: naoPagos.length },
   ];
 
   return (
@@ -231,7 +238,7 @@ export default function EntregaCamisetasPage() {
           <div className="h-full rounded-full bg-signal transition-all" style={{ width: `${total ? Math.round((entregues / total) * 100) : 0}%` }} />
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex gap-1 rounded-xl bg-sand-2 p-1">
+          <div className="flex flex-wrap gap-1 rounded-xl bg-sand-2 p-1">
             {filtros.map((f) => (
               <button
                 key={f.id}
@@ -260,7 +267,7 @@ export default function EntregaCamisetasPage() {
 
       {carregando && !data ? (
         <Card className="p-8 text-center text-sm text-muted">Carregando…</Card>
-      ) : total === 0 ? (
+      ) : total === 0 && filtro !== "NAO_PAGOS" ? (
         <Card>
           <EmptyState icon={<Shirt />} title="Nenhum atleta com inscrição paga" description="Quando os pagamentos forem confirmados, os atletas aparecem aqui." />
         </Card>
@@ -272,7 +279,9 @@ export default function EntregaCamisetasPage() {
             <div className="flex items-center justify-between gap-3 border-b border-line bg-sand px-4 py-3">
               <div className="font-display text-xl font-bold text-ink">{g.tipo}</div>
               <div className="text-xs font-semibold text-muted">
-                {g.linhas.filter((l) => l.entregueEm).length}/{g.linhas.length} entregues
+                {filtro === "NAO_PAGOS"
+                  ? `${g.linhas.length} sem pagamento`
+                  : `${g.linhas.filter((l) => l.entregueEm).length}/${g.linhas.length} entregues`}
               </div>
             </div>
             <ul className="divide-y divide-line">
@@ -287,6 +296,9 @@ export default function EntregaCamisetasPage() {
                       {l.entregueEm ? `Entregue ${formatarEntrega(l.entregueEm)}` : l.categorias.join(" · ")}
                     </div>
                   </div>
+                  {!l.pago ? (
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[12px] font-bold text-amber-800">Não pago</span>
+                  ) : (
                   <button
                     type="button"
                     onClick={() => void alternarEntrega(l)}
@@ -300,6 +312,7 @@ export default function EntregaCamisetasPage() {
                     {l.entregueEm && <Check className="h-4 w-4" />}
                     {l.entregueEm ? "Entregue" : "Entregar"}
                   </button>
+                  )}
                 </li>
               ))}
             </ul>
